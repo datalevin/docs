@@ -1,4 +1,4 @@
-Datalevin: The Definitive Guide to Logical and Intelligent Database
+Datalevin: The Definitive Guide to Logical and Intelligent Databases
 
 Part I — Foundations: A Multi-Paradigm Database
 
