@@ -6,356 +6,137 @@ part: "I — Foundations: A Multi-Paradigm Database"
 
 # Chapter 4: Storage Fundamentals: LMDB, Key–Value Layout, and Persistence
 
-Datalevin's query model is fact-centric, but its performance depends on storage
-choices. This chapter explains why Datalevin builds on LMDB, how DLMDB extends
-it, and how the physical layout supports both normalized queries and secondary
-index capabilities.
+Datalevin's query model is fact-centric, but its performance and reliability are grounded in its storage architecture. Unlike many databases that build custom buffer managers and page caches, Datalevin leverages the operating system's existing strengths by building on **LMDB** (Lightning Memory-Mapped Database).
 
-## 1. Why LMDB as the Foundation
+This chapter explores why Datalevin chose this foundation, how it extends LMDB into **DLMDB**, and how the physical layout of data supports efficient Datalog queries, secondary indexes, and high-throughput writes.
 
-LMDB's core strength is simplicity. It relies heavily on operating-system
-services (memory mapping, virtual memory, filesystem sync) instead of rebuilding
-its own buffer manager and page cache in user space.
+---
 
-### 1.1 Key Features and Architecture
+## 1. The Foundation: Why LMDB?
 
-- **Performance**: very high read efficiency via memory-mapped pages and a
-  zero-copy design. On the read hot path, data can be returned directly from
-  mapped memory without per-read `malloc`/`memcpy`. Although Datalevin reaches
-  LMDB through JNI, it preserves this property by mapping native values to Java
-  direct `ByteBuffer` views (with unsafe/native fast paths) instead of copying
-  payloads into heap arrays.
-- **Concurrency**: MVCC snapshots give non-blocking reads alongside writes.
-  Readers scale well with thread count for read-heavy workloads, while writes are
-  serialized through a single writer.
-- **Storage model**: single-level ordered key-value store (B+tree), with fast
-  cursor-based iteration and range traversal.
-- **Reliability**: copy-on-write page updates preserve integrity; recovery is
-  immediate to the last committed state without a separate log/journal replay
-  process.
+LMDB is a "tiny" but incredibly powerful key-value store. Its design philosophy is to do as little as possible in user space, offloading complex tasks like memory management to the operating system kernel.
 
-### 1.2 Configuration and Usage
+### 1.1 The Power of Memory-Mapping (mmap)
+Traditional databases often manage their own "buffer pool"—a chunk of RAM where they keep data pages. This often conflicts with the OS's own file system cache, leading to "double buffering" and inefficient memory use.
 
-- **Embedded**: LMDB runs in-process with the application.
-- **Footprint**: very small code base (commonly cited around ~32KB object code
-  for the core library).
-- **Environment layout**: typically one mapped data file plus a lock file in a
-  directory (or a direct data path with a corresponding `-lock` file).
-- **Tuning model**: comparatively configuration-light relative to many server
-  databases; most applications need only a small set of options.
+LMDB uses **memory-mapping (`mmap`)**. It treats the database file as if it were a large array in the application's address space. When Datalevin reads data, the OS handles fetching the required pages from disk into the **Page Cache**.
 
-### 1.3 Core Implementation
+- **Zero-Copy Reads**: On the read hot-path, Datalevin doesn't copy data from a kernel buffer to a user-space buffer. Instead, it returns a `DirectByteBuffer` that points directly to the OS Page Cache. This bypasses JVM heap allocation and minimizes Garbage Collection (GC) overhead. By default, this memory map is **read-only**, allowing the OS to manage the pages with minimal overhead and perfect safety, as it knows the application cannot directly modify the underlying file through the map.
+- **Immediate Recovery**: LMDB uses a Copy-on-Write (CoW) B+tree. It never overwrites data in place. When a transaction commits, it simply updates a pointer to the new root of the tree. If the system crashes, the database is always in a consistent state—no expensive "recovery" or log-replay process is needed.
 
-- **Language core**: LMDB is implemented in C.
+### 1.2 Read-Heavy Concurrency
+LMDB provides **MVCC (Multi-Version Concurrency Control)**. Readers never block writers, and writers never block readers. Because readers are zero-copy and lockless, Datalevin can scale to thousands of concurrent readers with near-linear performance.
 
-Datalevin's Datalog/KV transactions map directly to underlying LMDB
-transactions, so the semantic path from API to storage is short and explicit.
+---
 
-## 2. Why B+tree (Here) Instead of LSM
+## 2. B+Trees vs. LSM-Trees
 
-This is not a universal claim that B+tree is always better than LSM. It is a
-design choice for Datalevin's goals.
+Database storage engines generally fall into two camps: B+Trees (used by Postgres, Oracle, and LMDB) and Log-Structured Merge-Trees (LSM) (used by Cassandra, RocksDB, and LevelDB).
 
-For Datalevin, B+tree storage is a strong fit because:
+| Feature | B+Tree (Datalevin/LMDB) | LSM-Tree (RocksDB) |
+| :--- | :--- | :--- |
+| **Read Performance** | Excellent (O(log N) point/range) | Variable (may check multiple levels) |
+| **Write Performance** | Good (constrained by random I/O) | Excellent (sequential appends) |
+| **Complexity** | Simple (no background compaction) | High (compaction, bloom filters) |
+| **Space Efficiency** | Lower (due to fragmentation) | Higher (compressed on disk) |
+| **Consistency** | Strong and immediate | Often eventual or complex to tune |
 
-- it handles variable and large values naturally (including overflow pages),
-- sorted access paths are first-class for both point and range queries,
-- adding new index structures as additional DBIs is straightforward,
-- no compaction pipeline is required to keep read paths coherent.
+**Why Datalevin chose B+Trees:**
+Datalog queries rely heavily on **range scans** and **index joins**. A B+Tree keeps data perfectly sorted and provides predictable read latency. By using LMDB, Datalevin avoids the "write stalls" and CPU spikes associated with LSM background compaction, making it a better fit for predictable, real-time applications.
 
-Here, **DBI** means an LMDB sub-database (a named key-value namespace) inside
-the same LMDB environment/file. You can think of each DBI as a logical index or
-table-like keyspace with its own key ordering and flags, while still sharing the
-same transactional boundary.
-
-By contrast, LSM-based systems often trade this for higher write throughput via
-background compaction, which can complicate read-path predictability and
-operational behavior when many secondary indexes are present.
-
-That flexibility matters because Datalevin keeps extending index capabilities
-(full-text, vector, idoc, and others) while keeping them in one storage engine.
+---
 
 ## 3. From LMDB to DLMDB
 
-Datalevin uses DLMDB, a fork of LMDB with extensions that are specifically useful
-for datalog query planning and execution:
+Standard LMDB is a general-purpose tool, but Datalevin uses a specialized fork called **DLMDB** to support advanced Datalog features.
 
-- **Order statistics (`:counted` DBIs)**: efficient rank lookup, sampling, and
-  range count.
-- **Prefix compression**: better space efficiency and cache behavior, especially
-  for redundant key patterns.
-- **DUPSORT iteration optimizations**: faster traversal in duplicate-heavy
-  patterns.
-- **Robust interrupt handling**: operational hardening for real workloads.
+### 3.1 Order Statistics (`:counted` DBIs)
+A standard B+Tree doesn't know how many items are in a range without scanning them. DLMDB adds **counted B+Trees**, where each node in the tree stores the count of items in its sub-tree.
 
-These are not cosmetic changes. They directly power query-planning primitives:
-cheap counting and sampling under query conditions.
+- **Instant Counts**: All count/sample operations are O(log n) or O(1). For example, `(d/count-datoms db nil :person/age nil)` is an O(log n) operation, while `(d/count-datoms db nil :person/age 30)` is O(1).
+- **Fast Pagination**: You can skip the first 1,000,000 items in a sorted range and start reading the 1,000,001st item instantly using "rank-based" lookups. This is critical for efficient sampling and pagination.
+- **Efficient Query Planning**: The Datalog engine uses these counts and samples to decide the most efficient join order (e.g., "should I filter by age first, or by city?").
 
-## 4. Nested Triple Index Layout with DUPSORT
+### 3.2 Prefix Compression
+Datalog indexes often contain many keys that start with the same prefix (e.g., many datoms for the same attribute). DLMDB compresses these prefixes, significantly reducing the on-disk footprint and improving CPU cache locality.
 
-Datalevin stores datoms in multiple orderings (notably EAV and AVE). Instead of
-literal flat triples everywhere, it uses LMDB's DUPSORT (section 6.4) to
-nest repeated heads.
+---
 
-Conceptually:
+## 4. Physical Layout: The Nested Triple Index
 
+Datalevin doesn't just store "triples" (E, A, V). It stores them in multiple sorted orders to make queries fast. The primary indexes are **EAV** (Entity-Attribute-Value) and **AVE** (Attribute-Value-Entity).
+
+### 4.1 Leveraging DUPSORT
+Instead of storing a flat list of triples, Datalevin uses LMDB's `DUPSORT` feature to "nest" values. This is effectively a "B+Tree of B+Trees."
+
+**Conceptual AVE Layout:**
 ```text
-EAV view:  E  -> [(A,V), (A,V), ...]
-AVE view: (A,V) -> [E, E, E, ...]
+Key: (:person/age, 30) -> Values: [101, 102, 105, 200, ...] (Entity IDs)
+Key: (:person/age, 31) -> Values: [103, 104, 201, ...]
 ```
 
-This "B+trees of B+trees" style layout reduces redundancy and improves counting
-behavior. For example, exact-pattern counts like `[?e :person/age 30]` can be
-obtained very cheaply from AVE-oriented structures, while range patterns benefit
-from counted metadata.
+In this layout, the Attribute and Value form the **Key**, and all the Entities that share that value are stored in a sorted **Duplicate Set**. This makes finding "all people aged 30" extremely fast—it is a single key lookup followed by a sequential read of entity IDs.
 
-Short query examples that map naturally to these paths:
+---
 
-```clojure
-;; exact value match
-(d/q '[:find ?e
-       :in $
-       :where [?e :person/age 30]]
-     db)
+## 5. Secondary Indexes and Blob Storage
 
-;; range predicate (pushed down to index range scans)
-(d/q '[:find ?e
-       :in $
-       :where [?e :person/age ?age]
-              [(< 20 ?age 40)]]
-     db)
-```
+Beyond the primary triple indexes, Datalevin supports specialized secondary indexes such as **Full-Text Search (FTS)**, **Vector Search**, and **Document (idoc) Indexes**. These are not external plugins; they are integrated directly into the same LMDB environment.
 
-## 5. Secondary Indexes in the Same KV Environment
+### 5.1 Leveraging the KV Substrate
+Secondary indexes are implemented as additional named sub-databases (DBIs) within the same storage file. This allows Datalevin to maintain transactional atomicity across both Datalog datoms and secondary index updates.
 
-Datalevin's secondary indexes are not external services. They are stored as
-additional DBIs (sub-databases) in the same key-value environment and same data
-file.
-User-defined KV DBIs can live alongside these Datalog DBIs in that same file.
+### 5.2 Blob Storage Capabilities
+While a Datalog triple is a small piece of data, secondary indexes often need to store larger, more complex structures—such as search term postings lists, vector embeddings, or serialized JSON documents.
+- **Large Value Support**: Datalevin leverages LMDB's ability to store values up to 2GB in size (blobs).
+- **Efficiency**: By storing these as blobs in specialized DBIs, Datalevin can perform high-speed searches without cluttering the main triple indexes. For example, a search index might store a large bitset or a compressed postings list as a single KV value, which is then retrieved and processed with the same zero-copy efficiency as a simple triple.
 
-That includes capabilities such as:
+This capability is what makes Datalevin a "multi-paradigm" database: it uses the same robust KV foundation to power everything from relational Datalog queries to modern vector searches.
 
-- full-text index structures,
-- vector index domains,
-- idoc path indexes.
+---
 
-Because they live in the same storage system, they can be joined with regular
-triple clauses in one Datalog query context.
+## 6. The Key-Value API: Direct Access
 
-## 6. KV API in Practice
+While Datalog is the primary interface, Datalevin exposes the underlying KV store as a first-class citizen. This is a deliberate design choice: the Datalog engine is built *on top* of this KV layer, rather than as a separate opaque engine.
 
-Even if you mostly use Datalog, the KV API is important because it exposes the
-same storage substrate directly.
-In other words, KV and Datalog keyspaces are not forced into separate files.
+Exposing the KV layer allows developers to bypass the triple-model when it isn't the best fit—for example, when building custom indexes, high-frequency counters, or storing large binary blobs. This "multi-paradigm" approach ensures that you aren't forced to fit every data shape into a Datalog triple if a simple key-pair is more efficient.
 
-In Datalevin documentation and APIs, "EDN values" means Clojure data structures
-encoded with EDN (Extensible Data Notation): a JSON-like notation with extra
-data primitives such as keywords, symbols, sets, and tagged literals.
+The details of the KV API and its practical usage are covered in **Chapter 6**.
 
-Use KV API when:
+---
 
-- your access path is direct key lookup or range scan,
-- you want explicit control of DBIs/key types,
-- you do not need Datalog joins/rules for that path.
+## 7. Persistence and Durability: WAL Mode
 
-The KV surface area is intentionally broad. For the canonical signatures,
-arglists, and option details, use the API docs:
-https://cljdoc.org/d/datalevin/datalevin
+By default, LMDB is extremely safe but can be limited by disk I/O because every write transaction requires a synchronous flush of the memory-mapped pages to disk (`msync`) to ensure durability. Datalevin introduces a **Hybrid WAL (Write-Ahead Log) Mode** to overcome this.
 
-### 6.1 KV Function Map
+### 7.1 How WAL Mode Works
+When WAL mode is enabled (`:datalog-wal? true` or `:kv-wal? true`):
 
-| Category | Functions | Purpose |
-| --- | --- | --- |
-| Environment and lifecycle | `open-kv`, `close-kv`, `closed-kv?`, `dir`, `sync`, `set-env-flags`, `get-env-flags` | Open/close store, inspect handle, and control environment durability/flags |
-| DBI management and inspection | `open-dbi`, `clear-dbi`, `drop-dbi`, `list-dbis`, `stat`, `entries`, `copy` | Manage sub-databases and inspect/copy physical structures |
-| Transactions and WAL | `transact-kv`, `transact-kv-async`, `with-transaction-kv`, `abort-transact-kv`, `kv-wal-watermarks`, `flush-kv-indexer!` | Write path, explicit transaction scope, and WAL/indexer coordination |
-| KV pair and codec helpers | `k`, `v`, `put-buffer`, `read-buffer` | Access raw key/value buffers and encode/decode typed KV data |
-| Point and rank reads | `get-value`, `get-rank`, `get-by-rank` | Direct lookup and order-stat reads |
-| Key-range reads, counts, and sampling | `get-first`, `get-first-n`, `get-range`, `key-range`, `key-range-count`, `key-range-list-count`, `range-seq`, `range-count`, `sample-kv` | Cursor/range traversal, efficient counting, and planner-friendly sampling |
-| Predicate and visitor range ops | `get-some`, `range-filter`, `range-keep`, `range-some`, `range-filter-count`, `visit-key-range`, `visit` | Range filtering, projection, existence checks, and side-effect visitors |
-| List DBI lifecycle and point ops | `open-list-dbi`, `put-list-items`, `del-list-items`, `get-list`, `visit-list`, `list-count`, `in-list?` | Multi-value-per-key DBIs (dupsort-backed) |
-| List-range operations | `list-range`, `list-range-count`, `list-range-first`, `list-range-first-n`, `list-range-filter`, `list-range-keep`, `list-range-filter-count`, `list-range-some`, `visit-list-range` | Range/query operations over list DBIs by key and value |
-| Cross-cutting maintenance | `re-index` | Rebuild/re-index storage structures (also supports KV stores) |
+1.  **Transaction**: A write request arrives.
+2.  **WAL Append**: The change is appended to a sequential Log file and synced to disk. Sequential writes are significantly faster than random B+Tree updates.
+3.  **In-Memory Overlay**: The change is also added to an in-memory structure (the "overlay").
+4.  **Acknowledgment**: The application receives a "Success" response.
+5.  **Read Path**: When a query runs, Datalevin **merges** results from the on-disk LMDB file and the in-memory overlay. The user always sees the latest data.
+6.  **Checkpoint**: Periodically, a background indexer flushes the overlay changes into the main LMDB B+tree and clears the WAL.
 
-`clear` exists in the same namespace but applies to Datalog connections rather
-than KV stores.
-When using raw KV records from `visit`/`visit-key-range` and related APIs,
-`k`/`v` extract buffers and `read-buffer`/`put-buffer` are the necessary codec
-helpers for decoding/encoding typed values.
+This provides the **write throughput of an LSM-tree** with the **read performance and stability of a B+Tree**.
 
-### 6.2 Public KV Data Types
+### 7.2 Programmable WAL API and Datalog CDC
+The WAL is not just an internal implementation detail; it is exposed as a first-class API at the **Key-Value (KV) level**. This allows for low-level interaction with the physical stream of changes.
 
-While LMDB deals with raw bytes, Datalevin adds a layer of encoded data types.
-Datalevin's public/stable KV type keywords (for `k-type`/`v-type`,
-`put-buffer`, `read-buffer`) are:
+- **KV-Level (WAL)**: Using `open-tx-log` and `gc-wal-segments!`, you can access the raw, physical transaction log. This is ideal for system-level tasks like **replication** or building low-level Change Data Capture (CDC) for non-Datalog data stored in the same KV environment.
+- **Datalog-Level (Listeners)**: For most application-level needs, Datalevin provides a higher-level CDC mechanism via **Datalog listeners**. By using `d/listen!`, you can subscribe to logical Datalog transactions, receiving the set of added and retracted datoms. This is the preferred way to trigger application logic, update search indexes, or sync with other high-level systems.
 
-| Type keyword | Value form | Notes |
-| --- | --- | --- |
-| `:data` | arbitrary EDN | Default; avoid for range-query keys; not allowed inside tuple types |
-| `:string` | UTF-8 string | Ordered string key/value support |
-| `:long` | 64-bit integer | Common for sortable numeric keys |
-| `:id` | 64-bit integer id | Specialized id-ordered encoding used heavily by core indexes |
-| `:float` | 32-bit IEEE754 float | Numeric |
-| `:double` | 64-bit IEEE754 float | Numeric |
-| `:bigint` | `java.math.BigInteger` | Bounded to documented encoding range |
-| `:bigdec` | `java.math.BigDecimal` | Unscaled value bounded to documented encoding range |
-| `:bytes` | byte array | Binary payloads |
-| `:keyword` | EDN keyword | Useful for symbolic keys |
-| `:symbol` | EDN symbol | Symbolic values/keys |
-| `:boolean` | `true` / `false` | Boolean values |
-| `:instant` | `java.util.Date` | Timestamp semantics |
-| `:uuid` | `java.util.UUID` | UUID values/keys |
+By providing these two mechanisms at different levels, Datalevin gives you the choice between physical stream processing at the storage layer and logical event processing at the database layer.
 
-Tuple typing is also public:
-
-- heterogeneous tuple type: vector of scalar types (for example
-  `[:string :long :uuid]`)
-- homogeneous tuple type: vector with one scalar type (for example `[:long]`)
-
-Constraints called out by the API:
-
-- each tuple element must be at most 255 bytes
-- key size is capped at 511 bytes (the LMDB/Datalevin key-size class)
-- in `open-list-dbi` (DUPSORT) stores, each list item is stored on the
-  value/duplicate side but follows this same 511-byte bound
-- values can be large (Datalevin supports large document values up to
-  approximately 2 GiB); `:val-size` is the initial value-buffer size and can
-  grow as larger values are transacted
-
-### 6.3 `open-kv` Options
-
-The documented `open-kv` shape is:
-
-```clojure
-(d/open-kv dir opts)
-```
-
-`dir` can be a local directory path or a `dtlv://` URI for remote access.
-
-| Option | What it controls | Notes |
-| --- | --- | --- |
-| `:mapsize` | Initial LMDB map size (MiB) | Auto-expands as needed; larger initial values reduce resize events |
-| `:max-readers` | Max concurrent reader slots | Important for read-heavy multithreaded workloads |
-| `:max-dbs` | Max DBI/sub-database count | Capacity for core DBIs plus user DBIs in one file |
-| `:flags` | LMDB environment flags | Examples: `:rdonly-env`, `:nosubdir`, `:nosync`, `:mapasync`, `:nordahead` |
-| `:temp?` | Temporary KV store lifecycle | Temporary stores are deleted on JVM exit; Datalevin also applies `:nosync`, so this mode is a strong fit for cache-like workloads with very high read/write throughput |
-| `:client-opts` | Remote client config | Applied when `dir` is a remote `dtlv://` URI |
-| `:spill-opts` | Memory-pressure spill behavior for eager range APIs | Controls `get-range`/`range-filter` spill-to-disk behavior |
-
-`spill-opts` keys:
-
-- `:spill-threshold`: JVM memory-pressure percentage that triggers spill
-- `:spill-root`: directory used for spill files
-
-Use the API docs for current defaults, since exact default values may evolve:
-https://cljdoc.org/d/datalevin/datalevin
-
-Operational note: as with LMDB generally, keep one shared `open-kv` handle per
-process per DB path/URI, rather than opening the same environment many times in
-one process.
-Operational tradeoff: `:temp?` implies `:nosync`, which improves write
-throughput and is often ideal for caches, but reduces durability guarantees.
-For write-throughput benchmark context, see:
-https://github.com/datalevin/datalevin/tree/master/benchmarks/write-bench
-
-Short example:
-
-```clojure
-(def kv
-  (d/open-kv "/tmp/ch4-kv"
-    {:mapsize     2048
-     :max-readers 2048
-     :max-dbs     256
-     :spill-opts  {:spill-threshold 85
-                   :spill-root      "/tmp/dtlv-spill"}}))
-```
-
-### 6.4 List DBI (DUPSORT) in Practice
-
-`open-list-dbi` creates a DUPSORT-backed DBI: one logical key maps to many
-sorted values.
-
-```text
-k -> [v1, v2, v3, ...]   ; duplicate values kept in sorted order
-```
-
-This is useful when a natural access path is "one key to many items" while
-still needing efficient point/range operations over both keys and values.
-
-- point/list ops: `put-list-items`, `get-list`, `del-list-items`, `list-count`,
-  `in-list?`, `visit-list`
-- range ops: `list-range`, `list-range-count`, `list-range-first`,
-  `list-range-first-n`, `list-range-filter`, `list-range-keep`,
-  `list-range-filter-count`, `list-range-some`, `visit-list-range`
-
-Important limit detail: because list items are encoded on the DUPSORT duplicate
-value side, the 511-byte key-size class effectively applies to each list item
-value as well.
-
-`transact-kv` operations are tuple-shaped. Common forms are:
-
-- `[:put "<dbi>" key value]`
-- `[:put "<dbi>" key value key-type]` (typed keys for range behavior)
-- `[:del "<dbi>" key]`
-
-Short example:
-
-```clojure
-(require '[datalevin.core :as d])
-(import '[java.util Date])
-
-(def kv (d/open-kv "/tmp/ch4-kv"))
-(d/open-dbi kv "user")
-(d/open-dbi kv "events")
-
-;; One transaction can touch multiple DBIs atomically
-(d/transact-kv kv
-  [[:put "user" :u1 {:name "Alice" :tier :pro}]
-   [:put "events" #inst "2026-01-01" {:kind :signup :uid :u1} :instant]])
-
-;; Point read
-(d/get-value kv "user" :u1)
-;; => {:name "Alice" :tier :pro}
-
-;; Range read on typed keys
-(d/get-range kv "events" [:closed (Date. 0) (Date.)] :instant)
-
-;; Explicit KV transaction when multiple steps must be one unit
-(d/with-transaction-kv [kv-tx kv]
-  (d/transact-kv kv-tx [[:del "user" :u1]]))
-
-(d/close-kv kv)
-```
-
-For heavy write workloads, Datalevin also provides `transact-kv-async`, which
-uses adaptive batching to improve throughput while preserving commit ordering.
-
-## 7. Toward a Hybrid Mode: WAL + Overlay (WIP)
-
-Datalevin is evolving toward a hybrid write path for write-intensive workloads.
-
-The WAL mode design (in progress) is:
-
-1. append a logical WAL record and sync it durably,
-2. return transaction success at WAL durability boundary,
-3. persist to base DLMDB structures at checkpoint,
-4. serve non-checkpointed committed updates through an in-memory query overlay.
-
-This preserves durability while improving write throughput/latency behavior. The
-same WAL foundation is also intended to support replication, crash recovery, and
-high-availability workflows. This capability is in progress and targeted to be
-fully available by the time this book is published.
+---
 
 ## Summary
 
-Storage in Datalevin is intentionally layered:
+Datalevin's storage layer is a masterclass in pragmatic engineering:
+- It uses **LMDB** for its rock-solid stability and zero-copy performance.
+- It uses **B+Trees** to ensure predictable read performance for complex Datalog queries.
+- It adds **DLMDB** extensions like order statistics to power the query planner.
+- It provides a **Hybrid WAL** mode to scale write performance without sacrificing the B+Tree model.
 
-- LMDB/DLMDB provides a simple, OS-leveraging key-value substrate,
-- nested DUPSORT triple indexes provide efficient normalized access paths,
-- secondary indexes are side DBIs in the same engine,
-- KV API exposes that same substrate directly when you need low-level control,
-- WAL+overlay mode extends this into a hybrid architecture for heavier write
-  workloads.
-
-This is why Datalevin can stay fact-centric and normalized at the model level
-without giving up practical performance.
+By understanding these fundamentals, you can better tune your schema and queries for maximum performance.
