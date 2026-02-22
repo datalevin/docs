@@ -244,3 +244,5 @@ Here, the `not-join` efficiently finds all users who do *not* appear as a custom
 ## Summary
 
 Datalog's declarative nature frees you from thinking about the implementation details of your query. By stating your constraints clearly and using built-in constructs like `or-join` and `not-join` for subqueries, you can write expressive, powerful, and highly performant queries, trusting that Datalevin's optimizer will find the most efficient path to your data.
+
+In the next chapter, we will explore **Rules and Recursion**, which allow you to encapsulate this logic for reuse and traverse complex, hierarchical data structures.
