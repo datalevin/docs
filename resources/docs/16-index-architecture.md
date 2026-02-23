@@ -97,7 +97,7 @@ This nested storage eliminates redundant prefixes. In EAV, an entity with 10 att
 
 ---
 
-## 6. Summary: Indexes as Capabilities
+## 7. Summary: Indexes as Capabilities
 
 By making every attribute indexed by default and providing direct API access to those indexes, Datalevin transforms the database from a "black box" into a set of **programmable capabilities**.
 

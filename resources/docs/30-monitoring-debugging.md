@@ -51,7 +51,7 @@ LMDB reuses deleted pages rather than shrinking the file. `db-stats` will show y
 
 When queries are slow or the system feels sluggish, use these tools to find the bottleneck.
 
-- **Query Tracing**: Use `:trace true` in your queries (Chapter 24) to see which joins are consuming the most time.
+- **Query Analysis**: Use `d/explain` (Chapter 24) to inspect query plans and understand execution strategy.
 - **Writer Contention**: If `d/transact!` calls are slow but the disk is idle, check if multiple threads are competing for the single Writer Lock.
 - **Logging**: Use a library like Timbre to log transaction times and query latencies.
 
@@ -73,7 +73,7 @@ Before you "go live," ensure your configuration matches these best practices.
 - [ ] **Transparent Huge Pages (THP)**: Often recommended to be disabled or set to `madvise` for database workloads.
 
 ### 4.3 Operations
-- [ ] **Automated Backups**: Use `d/snapshot` to create transactionally consistent backups without downtime.
+- [ ] **Automated Backups**: Use `d/copy` to create transactionally consistent backups without downtime.
 - [ ] **Monitoring Hooks**: Use `d/listen!` to track transaction volume and data growth.
 - [ ] **Health Checks**: Implement a `/health` endpoint that performs a simple `(d/q '[:find ?e :limit 1] db)` to verify end-to-end connectivity.
 

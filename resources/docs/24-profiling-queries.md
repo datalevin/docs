@@ -29,17 +29,39 @@ The trace output includes the **Cost**, **Cardinality**, and **Execution Time** 
 
 ---
 
-## 2. Reading the Execution Trace
+## 2. Understanding Query Plans with `d/explain`
+
+Datalevin provides the **`d/explain`** function to inspect the query plan without executing the query. This helps you understand how the optimizer will process your query.
+
+```clojure
+(d/explain db
+  '[:find ?name
+    :where [?e :user/name ?name]
+           [?e :user/age ?age]
+           [(> ?age 30)]])
+```
+
+The output shows:
+- **Join order**: The sequence of clauses the optimizer chose
+- **Join methods**: Which method (forward ref, reverse ref, hash join, etc.) is used for each join
+- **Index scans**: What indexes are used for each clause
+- **Estimated cardinalities**: The optimizer's predicted result sizes
+
+Use `explain` to verify that your query is using the expected indexes and join strategies before running it with real data.
+
+---
+
+## 3. Reading the Execution Trace
 
 A trace is a nested data structure that describes how the engine "walked" through your query.
 
-### 2.1 Key Metrics to Watch
+### 3.1 Key Metrics to Watch
 - **Index Scans**: How many datoms were read from the B+Tree for each clause?
 - **Joins**: How many entities were matched at each step?
 - **Filters**: How many results were discarded by predicates like `(> ?age 30)`?
 - **Execution Time**: Which specific clause consumed the most CPU time?
 
-### 2.2 Identifying Bottlenecks
+### 3.2 Identifying Bottlenecks
 A common performance bottleneck is a **"Large Intermediate Result Set."**
 If the first join returns 1,000,000 entities, but the second join filters them down to 10, the engine still had to process 1,000,000 records.
 
@@ -47,7 +69,7 @@ If the first join returns 1,000,000 entities, but the second join filters them d
 
 ---
 
-## 3. Profiling Slow Predicates
+## 4. Profiling Slow Predicates
 
 If your query uses custom functions (Chapter 9), Datalevin's optimizer treats them as "black boxes" with an unknown cost.
 
@@ -57,7 +79,7 @@ If a trace shows that a predicate clause like `[(my-ns/is-complex? ?x)]` is taki
 
 ---
 
-## 4. Understanding Join Orders
+## 5. Understanding Join Orders
 
 The trace will show you the **Join Order** chosen by the optimizer.
 
@@ -68,14 +90,15 @@ If you see that the engine is starting with a non-selective clause (e.g., search
 
 ---
 
-## 5. Summary: The Profiling Workflow
+## 6. Summary: The Profiling Workflow
 
 When a query is slow, follow this workflow:
 
-1.  **Enable `:trace true`**: Get the raw execution data.
-2.  **Find the "Heavy" Clause**: Look for the clause with the highest execution time or the largest number of index scans.
-3.  **Check Cardinalities**: Are the actual number of results much higher than what you (or the optimizer) expected?
-4.  **Simplify and Isolate**: Remove clauses one by one to find the specific part of the query that is slow.
-5.  **Refine the Logic**: Use more selective attributes or move slow custom predicates to the end of the `:where` block.
+1.  **Use `d/explain`**: Inspect the query plan to verify join methods and index usage
+2.  **Enable `:trace true`**: Get the raw execution data.
+3.  **Find the "Heavy" Clause**: Look for the clause with the highest execution time or the largest number of index scans.
+4.  **Check Cardinalities**: Are the actual number of results much higher than what you (or the optimizer) expected?
+5.  **Simplify and Isolate**: Remove clauses one by one to find the specific part of the query that is slow.
+6.  **Refine the Logic**: Use more selective attributes or move slow custom predicates to the end of the `:where` block.
 
 By mastering the profiling API, you gain the transparency needed to ensure that every query in your Datalevin database is running at peak performance.

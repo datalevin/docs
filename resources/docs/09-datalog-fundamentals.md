@@ -209,9 +209,9 @@ By default, all clauses are joined with an implicit `and`. You can use `or` and 
 
 ## 7. Subqueries: The Right Way and the Wrong Way
 
-A common requirement is to filter a set of results based on another query. 
+A common requirement is to filter a set of results based on another query.
 
-### 5.1 The Performance Trap: Nested `q`
+### 7.1 The Performance Trap: Nested `q`
 It is technically possible to nest a `d/q` call inside a predicate. **You should almost never do this.**
 
 ```clojure
@@ -226,7 +226,7 @@ It is technically possible to nest a `d/q` call inside a predicate. **You should
 ```
 The inner query is executed once for *every single tuple* (in this case, every London user) found by the outer query. This is extremely inefficient.
 
-### 5.2 The Correct Way: `or-join` and `not-join`
+### 7.2 The Correct Way: `or-join` and `not-join`
 Datalog provides `or-join` and `not-join` clauses for performing efficient subqueries. These are integrated directly into the query optimizer.
 
 ```clojure
@@ -238,6 +238,62 @@ Datalog provides `or-join` and `not-join` clauses for performing efficient subqu
      db)
 ```
 Here, the `not-join` efficiently finds all users who do *not* appear as a customer in any order, and joins that result with the set of London users. This is vastly more performant than the nested `q` approach.
+
+---
+
+## 8. Flexible Data Sources: Beyond a Single Database
+
+One of the most powerful aspects of Datalevin's Datalog engine is that queries are not limited to a single database. The `:in` clause allows you to specify multiple data sources, enabling cross-database joins and ad-hoc data analysis.
+
+### 8.1 Multiple Databases
+
+You can pass multiple Datalevin databases to a single query, referenced by different symbols in `:in`:
+
+```clojure
+;; Join across two databases: a user db and an orders db
+(d/q '[:find ?name ?order-total
+       :in $users $orders ?min-total
+       :where [$users ?e :user/name ?name]
+              [$orders ?order :order/customer ?e]
+              [$orders ?order :order/total ?order-total]
+              [(> ?order-total ?min-total)]]
+     user-db order-db 100)
+```
+
+This is invaluable when:
+- Keeping separate databases for different tenants or domains
+- Performing migration or reconciliation between systems
+
+### 8.2 EAV Sequences as Data Sources
+
+Even more flexibly, the query engine accepts **any sequence of EAV tuples** as a
+data source. If you can represent your data as `[entity attribute value]`
+triples, you can query it with Datalog, no database required.
+
+```clojure
+;; Query an in-memory collection of tuples
+(def my-data
+  [[1 :user/name "Alice"]
+   [1 :user/age 30]
+   [2 :user/name "Bob"]
+   [2 :user/age 25]])
+
+(d/q '[:find ?name
+       :in $ ?min-age
+       :where [$ ?e :user/name ?name]
+              [$ ?e :user/age ?age]
+              [(>= ?age ?min-age)]]
+     my-data 28)
+;; => #{["Alice"]}
+```
+
+This capability enables:
+- **Ad-hoc analysis**: Query CSV files, JSON data, or API responses by transforming them into EAV tuples
+- **Testing**: Write Datalog queries against fixture data without setting up a test database
+- **Data transformation**: Use Datalog's pattern matching to reshape or filter in-memory collections
+- **Prototyping**: Experiment with query logic on sample data before committing to a schema
+
+The EAV model is not just a storage format—it is a universal data representation that makes Datalevin's query engine applicable far beyond traditional database use cases.
 
 ---
 

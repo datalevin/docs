@@ -4,17 +4,17 @@ chapter: 25
 part: "V — Performance and Dataflow"
 ---
 
-# Chapter 25: Incremental Computation and Semi-Naive Evaluation
+# Chapter 25: Rules Engine and Recursive Evaluation
 
-Datalog is more than just a search engine; it is a **deductive logic** system. When you use recursive rules (Chapter 10), you are essentially deriving new facts from the base facts in your database. Calculating these new facts efficiently—especially in large graphs—requires a specialized approach to recursion.
+Datalog's power lies in its ability to define **recursive rules** that derive new facts from base data. However, evaluating recursive rules efficiently requires sophisticated algorithms to avoid exponential blowup.
 
-This chapter explores **Semi-Naive Evaluation**, the engine that powers Datalevin's high-speed recursive rules.
+This chapter explores Datalevin's **bottom-up rules engine**, which implements the latest research advances in Datalog evaluation with several innovations of its own.
 
 ---
 
 ## 1. The Challenge of Naive Recursion
 
-Imagine a simple recursive rule for finding ancestors:
+Consider a simple recursive rule for finding ancestors:
 ```clojure
 [(ancestor ?x ?y) [?x :parent ?y]]
 [(ancestor ?x ?y) [?x :parent ?z] (ancestor ?z ?y)]
@@ -23,48 +23,77 @@ Imagine a simple recursive rule for finding ancestors:
 In a **Naive Evaluation** model:
 1.  **Iteration 1**: Find all parents (the base case).
 2.  **Iteration 2**: Join all parents with themselves to find grandparents.
-3.  **Iteration 3**: Join all parents with the *entire set* of ancestors found in iterations 1 and 2 to find great-grandparents.
+3.  **Iteration 3**: Join all parents with the *entire set* of ancestors found in iterations 1 and 2.
 
-The problem is **redundant computation**. In iteration 3, you are re-calculating the grandparents you already found in iteration 2. As the depth of the graph increases, the amount of redundant work grows exponentially, making the query incredibly slow for large datasets.
-
----
-
-## 2. Semi-Naive Evaluation: The Efficient Alternative
-
-Datalevin uses **Semi-Naive Evaluation** to solve this problem. Instead of joining with the *entire* set of previously found ancestors, it only joins with the **new** ancestors found in the *previous iteration*.
-
-1.  **Iteration 1**: Find `Delta-1` (parents).
-2.  **Iteration 2**: Join parents with `Delta-1` to find `Delta-2` (grandparents).
-3.  **Iteration 3**: Join parents with `Delta-2` to find `Delta-3` (great-grandparents).
-
-By only processing the **incremental changes** at each step, Datalevin ensures that every "fact" in the recursive path is calculated exactly once. This is the secret to why Datalevin can perform deep graph traversals across millions of nodes in milliseconds.
+The problem is **redundant computation**. In iteration 3, you re-calculate grandparents already found in iteration 2. This exponential blowup makes naive recursion unusable for large graphs.
 
 ---
 
-## 3. Incremental Updates and Fixpoints
+## 2. Semi-Naive Fixpoint Evaluation
 
-Datalog evaluation continues until a **fixpoint** is reached—the point where no new facts can be derived.
+Datalevin uses **Semi-Naive Evaluation (SNE)**, the standard bottom-up strategy:
 
-### 3.1 Termination Guarantees
-One of the key benefits of semi-naive evaluation is that it **guarantees termination**. Even if your graph has cycles (e.g., Alice follows Bob, Bob follows Alice), the engine detects that no *new* facts are being produced and stops the recursion. This prevents the infinite loops common in naive recursive functions.
+1.  **Delta tracking**: Only process *new* tuples discovered in each iteration
+2.  **Fixpoint**: Continue until no new tuples are produced
+3.  **Stratification**: Rules run in strongly connected components (strata) in topological order
 
----
-
-## 4. Semi-Naive Evaluation in Datalevin
-
-Datalevin's semi-naive engine is highly optimized for the LMDB storage layer.
-
-- **Index Locality**: The `Delta` sets for each iteration are stored in high-speed in-memory structures or temporary LMDB sub-databases.
-- **Unified Joins**: The engine uses the same cost-based optimizer (Chapter 23) for each iteration of the semi-naive loop, ensuring that every step of the recursion is as fast as possible.
+This ensures every fact is derived exactly once, providing linear performance for deep graph traversals.
 
 ---
 
-## 5. Summary: Performance through Precision
+## 3. Magic Set Rewrite
 
-Semi-naive evaluation is the "engine under the hood" of Datalevin's graph and recursive capabilities.
+Datalevin implements the **magic set rewrite** algorithm. This technique adds "magic rules" that leverage bound variables to prune unnecessary intermediate results.
 
-- **No Redundancy**: Only process new facts in each iteration.
-- **Scalability**: Handle deep paths and large graphs with linear performance.
-- **Safety**: Built-in termination guarantees for cyclic data.
+When querying for ancestors of a *specific person* (e.g., "who are Alice's
+ancestors?"), magic sets push that filter down into the recursive rule, so the
+engine doesn't compute the entire family tree, just the paths leading from Alice.
 
-By combining this efficient evaluation strategy with the power of Datalog, Datalevin provides a logic engine that is both incredibly expressive and fundamentally fast.
+---
+
+## 4. Innovations in Datalevin's Rules Engine
+
+### 4.1 Seeding Tuples
+
+Unlike a standalone SNE engine, Datalevin's rules engine doesn't work from a blank slate. It receives **seeding tuples** from outer query clauses.
+
+These seeds:
+- Come from index scans powered by the cost-based optimizer
+- Act as filters to prevent unnecessary tuple generation during SNE
+- Provide a "warm start" for recursive evaluation
+
+### 4.2 Inline Non-Recursive Clauses
+
+Datalevin identifies clauses not involved in recursion, pulls them out, and adds them to regular query clauses where the **cost-based optimizer** can work on them.
+
+SNE only operates on rules actually involved in recursion. This innovation leverages index-based joins (faster than SNE) for non-recursive parts.
+
+### 4.3 Temporal Elimination
+
+For recursive rules that meet **T-stratification** criteria, Datalevin implements temporal elimination—an optimization that:
+- Saves only the results of the *last* iteration
+- Avoids storing intermediate delta sets
+- Significantly reduces memory usage for long recursion chains
+
+---
+
+## 5. Benchmarks
+
+Datalevin's rules engine has been validated against industry benchmarks:
+
+- **LDBC SNB Benchmark**: Industry graph database benchmark. Datalevin compares favorably with Neo4j, particularly on queries leveraging rules.
+- **Math Genealogy Benchmark**: Compared with Datomic and Datascript. Datalevin is significantly faster, with **several orders of magnitude** speedup on recursive rules.
+
+---
+
+## 7. Summary: Why Bottom-Up Wins
+
+Datalevin's rules engine combines academic rigor with practical innovations:
+
+- **Semi-Naive Evaluation**: Process only new facts at each step
+- **Magic Set Rewrite**: Push filters into recursive rules
+- **Seeding**: Leverage the query optimizer for warm starts
+- **Inline Non-Recursive Clauses**: Let the CBO handle non-recursive parts
+- **Temporal Elimination**: Save memory for T-stratified rules
+
+The result is a rules engine that can handle millions of nodes in recursive queries while remaining memory-efficient and fast.

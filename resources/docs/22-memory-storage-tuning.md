@@ -27,6 +27,8 @@ Unlike a traditional Java heap, the `:mapsize` is a **virtual memory** reservati
 (d/get-conn path schema {:mapsize (* 128 1024 1024 1024)})
 ```
 
+> **Note**: Datalevin will automatically grow the mapsize if it runs out of space, but this is an expensive operation that causes a significant performance spike. Setting an appropriately large mapsize upfront avoids this overhead.
+
 ---
 
 ## 2. Leveraging the OS Page Cache
@@ -53,27 +55,7 @@ LMDB uses a "lock-free" reader model, but it still needs to track active readers
 
 ---
 
-## 4. Reclaiming Storage Space: Compaction
-
-A B+Tree database like LMDB does not automatically "shrink" its file size on disk when data is deleted. Instead, deleted pages are added to a **Free List** and reused for future writes.
-
-### 4.1 Reclaiming Disk Space
-If you have deleted a massive amount of data and want to reclaim disk space, you must perform a **Copy-Compact** operation.
-
-Datalevin provides a specialized function for this:
-```clojure
-;; This creates a new, perfectly compacted copy of the database
-(d/compact conn "/path/to/new-db-file")
-```
-
-This operation reads all active datoms from the current database and writes them sequentially into a new file, which:
-1.  Reclaims all free space.
-2.  Optimizes the B+Tree for maximum read speed.
-3.  Minimizes on-disk fragmentation.
-
----
-
-## 5. Storage Efficiency: Prefix Compression
+## 4. Storage Efficiency: Prefix Compression
 
 Datalevin's storage engine (DLMDB) uses **prefix compression** to minimize the on-disk footprint of your indexes.
 
@@ -83,14 +65,12 @@ In a Datalog AVE index, many keys share the same Attribute and Value (e.g., thou
 
 ---
 
-## 6. Summary: The Tuning Checklist
+## 5. Summary: The Tuning Checklist
 
 When deploying Datalevin to production, follow this checklist:
 
 1.  **Set a large `:mapsize`**: Reserve enough virtual address space for your future growth.
 2.  **Monitor Page Cache usage**: Ensure your server has enough RAM to keep your working set in memory.
 3.  **Adjust `:max-readers`**: If you have a high-concurrency application, increase the reader limit.
-4.  **Compact periodically**: If you perform large deletions, use `d/compact` to reclaim disk space and optimize indexes.
-5.  **Use WAL mode**: For write-heavy workloads, enable sequential WAL writes to bypass B+Tree random I/O overhead.
 
 By tuning these parameters, you ensure that Datalevin's zero-copy architecture remains fast, stable, and efficient across any dataset size.

@@ -1,10 +1,10 @@
 ---
-title: "Durability, Snapshots, and Backup Strategies"
+title: "Durability, Backups, and Database Maintenance"
 chapter: 26
 part: "VI — Systems and Operations"
 ---
 
-# Chapter 26: Durability, Snapshots, and Backup Strategies
+# Chapter 26: Durability, Backups, and Database Maintenance
 
 Performance is useless if your data is not safe. Datalevin's storage engine (LMDB/DLMDB) is famous for its **reliability** and **immediate recovery** in the face of system crashes.
 
@@ -30,59 +30,163 @@ The speed of your writes is primarily limited by the speed of your disk's **sync
 
 - **Safe by Default**: On every transaction commit, Datalevin tells the OS to flush the Page Cache to disk. This ensures that even if the OS crashes, your data is safe.
 - **Hardware Impact**: On high-speed NVMe drives, this flush is very fast. On older magnetic drives or cloud-based block storage (like AWS EBS), it can be a major bottleneck.
-- **WAL Mode**: As discussed in Chapter 4, the **WAL mode** can mitigate this by turning many random `msync` calls into a single sequential log write.
 
 ---
 
-## 3. Online Snapshots: `d/snapshot`
+## 3. Non-Durable Environment Flags
+
+Datalevin supports faster, albeit less durable write modes by passing environment flags when opening the database. These trade safety for speed and are useful for temporary bulk imports where you can re-run the import if needed.
+
+| Flag | Speedup | Implication |
+|------|---------|-------------|
+| `:nometasync` | up to 5X | Last transaction may be lost at crash, but DB integrity retained |
+| `:nosync` | up to 20X | OS syncs data; crash may corrupt DB |
+| `:writemap` + `:mapasync` | up to 25X | Crash may corrupt DB; OS preallocates disk to map size |
+
+### 3.1 Setting Flags
+
+```clojure
+(require '[datalevin.constants :as c])
+
+;; Using :nosync for temporary bulk imports
+(def conn (d/get-conn path schema {:kv-opts {:flags (conj c/default-env-flags :nosync)}}))
+
+;; Using :writemap + :mapasync for maximum speed
+(def conn (d/get-conn path schema {:kv-opts {:flags (-> c/default-env-flags
+                                                         (conj :writemap)
+                                                         (conj :mapasync))}}))
+```
+
+You can also toggle flags dynamically:
+
+```clojure
+(d/set-env-flags kv-db [:nosync] false)
+```
+
+> **Warning**: These flags risk data loss or DB corruption on system crash. Only use for temporary bulk imports. Call `d/sync` manually to force flushes at safe points.
+
+---
+
+## 4. Online Snapshots: `d/copy`
 
 Backing up a live database can be tricky. If you simply copy the file while a write is happening, the copy might be corrupted.
 
-Datalevin provides a specialized **`d/snapshot`** function for safe, online backups.
+Datalevin's **`d/copy`** function creates a consistent snapshot of the database. It can run while the database is actively used—readers can continue accessing the source while the copy is being made.
 
 ```clojure
-;; Create a consistent snapshot of the live database
-(d/snapshot conn "/path/to/backup-file")
+;; Create a snapshot of the live database
+(d/copy conn "/path/to/backup-db")
 ```
 
-- **Live Backups**: You can run `snapshot` while the database is being actively queried and written to.
-- **Consistency**: The snapshot represents a single, transactionally consistent point in time.
-- **Zero-Impact**: Because of LMDB's MVCC architecture (Chapter 27), the snapshot doesn't block writers or other readers.
+- **Live Backups**: You can run `copy` while the database is being actively queried and written to.
+- **Consistency**: The copy represents a single, transactionally consistent point in time.
+- **Zero-Impact**: Because of LMDB's MVCC architecture (Chapter 27), the copy doesn't block writers or other readers.
 
 ---
 
-## 4. Backup Strategies: File Copies
+## 5. Database Maintenance: Copy, Dump, and Load
 
-Because LMDB is just a single file (or a directory with two files), backups are straightforward.
+Datalevin provides comprehensive command-line and API tools for database maintenance, backup, and migration.
 
-### 4.1 Simple File Copy (Offline)
-If you can stop the database, you can simply use `cp`, `rsync`, or `tar` to copy the database directory. The resulting copy is a perfectly valid Datalevin database.
+### 5.1 Compacting with `d/copy`
 
-### 4.2 Incremental Backups (Rsync)
-Because LMDB only writes to new pages (CoW), an `rsync` of the database file can be very efficient, as it only needs to copy the changed pages.
+LMDB's copy functionality creates a compacted copy of the database. This reclaims all free space from deleted data and optimizes the B+Tree for maximum read speed.
 
-> **Tip**: Always use `d/snapshot` for live backups to ensure the copy is never "torn" by a concurrent write.
+```clojure
+;; Copy and compact the database
+(d/copy conn "/path/to/backup-db" {:compact? true})
+```
+
+The copy operation can run **regardless of whether the database is currently in use**—readers can continue accessing the source while the copy is being made.
+
+### 5.2 The `dtlv` Command Line Tool
+
+The `dtlv` CLI tool provides interactive and batch database operations:
+
+```console
+# Interactive REPL
+$ dtlv
+
+# Backup with compaction
+$ dtlv -d /data/companydb -c copy /backup/companydb-2024-01-15
+
+# Dump database to file
+$ dtlv -d /data/companydb -g -f ~/dump.edn dump
+
+# Load dump into new database
+$ dtlv -d /data/newdb -f ~/dump.edn -g load
+
+# View database statistics
+$ dtlv -d /data/companydb stat
+
+# List sub-databases
+$ dtlv -d /data/companydb -l dump
+```
+
+Key options:
+- `-c, --compact`: Compact while copying
+- `-g, --datalog`: Dump/load as Datalog database
+- `-n, --nippy`: Use Nippy binary format for faster serialization
+
+### 5.3 Dump and Load Formats
+
+Datalevin supports multiple dump/load formats:
+
+- **EDN (default)**: Human-readable, version-independent text format
+- **Nippy**: Binary format for faster serialization of large databases
+
+```console
+# Binary dump/load (faster)
+$ dtlv -d /data/companydb -n -f ~/backup.nippy dump
+$ dtlv -d /data/newdb -n -f ~/backup.nippy load
+```
 
 ---
 
-## 5. Recovery: Restoring from a Backup
+## 6. Re-Indexing
 
-Restoring a Datalevin database is as simple as:
-1.  Stopping the application.
-2.  Replacing the database directory with your backup.
-3.  Restarting the application.
+Datalevin provides a `re-index` function that rebuilds the in-memory index structures from the on-disk data. This can be useful in recovery scenarios or when index structures become stale.
 
-Since there is no "log replay" or "database warming" needed, your application can be back online in seconds.
+```clojure
+;; Rebuild indexes
+(def reindexed-db (d/re-index db))
+```
 
 ---
 
-## 6. Summary: The Operations Checklist
+## 7. Database Upgrades
+
+When upgrading Datalevin to a new minor version, you may need to migrate your database. Datalevin provides automatic migration for databases newer than version 0.9.27.
+
+### 7.1 Automatic Migration
+For databases created with Datalevin 0.9.27 or later, opening with a newer version triggers automatic migration. This process downloads the old version's uberjar to dump the data, then loads it with the new version.
+
+### 7.2 Manual Migration
+For older databases, use the command line tool:
+
+```console
+# 1. Backup and compact with old version
+$ dtlv-0.4 -d /src/dir -c copy /backup/dir
+
+# 2. Dump with old version
+$ dtlv-0.4 -d /src/dir -g -f dump.edn dump
+
+# 3. Load with new version
+$ dtlv -d /dest/dir -f dump.edn -g load
+```
+
+---
+
+## 8. Summary: The Operations Checklist
 
 To ensure your data is safe and recoverable, follow this checklist:
 
 1.  **Monitor disk space**: LMDB needs enough free space to perform its CoW operations.
-2.  **Automate `d/snapshot`**: Run a daily or hourly snapshot and move the result to an off-site location (e.g., AWS S3).
+2.  **Automate `d/copy`**: Run a daily or hourly snapshot and move the result to an off-site location (e.g., AWS S3).
 3.  **Test your restores**: Regularly practice restoring from a snapshot to a fresh server.
 4.  **Use NVMe for speed**: The durability of your database is directly tied to the IOPS and latency of your disk.
+5.  **Use non-durable flags for bulk imports**: When doing large one-time imports, use `:nosync` or `:writemap` for speed, then re-enable for production.
+6.  **Compact periodically**: Use `d/copy` with `{:compact? true}` to reclaim disk space after large deletions.
+7.  **Plan upgrades**: When upgrading Datalevin versions, use dump/load for databases older than 0.9.27.
 
 By leveraging Datalevin's rock-solid CoW architecture, you can sleep soundly knowing your data is safe from crashes and easy to recover from disasters.
