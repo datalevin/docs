@@ -58,12 +58,71 @@
                     :part (:part frontmatter)})]
     (sort-by :chapter chapters)))
 
+(def ^:private card-style "dl-card")
+
+(def ^:private btn-style "dl-btn")
+
+(def ^:private slack-url
+  (str "https://clojurians.slack.com/join/shared_invite/"
+       "zt-3mkyfmlaa-IHIYCGV0hEcZomaHnCHgdQ"
+       \# "/shared-invite/email"))
+
 (defn home [req]
-  (let [hero "<div><h1 style=\"font-size: 3rem; font-weight: bold; margin-bottom: 1.5rem; text-align: center;\">Datalevin</h1><p style=\"font-size: 1.25rem; color: #666; margin-bottom: 2rem; text-align: center;\">A simple, fast, and versatile Datalog database</p><div style=\"display: flex; justify-content: center; gap: 1rem; margin-bottom: 3rem;\"><a style=\"background: #2563eb; color: white; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 500;\" href=\"/docs/02-getting-started\">Get Started</a><a style=\"border: 1px solid #d1d5db; background: white; color: #374151; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 500;\" href=\"/docs\">Read the Book</a></div></div>"
-        features "<div style=\"max-width: 5xl; margin: 0 auto; padding: 2rem;\"><h2 style=\"font-size: 1.5rem; font-weight: bold; text-align: center; margin-bottom: 2rem;\">Why Datalevin?</h2><div style=\"display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem;\"><div style=\"background: white; padding: 1.5rem; border-radius: 0.5rem; border: 1px solid #e5e7eb;\"><h3 style=\"font-weight: 600; margin-bottom: 0.5rem;\">Fast</h3><p style=\"color: #666; font-size: 0.875rem;\">Built on LMDB, one of the fastest key-value stores.</p></div><div style=\"background: white; padding: 1.5rem; border-radius: 0.5rem; border: 1px solid #e5e7eb;\"><h3 style=\"font-weight: 600; margin-bottom: 0.5rem;\">Search</h3><p style=\"color: #666; font-size: 0.875rem;\">Built-in full-text and vector search.</p></div><div style=\"background: white; padding: 1.5rem; border-radius: 0.5rem; border: 1px solid #e5e7eb;\"><h3 style=\"font-weight: 600; margin-bottom: 0.5rem;\">Datalog</h3><p style=\"color: #666; font-size: 0.875rem;\">Powerful declarative queries.</p></div></div></div>"]
-    {:status 200
-     :headers {"Content-Type" "text/html"}
-     :body (str (layout/base-with-req "Datalevin Docs" req [:div]) hero features)}))
+  {:status 200
+   :headers {"Content-Type" "text/html"}
+   :body
+   (layout/base-with-req "Datalevin Docs" req
+    ;; Hero
+    [:div {:style "text-align:center;padding:3rem 1rem 0"}
+     [:h1 {:style "font-size:3rem;font-weight:bold;margin-bottom:1.5rem"} "Datalevin"]
+     [:p {:style "font-size:1.25rem;color:#666;margin-bottom:2rem"}
+      "A simple, fast, and versatile open-source Datalog database"]
+     [:div {:style "display:flex;justify-content:center;gap:1rem;margin-bottom:3rem"}
+      [:a {:href "/docs/02-getting-started" :class "dl-btn-primary"} "Get Started"]
+      [:a {:href "/docs" :class "dl-btn"} "Read the Book"]]]
+    ;; Features
+    [:div {:style "max-width:64rem;margin:0 auto;padding:2rem 2rem"}
+     [:h2 {:style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:2rem"} "Why Datalevin?"]
+     [:div {:style "display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.5rem"}
+      [:a {:href "/docs/03-mental-model" :class card-style}
+       [:h3 {:style "font-weight:600;margin-bottom:0.5rem"} "Simple"]
+       [:p {:style "color:#666;font-size:0.875rem"} "Declarative Datalog query language and triple data model."]]
+      [:a {:href "/docs/04-storage-fundamentals" :class card-style}
+       [:h3 {:style "font-weight:600;margin-bottom:0.5rem"} "Fast"]
+       [:p {:style "color:#666;font-size:0.875rem"} "Built on LMDB, one of the fastest key-value stores."]]
+      [:a {:href "/docs/01-why-datalevin" :class card-style}
+       [:h3 {:style "font-weight:600;margin-bottom:0.5rem"} "Versatile"]
+       [:p {:style "color:#666;font-size:0.875rem"} "Relational, graph, document, vector, full-text search in a unified data store."]]]
+     [:div {:style "display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.5rem;margin-top:1.5rem"}
+      [:a {:href "/docs/02-getting-started" :class card-style}
+       [:h3 {:style "font-weight:600;margin-bottom:0.5rem"} "Flexible"]
+       [:p {:style "color:#666;font-size:0.875rem"} "Seamless deployment model \u2014 embedded, client/server, and command line scripting."]]
+      [:a {:href "/docs/26-durability-backups" :class card-style}
+       [:h3 {:style "font-weight:600;margin-bottom:0.5rem"} "Reliable"]
+       [:p {:style "color:#666;font-size:0.875rem"} "Transaction log access, replication and high availability."]]
+      [:a {:href "/docs/31-agent-memory" :class card-style}
+       [:h3 {:style "font-weight:600;margin-bottom:0.5rem"} "AI Ready"]
+       [:p {:style "color:#666;font-size:0.875rem"} "Built-in MCP server, ideal for agent memory and agentic applications."]]]]
+    ;; Community
+    [:div {:style "max-width:64rem;margin:0 auto;padding:2rem 2rem"}
+     [:h2 {:style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:0.75rem"} "Community"]
+     [:p {:style "text-align:center;color:#666;font-size:1rem;margin-bottom:1.5rem"}
+      "Sharing ideas and helping each other with questions, examples, and issues."]
+     [:div {:style "display:flex;justify-content:center;gap:1rem;flex-wrap:wrap"}
+      [:a {:href "/examples" :class btn-style} "Community Examples"]
+      [:a {:href slack-url :target "_blank" :rel "noopener noreferrer" :class btn-style}
+       (str \# "datalevin Clojurians Slack")]
+      [:a {:href "https://github.com/datalevin/datalevin/discussions"
+           :target "_blank" :rel "noopener noreferrer" :class btn-style}
+       "GitHub Discussions"]]]
+    ;; Support
+    [:div {:style "max-width:64rem;margin:0 auto;padding:2rem 2rem 3rem"}
+     [:h2 {:style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:0.75rem"} "Support the Project"]
+     [:p {:style "text-align:center;color:#666;font-size:1rem;margin-bottom:1.5rem"}
+      "If you enjoy Datalevin and it is helping you succeed, consider sponsoring the development and maintenance of this project."]
+     [:div {:style "display:flex;justify-content:center"}
+      [:a {:href "https://github.com/sponsors/huahaiy" :target "_blank" :rel "noopener noreferrer" :class btn-style}
+       "GitHub Sponsors"]]])}))
 
 (defn docs-index [req]
   (let [chapters (load-chapter-meta)

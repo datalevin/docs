@@ -12,7 +12,14 @@
       [:nav {:class "hidden md:flex items-center gap-6"}
        [:a {:href "/docs" :class "text-gray-700 hover:text-blue-600"} "The Book"]
        [:a {:href "/examples" :class "text-gray-700 hover:text-blue-600"} "Examples"]
-       [:a {:href "/search" :class "text-gray-700 hover:text-blue-600"} "Search"]]
+       [:a {:href "/search" :class "text-gray-700 hover:text-blue-600"} "Search"]
+       [:a {:href "https://github.com/datalevin/datalevin" :target "_blank" :rel "noopener noreferrer"
+            :class "flex items-center gap-1.5 text-gray-700 hover:text-blue-600"}
+        [:span "GitHub"]
+        [:svg {:xmlns "http://www.w3.org/2000/svg" :viewBox "0 0 16 16" :fill "currentColor"
+               :width "16" :height "16" :class "flex-shrink-0"}
+         [:path {:d "M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"}]]
+        [:span {:id "gh-stars" :class "text-xs font-medium whitespace-nowrap"}]]]
       [:div {:class "flex items-center gap-4"}
        (if user
          [:div {:class "flex items-center gap-3"}
@@ -21,19 +28,21 @@
           [:a {:href "/examples/new" :class "text-sm text-blue-600 hover:underline"} "Add Example"]
           [:a {:href "/auth/logout" :class "text-sm text-gray-500 hover:text-gray-700"} "Logout"]]
          [:div {:class "flex items-center gap-3"}
-          [:a {:href "/auth/login" :class "text-sm text-gray-600 hover:text-gray-900"} "Log in"]
-          [:a {:href "/auth/register" :class "bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700"} "Sign up"]])]]]))
+          [:a {:href "/auth/login" :class "text-sm text-gray-600 hover:text-gray-900"
+               :title "Sign in to post examples and download the book"} "Log in"]
+          [:a {:href "/auth/register" :class "bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700"
+               :title "Sign in to post examples and download the book"} "Sign up"]])]]]))
 
 (defn flash-message [flash]
   (when flash
     [:div {:class "fixed top-20 left-1/2 -translate-x-1/2 z-50"}
      (when-let [error (:error flash)]
        [:div {:class "bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded shadow-lg"
-              :hx-get "/_flash" :hx-vals {:json (pr-str {:success nil})} :hx-trigger "load delay:3s"}
+              :hx-get "/_flash" :hx-vals {:json "null"} :hx-trigger "load delay:3s"}
         error])
      (when-let [success (:success flash)]
        [:div {:class "bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded shadow-lg"
-              :hx-get "/_flash" :hx-vals {:json (pr-str {:error nil})} :hx-trigger "load delay:3s"}
+              :hx-get "/_flash" :hx-vals {:json "null"} :hx-trigger "load delay:3s"}
         success])]))
 
 (defn base [title & body]
@@ -43,10 +52,12 @@
       [:meta {:charset "utf-8"}]
       [:meta {:content "width=device-width, initial-scale=1" :name "viewport"}]
       [:title title]
+      [:link {:rel "icon" :type "image/png" :href "/images/logo.png"}]
       [:script {:src "/js/htmx.min.js"}]
       [:link {:href "/css/output.css" :rel "stylesheet"}]
-      [:style "html { scroll-behavior: smooth; }"]]
-     [:body {:class "bg-gray-50"}
+      [:style "html { scroll-behavior: smooth; }
+body { background: linear-gradient(135deg, #eef2ff 0%, #f9fafb 40%, #f0fdf4 70%, #fefce8 100%); background-attachment: fixed; min-height: 100vh; }"]]
+     [:body
       (header)
       body]])))
 
@@ -60,14 +71,23 @@
         [:meta {:charset "utf-8"}]
         [:meta {:content "width=device-width, initial-scale=1" :name "viewport"}]
         [:title title]
+        [:link {:rel "icon" :type "image/png" :href "/images/logo.png"}]
         [:script {:src "/js/htmx.min.js"}]
         [:link {:href "/css/output.css" :rel "stylesheet"}]
         [:link {:href "/css/hljs-atom-one-dark.min.css" :rel "stylesheet"}]
         [:script {:src "/js/highlight.min.js"}]
         [:script {:src "/js/hljs-clojure.min.js"}]
         [:script {:src "/js/code-highlight.js" :defer true}]
-        [:style "html { scroll-behavior: smooth; }"]]
-       [:body {:class "bg-gray-50 min-h-screen"}
+        [:script {:src "/js/gh-stars.js" :defer true}]
+        [:style "html { scroll-behavior: smooth; }
+body { background: linear-gradient(135deg, #eef2ff 0%, #f9fafb 40%, #f0fdf4 70%, #fefce8 100%); background-attachment: fixed; min-height: 100vh; }
+.dl-card { display:block; background:white; padding:1.5rem; border-radius:0.5rem; border:1px solid #e5e7eb; transition: transform 0.15s, box-shadow 0.15s; text-decoration:none; color:inherit; cursor:pointer; }
+.dl-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-color: #c7d2fe; }
+.dl-btn { display:inline-block; border:1px solid #d1d5db; background:white; color:#374151; padding:0.625rem 1.25rem; border-radius:0.5rem; font-weight:500; font-size:0.875rem; text-decoration:none; transition: all 0.15s; cursor:pointer; }
+.dl-btn:hover { background:#f3f4f6; border-color:#9ca3af; color:#111827; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+.dl-btn-primary { display:inline-block; background:#2563eb; color:white; padding:0.75rem 1.5rem; border-radius:0.5rem; font-weight:500; text-decoration:none; transition: all 0.15s; cursor:pointer; }
+.dl-btn-primary:hover { background:#1d4ed8; box-shadow: 0 4px 12px rgba(37,99,235,0.3); }"]]
+       [:body
         (header req)
         (flash-message flash)
         body]]))))
