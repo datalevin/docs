@@ -20,12 +20,22 @@
    :session/user {:db/valueType :db.type/ref}
    :session/expires-at {:db/valueType :db.type/instant}
 
+   ;; Email verification tokens
+   :verification-token/token {:db/valueType :db.type/string :db/unique :db.unique/identity}
+   :verification-token/user {:db/valueType :db.type/ref}
+   :verification-token/expires-at {:db/valueType :db.type/instant}
+
+   ;; Password reset tokens
+   :password-reset/token {:db/valueType :db.type/string :db/unique :db.unique/identity}
+   :password-reset/user {:db/valueType :db.type/ref}
+   :password-reset/expires-at {:db/valueType :db.type/instant}
+
    ;; Documentation
    :doc/slug {:db/valueType :db.type/string :db/unique :db.unique/identity}
    :doc/title {:db/valueType :db.type/string}
    :doc/chapter {:db/valueType :db.type/long}
    :doc/part {:db/valueType :db.type/string}
-   :doc/content {:db/valueType :db.type/string}
+   :doc/content {:db/valueType :db.type/string :db/fulltext true}
    :doc/html {:db/valueType :db.type/string}
    :doc/filename {:db/valueType :db.type/string :db/unique :db.unique/identity}
    :doc/order {:db/valueType :db.type/long}
@@ -65,7 +75,17 @@
 
    :session/id {:db/valueType :db.type/uuid :db/unique :db.unique/identity}
    :session/user {:db/valueType :db.type/ref}
-   :session/expires-at {:db/valueType :db.type/instant}})
+   :session/expires-at {:db/valueType :db.type/instant}
+
+   ;; Email verification tokens
+   :verification-token/token {:db/valueType :db.type/string :db/unique :db.unique/identity}
+   :verification-token/user {:db/valueType :db.type/ref}
+   :verification-token/expires-at {:db/valueType :db.type/instant}
+
+   ;; Password reset tokens
+   :password-reset/token {:db/valueType :db.type/string :db/unique :db.unique/identity}
+   :password-reset/user {:db/valueType :db.type/ref}
+   :password-reset/expires-at {:db/valueType :db.type/instant}})
 
 (def example-schema
   {:example/id {:db/valueType :db.type/uuid :db/unique :db.unique/identity}

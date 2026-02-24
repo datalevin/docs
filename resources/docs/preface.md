@@ -1,3 +1,8 @@
+---
+title: Preface
+chapter: 0
+---
+
 # Preface
 
 Modern applications demand more from data systems than any single traditional
@@ -25,12 +30,14 @@ not build the database from the ground up for multi-paradigm data modeling. The
 multiple data models are provided as add-ons, with reasoning, inference, and
 long-term state evolution treated as external concerns.
 
+![Datalevin unified data model](/images/unified.jpg)
+
 Datalevin[^name-origin] starts from a different premise: the database is built
 from the ground up to be multi-paradigm friendly. It achieves this flexibility by
 modeling data as atomic facts first. In relational and document database systems,
 an aggregate shape (a document, a row, or a column, with nested fields, columns, or
-rows) is the primary unit of storage, update, and retrieval. In Datalevin's triple
-model, the atomic unit is a fact of three elements: `entity`, `attribute`, and
+rows) is the primary unit of storage, update, and retrieval. In Datalevin's **triple
+model**, the atomic unit is a fact of three elements: `entity`, `attribute`, and
 `value`.
 
 This fact-first approach is a first-principled choice. It keeps the core model
@@ -38,8 +45,6 @@ small and composable, and delays workload-specific optimization decisions until
 they are justified by real needs. For example, rows or columns are just
 different organizations of the same set of facts. Rows are `entity`-major sorted
 facts, and columns are `attribute` and `value` sorted facts.
-
-TODO: picture here.
 
 On top of this conceptual model, Datalevin provides a unified implementation
 stack. Facts and indexes are persisted in a high-performance key-value engine,
@@ -50,6 +55,34 @@ The triple model supports a powerful query language called **Datalog**. It can
 declaratively express complex relational queries. In addition, query
 clauses in Datalog can be grouped into named reusable components called
 **rules**, which allow logical derivation of new facts and navigation in graphs.
+
+```clojure
+(require '[datalevin.core :as d])
+
+;; Define a schema and open a database
+(def schema {:person/name  {:db/unique :db.unique/identity}
+             :person/follows {:db/valueType :db.type/ref
+                              :db/cardinality :db.cardinality/many}})
+
+(def conn (d/get-conn "/tmp/preface-demo" schema))
+
+;; Transact some facts
+(d/transact! conn
+  [{:person/name "Alice" :person/follows [{:person/name "Bob"}]}
+   {:person/name "Bob"   :person/follows [{:person/name "Carol"}]}
+   {:person/name "Carol" :person/follows [{:person/name "Alice"}]}])
+
+;; Query: who does Alice follow, and who do they follow?
+(d/q '[:find ?name ?follows-name
+       :where
+       [?alice :person/name "Alice"]
+       [?alice :person/follows ?friend]
+       [?friend :person/name ?name]
+       [?friend :person/follows ?fof]
+       [?fof :person/name ?follows-name]]
+     (d/db conn))
+;; => #{["Bob" "Carol"]}
+```
 
 The triple model also allows rich secondary indices on attributes and their
 values. For example, full-text search, vector similarity, and automatic document

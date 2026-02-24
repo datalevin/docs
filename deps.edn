@@ -15,9 +15,9 @@
    clj-http/clj-http {:mvn/version "3.13.0"}
 
   ;; Utilities
-  aero/aero {:mvn/version "1.1.6"}
   org.commonmark/commonmark {:mvn/version "0.24.0"}
   org.commonmark/commonmark-ext-footnotes {:mvn/version "0.24.0"}
+  org.commonmark/commonmark-ext-gfm-tables {:mvn/version "0.24.0"}
   clj-commons/clj-yaml {:mvn/version "1.0.27"}  ; YAML frontmatter parsing
   com.draines/postal {:mvn/version "2.0.5"}
   metosin/jsonista {:mvn/version "0.3.13"}
@@ -37,6 +37,7 @@
         :extra-deps {org.clojure/tools.namespace {:mvn/version "1.5.0"}
                      nrepl/nrepl {:mvn/version "1.1.0"}
                      com.nextjournal/beholder {:mvn/version "1.0.3"}
+                     ring/ring-devel {:mvn/version "1.12.2"}
                      ;; Local submodule during development
                      io.github.datalevin/biff-datalevin {:local/root "lib/biff-datalevin"}}
         :main-opts ["-m" "nrepl.cmdline" "--interactive"]}

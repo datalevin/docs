@@ -6,11 +6,12 @@
   (let [user (:user req)]
     [:header {:class "sticky top-0 z-50 bg-white border-b shadow-sm"}
      [:div {:class "max-w-5xl mx-auto px-4 py-3 flex items-center justify-between"}
-      [:a {:href "/" :class "flex items-center gap-2"}
-       [:span {:class "text-2xl"} "📚"]
-       [:span {:class "font-bold text-lg"} "Datalevin"]]
+[:a {:href "/" :class "flex items-center gap-2"}
+        [:img {:src "/images/logo.png" :alt "Datalevin" :class "h-8 w-8"}]
+        [:span {:class "font-bold text-lg"} "Datalevin"]]
       [:nav {:class "hidden md:flex items-center gap-6"}
-       [:a {:href "/docs" :class "text-gray-700 hover:text-blue-600"} "Docs"]
+       [:a {:href "/docs" :class "text-gray-700 hover:text-blue-600"} "The Book"]
+       [:a {:href "/examples" :class "text-gray-700 hover:text-blue-600"} "Examples"]
        [:a {:href "/search" :class "text-gray-700 hover:text-blue-600"} "Search"]]
       [:div {:class "flex items-center gap-4"}
        (if user
@@ -36,8 +37,7 @@
         success])]))
 
 (defn base [title & body]
-  (str (h/html {:mode :html}
-    "<!DOCTYPE html>"
+  (str (h/html {:mode :html :escape? false}
     [:html {:hx-boost "true" :lang "en"}
      [:head
       [:meta {:charset "utf-8"}]
@@ -54,8 +54,7 @@
   (let [session (:session req)
         flash (:flash session)
         token (force anti-forgery/*anti-forgery-token*)]
-    (str (h/html {:mode :html}
-      "<!DOCTYPE html>"
+    (str (h/html {:mode :html :escape? false}
       [:html {:hx-boost "true" :hx-headers (pr-str {:X-CSRF-Token token}) :lang "en"}
        [:head
         [:meta {:charset "utf-8"}]
@@ -63,18 +62,31 @@
         [:title title]
         [:script {:src "/js/htmx.min.js"}]
         [:link {:href "/css/output.css" :rel "stylesheet"}]
+        [:link {:href "/css/hljs-atom-one-dark.min.css" :rel "stylesheet"}]
+        [:script {:src "/js/highlight.min.js"}]
+        [:script {:src "/js/hljs-clojure.min.js"}]
+        [:script {:src "/js/code-highlight.js" :defer true}]
         [:style "html { scroll-behavior: smooth; }"]]
        [:body {:class "bg-gray-50 min-h-screen"}
         (header req)
         (flash-message flash)
         body]]))))
 
-(defn render-example [example]
-  (let [{:keys [example/title example/code example/output example/description author]} example
-        username (or (some-> author :user/username) "Anonymous")]
+(defn render-example [example & [req]]
+  (let [{:keys [example/id example/title example/code example/output example/description author]} example
+        username (or (some-> author :user/username) "Anonymous")
+        user (:user req)
+        admin? (= :admin (:user/role user))
+        token (when admin? (force anti-forgery/*anti-forgery-token*))]
     [:div {:class "border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm"}
-     [:div {:class "bg-gray-50 px-4 py-2 border-b border-gray-200"}
-      [:h4 {:class "text-base font-semibold text-gray-900"} title]]
+     [:div {:class "bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between"}
+      [:h4 {:class "text-base font-semibold text-gray-900"} title]
+      (when admin?
+        [:form {:method "post" :action (str "/admin/examples/" id "/remove") :class "inline"}
+         [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
+         [:button {:type "submit" :class "text-xs text-red-600 hover:text-red-800 font-medium"
+                   :onclick "return confirm('Remove this example?')"}
+          "Remove"]])]
      (when description
        [:div {:class "px-4 py-2 text-sm text-gray-600 border-b border-gray-100"} description])
      [:div {:class "px-4 py-3"}
@@ -85,33 +97,90 @@
         [:span {:class "text-xs font-medium text-blue-700"} "Output: "]
         [:code {:class "text-sm text-blue-800"} output]])
      [:div {:class "px-4 py-2 border-t border-gray-100 bg-gray-50"}
-      [:span {:class "text-xs text-gray-500"} "by " username]]]))
+      [:span {:class "text-xs text-gray-500"} "by "
+       [:a {:href (str "/users/" username) :class "text-blue-600 hover:underline"} username]]]]))
 
-(defn doc-page [{:keys [title chapter part html examples] :as doc} & [req]]
-  (base-with-req title req
-    [:div {:class "max-w-5xl mx-auto px-4 py-8"}
-     [:nav {:class "text-sm mb-4"}
-      [:a {:class "text-blue-600 hover:underline" :href "/"} "Home"]
-      [:span {:class "mx-2 text-gray-400"} "/"]
-      [:a {:class "text-blue-600 hover:underline" :href "/docs"} "Docs"]
-      [:span {:class "mx-2 text-gray-400"} "/"]
-      [:span {:class "text-gray-600"} title]]
-     (when part [:div {:class "text-sm text-gray-500 mb-2"} part])
-     [:article {:class "prose prose-lg max-w-none bg-white rounded-xl shadow-sm p-8"}
-      html]
-     [:div {:class "mt-12"}
-      [:div {:class "flex items-center justify-between mb-6"}
-       [:h2 {:class "text-2xl font-bold text-gray-900"} "User Examples"]
-       (if (:user req)
-         [:a {:class "bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700"
-              :href (str "/examples/new?doc-section=" chapter)} "+ Add Example"]
-         [:a {:class "text-blue-600 font-medium hover:underline" :href "/auth/login"} "Login to add examples"])]
-      (if (seq examples)
-        [:div {:class "space-y-4"} (mapv render-example examples)]
-        [:div {:class "text-center py-12 bg-white rounded-xl border border-dashed border-gray-300"}
-         [:p {:class "text-gray-500 mb-2"} "No examples yet. Be the first to add one!"]
-         (if (:user req)
-           [:a {:class "text-blue-600 font-medium hover:underline" :href (str "/examples/new?doc-section=" chapter)} "Add an example"]
-           [:a {:class "text-blue-600 font-medium hover:underline" :href "/auth/login"} "Login to add an example"])])]
-     [:nav {:class "flex justify-between mt-12 pt-6 border-t border-gray-200"}
-      [:a {:class "text-gray-600 hover:text-blue-600" :href "/docs"} "← Table of Contents"]]]))
+(defn error-page
+  "Renders a styled error page. Uses `base` (no req) so it works outside of session middleware."
+  [status title message]
+  (base (str status " — " title)
+    [:div {:class "max-w-xl mx-auto py-24 px-4 text-center"}
+     [:p {:class "text-6xl font-bold text-gray-300 mb-4"} (str status)]
+     [:h1 {:class "text-2xl font-bold text-gray-900 mb-3"} title]
+     [:p {:class "text-gray-500 mb-8"} message]
+     [:a {:href "/" :class "inline-block bg-blue-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-blue-700"} "Go home"]]))
+
+(defn not-found-page []
+  (error-page 404 "Page not found" "The page you're looking for doesn't exist or has been moved."))
+
+(defn server-error-page []
+  (error-page 500 "Something went wrong" "An unexpected error occurred. Please try again later."))
+
+(defn forbidden-page []
+  (error-page 403 "Forbidden" "You don't have permission to access this page."))
+
+(defn chapter-nav [{:keys [nav]}]
+  (let [prev (:prev nav)
+        nxt  (:next nav)]
+    (when (or prev nxt)
+      [:nav {:class "flex items-center justify-between mt-12 pt-6 border-t border-gray-200"}
+       (if prev
+         [:a {:href (str "/docs/" (:slug prev))
+              :class "group flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition"}
+          [:span {:class "text-lg group-hover:-translate-x-0.5 transition-transform"} "\u2190"]
+          [:span [:span {:class "block text-xs text-gray-400 uppercase tracking-wide"} "Previous"]
+                 [:span {:class "font-medium text-gray-700 group-hover:text-blue-600"} (:title prev)]]]
+         [:div])
+       (if nxt
+         [:a {:href (str "/docs/" (:slug nxt))
+              :class "group flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition text-right"}
+          [:span [:span {:class "block text-xs text-gray-400 uppercase tracking-wide"} "Next"]
+                 [:span {:class "font-medium text-gray-700 group-hover:text-blue-600"} (:title nxt)]]
+          [:span {:class "text-lg group-hover:translate-x-0.5 transition-transform"} "\u2192"]]
+         [:div])])))
+
+(defn doc-page [{:keys [title chapter part html examples slug nav] :as doc} & [req]]
+  (let [user (:user req)
+        examples-list (when (seq examples)
+                        (mapv first examples))
+        examples-html (str (h/html {:mode :html :escape? false}
+                             [:div {:class "mt-10 border-t border-gray-200 pt-8"}
+                              [:div {:class "flex items-center justify-between mb-4"}
+                               [:h2 {:class "text-xl font-bold text-gray-900"}
+                                "Community Examples"
+                                (when (seq examples-list)
+                                  [:span {:class "text-base font-normal text-gray-400 ml-2"}
+                                   (str "(" (count examples-list) ")")])]
+                               (when user
+                                 [:a {:href (str "/examples/new?doc-section=" slug)
+                                      :class "text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-blue-700"}
+                                  "Add Example"])]
+                              (if (seq examples-list)
+                                [:div {:class "space-y-4"}
+                                 (for [ex examples-list]
+                                   (render-example ex req))]
+                                [:p {:class "text-gray-400 text-sm"}
+                                 "No examples for this chapter yet."
+                                 (when user
+                                   [:span " "
+                                    [:a {:href (str "/examples/new?doc-section=" slug)
+                                         :class "text-blue-600 hover:underline"} "Be the first!"]])])]))
+        nav-html (str (h/html {:mode :html :escape? false} (chapter-nav doc)))]
+    (base-with-req title req
+      [:div {:class "max-w-5xl mx-auto px-6 py-10"}
+       ;; Breadcrumb
+       [:nav {:class "text-sm mb-6 text-gray-400"}
+        [:a {:href "/" :class "hover:text-blue-600 transition"} "Home"]
+        [:span {:class "mx-2"} "/"]
+        [:a {:href "/docs" :class "hover:text-blue-600 transition"} "Docs"]
+        [:span {:class "mx-2"} "/"]
+        [:span {:class "text-gray-600"} title]]
+       ;; Part label
+       (when part
+         [:div {:class "text-sm font-medium text-blue-600 uppercase tracking-wide mb-2"} (str "Part " part)])
+       ;; Article
+       [:article {:class "prose prose-datalevin lg:prose-lg max-w-none bg-white rounded-xl shadow-sm px-10 py-12 border border-gray-100"}
+        (h/raw html)
+        (h/raw examples-html)
+        (h/raw nav-html)]])))
+

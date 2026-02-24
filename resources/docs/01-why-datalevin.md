@@ -11,7 +11,7 @@ updates, relational joins, graph traversal, document-style flexibility, and
 semantic retrieval. Teams frequently assemble these from multiple products, then
 pay the operational cost in data pipelines, synchronization lag, and glue code.
 
-Datalevin[^name-origin] is designed as a single durable substrate for these
+Datalevin is designed as a single durable substrate for these
 mixed workloads.
 It combines a high-performance key-value storage layer with a Datalog query
 engine and integrated indexing and search capabilities, so you can model and
@@ -89,8 +89,6 @@ Datalevin includes built-in full-text search and vector similarity search.
 Because these indexes live in the same database system, you can combine
 retrieval and logic filtering in one Datalog query instead of synchronizing
 external search services.
-Performance comparisons referenced in this chapter are workload-dependent and
-hardware-dependent.[^benchmark-notes]
 
 ## 3. Developer Ergonomics and Deployment Modes
 
@@ -129,20 +127,24 @@ constraints in one query:
 ```clojure
 (require '[datalevin.core :as d])
 
+;; Datalevin is Schema on Write, so schema is optional, but strongly recommended
 (def schema
   {:doc/body {:db/valueType :db.type/string
               :db/fulltext  true}
    :doc/lang {:db/valueType :db.type/keyword}
    :doc/idoc {:db/valueType :db.type/idoc}})
 
+;; Obtain a DB connection. DB will be at data/ch1 directory
 (def conn (d/get-conn "data/ch1" schema))
 
+;; Transact an entity
 (d/transact! conn
   [{:db/id    -1
     :doc/lang :en
     :doc/body "Datalevin adds idoc indexing and vector search."
     :doc/idoc {:module {:name "search" :status "stable"}}}])
 
+;; Query
 (d/q '[:find ?e
        :in $ ?term
        :where
@@ -151,8 +153,7 @@ constraints in one query:
        [(fulltext $ :doc/body ?term) [[?e _ _]]]
        [(idoc-match $ :doc/idoc {:module {:status "stable"}}) [[?e _ _]]]
        [?e :doc/lang :en]]
-     (d/db conn)
-     "vector")
+     (d/db conn) "vector")
 ```
 
 What happens in this query:
@@ -180,12 +181,3 @@ Datalevin is built for workloads that cross boundaries between key-value
 storage, logical querying, graph relationships, document modeling, and semantic
 retrieval. The rest of this book shows each capability in depth and, more
 importantly, how to compose them into one coherent system.
-
-[^benchmark-notes]: Performance numbers in this chapter come from Datalevin benchmark suites and should be treated as reference points, not universal constants.
-    - Join Order Benchmark (JOB): about 2.4x faster than PostgreSQL and about 4x faster than SQLite on the documented run.
-    - LDBC SNB (Neo4j comparison): very large gains on interactive short queries and about 13% faster average time on interactive complex queries on the documented SF1 run.
-    - Search benchmark (Lucene comparison): higher search throughput and lower median latency, while Lucene indexes faster in bulk and Datalevin shows longer latency tails on some queries.
-    - Sources: https://github.com/datalevin/datalevin/tree/master/benchmarks/JOB-bench ; https://github.com/datalevin/datalevin/tree/master/benchmarks/LDBC-SNB-bench ; https://github.com/datalevin/datalevin/tree/master/benchmarks/search-bench
-
-[^name-origin]: Datalevin builds on LMDB, and "levin" is an old English word
-    for lightning.
