@@ -164,7 +164,7 @@ What happens in this query:
    `{:module {:status "stable"}}`.
 3. The datalog clause `[?e :doc/lang :en]` applies an exact metadata constraint.
 
-The key point is not code size. The key point is composition: lexical retrieval,
+The key point here is composition: lexical retrieval,
 structure-aware filtering, and exact logical predicates are executed in one
 query context, over one database state.
 
@@ -173,7 +173,7 @@ capabilities together, so full-text matches, idoc constraints, and relational
 facts can be joined in one logical query.
 
 In a split architecture, this often requires multiple systems and intermediate
-joins. Here it is one declarative query.
+joins. Here it is a single declarative query.
 
 ## Summary
 

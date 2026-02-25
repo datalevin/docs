@@ -116,7 +116,7 @@ building data-intensive systems. It is written for teams using Datalevin across
 Clojure, Java, JavaScript, and Python APIs.
 
 You should be comfortable with basic database concepts, such as transactions,
-indexes, and query predicates. No prior Datalog experience is required.
+normalization, and query predicates. No prior Datalog experience is required.
 
 ## How to Use This Book
 

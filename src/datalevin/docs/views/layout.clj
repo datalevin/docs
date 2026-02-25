@@ -28,7 +28,7 @@
           (when (= :admin (:user/role user))
             [:a {:href "/admin/examples" :class "text-sm text-blue-600 hover:underline"} "Admin"])
           [:a {:href "/pdf" :class "text-sm text-blue-600 hover:underline"} "PDF"]
-          [:a {:href "/examples/new" :class "text-sm text-blue-600 hover:underline"} "Add Example"]
+          [:a {:href "/examples/new" :class "text-sm text-blue-600 hover:text-blue-700"} "Add Example"]
           [:a {:href "/auth/logout" :class "text-sm text-gray-500 hover:text-gray-700"} "Logout"]]
          [:a {:href "/auth/login" :class "text-sm text-gray-600 hover:text-gray-900"
               :title "Sign in to post examples and download the book"} "Log in"])]]]))
@@ -148,23 +148,22 @@ body { background: linear-gradient(135deg, #eef2ff 0%, #f9fafb 40%, #f0fdf4 70%,
          [:a {:href (str "/docs/" (:slug prev))
               :class "group flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition no-underline"}
           [:span {:class "text-lg group-hover:-translate-x-0.5 transition-transform"} "\u2190"]
-          [:span [:span {:class "block text-xs text-gray-400 uppercase tracking-wide"} "Previous"]
-                 [:span {:class "font-medium text-gray-700 group-hover:text-blue-600"} (:title prev)]]]
+          [:span {:class "font-medium text-gray-700 group-hover:text-blue-600"} (:title prev)]]
          [:div])
        (if nxt
          [:a {:href (str "/docs/" (:slug nxt))
               :class "group flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition text-right no-underline"}
-          [:span [:span {:class "block text-xs text-gray-400 uppercase tracking-wide"} "Next"]
-                 [:span {:class "font-medium text-gray-700 group-hover:text-blue-600"} (:title nxt)]]
+          [:span {:class "font-medium text-gray-700 group-hover:text-blue-600"} (:title nxt)]
           [:span {:class "text-lg group-hover:translate-x-0.5 transition-transform"} "\u2192"]]
          [:div])])))
 
 (defn doc-page [{:keys [title chapter part html examples slug nav] :as doc} & [req]]
   (let [user (:user req)
+        token (when user (force anti-forgery/*anti-forgery-token*))
         examples-list (when (seq examples)
                         (mapv first examples))
         examples-html (str (h/html {:mode :html :escape? false}
-                             [:div {:class "mt-10 border-t border-gray-200 pt-8"}
+                             [:div {:class "not-prose mt-10 border-t border-gray-200 pt-8"}
                               [:div {:class "flex items-center justify-between mb-4"}
                                [:h2 {:class "text-xl font-bold text-gray-900"}
                                 "Community Examples"
@@ -172,23 +171,38 @@ body { background: linear-gradient(135deg, #eef2ff 0%, #f9fafb 40%, #f0fdf4 70%,
                                   [:span {:class "text-base font-normal text-gray-400 ml-2"}
                                    (str "(" (count examples-list) ")")])]
                                (if user
-                                 [:a {:href (str "/examples/new?doc-section=" slug)
-                                      :class "text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-blue-700"}
+                                 [:button {:type "button"
+                                           :class "text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-blue-700"
+                                           :onclick (str "document.getElementById('example-form-" slug "').classList.toggle('hidden')")}
                                   "Add Example"]
                                  [:a {:href "/auth/login"
                                       :class "text-sm text-blue-600 hover:underline"}
                                   "Log in to create examples"])]
+                              [:div {:id (str "example-form-" slug) :class "mt-4 hidden"}
+                               [:form {:method "post" :action "/examples" :hx-boost "false"
+                                       :class "space-y-4 p-4 bg-gray-50 rounded-lg"}
+                                [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
+                                [:input {:type "hidden" :name "doc-section" :value slug}]
+                                [:div
+                                 [:label {:class "block text-sm font-medium text-gray-700 mb-1"} "Title"]
+                                 [:input {:name "title" :required true :class "w-full px-3 py-2 border border-gray-300 rounded-lg"}]]
+                                [:div
+                                 [:label {:class "block text-sm font-medium text-gray-700 mb-1"} "Code"]
+                                 [:textarea {:name "code" :required true :rows 8 :class "w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm"}]]
+                                [:div
+                                 [:label {:class "block text-sm font-medium text-gray-700 mb-1"} "Output (optional)"]
+                                 [:textarea {:name "output" :rows 4 :class "w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm"}]]
+                                [:div {:class "flex gap-3"}
+                                 [:button {:type "submit" :class "py-2 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"} "Submit"]
+                                 [:button {:type "button" :class "py-2 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                                           :onclick (str "document.getElementById('example-form-" slug "').classList.add('hidden')")} "Cancel"]]]]
                               (if (seq examples-list)
-                                [:div {:class "space-y-4"}
-                                 (for [ex examples-list]
-                                   (render-example ex req))]
-                                [:p {:class "text-gray-400 text-sm"}
-                                 "No examples for this chapter yet."
-                                 (when user
-                                   [:span " "
-                                    [:a {:href (str "/examples/new?doc-section=" slug)
-                                         :class "text-blue-600 hover:underline"} "Be the first!"]])])]))
-        nav-html (str (h/html {:mode :html :escape? false} (chapter-nav doc)))]
+                               [:div {:class "space-y-4"}
+                                (for [ex examples-list]
+                                  (render-example ex req))]
+                               [:p {:class "text-gray-400 text-sm"}
+                                "No examples for this chapter yet."])]))
+         nav-html (str (h/html {:mode :html :escape? false} (chapter-nav doc)))]
     (base-with-req title req
       [:div {:class "max-w-5xl mx-auto px-6 py-10"}
        ;; Breadcrumb

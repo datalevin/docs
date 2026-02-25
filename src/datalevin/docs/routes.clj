@@ -169,6 +169,14 @@
      :headers {"Location" "/auth/login"}
      :session (assoc (:session req) :flash {:error "Please log in"})}))
 
+(defn new-example-fragment [req]
+  (if (:user req)
+    (examples/new-example-form-fragment req)
+    {:status 200
+     :headers {"Content-Type" "text/html"
+               "HX-Redirect" "/auth/login"}
+     :body ""}))
+
 (defn wrap-exceptions [handler]
   (fn [req]
     (try
@@ -245,6 +253,7 @@
                                                        rate-limit/wrap-example-rate-limit
                                                        wrap-auth)}}]
                      ["/examples/new" {:get {:handler new-example-page}}]
+                     ["/examples/form" {:get {:handler new-example-fragment}}]
                      ["/examples/:id" {:get {:handler examples/view-example-handler}}]
                      ["/users/:username" {:get {:handler examples/user-profile-handler}}]
                      ["/pdf" {:get {:handler (wrap-auth pdf/pdf-handler)}}]

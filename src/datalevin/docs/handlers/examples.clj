@@ -1,6 +1,7 @@
 (ns datalevin.docs.handlers.examples
   (:require [datalevin.core :as d]
             [clojure.string :as str]
+            [hiccup2.core :as h]
             [ring.middleware.anti-forgery :as anti-forgery]
             [datalevin.docs.views.layout :as layout]
             [datalevin.docs.util :as util])
@@ -166,3 +167,35 @@
                  [:label {:class "block text-sm font-medium text-gray-700 mb-1"} "Output (optional)"]
                  [:textarea {:name "output" :rows 4 :class "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"}]]
                 [:button {:type "submit" :class "w-full py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"} "Submit Example"]]])}))
+
+(defn new-example-form-fragment [{:keys [params session] :as req}]
+  (let [doc-section (get params "doc-section" "")
+        token (force anti-forgery/*anti-forgery-token*)]
+    {:status 200
+     :headers {"Content-Type" "text/html"}
+     :body (str
+            (h/html
+             [:form {:method "post" :action "/examples"
+                     :class "space-y-4 p-4 bg-gray-50 rounded-lg"}
+              [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
+              [:input {:type "hidden" :name "doc-section" :value doc-section}]
+              [:div
+               [:label {:class "block text-sm font-medium text-gray-700 mb-1"} "Title"]
+               [:input {:name "title" :required true
+                        :class "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"}]]
+              [:div
+               [:label {:class "block text-sm font-medium text-gray-700 mb-1"} "Code"]
+               [:textarea {:name "code" :required true :rows 8
+                           :class "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"}]]
+              [:div
+               [:label {:class "block text-sm font-medium text-gray-700 mb-1"} "Output (optional)"]
+               [:textarea {:name "output" :rows 4
+                           :class "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"}]]
+              [:div {:class "flex gap-3"}
+               [:button {:type "submit"
+                         :class "py-2 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"}
+                "Submit"]
+               [:button {:type "button"
+                         :class "py-2 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                         :onclick "this.closest('form').remove()"}
+                "Cancel"]]]))}))
