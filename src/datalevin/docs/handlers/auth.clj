@@ -49,6 +49,7 @@
 (defn login-handler [{:keys [params session biff.datalevin/conn admin-emails] :as req}]
   (let [email (str/trim (param params "email"))
         password (param params "password")
+        return-to (:return-to session)
         db (d/db conn)]
     (if-let [user (auth/authenticate-user db email password)]
       (let [role (if (contains? admin-emails (:user/email user)) :admin (:user/role user))
@@ -58,8 +59,8 @@
           (d/transact! conn [{:db/id [:user/id (:user/id user)] :user/role role}]))
         (d/transact! conn [(:tx session-tx)])
         {:status 302
-         :session (assoc session :user (dissoc user :user/password-hash))
-         :headers {"Location" "/"}
+         :session (-> session (dissoc :return-to) (assoc :user (dissoc user :user/password-hash)))
+         :headers {"Location" (if (seq return-to) return-to "/")}
          :cookies {"session" {:value (str (:session-id session-tx))}}})
       {:status 302
        :session (assoc session :flash {:error "Invalid credentials"})
@@ -146,11 +147,12 @@
               user (assoc user :user/role role)
               _ (when (and (not= role (:user/role user)) (:user/id user))
                   (d/transact! conn [{:db/id [:user/id (:user/id user)] :user/role role}]))
-              session-tx (session/create-session [:user/id (:user/id user)])]
+              session-tx (session/create-session [:user/id (:user/id user)])
+              return-to (:return-to session)]
           (d/transact! conn [(:tx session-tx)])
           {:status 302
-           :session (assoc (dissoc session :github-oauth-state) :user (dissoc user :user/password-hash))
-           :headers {"Location" "/"}
+           :session (-> session (dissoc :github-oauth-state :return-to) (assoc :user (dissoc user :user/password-hash)))
+           :headers {"Location" (if (seq return-to) return-to "/")}
            :cookies {"session" {:value (str (:session-id session-tx))}}})
         (catch Exception e
           (log/error "GitHub OAuth error:" (.getMessage e) (pr-str (class e)))

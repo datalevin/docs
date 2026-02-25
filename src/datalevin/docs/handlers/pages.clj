@@ -73,40 +73,40 @@
    :body
    (layout/base-with-req "Datalevin Docs" req
     ;; Hero
-    [:div {:style "text-align:center;padding:3rem 1rem 0"}
-     [:h1 {:style "font-size:3rem;font-weight:bold;margin-bottom:1.5rem"} "Datalevin"]
-     [:p {:style "font-size:1.25rem;color:#666;margin-bottom:2rem"}
+    [:div {:style "text-align:center;padding:4rem 1rem 0"}
+     [:h1 {:style "font-size:3.5rem;font-weight:bold;margin-bottom:1.5rem;background:linear-gradient(135deg,#06b6d4,#3b82f6,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;"} "Datalevin"]
+     [:p {:style "font-size:1.25rem;color:#9ca3af;margin-bottom:2rem"}
       "A simple, fast, and versatile open-source Datalog database"]
      [:div {:style "display:flex;justify-content:center;gap:1rem;margin-bottom:3rem"}
       [:a {:href "/docs/02-getting-started" :class "dl-btn-primary"} "Get Started"]
       [:a {:href "/docs" :class "dl-btn"} "Read the Book"]]]
     ;; Features
     [:div {:style "max-width:64rem;margin:0 auto;padding:2rem 2rem"}
-     [:h2 {:style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:2rem"} "Why Datalevin?"]
+     [:h2 {:style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:2rem;color:#f9fafb"} "Why Datalevin?"]
      [:div {:style "display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.5rem"}
       [:a {:href "/docs/03-mental-model" :class card-style}
-       [:h3 {:style "font-weight:600;margin-bottom:0.5rem"} "Simple"]
-       [:p {:style "color:#666;font-size:0.875rem"} "Declarative Datalog query language and triple data model."]]
+       [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Simple"]
+       [:p {:style "color:#9ca3af;font-size:0.875rem"} "Declarative Datalog query language and triple data model."]]
       [:a {:href "/docs/04-storage-fundamentals" :class card-style}
-       [:h3 {:style "font-weight:600;margin-bottom:0.5rem"} "Fast"]
-       [:p {:style "color:#666;font-size:0.875rem"} "Built on LMDB, one of the fastest key-value stores."]]
+       [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Fast"]
+       [:p {:style "color:#9ca3af;font-size:0.875rem"} "Built on LMDB, one of the fastest key-value stores."]]
       [:a {:href "/docs/01-why-datalevin" :class card-style}
-       [:h3 {:style "font-weight:600;margin-bottom:0.5rem"} "Versatile"]
-       [:p {:style "color:#666;font-size:0.875rem"} "Relational, graph, document, vector, full-text search in a unified data store."]]]
+       [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Versatile"]
+       [:p {:style "color:#9ca3af;font-size:0.875rem"} "Relational, graph, document, vector, full-text search in a unified data store."]]]
      [:div {:style "display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.5rem;margin-top:1.5rem"}
       [:a {:href "/docs/02-getting-started" :class card-style}
-       [:h3 {:style "font-weight:600;margin-bottom:0.5rem"} "Flexible"]
-       [:p {:style "color:#666;font-size:0.875rem"} "Seamless deployment \u2014 embedded, client/server, and command line scripting."]]
+       [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Flexible"]
+       [:p {:style "color:#9ca3af;font-size:0.875rem"} "Seamless deployment \u2014 embedded, client/server, and command line scripting."]]
       [:a {:href "/docs/26-durability-backups" :class card-style}
-       [:h3 {:style "font-weight:600;margin-bottom:0.5rem"} "Reliable"]
-       [:p {:style "color:#666;font-size:0.875rem"} "Transaction log access, replication and high availability."]]
+       [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Reliable"]
+       [:p {:style "color:#9ca3af;font-size:0.875rem"} "Transaction log access, replication and high availability."]]
       [:a {:href "/docs/31-agent-memory" :class card-style}
-       [:h3 {:style "font-weight:600;margin-bottom:0.5rem"} "AI Ready"]
-       [:p {:style "color:#666;font-size:0.875rem"} "Built-in MCP server, ideal for agent memory and agentic applications."]]]]
+       [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "AI Ready"]
+       [:p {:style "color:#9ca3af;font-size:0.875rem"} "Built-in MCP server, ideal for agent memory and agentic applications."]]]]
     ;; Community
     [:div {:style "max-width:64rem;margin:0 auto;padding:2rem 2rem"}
-     [:h2 {:style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:0.75rem"} "Community"]
-     [:p {:style "text-align:center;color:#666;font-size:1rem;margin-bottom:1.5rem"}
+     [:h2 {:style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:0.75rem;color:#f9fafb"} "Community"]
+     [:p {:style "text-align:center;color:#9ca3af;font-size:1rem;margin-bottom:1.5rem"}
       "Sharing ideas and helping each other with questions, examples, and issues."]
      [:div {:style "display:flex;justify-content:center;gap:1rem;flex-wrap:wrap"}
       [:a {:href "/examples" :class btn-style} "Community Examples"]
@@ -117,8 +117,8 @@
        "GitHub Discussions"]]]
     ;; Support
     [:div {:style "max-width:64rem;margin:0 auto;padding:2rem 2rem 3rem"}
-     [:h2 {:style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:0.75rem"} "Support the Project"]
-     [:p {:style "text-align:center;color:#666;font-size:1rem;margin-bottom:1.5rem"}
+     [:h2 {:style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:0.75rem;color:#f9fafb"} "Support the Project"]
+     [:p {:style "text-align:center;color:#9ca3af;font-size:1rem;margin-bottom:1.5rem"}
       "If you enjoy Datalevin and it is helping you succeed, consider sponsoring the development and maintenance of this project."]
      [:div {:style "display:flex;justify-content:center"}
       [:a {:href "https://github.com/sponsors/huahaiy" :target "_blank" :rel "noopener noreferrer" :class btn-style}
@@ -129,7 +129,7 @@
         grouped (partition-by :part chapters)
         toc-html (apply str
                    "<div class=\"max-w-3xl mx-auto px-4 py-8\">"
-                   "<h1 class=\"text-3xl font-bold mb-8\">Datalevin: The Definitive Guide</h1>"
+                   "<h1 class=\"text-3xl font-bold mb-8 text-white\">Datalevin: The Definitive Guide</h1>"
                    (concat
                      (for [group grouped
                            :let [part (:part (first group))]]
@@ -141,9 +141,9 @@
                             (apply str
                               (for [{:keys [slug title chapter]} group]
                                 (str "<li>"
-                                     "<a href=\"/docs/" slug "\" class=\"text-blue-600 hover:text-blue-800 hover:underline\">"
+                                     "<a href=\"/docs/" slug "\" class=\"text-cyan-400 hover:text-cyan-300 hover:underline\">"
                                      (when (pos? chapter)
-                                       (str "<span class=\"text-gray-400 mr-2\">" chapter ".</span>"))
+                                       (str "<span class=\"text-gray-500 mr-2\">" chapter ".</span>"))
                                      title
                                      "</a></li>")))
                             "</ol></div>"))

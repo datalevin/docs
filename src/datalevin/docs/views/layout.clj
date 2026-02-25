@@ -3,19 +3,30 @@
             [jsonista.core :as j]
             [ring.middleware.anti-forgery :as anti-forgery]))
 
+(def ^:private dark-body-style
+  "html { scroll-behavior: smooth; }
+body { background-color: #0a0a0f; background-image: radial-gradient(ellipse 80% 50% at 50% 0%, rgba(6,182,212,0.25), transparent), radial-gradient(ellipse 60% 50% at 100% 50%, rgba(59,130,246,0.2), transparent), radial-gradient(ellipse 60% 50% at 0% 100%, rgba(139,92,246,0.2), transparent), radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px); background-size: 100%, 100%, 100%, 24px 24px; background-attachment: fixed; min-height: 100vh; color: #e5e7eb; }
+.dl-card { display:block; padding:1.5rem; border-radius:0.75rem; transition: all 0.2s; text-decoration:none; color:inherit; cursor:pointer; background: rgba(255,255,255,0.05); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 24px rgba(0,0,0,0.2); }
+.dl-card:hover { transform: translateY(-2px); border-color: rgba(6,182,212,0.4); box-shadow: 0 0 24px rgba(6,182,212,0.15), 0 4px 24px rgba(0,0,0,0.3); }
+.dl-btn { display:inline-block; padding:0.625rem 1.25rem; border-radius:0.5rem; font-weight:500; font-size:0.875rem; text-decoration:none; transition: all 0.15s; cursor:pointer; color:rgba(255,255,255,0.7); background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); }
+.dl-btn:hover { background:rgba(255,255,255,0.12); border-color:rgba(255,255,255,0.3); color:#fff; box-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+.dl-btn-primary { display:inline-block; color:white; padding:0.75rem 1.5rem; border-radius:0.5rem; font-weight:500; text-decoration:none; transition: all 0.15s; cursor:pointer; background:linear-gradient(135deg, #06b6d4, #3b82f6); border:none; }
+.dl-btn-primary:hover { box-shadow: 0 0 24px rgba(6,182,212,0.4), 0 4px 12px rgba(59,130,246,0.3); }")
+
 (defn header [& [req]]
   (let [user (:user req)]
-    [:header {:class "sticky top-0 z-50 bg-white border-b shadow-sm"}
+    [:header {:class "sticky top-0 z-50 border-b"
+              :style "background:rgba(10,10,15,0.8); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border-color:rgba(255,255,255,0.1);"}
      [:div {:class "max-w-5xl mx-auto px-4 py-3 flex items-center justify-between"}
-[:a {:href "/" :class "flex items-center gap-2"}
-        [:img {:src "/images/logo.png" :alt "Datalevin" :class "h-8 w-8"}]
-        [:span {:class "font-bold text-lg"} "Datalevin"]]
+      [:a {:href "/" :class "flex items-center gap-2"}
+       [:img {:src "/images/logo.png" :alt "Datalevin" :class "h-8 w-8"}]
+       [:span {:class "font-bold text-lg text-white"} "Datalevin"]]
       [:nav {:class "hidden md:flex items-center gap-6"}
-       [:a {:href "/docs" :class "text-gray-700 hover:text-blue-600"} "The Book"]
-       [:a {:href "/examples" :class "text-gray-700 hover:text-blue-600"} "Examples"]
-       [:a {:href "/search" :class "text-gray-700 hover:text-blue-600"} "Search"]
+       [:a {:href "/docs" :class "text-gray-400 hover:text-cyan-400 transition"} "The Book"]
+       [:a {:href "/examples" :class "text-gray-400 hover:text-cyan-400 transition"} "Examples"]
+       [:a {:href "/search" :class "text-gray-400 hover:text-cyan-400 transition"} "Search"]
        [:a {:href "https://github.com/datalevin/datalevin" :target "_blank" :rel "noopener noreferrer"
-            :class "flex items-center gap-1.5 text-gray-700 hover:text-blue-600"}
+            :class "flex items-center gap-1.5 text-gray-400 hover:text-cyan-400 transition"}
         [:span "GitHub"]
         [:svg {:xmlns "http://www.w3.org/2000/svg" :viewBox "0 0 16 16" :fill "currentColor"
                :width "16" :height "16" :class "flex-shrink-0"}
@@ -24,24 +35,26 @@
       [:div {:class "flex items-center gap-4"}
        (if user
          [:div {:class "flex items-center gap-3"}
-          [:span {:class "text-sm text-gray-600"} (:user/username user)]
+          [:span {:class "text-sm text-gray-400"} (:user/username user)]
           (when (= :admin (:user/role user))
-            [:a {:href "/admin/examples" :class "text-sm text-blue-600 hover:underline"} "Admin"])
-          [:a {:href "/pdf" :class "text-sm text-blue-600 hover:underline"} "PDF"]
-          [:a {:href "/examples/new" :class "text-sm text-blue-600 hover:text-blue-700"} "Add Example"]
-          [:a {:href "/auth/logout" :class "text-sm text-gray-500 hover:text-gray-700"} "Logout"]]
-         [:a {:href "/auth/login" :class "text-sm text-gray-600 hover:text-gray-900"
+            [:a {:href "/admin/examples" :class "text-sm text-cyan-400 hover:text-cyan-300"} "Admin"])
+          [:a {:href "/pdf" :class "text-sm text-cyan-400 hover:text-cyan-300"} "PDF"]
+          [:a {:href "/examples/new" :class "text-sm text-cyan-400 hover:text-cyan-300"} "Add Example"]
+          [:a {:href "/auth/logout" :class "text-sm text-gray-500 hover:text-gray-300 transition"} "Logout"]]
+         [:a {:href "/auth/login" :class "text-sm text-gray-400 hover:text-white transition"
               :title "Sign in to post examples and download the book"} "Log in"])]]]))
 
 (defn flash-message [flash]
   (when flash
     [:div {:class "fixed top-20 left-1/2 -translate-x-1/2 z-50"}
      (when-let [error (:error flash)]
-       [:div {:class "bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded shadow-lg"
+       [:div {:class "px-4 py-3 rounded-lg shadow-lg text-sm"
+              :style "background:rgba(220,38,38,0.15); border:1px solid rgba(220,38,38,0.4); color:#fca5a5; backdrop-filter:blur(12px);"
               :hx-get "/_flash" :hx-vals {:json "null"} :hx-trigger "load delay:3s"}
         error])
      (when-let [success (:success flash)]
-       [:div {:class "bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded shadow-lg"
+       [:div {:class "px-4 py-3 rounded-lg shadow-lg text-sm"
+              :style "background:rgba(34,197,94,0.15); border:1px solid rgba(34,197,94,0.4); color:#86efac; backdrop-filter:blur(12px);"
               :hx-get "/_flash" :hx-vals {:json "null"} :hx-trigger "load delay:3s"}
         success])]))
 
@@ -55,8 +68,7 @@
       [:link {:rel "icon" :type "image/png" :href "/images/logo.png"}]
       [:script {:src "/js/htmx.min.js"}]
       [:link {:href "/css/output.css" :rel "stylesheet"}]
-      [:style "html { scroll-behavior: smooth; }
-body { background: linear-gradient(135deg, #eef2ff 0%, #f9fafb 40%, #f0fdf4 70%, #fefce8 100%); background-attachment: fixed; min-height: 100vh; }"]]
+      [:style dark-body-style]]
      [:body
       (header)
       body]])))
@@ -79,56 +91,44 @@ body { background: linear-gradient(135deg, #eef2ff 0%, #f9fafb 40%, #f0fdf4 70%,
         [:script {:src "/js/hljs-clojure.min.js"}]
         [:script {:src "/js/code-highlight.js" :defer true}]
         [:script {:src "/js/gh-stars.js" :defer true}]
-        [:style "html { scroll-behavior: smooth; }
-body { background: linear-gradient(135deg, #eef2ff 0%, #f9fafb 40%, #f0fdf4 70%, #fefce8 100%); background-attachment: fixed; min-height: 100vh; }
-.dl-card { display:block; background:white; padding:1.5rem; border-radius:0.5rem; border:1px solid #e5e7eb; transition: transform 0.15s, box-shadow 0.15s; text-decoration:none; color:inherit; cursor:pointer; }
-.dl-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-color: #c7d2fe; }
-.dl-btn { display:inline-block; border:1px solid #d1d5db; background:white; color:#374151; padding:0.625rem 1.25rem; border-radius:0.5rem; font-weight:500; font-size:0.875rem; text-decoration:none; transition: all 0.15s; cursor:pointer; }
-.dl-btn:hover { background:#f3f4f6; border-color:#9ca3af; color:#111827; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
-.dl-btn-primary { display:inline-block; background:#2563eb; color:white; padding:0.75rem 1.5rem; border-radius:0.5rem; font-weight:500; text-decoration:none; transition: all 0.15s; cursor:pointer; }
-.dl-btn-primary:hover { background:#1d4ed8; box-shadow: 0 4px 12px rgba(37,99,235,0.3); }"]]
+        [:style dark-body-style]]
        [:body
         (header req)
         (flash-message flash)
         body]]))))
 
 (defn render-example [example & [req]]
-  (let [{:keys [example/id example/title example/code example/output example/description author]} example
+  (let [{:keys [example/id example/code author]} example
         username (or (some-> author :user/username) "Anonymous")
         user (:user req)
         admin? (= :admin (:user/role user))
         token (when admin? (force anti-forgery/*anti-forgery-token*))]
-    [:div {:class "border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm"}
-     [:div {:class "bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between"}
-      [:h4 {:class "text-base font-semibold text-gray-900"} title]
+    [:div {:class "rounded-lg overflow-hidden"
+           :style "background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);"}
+     [:div {:class "px-4 py-3"}
+      [:pre {:class "bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto text-sm font-mono"
+             :style "background:#0d0d14; border:1px solid rgba(255,255,255,0.08);"}
+       [:code code]]]
+     [:div {:class "px-4 py-2 flex items-center justify-between"
+            :style "border-top:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03);"}
+      [:span {:class "text-xs text-gray-500"} "by "
+       [:a {:href (str "/users/" username) :class "text-cyan-400 hover:text-cyan-300 hover:underline"} username]]
       (when admin?
         [:form {:method "post" :action (str "/admin/examples/" id "/remove") :class "inline"}
          [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
-         [:button {:type "submit" :class "text-xs text-red-600 hover:text-red-800 font-medium"
+         [:button {:type "submit" :class "text-xs text-red-400 hover:text-red-300 font-medium"
                    :onclick "return confirm('Remove this example?')"}
-          "Remove"]])]
-     (when description
-       [:div {:class "px-4 py-2 text-sm text-gray-600 border-b border-gray-100"} description])
-     [:div {:class "px-4 py-3"}
-      [:pre {:class "bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto text-sm font-mono"}
-       [:code code]]]
-     (when output
-       [:div {:class "px-4 py-2 bg-blue-50 border-t border-blue-100"}
-        [:span {:class "text-xs font-medium text-blue-700"} "Output: "]
-        [:code {:class "text-sm text-blue-800"} output]])
-     [:div {:class "px-4 py-2 border-t border-gray-100 bg-gray-50"}
-      [:span {:class "text-xs text-gray-500"} "by "
-       [:a {:href (str "/users/" username) :class "text-blue-600 hover:underline"} username]]]]))
+          "Remove"]])]]))
 
 (defn error-page
   "Renders a styled error page. Uses `base` (no req) so it works outside of session middleware."
   [status title message]
-  (base (str status " — " title)
+  (base (str status " \u2014 " title)
     [:div {:class "max-w-xl mx-auto py-24 px-4 text-center"}
-     [:p {:class "text-6xl font-bold text-gray-300 mb-4"} (str status)]
-     [:h1 {:class "text-2xl font-bold text-gray-900 mb-3"} title]
-     [:p {:class "text-gray-500 mb-8"} message]
-     [:a {:href "/" :class "inline-block bg-blue-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-blue-700"} "Go home"]]))
+     [:p {:class "text-6xl font-bold mb-4" :style "color:rgba(255,255,255,0.15)"} (str status)]
+     [:h1 {:class "text-2xl font-bold text-white mb-3"} title]
+     [:p {:class "text-gray-400 mb-8"} message]
+     [:a {:href "/" :class "dl-btn-primary"} "Go home"]]))
 
 (defn not-found-page []
   (error-page 404 "Page not found" "The page you're looking for doesn't exist or has been moved."))
@@ -143,17 +143,18 @@ body { background: linear-gradient(135deg, #eef2ff 0%, #f9fafb 40%, #f0fdf4 70%,
   (let [prev (:prev nav)
         nxt  (:next nav)]
     (when (or prev nxt)
-      [:nav {:class "flex items-center justify-between mt-12 pt-6 border-t border-gray-200"}
+      [:nav {:class "flex items-center justify-between mt-12 pt-6"
+             :style "border-top:1px solid rgba(255,255,255,0.1);"}
        (if prev
          [:a {:href (str "/docs/" (:slug prev))
-              :class "group flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition no-underline"}
+              :class "group flex items-center gap-2 text-sm text-gray-400 hover:text-cyan-400 transition no-underline"}
           [:span {:class "text-lg group-hover:-translate-x-0.5 transition-transform"} "\u2190"]
-          [:span {:class "font-medium text-gray-700 group-hover:text-blue-600"} (:title prev)]]
+          [:span {:class "font-medium text-gray-300 group-hover:text-cyan-400"} (:title prev)]]
          [:div])
        (if nxt
          [:a {:href (str "/docs/" (:slug nxt))
-              :class "group flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition text-right no-underline"}
-          [:span {:class "font-medium text-gray-700 group-hover:text-blue-600"} (:title nxt)]
+              :class "group flex items-center gap-2 text-sm text-gray-400 hover:text-cyan-400 transition text-right no-underline"}
+          [:span {:class "font-medium text-gray-300 group-hover:text-cyan-400"} (:title nxt)]
           [:span {:class "text-lg group-hover:translate-x-0.5 transition-transform"} "\u2192"]]
          [:div])])))
 
@@ -163,61 +164,63 @@ body { background: linear-gradient(135deg, #eef2ff 0%, #f9fafb 40%, #f0fdf4 70%,
         examples-list (when (seq examples)
                         (mapv first examples))
         examples-html (str (h/html {:mode :html :escape? false}
-                             [:div {:class "not-prose mt-10 border-t border-gray-200 pt-8"}
+                             [:div {:id "examples" :class "not-prose mt-10 pt-8"
+                                    :style "border-top:1px solid rgba(255,255,255,0.1);"}
                               [:div {:class "flex items-center justify-between mb-4"}
-                               [:h2 {:class "text-xl font-bold text-gray-900"}
+                               [:h2 {:class "text-xl font-bold text-white"}
                                 "Community Examples"
                                 (when (seq examples-list)
-                                  [:span {:class "text-base font-normal text-gray-400 ml-2"}
+                                  [:span {:class "text-base font-normal text-gray-500 ml-2"}
                                    (str "(" (count examples-list) ")")])]
                                (if user
                                  [:button {:type "button"
-                                           :class "text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-blue-700"
+                                           :class "text-sm text-white px-3 py-1.5 rounded-lg font-medium"
+                                           :style "background:linear-gradient(135deg,#06b6d4,#3b82f6);"
                                            :onclick (str "document.getElementById('example-form-" slug "').classList.toggle('hidden')")}
                                   "Add Example"]
-                                 [:a {:href "/auth/login"
-                                      :class "text-sm text-blue-600 hover:underline"}
+                                 [:a {:href (str "/auth/login?return-to=/docs/" slug "%23examples")
+                                      :class "text-sm text-cyan-400 hover:text-cyan-300"}
                                   "Log in to create examples"])]
                               [:div {:id (str "example-form-" slug) :class "mt-4 hidden"}
                                [:form {:method "post" :action "/examples" :hx-boost "false"
-                                       :class "space-y-4 p-4 bg-gray-50 rounded-lg"}
+                                       :class "p-4 rounded-lg"
+                                       :style "background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);"}
                                 [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
                                 [:input {:type "hidden" :name "doc-section" :value slug}]
-                                [:div
-                                 [:label {:class "block text-sm font-medium text-gray-700 mb-1"} "Title"]
-                                 [:input {:name "title" :required true :class "w-full px-3 py-2 border border-gray-300 rounded-lg"}]]
-                                [:div
-                                 [:label {:class "block text-sm font-medium text-gray-700 mb-1"} "Code"]
-                                 [:textarea {:name "code" :required true :rows 8 :class "w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm"}]]
-                                [:div
-                                 [:label {:class "block text-sm font-medium text-gray-700 mb-1"} "Output (optional)"]
-                                 [:textarea {:name "output" :rows 4 :class "w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm"}]]
+                                [:textarea {:name "code" :required true :rows 8
+                                            :placeholder "Paste your code example here\n;; Add comments to describe it"
+                                            :class "w-full px-3 py-2 rounded-lg font-mono text-sm mb-3 text-white outline-none"
+                                            :style "background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);"}]
                                 [:div {:class "flex gap-3"}
-                                 [:button {:type "submit" :class "py-2 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"} "Submit"]
-                                 [:button {:type "button" :class "py-2 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                                 [:button {:type "submit" :class "py-2 px-4 text-white rounded-lg font-medium"
+                                           :style "background:linear-gradient(135deg,#06b6d4,#3b82f6);"} "Submit"]
+                                 [:button {:type "button" :class "py-2 px-4 rounded-lg text-gray-300"
+                                           :style "border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05);"
                                            :onclick (str "document.getElementById('example-form-" slug "').classList.add('hidden')")} "Cancel"]]]]
                               (if (seq examples-list)
                                [:div {:class "space-y-4"}
                                 (for [ex examples-list]
                                   (render-example ex req))]
-                               [:p {:class "text-gray-400 text-sm"}
-                                "No examples for this chapter yet."])]))
-         nav-html (str (h/html {:mode :html :escape? false} (chapter-nav doc)))]
+                               [:p {:class "text-gray-500 text-sm"}
+                                "No examples for this chapter yet."])
+                              (when user
+                                [:script (h/raw (str "if(location.hash==='#examples'){document.getElementById('example-form-" slug "').classList.remove('hidden')}"))])]))
+        nav-html (str (h/html {:mode :html :escape? false} (chapter-nav doc)))]
     (base-with-req title req
       [:div {:class "max-w-5xl mx-auto px-6 py-10"}
        ;; Breadcrumb
-       [:nav {:class "text-sm mb-6 text-gray-400"}
-        [:a {:href "/" :class "hover:text-blue-600 transition"} "Home"]
+       [:nav {:class "text-sm mb-6 text-gray-500"}
+        [:a {:href "/" :class "hover:text-cyan-400 transition"} "Home"]
         [:span {:class "mx-2"} "/"]
-        [:a {:href "/docs" :class "hover:text-blue-600 transition"} "Docs"]
+        [:a {:href "/docs" :class "hover:text-cyan-400 transition"} "Docs"]
         [:span {:class "mx-2"} "/"]
-        [:span {:class "text-gray-600"} title]]
+        [:span {:class "text-gray-300"} title]]
        ;; Part label
        (when part
-         [:div {:class "text-sm font-medium text-blue-600 uppercase tracking-wide mb-2"} (str "Part " part)])
+         [:div {:class "text-sm font-medium uppercase tracking-wide mb-2 text-cyan-400"} (str "Part " part)])
        ;; Article
-       [:article {:class "prose prose-datalevin max-w-none bg-white rounded-xl shadow-sm px-10 py-12 border border-gray-100"}
+       [:article {:class "prose prose-datalevin max-w-none rounded-xl px-10 py-12"
+                  :style "background:rgba(255,255,255,0.06); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.1); box-shadow:0 8px 32px rgba(0,0,0,0.3);"}
         (h/raw html)
         (h/raw examples-html)
         (h/raw nav-html)]])))
-

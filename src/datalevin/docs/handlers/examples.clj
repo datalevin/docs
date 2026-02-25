@@ -8,33 +8,28 @@
   (:import [java.util Date UUID]))
 
 (def ^:private example-pull-expr
-  [:example/id :example/title :example/code :example/output
-   :example/description :example/doc-section :example/created-at
+  [:example/id :example/code :example/doc-section :example/created-at
    {:example/author [:user/id :user/username :user/avatar-url]}])
 
 (defn create-example-handler [{:keys [params session biff.datalevin/conn] :as req}]
   (let [user (:user session)
-        title (str/trim (get params "title" ""))
         code (str/trim (get params "code" ""))
-        output (str/trim (get params "output" ""))
         doc-section (get params "doc-section" "")]
     (cond
       (not user)
       {:status 302 :headers {"Location" "/auth/login"} :session (assoc session :flash {:error "Please log in"})}
-      (empty? title)
-      {:status 302 :headers {"Location" "/examples/new"} :session (assoc session :flash {:error "Title required"})}
       (empty? code)
-      {:status 302 :headers {"Location" "/examples/new"} :session (assoc session :flash {:error "Code required"})}
+      {:status 302 :headers {"Location" (if (seq doc-section) (str "/docs/" doc-section) "/examples/new")}
+       :session (assoc session :flash {:error "Code required"})}
       :else
       (let [example-tx {:example/id (UUID/randomUUID)
-                        :example/title (util/escape-html title)
                         :example/code (util/escape-html code)
-                        :example/output (util/escape-html output)
                         :example/doc-section doc-section
                         :example/removed? false
-                        :example/author [:user/id (:user/id user)] :example/created-at (Date.)}]
+                        :example/author [:user/id (:user/id user)]
+                        :example/created-at (Date.)}]
         (d/transact! conn [example-tx])
-        {:status 302 :headers {"Location" (str "/docs/" doc-section)}
+        {:status 302 :headers {"Location" (str "/docs/" doc-section "#examples")}
          :session (assoc session :flash {:success "Example submitted!"})}))))
 
 ;; ---- Browse all examples (GET /examples) ----
@@ -50,19 +45,21 @@
     {:status 200
      :headers {"Content-Type" "text/html"}
      :body (layout/base-with-req "Examples" req
-             [:div {:class "max-w-4xl mx-auto py-8 px-4"}
-              [:div {:class "flex items-center justify-between mb-6"}
-               [:h1 {:class "text-3xl font-bold text-gray-900"} "Community Examples"]
-               [:a {:href "/examples/new" :class "bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"}
-                "Add Example"]]
-              (if (seq sorted)
-                [:div {:class "space-y-6"}
-                 (for [ex sorted]
-                   (layout/render-example ex req))]
-                [:div {:class "text-center py-16 text-gray-500"}
-                 [:p {:class "text-lg"} "No examples yet."]
-                 [:p {:class "text-sm mt-2"} "Be the first to "
-                  [:a {:href "/examples/new" :class "text-blue-600 hover:underline"} "submit one"] "!"]])])}))
+                                 [:div {:class "max-w-4xl mx-auto py-8 px-4"}
+                                  [:div {:class "flex items-center justify-between mb-6"}
+                                   [:h1 {:class "text-3xl font-bold text-white"} "Community Examples"]
+                                   [:a {:href "/examples/new"
+                                        :class "text-white px-4 py-2 rounded-lg text-sm font-medium"
+                                        :style "background:linear-gradient(135deg,#06b6d4,#3b82f6);"}
+                                    "Add Example"]]
+                                  (if (seq sorted)
+                                    [:div {:class "space-y-6"}
+                                     (for [ex sorted]
+                                       (layout/render-example ex req))]
+                                    [:div {:class "text-center py-16 text-gray-500"}
+                                     [:p {:class "text-lg"} "No examples yet."]
+                                     [:p {:class "text-sm mt-2"} "Be the first to "
+                                      [:a {:href "/examples/new" :class "text-cyan-400 hover:text-cyan-300"} "submit one"] "!"]])])}))
 
 ;; ---- View single example (GET /examples/:id) ----
 
@@ -82,22 +79,20 @@
         (if-not example
           {:status 404 :headers {"Content-Type" "text/html"}
            :body (layout/base-with-req "Not Found" req [:div {:class "max-w-4xl mx-auto py-16 text-center text-gray-500"} "Example not found"])}
-          (let [{:keys [example/title example/doc-section]} example]
+          (let [doc-section (:example/doc-section example)]
             {:status 200
              :headers {"Content-Type" "text/html"}
-             :body (layout/base-with-req (or title "Example") req
-                     [:div {:class "max-w-4xl mx-auto py-8 px-4"}
-                      [:nav {:class "text-sm mb-4"}
-                       [:a {:href "/" :class "text-blue-600 hover:underline"} "Home"]
-                       [:span {:class "mx-2 text-gray-400"} "/"]
-                       [:a {:href "/examples" :class "text-blue-600 hover:underline"} "Examples"]
-                       [:span {:class "mx-2 text-gray-400"} "/"]
-                       [:span {:class "text-gray-600"} title]]
-                      (layout/render-example example req)
-                      (when (seq doc-section)
-                        [:p {:class "mt-4 text-sm text-gray-500"}
-                         "Related doc: "
-                         [:a {:href (str "/docs/" doc-section) :class "text-blue-600 hover:underline"} doc-section]])])}))))))
+             :body (layout/base-with-req "Example" req
+                                         [:div {:class "max-w-4xl mx-auto py-8 px-4"}
+                                          [:nav {:class "text-sm mb-4"}
+                                           [:a {:href "/" :class "text-cyan-400 hover:text-cyan-300"} "Home"]
+                                           [:span {:class "mx-2 text-gray-500"} "/"]
+                                           [:a {:href "/examples" :class "text-cyan-400 hover:text-cyan-300"} "Examples"]]
+                                          (layout/render-example example req)
+                                          (when (seq doc-section)
+                                            [:p {:class "mt-4 text-sm text-gray-500"}
+                                             "Related doc: "
+                                             [:a {:href (str "/docs/" doc-section) :class "text-cyan-400 hover:text-cyan-300"} doc-section]])])}))))))
 
 ;; ---- User profile (GET /users/:username) ----
 
@@ -111,7 +106,7 @@
     (if-not user
       {:status 404 :headers {"Content-Type" "text/html"}
        :body (layout/base-with-req "Not Found" req
-               [:div {:class "max-w-4xl mx-auto py-16 text-center text-gray-500"} "User not found"])}
+                                   [:div {:class "max-w-4xl mx-auto py-16 text-center text-gray-500"} "User not found"])}
       (let [examples (d/q `[:find [(~'pull ~'?e ~example-pull-expr) ...]
                             :in ~'$ ~'?uid
                             :where
@@ -122,21 +117,21 @@
         {:status 200
          :headers {"Content-Type" "text/html"}
          :body (layout/base-with-req (str username "'s Profile") req
-                 [:div {:class "max-w-4xl mx-auto py-8 px-4"}
-                  [:div {:class "flex items-center gap-4 mb-8"}
-                   (when (:user/avatar-url user)
-                     [:img {:src (:user/avatar-url user) :class "h-16 w-16 rounded-full"}])
-                   [:div
-                    [:h1 {:class "text-2xl font-bold text-gray-900"} username]
-                    (when-let [created (:user/created-at user)]
-                      [:p {:class "text-sm text-gray-500"} "Joined " (str created)])]]
-                  [:h2 {:class "text-xl font-semibold text-gray-800 mb-4"}
-                   "Examples (" (count sorted) ")"]
-                  (if (seq sorted)
-                    [:div {:class "space-y-6"}
-                     (for [ex sorted]
-                       (layout/render-example ex req))]
-                    [:p {:class "text-gray-500"} "No examples yet."])])}))))
+                                     [:div {:class "max-w-4xl mx-auto py-8 px-4"}
+                                      [:div {:class "flex items-center gap-4 mb-8"}
+                                       (when (:user/avatar-url user)
+                                         [:img {:src (:user/avatar-url user) :class "h-16 w-16 rounded-full"}])
+                                       [:div
+                                        [:h1 {:class "text-2xl font-bold text-white"} username]
+                                        (when-let [created (:user/created-at user)]
+                                          [:p {:class "text-sm text-gray-500"} "Joined " (str created)])]]
+                                      [:h2 {:class "text-xl font-semibold text-gray-200 mb-4"}
+                                       "Examples (" (count sorted) ")"]
+                                      (if (seq sorted)
+                                        [:div {:class "space-y-6"}
+                                         (for [ex sorted]
+                                           (layout/render-example ex req))]
+                                        [:p {:class "text-gray-500"} "No examples yet."])])}))))
 
 ;; ---- New example form ----
 
@@ -150,23 +145,22 @@
     {:status 200
      :headers {"Content-Type" "text/html"}
      :body (layout/base "Submit Example"
-              [:div {:class "max-w-2xl mx-auto py-8 px-4"}
-               [:h1 {:class "text-3xl font-bold text-gray-900 mb-6"} "Submit Example"]
-               (when error-msg [:p {:class "bg-red-50 text-red-700 p-3 rounded-lg mb-4 text-sm"} error-msg])
-               (when success-msg [:p {:class "bg-green-50 text-green-700 p-3 rounded-lg mb-4 text-sm"} success-msg])
-               [:form {:method "post" :action "/examples" :class "space-y-4"}
-                [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
-                [:input {:type "hidden" :name "doc-section" :value doc-section}]
-                [:div
-                 [:label {:class "block text-sm font-medium text-gray-700 mb-1"} "Title"]
-                 [:input {:name "title" :required true :class "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"}]]
-                [:div
-                 [:label {:class "block text-sm font-medium text-gray-700 mb-1"} "Code"]
-                 [:textarea {:name "code" :required true :rows 8 :class "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"}]]
-                [:div
-                 [:label {:class "block text-sm font-medium text-gray-700 mb-1"} "Output (optional)"]
-                 [:textarea {:name "output" :rows 4 :class "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"}]]
-                [:button {:type "submit" :class "w-full py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"} "Submit Example"]]])}))
+                        [:div {:class "max-w-2xl mx-auto py-8 px-4"}
+                         [:h1 {:class "text-3xl font-bold text-white mb-6"} "Submit Example"]
+                         (when error-msg [:p {:class "p-3 rounded-lg mb-4 text-sm"
+                                              :style "background:rgba(220,38,38,0.15); border:1px solid rgba(220,38,38,0.3); color:#fca5a5;"} error-msg])
+                         (when success-msg [:p {:class "p-3 rounded-lg mb-4 text-sm"
+                                                :style "background:rgba(34,197,94,0.15); border:1px solid rgba(34,197,94,0.3); color:#86efac;"} success-msg])
+                         [:form {:method "post" :action "/examples" :class "space-y-4"}
+                          [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
+                          [:input {:type "hidden" :name "doc-section" :value doc-section}]
+                          [:textarea {:name "code" :required true :rows 10
+                                      :placeholder "Paste your code example here\n;; Add comments to describe it"
+                                      :class "w-full px-3 py-2 rounded-lg outline-none font-mono text-sm text-white"
+                                      :style "background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);"}]
+                          [:button {:type "submit"
+                                    :class "w-full py-2.5 text-white rounded-lg font-medium transition"
+                                    :style "background:linear-gradient(135deg,#06b6d4,#3b82f6);"} "Submit Example"]]])}))
 
 (defn new-example-form-fragment [{:keys [params session] :as req}]
   (let [doc-section (get params "doc-section" "")
@@ -176,26 +170,21 @@
      :body (str
             (h/html
              [:form {:method "post" :action "/examples"
-                     :class "space-y-4 p-4 bg-gray-50 rounded-lg"}
+                     :class "p-4 rounded-lg"
+                     :style "background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);"}
               [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
               [:input {:type "hidden" :name "doc-section" :value doc-section}]
-              [:div
-               [:label {:class "block text-sm font-medium text-gray-700 mb-1"} "Title"]
-               [:input {:name "title" :required true
-                        :class "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"}]]
-              [:div
-               [:label {:class "block text-sm font-medium text-gray-700 mb-1"} "Code"]
-               [:textarea {:name "code" :required true :rows 8
-                           :class "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"}]]
-              [:div
-               [:label {:class "block text-sm font-medium text-gray-700 mb-1"} "Output (optional)"]
-               [:textarea {:name "output" :rows 4
-                           :class "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"}]]
+              [:textarea {:name "code" :required true :rows 8
+                          :placeholder "Paste your code example here\n;; Add comments to describe it"
+                          :class "w-full px-3 py-2 rounded-lg outline-none font-mono text-sm mb-3 text-white"
+                          :style "background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);"}]
               [:div {:class "flex gap-3"}
                [:button {:type "submit"
-                         :class "py-2 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"}
+                         :class "py-2 px-4 text-white rounded-lg font-medium"
+                         :style "background:linear-gradient(135deg,#06b6d4,#3b82f6);"}
                 "Submit"]
                [:button {:type "button"
-                         :class "py-2 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                         :class "py-2 px-4 rounded-lg text-gray-300"
+                         :style "border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05);"
                          :onclick "this.closest('form').remove()"}
                 "Cancel"]]]))}))

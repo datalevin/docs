@@ -4,7 +4,7 @@
 
 @layer base {
   body {
-    @apply text-gray-900;
+    @apply text-gray-300;
   }
 }
 
@@ -13,15 +13,35 @@
     @apply px-4 py-2 rounded-lg font-medium transition duration-200;
   }
   .btn-primary {
-    @apply bg-blue-600 text-white hover:bg-blue-700;
+    @apply text-white font-medium;
+    background: linear-gradient(135deg, #06b6d4, #3b82f6);
+  }
+  .btn-primary:hover {
+    box-shadow: 0 0 20px rgba(6,182,212,0.4);
   }
   .btn-secondary {
-    @apply border border-gray-300 bg-white text-gray-700 hover:bg-gray-50;
+    @apply text-gray-300;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.15);
+    backdrop-filter: blur(12px);
+  }
+  .btn-secondary:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.25);
   }
   .input {
-    @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none;
+    @apply w-full px-3 py-2 rounded-lg outline-none text-white;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .input:focus {
+    border-color: #06b6d4;
+    box-shadow: 0 0 0 2px rgba(6,182,212,0.3);
   }
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-200;
+    @apply rounded-xl;
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.1);
   }
 }
