@@ -7,15 +7,20 @@
             [taoensso.timbre :as log])
   (:import [java.util Date UUID]))
 
+(defn- param
+  "Get a parameter by name, checking both keyword and string keys."
+  [params k]
+  (or (get params (keyword k)) (get params (str k)) ""))
+
 ;; =============================================================================
 ;; Registration (with email verification)
 ;; =============================================================================
 
 (defn register-handler [{:keys [params session biff.datalevin/conn] :as req}]
-  (let [email (str/trim (get params "email" ""))
-        username (str/trim (get params "username" ""))
-        password (get params "password" "")
-        confirm-password (get params "confirm-password" "")
+  (let [email (str/trim (param params "email"))
+        username (str/trim (param params "username"))
+        password (param params "password")
+        confirm-password (param params "confirm-password")
         base-url (:base-url req)]
     (if (or (empty? email) (empty? username) (empty? password))
       {:status 302 :session (assoc session :flash {:error "All fields required"}) :headers {"Location" "/auth/register"}}
@@ -41,12 +46,16 @@
 ;; Login / Logout
 ;; =============================================================================
 
-(defn login-handler [{:keys [params session biff.datalevin/conn] :as req}]
-  (let [email (str/trim (get params "email" ""))
-        password (get params "password" "")
+(defn login-handler [{:keys [params session biff.datalevin/conn admin-emails] :as req}]
+  (let [email (str/trim (param params "email"))
+        password (param params "password")
         db (d/db conn)]
     (if-let [user (auth/authenticate-user db email password)]
-      (let [session-tx (session/create-session [:user/id (:user/id user)])]
+      (let [role (if (contains? admin-emails (:user/email user)) :admin (:user/role user))
+            user (assoc user :user/role role)
+            session-tx (session/create-session [:user/id (:user/id user)])]
+        (when (not= role (:user/role user))
+          (d/transact! conn [{:db/id [:user/id (:user/id user)] :user/role role}]))
         (d/transact! conn [(:tx session-tx)])
         {:status 302
          :session (assoc session :user (dissoc user :user/password-hash))
@@ -73,7 +82,7 @@
 ;; =============================================================================
 
 (defn verify-email-handler [{:keys [params biff.datalevin/conn session] :as req}]
-  (let [token (get params "token" "")
+  (let [token (param params "token")
         db (d/db conn)]
     (if-let [user-id (auth/verify-token db token)]
       (let [delete-tx (auth/delete-verification-token-tx db token)]
@@ -105,9 +114,9 @@
                                                          :redirect-uri redirect-uri
                                                          :state state})}})))
 
-(defn github-callback-handler [{:keys [params session biff.datalevin/conn] :as req}]
-  (let [code (get params "code" "")
-        state (get params "state" "")
+(defn github-callback-handler [{:keys [params session biff.datalevin/conn admin-emails] :as req}]
+  (let [code (param params "code")
+        state (param params "state")
         expected-state (:github-oauth-state session)
         client-id (:github-client-id req)
         client-secret (:github-client-secret req)
@@ -132,6 +141,11 @@
                            tx (assoc tx :user/role :user :user/email-verified? true)]
                        (d/transact! conn [tx])
                        tx))
+              email (:user/email user)
+              role (if (contains? admin-emails email) :admin (:user/role user))
+              user (assoc user :user/role role)
+              _ (when (and (not= role (:user/role user)) (:user/id user))
+                  (d/transact! conn [{:db/id [:user/id (:user/id user)] :user/role role}]))
               session-tx (session/create-session [:user/id (:user/id user)])]
           (d/transact! conn [(:tx session-tx)])
           {:status 302
@@ -139,7 +153,7 @@
            :headers {"Location" "/"}
            :cookies {"session" {:value (str (:session-id session-tx))}}})
         (catch Exception e
-          (log/error e "GitHub OAuth error")
+          (log/error "GitHub OAuth error:" (.getMessage e) (pr-str (class e)))
           {:status 302
            :session (assoc (dissoc session :github-oauth-state) :flash {:error "GitHub login failed"})
            :headers {"Location" "/auth/login"}})))))
@@ -152,7 +166,7 @@
   nil) ;; Rendered inline in routes.clj
 
 (defn forgot-password-handler [{:keys [params session biff.datalevin/conn] :as req}]
-  (let [email (str/trim (get params "email" ""))
+  (let [email (str/trim (param params "email"))
         db (d/db conn)
         base-url (:base-url req)
         ;; Always show same message to prevent email enumeration
@@ -183,9 +197,9 @@
   nil) ;; Rendered inline in routes.clj
 
 (defn reset-password-handler [{:keys [params session biff.datalevin/conn] :as req}]
-  (let [token (get params "token" "")
-        password (get params "password" "")
-        confirm-password (get params "confirm-password" "")
+  (let [token (param params "token")
+        password (param params "password")
+        confirm-password (param params "confirm-password")
         db (d/db conn)]
     (if-let [user-id (lookup-reset-token db token)]
       (cond

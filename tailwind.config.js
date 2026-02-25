@@ -73,8 +73,8 @@ module.exports = {
               },
             },
             h1: {
-              fontWeight: '800',
-              fontSize: '2em',
+              fontWeight: '700',
+              fontSize: '1.5em',
               marginTop: '0',
               marginBottom: '0.8em',
               lineHeight: '1.2',

@@ -88,7 +88,12 @@
      :headers {"Content-Type" "text/html"}
      :body (layout/base-with-req "Admin — Examples" req
              [:div {:class "max-w-5xl mx-auto py-8 px-4"}
-              [:h1 {:class "text-3xl font-bold text-gray-900 mb-2"} "Manage Examples"]
+              [:div {:class "flex items-center justify-between mb-2"}
+               [:h1 {:class "text-3xl font-bold text-gray-900"} "Manage Examples"]
+               [:form {:method "post" :action "/admin/reindex"}
+                [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
+                [:button {:type "submit" :class "px-3 py-1.5 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700"}
+                 "Reindex Search"]]]
               [:p {:class "text-sm text-gray-500 mb-6"}
                (str active-count " active, " removed-count " removed")]
               [:div {:class "flex gap-2 mb-6"}
@@ -105,9 +110,8 @@
                  (for [ex sorted]
                    (render-admin-example ex token))])])}))
 
-(defn reindex-handler [{:keys [headers biff.datalevin/conn] :as req}]
-  (let [search-conn (:search/conn req)
-        reindex-secret (:reindex-secret req)
+(defn reindex-handler [{:keys [headers biff.datalevin/conn session] :as req}]
+  (let [reindex-secret (:reindex-secret req)
         secret-header (get headers "x-reindex-secret")
         user (:user req)
         authorized? (or (= (:user/role user) :admin)
@@ -130,9 +134,11 @@
                            (:title frontmatter) (assoc :doc/title (:title frontmatter))
                            (:chapter frontmatter) (assoc :doc/chapter (:chapter frontmatter))
                            (:part frontmatter) (assoc :doc/part (:part frontmatter)))]
-              (d/transact! search-conn [doc-tx])))
+              (d/transact! conn [doc-tx])))
           (log/info "Reindex complete:" (count files) "docs")
-          {:status 200 :body (str "Reindexed " (count files) " documents")})
+          {:status 302
+           :session (assoc session :flash {:success (str "Reindexed " (count files) " documents")})
+           :headers {"Location" "/admin/examples"}})
         (catch Exception e
           (log/error e "Reindex failed")
           {:status 500 :body "Reindex failed"})))))

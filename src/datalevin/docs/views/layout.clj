@@ -1,5 +1,6 @@
 (ns datalevin.docs.views.layout
   (:require [hiccup2.core :as h]
+            [jsonista.core :as j]
             [ring.middleware.anti-forgery :as anti-forgery]))
 
 (defn header [& [req]]
@@ -24,14 +25,13 @@
        (if user
          [:div {:class "flex items-center gap-3"}
           [:span {:class "text-sm text-gray-600"} (:user/username user)]
+          (when (= :admin (:user/role user))
+            [:a {:href "/admin/examples" :class "text-sm text-blue-600 hover:underline"} "Admin"])
           [:a {:href "/pdf" :class "text-sm text-blue-600 hover:underline"} "PDF"]
           [:a {:href "/examples/new" :class "text-sm text-blue-600 hover:underline"} "Add Example"]
           [:a {:href "/auth/logout" :class "text-sm text-gray-500 hover:text-gray-700"} "Logout"]]
-         [:div {:class "flex items-center gap-3"}
-          [:a {:href "/auth/login" :class "text-sm text-gray-600 hover:text-gray-900"
-               :title "Sign in to post examples and download the book"} "Log in"]
-          [:a {:href "/auth/register" :class "bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700"
-               :title "Sign in to post examples and download the book"} "Sign up"]])]]]))
+         [:a {:href "/auth/login" :class "text-sm text-gray-600 hover:text-gray-900"
+              :title "Sign in to post examples and download the book"} "Log in"])]]]))
 
 (defn flash-message [flash]
   (when flash
@@ -66,7 +66,7 @@ body { background: linear-gradient(135deg, #eef2ff 0%, #f9fafb 40%, #f0fdf4 70%,
         flash (:flash session)
         token (force anti-forgery/*anti-forgery-token*)]
     (str (h/html {:mode :html :escape? false}
-      [:html {:hx-boost "true" :hx-headers (pr-str {:X-CSRF-Token token}) :lang "en"}
+      [:html {:hx-boost "true" :hx-headers (j/write-value-as-string {"X-CSRF-Token" token}) :lang "en"}
        [:head
         [:meta {:charset "utf-8"}]
         [:meta {:content "width=device-width, initial-scale=1" :name "viewport"}]
@@ -146,14 +146,14 @@ body { background: linear-gradient(135deg, #eef2ff 0%, #f9fafb 40%, #f0fdf4 70%,
       [:nav {:class "flex items-center justify-between mt-12 pt-6 border-t border-gray-200"}
        (if prev
          [:a {:href (str "/docs/" (:slug prev))
-              :class "group flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition"}
+              :class "group flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition no-underline"}
           [:span {:class "text-lg group-hover:-translate-x-0.5 transition-transform"} "\u2190"]
           [:span [:span {:class "block text-xs text-gray-400 uppercase tracking-wide"} "Previous"]
                  [:span {:class "font-medium text-gray-700 group-hover:text-blue-600"} (:title prev)]]]
          [:div])
        (if nxt
          [:a {:href (str "/docs/" (:slug nxt))
-              :class "group flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition text-right"}
+              :class "group flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition text-right no-underline"}
           [:span [:span {:class "block text-xs text-gray-400 uppercase tracking-wide"} "Next"]
                  [:span {:class "font-medium text-gray-700 group-hover:text-blue-600"} (:title nxt)]]
           [:span {:class "text-lg group-hover:translate-x-0.5 transition-transform"} "\u2192"]]
@@ -171,10 +171,13 @@ body { background: linear-gradient(135deg, #eef2ff 0%, #f9fafb 40%, #f0fdf4 70%,
                                 (when (seq examples-list)
                                   [:span {:class "text-base font-normal text-gray-400 ml-2"}
                                    (str "(" (count examples-list) ")")])]
-                               (when user
+                               (if user
                                  [:a {:href (str "/examples/new?doc-section=" slug)
                                       :class "text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-blue-700"}
-                                  "Add Example"])]
+                                  "Add Example"]
+                                 [:a {:href "/auth/login"
+                                      :class "text-sm text-blue-600 hover:underline"}
+                                  "Log in to create examples"])]
                               (if (seq examples-list)
                                 [:div {:class "space-y-4"}
                                  (for [ex examples-list]
@@ -199,7 +202,7 @@ body { background: linear-gradient(135deg, #eef2ff 0%, #f9fafb 40%, #f0fdf4 70%,
        (when part
          [:div {:class "text-sm font-medium text-blue-600 uppercase tracking-wide mb-2"} (str "Part " part)])
        ;; Article
-       [:article {:class "prose prose-datalevin lg:prose-lg max-w-none bg-white rounded-xl shadow-sm px-10 py-12 border border-gray-100"}
+       [:article {:class "prose prose-datalevin max-w-none bg-white rounded-xl shadow-sm px-10 py-12 border border-gray-100"}
         (h/raw html)
         (h/raw examples-html)
         (h/raw nav-html)]])))

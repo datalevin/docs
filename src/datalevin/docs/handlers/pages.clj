@@ -96,7 +96,7 @@
      [:div {:style "display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.5rem;margin-top:1.5rem"}
       [:a {:href "/docs/02-getting-started" :class card-style}
        [:h3 {:style "font-weight:600;margin-bottom:0.5rem"} "Flexible"]
-       [:p {:style "color:#666;font-size:0.875rem"} "Seamless deployment model \u2014 embedded, client/server, and command line scripting."]]
+       [:p {:style "color:#666;font-size:0.875rem"} "Seamless deployment \u2014 embedded, client/server, and command line scripting."]]
       [:a {:href "/docs/26-durability-backups" :class card-style}
        [:h3 {:style "font-weight:600;margin-bottom:0.5rem"} "Reliable"]
        [:p {:style "color:#666;font-size:0.875rem"} "Transaction log access, replication and high availability."]]
@@ -122,7 +122,7 @@
       "If you enjoy Datalevin and it is helping you succeed, consider sponsoring the development and maintenance of this project."]
      [:div {:style "display:flex;justify-content:center"}
       [:a {:href "https://github.com/sponsors/huahaiy" :target "_blank" :rel "noopener noreferrer" :class btn-style}
-       "GitHub Sponsors"]]])}))
+       "GitHub Sponsors"]]])})
 
 (defn docs-index [req]
   (let [chapters (load-chapter-meta)

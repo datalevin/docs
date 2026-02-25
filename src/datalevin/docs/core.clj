@@ -45,11 +45,11 @@
       TimeUnit/HOURS)
     scheduler))
 
-(def search-schema
-  {:doc/title {}
+(def doc-schema
+  {:doc/title {:db/fulltext true}
    :doc/chapter {}
    :doc/part {}
-   :doc/content {}
+   :doc/content {:db/fulltext true}
    :doc/filename {:db/unique :db.unique/identity}})
 
 (defn start
@@ -63,25 +63,22 @@
          _ (configure-logging! (:env cfg))
          db-path (:db-path cfg)
 
-         ;; Main app DB with user/session/example schema
-         app-conn (d/get-conn db-path (merge schema/user-schema schema/example-schema))
+         ;; Single DB with all schemas
+         all-schema (merge schema/user-schema schema/example-schema doc-schema)
+         conn (d/get-conn db-path all-schema)
 
-         ;; Search DB with doc schema
-         search-db-path "data/docs-db"
-         search-conn (d/get-conn search-db-path search-schema)
-
-         session-scheduler (start-session-cleanup app-conn)
+         session-scheduler (start-session-cleanup conn)
 
          sys (biff/start-system
                {:biff.datalevin/db-path db-path
-                :biff.datalevin/schema (merge schema/user-schema schema/example-schema)
-                :biff.datalevin/conn app-conn
+                :biff.datalevin/schema all-schema
+                :biff.datalevin/conn conn
                 :port (:port cfg)
                 :base-url (:base-url cfg)
                 :session-secret (or (:session-secret cfg) "dev-secret-min-32-chars")
-                :search/conn search-conn
                 :github-client-id (:github-client-id cfg)
                 :github-client-secret (:github-client-secret cfg)
+                :admin-emails (:admin-emails cfg)
                 :reindex-secret (:reindex-secret cfg)
                 :session-scheduler session-scheduler
                 :biff/config cfg}
