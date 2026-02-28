@@ -43,7 +43,7 @@ Database storage engines generally fall into two camps: B+Trees (used by Postgre
 | **Read Performance** | Excellent (O(log N) point/range) | Variable (may check multiple levels) |
 | **Write Performance** | Good (constrained by random I/O) | Excellent (sequential appends) |
 | **Complexity** | Simple (no background compaction) | High (compaction, bloom filters) |
-| **Large Values Handling** | Good (little write amplification) | Poor (Rewrite data repeatedly during compaction) |
+| **Large Values Handling** | Good (little write amplification) | Poor (rewrite data repeatedly during compaction) |
 | **Space Efficiency** | Lower (due to fragmentation) | Higher (compressed on disk) |
 | **Consistency** | Strong and immediate | Often eventual or complex to tune |
 
@@ -135,7 +135,7 @@ The details of the KV API and its practical usage are covered in **Chapter 6**.
 By default, LMDB is extremely safe but can be limited by disk I/O because every write transaction requires a synchronous flush of the memory-mapped pages to disk (`msync`) to ensure durability. Datalevin introduces a **WAL (Write-Ahead Log) Mode** to overcome this.
 
 ### 7.1 How WAL Mode Works
-When WAL mode is enabled (`:datalog-wal? true` or `:kv-wal? true`):
+When WAL mode is enabled (`:wal? true`):
 
 1.  **Transaction**: A write request arrives.
 2.  **WAL Append**: The change is appended to a sequential log file and synced to disk. Sequential writes are significantly faster than random B+Tree updates.

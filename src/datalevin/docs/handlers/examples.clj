@@ -47,7 +47,7 @@
      :body (layout/base-with-req "Examples" req
                                  [:div {:class "max-w-4xl mx-auto py-8 px-4"}
                                   [:div {:class "flex items-center justify-between mb-6"}
-                                   [:h1 {:class "text-3xl font-bold text-white"} "Community Examples"]
+                                   [:h1 {:class "text-3xl font-bold text-white"} "User Examples"]
                                    [:a {:href "/examples/new"
                                         :class "text-white px-4 py-2 rounded-lg text-sm font-medium"
                                         :style "background:linear-gradient(135deg,#06b6d4,#3b82f6);"}

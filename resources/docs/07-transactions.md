@@ -13,7 +13,7 @@ Every write to a Datalevin database happens within a **transaction**. Transactio
 ## 1. The Transaction Model
 
 ### 1.1 Default Mode: Synchronous LMDB Transactions
-In its default (non-WAL) mode, a Datalevin transaction is a direct mapping to an underlying **LMDB transaction**. 
+In its default (non-WAL) mode, a Datalevin transaction is a direct mapping to an underlying **LMDB transaction**.
 - **Atomicity**: All changes within a single `transact!` call are applied as a single, atomic unit. They either all succeed or all fail.
 - **Durability**: By default, every transaction is synchronously flushed to disk (`msync`) before it is confirmed. This guarantees that once a transaction is committed, it is durable and will survive a system crash.
 
@@ -24,22 +24,131 @@ For use cases where maximum write speed is more important than crash-proof durab
 
 ## 2. Transacting Data
 
-The primary function for writing data is `d/transact!`. It takes a connection and a vector of transactable entities.
+The primary function for writing data is `d/transact!`. It takes a connection and a vector of transactable entities. Datalevin is flexible in how you can express changes.
 
-### 2.1 Transactable Entities
-Datalevin is flexible in how you can express changes. You can transact a list of maps, where each map represents an entity:
+### 2.1 Entity Maps
+
+The most common way to express an entity is using a map. Each map represents an entity with its attributes and values:
+
 ```clojure
 (d/transact! conn
-  [{:user/name "Alice" :user/email "alice@example.com"} ; New entity
-   {:db/id 101, :user/active? false}]) ; Update entity 101
+  [{:user/name "Alice" :user/email "alice@example.com"}
+   {:user/name "Bob" :user/email "bob@example.com"}])
 ```
 
-Or you can provide a list of raw datom vectors `[Entity Attribute Value]`:
+When you omit `:db/id`, Datalevin assigns a new unique entity ID automatically.
+
+### 2.2 Updating Existing Entities
+
+To update an existing entity, include its entity ID in the map:
+
+```clojure
+(d/transact! conn
+  [{:db/id 101, :user/active? false}])
+```
+
+This updates the entity with ID 101 to set `:user/active?` to false.
+
+### 2.3 Temporary Entity IDs (Temp Eids)
+
+When creating new entities that will be referenced by other entities in the same transaction, use **temporary entity IDs** (temp eids). These are negative numbers that act as placeholders:
+
+```clojure
+(d/transact! conn
+  [{:db/id -1, :user/name "Alice" :user/friend -2}
+   {:db/id -2, :user/name "Bob"}])
+```
+
+In this example, `-1` references `-2` as a friend. Datalevin resolves these temp eids during the transaction, replacing them with real entity IDs.
+
+### 2.4 Lookup Refs
+
+Instead of knowing the entity ID, you can use a **lookup ref** to identify an existing entity by a unique attribute. A lookup ref is a vector `[attribute value]`:
+
+```clojure
+(d/transact! conn
+  [[[:user/email "alice@example.com"] :user/active? false]])
+```
+
+This finds the entity with `:user/email` equal to `"alice@example.com"` and updates it. If no entity exists with that email, the transaction will fail.
+
+Lookup refs are particularly useful when you only have a unique identifier (like an email) but not the entity ID.
+
+### 2.5 Unique Attributes and Upsert
+
+When an attribute is marked as `:db.unique/identity`, Datalevin automatically performs an **upsert**: if an entity with that value exists, it updates that entity; otherwise, it creates a new one:
+
+```clojure
+;; First, add a schema with unique identity
+(d/transact! conn
+  [{:db/ident :user/email
+    :db/valueType :db.type/string
+    :db/unique :db.unique/identity}])
+
+;; Now upsert based on email
+(d/transact! conn
+  [{:user/email "alice@example.com" :user/name "Alice v2"}])
+```
+
+If `"alice@example.com"` already exists, this updates the existing entity. If not, it creates a new one. This eliminates the need to check for existence before transacting.
+
+### 2.6 Raw Datom Vectors
+
+For fine-grained control, you can express changes as raw datom vectors `[op entity attribute value]`:
+
 ```clojure
 (d/transact! conn
   [[:db/add -1 :user/name "Alice"]
-   [:db/add 101 :user/active? false]])
+   [:db/add -1 :user/email "alice@example.com"]
+   [:db/retract 101 :user/active? true]])
 ```
+
+The operations are:
+- `:db/add` — adds or updates an attribute value
+- `:db/retract` — removes an attribute value
+
+### 2.7 Mixed Forms
+
+You can mix all these forms in a single transaction:
+
+```clojure
+(d/transact! conn
+  [{:user/email "new@example.com" :user/name "New User"}  ; upsert
+   [[:user/email "alice@example.com"] :user/status "active"] ; lookup ref
+   {:db/id -1, :user/friend [[:user/email "bob@example.com"]]} ; temp eid + lookup ref
+   [:db/add -1 :user/notes "Added via datom vector"]}) ; raw datom
+```
+
+This flexibility allows you to choose the most convenient form for each operation in your transaction.
+
+### 2.8 Strong Typing and Data Type Considerations
+
+Datalevin is a **strongly typed** database. It is strongly recommended to give
+every attribute value an explicit type defined in the schema (e.g.,
+`:db.type/long`, `:db.type/string`, `:db.type/boolean`). When you specify a type
+in your schema, Datalevin enforces it. This ensures predictable behavior.
+
+When you transact data without a data type in schema, Datalevin serializes it as
+an EDN binary blob. It can sometimes behave unexpectedly:
+
+```clojure
+;; Transacting with an explicit int
+(d/transact! conn [{:db/id -1, :my-entity/val (int 42)}])
+
+;; Querying with a plain integer literal (defaults to long)
+(d/q
+  '[:find ?e :in $
+    :where [?e :my-entity/val 42]]
+  (d/db conn))
+;;=> ()  ;; Unexpected! No results because (int 42) ≠ 42
+```
+
+The query returns no results because the value was stored as an integer (32-bit)
+but the query uses a long (64-bit). They are not equal.
+
+However, if you specify a type for `:my-entity/val`, e.g. `:db.type/long`,
+Datalevin does type coercion for you, so your `(int 42)` will be stored as a
+`long` instead.
 
 ---
 

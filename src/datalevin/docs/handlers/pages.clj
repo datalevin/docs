@@ -101,15 +101,15 @@
        [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Reliable"]
        [:p {:style "color:#9ca3af;font-size:0.875rem"} "Transaction log access, replication and high availability."]]
       [:a {:href "/docs/31-agent-memory" :class card-style}
-       [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "AI Ready"]
+       [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "AI Friendly"]
        [:p {:style "color:#9ca3af;font-size:0.875rem"} "Built-in MCP server, ideal for agent memory and agentic applications."]]]]
-    ;; Community
+    ;; Ecosystem
     [:div {:style "max-width:64rem;margin:0 auto;padding:2rem 2rem"}
-     [:h2 {:style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:0.75rem;color:#f9fafb"} "Community"]
+     [:h2 {:style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:0.75rem;color:#f9fafb"} "Ecosystem"]
      [:p {:style "text-align:center;color:#9ca3af;font-size:1rem;margin-bottom:1.5rem"}
       "Sharing ideas and helping each other with questions, examples, and issues."]
      [:div {:style "display:flex;justify-content:center;gap:1rem;flex-wrap:wrap"}
-      [:a {:href "/examples" :class btn-style} "Community Examples"]
+       [:a {:href "/examples" :class btn-style} "User Examples"]
       [:a {:href slack-url :target "_blank" :rel "noopener noreferrer" :class btn-style}
        (str \# "datalevin Clojurians Slack")]
       [:a {:href "https://github.com/datalevin/datalevin/discussions"
