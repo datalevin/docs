@@ -5,43 +5,47 @@
             [clojure.string :as str]))
 
 (defn search-docs [conn query]
-  (when (and conn (seq (str/trim query)))
-    (let [q (str/trim query)
-          db (d/db conn)
-          results (d/q '[:find ?e ?a ?v
-                         :in $ ?q
-                         :where [(fulltext $ ?q {:top 50}) [[?e ?a ?v]]]]
-                       db q)]
-      (->> results
-           (take 20)
-           (mapv (fn [[e a v]]
-                   (let [doc (d/entity db e)]
-                     {:title (:doc/title doc)
-                      :filename (:doc/filename doc)
-                      :chapter (:doc/chapter doc)
-                      :type :doc
-                      :url (str "/docs/" (:doc/filename doc))})))))))
+  (when (and conn (seq query))
+    (let [q (clojure.string/trim query)
+          db (d/db conn)]
+      (if (empty? q)
+        nil
+        (let [results (d/q '[:find ?e ?a ?v
+                             :in $ ?q
+                             :where [(fulltext $ ?q {:top 50}) [[?e ?a ?v]]]]
+                           db q)]
+          (->> results
+               (take 20)
+               (mapv (fn [[e _a _v]]  ;; Don't need ?a ?v values
+                       (let [doc (d/entity db e)]
+                         {:title (:doc/title doc)
+                          :filename (:doc/filename doc)
+                          :chapter (:doc/chapter doc)
+                          :type :doc
+                          :url (str "/docs/" (:doc/filename doc))})))))))))
 
 (defn search-examples [conn query]
-  (when (and conn (seq (str/trim query)))
-    (let [q (str/trim query)
-          db (d/db conn)
-          results (d/q '[:find ?e ?a ?v
-                         :in $ ?q
-                         :where [(fulltext $ ?q {:top 20}) [[?e ?a ?v]]]
-                                [?e :example/removed? false]]
-                       db q)]
-      (->> results
-           (take 10)
-           (mapv (fn [[e a v]]
-                   (let [ex (d/entity db e)]
-                     {:title (:example/title ex)
-                      :description (:example/description ex)
-                      :doc-section (:example/doc-section ex)
-                      :type :example
-                      :url (if-let [s (:example/doc-section ex)]
-                             (str "/docs/" s)
-                             "/examples")})))))))
+  (when (and conn (seq query))
+    (let [q (clojure.string/trim query)
+          db (d/db conn)]
+      (if (empty? q)
+        nil
+        (let [results (d/q '[:find ?e ?a ?v
+                             :in $ ?q
+                             :where [(fulltext $ ?q {:top 20}) [[?e ?a ?v]]]
+                                    [?e :example/removed? false]]
+                           db q)]
+          (->> results
+               (take 10)
+               (mapv (fn [[e _a _v]]  ;; Don't need ?a ?v values
+                       (let [ex (d/entity db e)]
+                         {:title (:example/title ex)
+                          :description (:example/description ex)
+                          :doc-section (:example/doc-section ex)
+                          :type :example
+                          :url (if-let [s (:example/doc-section ex)]
+                                 (str "/docs/" s)
+                                 "/examples")})))))))))
 
 (defn render-result [r]
   (str "<a class=\"block p-4 rounded-lg transition\" style=\"background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);\" onmouseover=\"this.style.borderColor='rgba(6,182,212,0.4)';this.style.boxShadow='0 0 16px rgba(6,182,212,0.12)'\" onmouseout=\"this.style.borderColor='rgba(255,255,255,0.1)';this.style.boxShadow='none'\" href=\""

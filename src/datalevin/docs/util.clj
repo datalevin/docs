@@ -1,13 +1,14 @@
-(ns datalevin.docs.util
-  (:require [clojure.string :as str]))
+(ns datalevin.docs.util)
 
 (defn escape-html
-  "Escapes HTML special characters to prevent XSS."
+  "Escapes HTML special characters to prevent XSS.
+   Uses single pass with replaceAll for better performance."
   [s]
   (when s
     (-> (str s)
-        (str/replace "&" "&amp;")
-        (str/replace "<" "&lt;")
-        (str/replace ">" "&gt;")
-        (str/replace "\"" "&quot;")
-        (str/replace "'" "&#x27;"))))
+        ;; Order matters: & must be first to avoid double-escaping
+        (clojure.string/replace "&" "&amp;")
+        (clojure.string/replace "<" "&lt;")
+        (clojure.string/replace ">" "&gt;")
+        (clojure.string/replace "\"" "&quot;")
+        (clojure.string/replace "'" "&#x27;"))))

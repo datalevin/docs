@@ -45,6 +45,15 @@
       TimeUnit/HOURS)
     scheduler))
 
+(defn stop-session-cleanup
+  "Stops the session cleanup scheduler."
+  [scheduler]
+  (when scheduler
+    (.shutdown scheduler)
+    (if (.awaitTermination scheduler 5 TimeUnit/SECONDS)
+      (log/info "Session cleanup scheduler stopped")
+      (log/warn "Session cleanup scheduler did not stop gracefully"))))
+
 (def doc-schema
   {:doc/title {:db/fulltext true}
    :doc/chapter {}
@@ -91,7 +100,10 @@
                         app (cond-> app wrap-handler wrap-handler)
                         jetty-server (do (log/info "Starting server on port" (:port sys))
                                          (jetty/run-jetty app {:port (:port sys) :join? false}))]
-                    (assoc sys :jetty/server jetty-server)))])]
+                    (-> sys
+                        (assoc :jetty/server jetty-server)
+                        (assoc :session-scheduler session-scheduler)
+                        (update :biff/stop conj #(stop-session-cleanup session-scheduler))))))]
      (log/info "System started with auth, search, and session cleanup")
      sys)))
 

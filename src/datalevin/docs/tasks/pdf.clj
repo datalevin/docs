@@ -15,24 +15,35 @@
 (defn parse-markdown [markdown]
   (.render renderer* (.parse parser* markdown)))
 
+;; Cache for PDF generation to avoid repeated file I/O and parsing
+(defonce ^:private pdf-chapters-cache (atom nil))
+
+(defn- clear-pdf-cache!
+  "Clear PDF cache. Call when docs are updated."
+  []
+  (reset! pdf-chapters-cache nil))
+
 (defn load-all-chapters []
-  (let [dir (jio/file docs-dir)
-        files (filter #(.endsWith (.getName %) ".md") (file-seq dir))
-        chapters (for [f files
-                       :let [filename (.getName f)]
-                       :when (not (or (= filename "toc.md")
-                                      (= filename "preface.md")))
-                       :let [content (slurp f)
-                             {:keys [frontmatter markdown]} (pages/parse-frontmatter content)
-                             chapter-num (or (:chapter frontmatter) 0)]
-                       :when (and (number? chapter-num) (> chapter-num 0))]
-                   {:filename filename
-                    :chapter chapter-num
-                    :title (:title frontmatter)
-                    :part (:part frontmatter)
-                    :markdown markdown
-                    :html (parse-markdown markdown)})]
-    (sort-by :chapter chapters)))
+  (or @pdf-chapters-cache
+      (let [dir (jio/file docs-dir)
+            files (filter #(.endsWith (.getName %) ".md") (file-seq dir))
+            chapters (for [f files
+                           :let [filename (.getName f)]
+                           :when (not (or (= filename "toc.md")
+                                          (= filename "preface.md")))
+                           :let [content (slurp f)
+                                 {:keys [frontmatter markdown]} (pages/parse-frontmatter content)
+                                 chapter-num (or (:chapter frontmatter) 0)]
+                           :when (and (number? chapter-num) (> chapter-num 0))]
+                       {:filename filename
+                        :chapter chapter-num
+                        :title (:title frontmatter)
+                        :part (:part frontmatter)
+                        :markdown markdown
+                        :html (parse-markdown markdown)})
+            sorted (sort-by :chapter chapters)]
+        (reset! pdf-chapters-cache sorted)
+        sorted)))
 
 (def print-styles
   "<style>

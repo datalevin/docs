@@ -13,6 +13,38 @@
 (def parser* (.. Parser builder (extensions extensions) build))
 (def renderer* (.. HtmlRenderer builder (extensions extensions) build))
 
+;; Cache for chapter metadata to avoid repeated file I/O
+;; Metadata only changes when docs are added/removed, so we cache indefinitely
+;; and rely on explicit invalidation (clear-all-caches!) when needed.
+(defonce ^:private chapter-meta-cache (atom nil))
+
+;; Cache for parsed document HTML
+;; Documents rarely change in production; cleared on reindex or dev file changes
+(defonce ^:private doc-cache (atom {}))
+
+(defn- clear-chapter-cache!
+  "Clear the chapter metadata cache. Call when docs are updated."
+  []
+  (reset! chapter-meta-cache nil))
+
+(defn- clear-doc-cache!
+  "Clear the document cache. Call when docs are updated."
+  []
+  (reset! doc-cache {}))
+
+(defn clear-all-caches!
+  "Clear all caches including PDF cache. Call when docs are updated."
+  []
+  (clear-chapter-cache!)
+  (clear-doc-cache!)
+  ;; Also clear PDF cache if the namespace is loaded
+  (try
+    (require 'datalevin.docs.tasks.pdf)
+    ((resolve 'datalevin.docs.tasks.pdf/clear-pdf-cache!))
+    (catch Exception _
+      ;; PDF namespace may not be loaded in production
+      ))))
+
 (defn parse-frontmatter [content]
   (let [yaml-re #"^---\n([\s\S]*?)\n---\n([\s\S]*)$"
         matches (re-find yaml-re content)]
@@ -26,37 +58,44 @@
     (.render renderer* node)))
 
 (defn load-doc [filename]
-  (let [path (str docs-dir "/" filename ".md")
-        file (jio/file path)]
-    (when (.exists file)
-      (let [content (slurp path)
-            {:keys [frontmatter markdown]} (parse-frontmatter content)
-            html (parse-markdown markdown)]
-        {:title (:title frontmatter)
-         :chapter (:chapter frontmatter)
-         :part (:part frontmatter)
-         :html html}))))
+  (or (get @doc-cache filename)
+      (let [path (str docs-dir "/" filename ".md")
+            file (jio/file path)]
+        (when (.exists file)
+          (let [content (slurp path)
+                {:keys [frontmatter markdown]} (parse-frontmatter content)
+                html (parse-markdown markdown)
+                doc {:title (:title frontmatter)
+                     :chapter (:chapter frontmatter)
+                     :part (:part frontmatter)
+                     :html html}]
+            (swap! doc-cache assoc filename doc)
+            doc)))))
 
 (defn load-chapter-meta
   "Reads frontmatter from all chapter .md files in docs-dir.
-   Returns a sorted seq of {:slug, :title, :chapter, :part}."
+   Returns a sorted seq of {:slug, :title, :chapter, :part}.
+   Uses caching to avoid repeated file I/O. Cache is cleared when docs change."
   []
-  (let [dir (jio/file docs-dir)
-        files (.listFiles dir)
-        chapters (for [f files
-                       :when (.isFile f)
-                       :let [name (.getName f)]
-                       :when (and (.endsWith name ".md")
-                                  (not= name "toc.md"))
-                       :let [slug (subs name 0 (- (count name) 3))
-                             content (slurp f)
-                             {:keys [frontmatter]} (parse-frontmatter content)]
-                       :when (:chapter frontmatter)]
-                   {:slug slug
-                    :title (:title frontmatter)
-                    :chapter (:chapter frontmatter)
-                    :part (:part frontmatter)})]
-    (sort-by :chapter chapters)))
+  (or @chapter-meta-cache
+      (let [dir (jio/file docs-dir)
+            files (.listFiles dir)
+            chapters (for [f files
+                           :when (.isFile f)
+                           :let [name (.getName f)]
+                           :when (and (.endsWith name ".md")
+                                      (not= name "toc.md"))
+                           :let [slug (subs name 0 (- (count name) 3))
+                                 content (slurp f)
+                                 {:keys [frontmatter]} (parse-frontmatter content)]
+                           :when (:chapter frontmatter)]
+                       {:slug slug
+                        :title (:title frontmatter)
+                        :chapter (:chapter frontmatter)
+                        :part (:part frontmatter)})
+            sorted (sort-by :chapter chapters)]
+        (reset! chapter-meta-cache sorted)
+        sorted)))
 
 (def ^:private card-style "dl-card")
 
@@ -82,7 +121,7 @@
       [:a {:href "/docs" :class "dl-btn"} "Read the Book"]]]
     ;; Features
     [:div {:style "max-width:64rem;margin:0 auto;padding:2rem 2rem"}
-     [:h2 {:style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:2rem;color:#f9fafb"} "Why Datalevin?"]
+     [:h2 {:class "section-title" :style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:2rem;color:#f9fafb"} "Why Datalevin?"]
      [:div {:style "display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.5rem"}
       [:a {:href "/docs/03-mental-model" :class card-style}
        [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Simple"]
@@ -105,7 +144,7 @@
        [:p {:style "color:#9ca3af;font-size:0.875rem"} "Built-in MCP server, ideal for agent memory and agentic applications."]]]]
     ;; Ecosystem
     [:div {:style "max-width:64rem;margin:0 auto;padding:2rem 2rem"}
-     [:h2 {:style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:0.75rem;color:#f9fafb"} "Ecosystem"]
+     [:h2 {:class "section-title" :style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:0.75rem;color:#f9fafb"} "Ecosystem"]
      [:p {:style "text-align:center;color:#9ca3af;font-size:1rem;margin-bottom:1.5rem"}
       "Sharing ideas and helping each other with questions, examples, and issues."]
      [:div {:style "display:flex;justify-content:center;gap:1rem;flex-wrap:wrap"}
@@ -117,7 +156,7 @@
        "GitHub Discussions"]]]
     ;; Support
     [:div {:style "max-width:64rem;margin:0 auto;padding:2rem 2rem 3rem"}
-     [:h2 {:style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:0.75rem;color:#f9fafb"} "Support the Project"]
+     [:h2 {:class "section-title" :style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:0.75rem;color:#f9fafb"} "Support the Project"]
      [:p {:style "text-align:center;color:#9ca3af;font-size:1rem;margin-bottom:1.5rem"}
       "If you enjoy Datalevin and it is helping you succeed, consider sponsoring the development and maintenance of this project."]
      [:div {:style "display:flex;justify-content:center"}

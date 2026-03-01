@@ -135,6 +135,8 @@
                            (:chapter frontmatter) (assoc :doc/chapter (:chapter frontmatter))
                            (:part frontmatter) (assoc :doc/part (:part frontmatter)))]
               (d/transact! conn [doc-tx])))
+          ;; Clear caches after reindex
+          (pages/clear-all-caches!)
           (log/info "Reindex complete:" (count files) "docs")
           {:status 302
            :session (assoc session :flash {:success (str "Reindexed " (count files) " documents")})

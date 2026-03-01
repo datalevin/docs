@@ -30,7 +30,8 @@ body.light .prose strong { color: #1f2937 !important; }
 body.light .prose blockquote { color: #374151 !important; border-left-color: #0891b2 !important; background-color: rgba(0,0,0,0.03) !important; }
 body.light .prose code { color: #1f2937 !important; background-color: rgba(0,0,0,0.08) !important; }
 body.light .prose pre { background-color: #1f2937 !important; }
-body.light .prose pre code { color: #e5e7eb !important; background-color: transparent !important; }")
+body.light .prose pre code { color: #e5e7eb !important; background-color: transparent !important; }
+body.light h2.section-title { color: #1f2937 !important; }")
 
 (defn header [& [req]]
   (let [user (:user req)]
