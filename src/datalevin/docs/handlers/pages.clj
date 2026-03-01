@@ -141,14 +141,13 @@
                           [:div {:style "display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.5rem;margin-top:1.5rem"}
                            [:a {:href "/docs/02-getting-started" :class card-style}
                             [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Flexible"]
-                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "Seamless deployment \u2014 embedded, client/server, and command line scripting."]]
+                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "Seamless deployment: embedded in applications, client/server, and fast starting command line scripting."]]
                            [:a {:href "/docs/26-durability-backups" :class card-style}
                             [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Reliable"]
-                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "Transaction log access, replication and high availability."]]
+                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "Robust ACID compliance, WAL writes, transaction log access, read replica and high availability."]]
                            [:a {:href "/docs/31-agent-memory" :class card-style}
                             [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "AI Friendly"]
-                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "Built-in MCP server, ideal for agent memory and agentic applications."]]]]
-    ;; Ecosystem
+                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "CLI with full capability and built-in MCP server, ideal for agent memory and agentic application."]]]]    ;; Ecosystem
                          [:div {:style "max-width:64rem;margin:0 auto;padding:2rem 2rem"}
                           [:h2 {:class "section-title" :style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:0.75rem;color:#f9fafb"} "Ecosystem"]
                           [:p {:style "text-align:center;color:#9ca3af;font-size:1rem;margin-bottom:1.5rem"}
@@ -174,8 +173,7 @@
         grouped (partition-by :part chapters)
         toc-html (apply str
                         "<div class=\"max-w-3xl mx-auto px-4 py-8\">"
-                        "<h1 class=\"text-3xl font-bold mb-8\" style=\"color:var(--text-primary, #e5e7eb)\">Datalevin: The Definitive Guide</h1>"
-                        (concat
+                        "<h1 class=\"text-3xl font-bold mb-8\" style=\"color:var(--text-primary, #e5e7eb)\"><i>Datalevin: The Definitive Guide</i></h1>"                        (concat
                          (for [group grouped
                                :let [part (:part (first group))]]
                            (str "<div class=\"mb-8\">"

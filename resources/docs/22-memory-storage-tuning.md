@@ -76,7 +76,21 @@ When WAL mode is enabled, several additional parameters can be tuned to balance 
 
 ---
 
-## 6. Summary: The Tuning Checklist
+## 6. Server and Client Tuning
+
+When using Datalevin in Client-Server mode, additional tuning parameters are available to optimize network performance, connection pooling, and protocol compression.
+
+Key server and client-side knobs include:
+- **`--idle-timeout`**: Reclaim server resources from inactive sessions.
+- **Connection Pooling**: Control `:pool-size` and `:time-out` on the client.
+- **Wire Compression**: Adjust `*wire-compression-threshold*` and `*wire-compression-level*` for large payloads.
+- **Freshness Control**: Tune `*remote-db-last-modified-check-interval-ms*` to balance latency and data consistency.
+
+Refer to **Chapter 27: Client-Server Architecture** for a detailed guide on these parameters.
+
+---
+
+## 7. Summary: The Tuning Checklist
 
 When deploying Datalevin to production, follow this checklist:
 

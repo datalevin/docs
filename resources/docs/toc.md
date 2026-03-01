@@ -1,4 +1,4 @@
-Datalevin: The Definitive Guide to Logical and Intelligent Databases
+*Datalevin: The Definitive Guide to Logical and Intelligent Databases*
 
 Part I — Foundations: A Multi-Paradigm Database
 
@@ -48,8 +48,6 @@ Part IV — Indexes as Capabilities
 
 20. Combining Indexes: Hybrid Queries Across KV, Logic, and Search
 
-(This is a key differentiator: indexes as programmable capabilities.)
-
 Part V — Performance and Dataflow
 
 21. Batching, Sorting, and High-Throughput Ingestion
@@ -66,7 +64,7 @@ Part VI — Systems and Operations
 
 26. Durability, Snapshots, and Backup Strategies
 
-27. Concurrency: Readers, Writers, and MVCC
+27. Client-Server Architecture: Protocols and Security
 
 28. Encryption at Rest and Security Models
 
@@ -88,7 +86,7 @@ Part VII — Datalevin for Intelligent Systems
 
 Part VIII — Internals and Extensions
 
-36. Inside Datalevin: Storage, Indexes, and Execution
+36. Inside Datalevin: Storage, Indexes, and Execution (with Concurrency & MVCC)
 
 37. Datalog Evaluation Strategies
 

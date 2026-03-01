@@ -12,34 +12,13 @@ This chapter explores the architectural trade-offs of the three primary deployme
 
 ---
 
-## 1. Embedded Mode: Direct Library Integration
+## 1. Embedded Mode: Maximum Performance
 
-Embedded mode is the "native" way to use Datalevin. You include it as a standard Clojure or Java library in your application's `deps.edn` or `project.clj`.
+Embedded mode is the primary way to use Datalevin. You include it as a standard library in your application.
 
 - **Architecture**: Your application and Datalevin share the same process and address space.
 - **Performance**: This is the fastest possible deployment. Because Datalevin uses memory-mapping (mmap), your application reads data directly from the OS Page Cache with **zero-copy overhead**.
-- **Locking**: A single process owns the "Writer Lock" on the database file.
-
-### 1.1 Installation
-
-```clojure
-;; deps.edn
-{:deps {datalevin/datalevin {:mvn/version "0.10.5"}}}
-```
-
-```clojure
-;; project.clj (Leiningen)
-[datalevin "0.10.5"]
-```
-
-### 1.2 Performance Tips
-
-Add these JVM options for 5-20% better performance:
-
-```
---add-opens=java.base/java.nio=ALL-UNNAMED
---add-opens=java.base/sun.nio.ch=ALL-UNNAMED
-```
+- **Operational Simplicity**: No separate database process to manage, monitor, or secure. The database file is just another part of your application's state.
 
 **Best for**:
 - High-performance, single-node services.
@@ -48,119 +27,45 @@ Add these JVM options for 5-20% better performance:
 
 ---
 
-## 2. Server Mode: Centralized Data Management
+## 2. Server Mode: Centralized Management
 
-If you have multiple services that need to share a single Datalevin database, or if you want to manage your database as a standalone system, use **Server Mode**.
+Server mode (detailed in **Chapter 27**) is used when you need multiple services to share a single Datalevin instance, or when you require cross-language access (e.g., Python/Go clients).
 
-### 2.1 Starting the Server
-
-```console
-# Using the native CLI tool
-$ dtlv serv -r /data/datalevin -p 8898
-
-# Using JVM uberjar (recommended for high concurrency)
-$ java --add-opens=java.base/java.nio=ALL-UNNAMED \
-       --add-opens=java.base/sun.nio.ch=ALL-UNNAMED \
-       -jar datalevin-0.10.5-standalone.jar serv -r /data/datalevin
-```
-
-> **Note**: The native CLI tool uses GraalVM with SerialGC, which limits throughput. Use the JVM uberjar for high-concurrency production workloads.
-
-### 2.2 Default Credentials
-
-The server comes with a built-in admin user:
-- **Username**: `datalevin`
-- **Password**: `datalevin`
-
-Change the password using:
-```clojure
-(require '[datalevin.client :as c])
-(def client (c/new-client "dtlv://datalevin:datalevin@localhost:8898"))
-(c/reset-password client "datalevin" "new-password")
-```
-
-### 2.3 Client Connection
-
-Connect to a remote database using a connection URI:
-
-```clojure
-(def conn (d/get-conn "dtlv://user:pass@localhost:8898/mydb"))
-```
-
-URI format: `dtlv://<user>:<pass>@<host>:<port>/<db-name>?store=datalog|kv`
-
-- `store` defaults to `datalog`, use `kv` for key-value store
-- Database is created automatically if it doesn't exist
-
-### 2.4 Architecture
-
-- **Non-blocking server**: Uses event-driven architecture with a work-stealing thread pool
-- **Transparent API**: Same functions work for local and remote databases
-- **Wire protocol**: Inspired by PostgreSQL, using TLV message format
-- **Serialization**: Default is Nippy (fast, Clojure-specific); transit+json available for cross-language clients
-
-### 2.5 Security: Role-Based Access Control
-
-Datalevin server implements full **RBAC**:
-
-- **Permissions**: `:view`, `:alter`, `:create`, `:control` (each implies the former)
-- **Objects**: `:user`, `:role`, `:database`, `:server` (each implies the former)
-- **Create users and roles**:
-```clojure
-(c/create-user client "alice" "password123")
-(c/create-role client "reader")
-(c/assign-role client "alice" "reader")
-(c/grant-permission client "reader" :datalevin.server/view "mydb")
-```
+- **Architecture**: A standalone `dtlv` server process manages the storage and provides a network API.
+- **Benefits**: Centralized backup management, fine-grained RBAC, and the ability to share a single database across microservices.
+- **Trade-offs**: Network latency and serialization overhead (Nippy/Transit).
 
 **Best for**:
-- Microservices architectures.
-- Shared development environments.
-- Scenarios requiring fine-grained user permissions.
+- Microservices architectures where data must be shared.
+- Shared development environments for teams.
+- Non-JVM applications needing Datalog or KV storage.
 
 ---
 
-## 3. Babashka Pods: High-Performance Scripting
+## 3. Babashka Pods: Rapid Scripting
 
-Babashka is a fast-starting Clojure interpreter for scripting. Datalevin provides a **Pod** that allows you to use its Datalog and KV capabilities within a Babashka script.
+Babashka is a fast-starting Clojure interpreter for scripting. Datalevin provides a **Pod** that allows you to use its Datalog and KV capabilities within a script without the overhead of the full JVM startup.
 
-### 3.1 Installation
-
-```bash
-# Via Babashka pod registry
-(require '[babashka.pods :as pods])
-(pods/load-pod 'huahaiy/datalevin "0.10.5")
-
-# Or via homebrew
-brew install huahaiy/brew/datalevin
-```
-
-### 3.2 Usage
-
-```clojure
-(require '[pod.huahaiy.datalevin :as d])
-
-(def conn (d/get-conn "/tmp/test"))
-(d/transact! conn [{:name "hello"}])
-(d/q '[:find ?n :where [_ :name ?n]] (d/db conn))
-```
+- **Architecture**: The Pod runs as a separate process and communicates with Babashka via IPC.
+- **Performance**: High (IPC overhead is minimal compared to network), but lacks the zero-copy speed of the embedded mode.
+- **Convenience**: Single-binary installation and instantaneous startup.
 
 **Best for**:
 - CLI tools that store state.
-- Database maintenance scripts.
+- Database maintenance and migration scripts.
 - Ephemeral tasks or "Lambda"-style functions.
 
 ---
 
-## 4. Comparison Table
+## 4. Architectural Comparison Table
 
 | Feature | Embedded | Server | Babashka Pod |
 | :--- | :--- | :--- | :--- |
-| **Performance** | Maximum (Zero-copy) | High (TCP + serialization) | High (IPC) |
-| **Setup** | Library dependency | Separate process | Single binary |
-| **Security** | OS-level | Full RBAC | OS-level |
-| **Concurrency** | Single writer | Multi-client | Single writer |
-| **Language** | JVM (Clojure/Java) | Any via TCP | Babashka |
+| **Communication** | Direct (Function calls) | Network (TCP) | IPC (Stdio/Sockets) |
+| **Overhead** | None (Zero-copy) | High (Serialization + TCP) | Medium (Serialization + IPC) |
+| **Security** | OS-level (File permissions) | Full RBAC (Users/Roles) | OS-level |
+| **Concurrency** | Single-Writer (process) | Multi-client (server-side) | Single-Writer (process) |
+| **Tech Stack** | JVM (Clojure/Java) | Language Independent | Babashka |
 
 ---
 

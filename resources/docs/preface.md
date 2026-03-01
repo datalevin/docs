@@ -100,7 +100,7 @@ modes (embedded, client/server, and lightweight pods), Datalevin supports a new
 class of systems in which databases are not just passive repositories, but
 active participants in reasoning and collaboration.
 
-Datalevin: The Definitive Guide to Logical and Intelligent Databases is written
+*Datalevin: The Definitive Guide to Logical and Intelligent Databases* is written
 for practitioners who want to go beyond isolated data models and toward unified,
 long-lived systems. You will learn how Datalevin can be used as a fast embedded
 store, a networked database, or an application-integrated component; how to
