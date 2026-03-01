@@ -32,16 +32,21 @@ For regular (non-virtual) threads, Datalevin **reuses read-only transactions and
 
 ---
 
-## 2. The Single-Writer Model
+## 2. The Single-Writer Model vs. Concurrent WAL
 
-While there can be thousands of concurrent readers, Datalevin follows a **Single-Writer Model** per database environment.
+While there can be thousands of concurrent readers, Datalevin traditionally follows a **Single-Writer Model** per database environment.
 
 - **Locking**: When a transaction starts a write, it acquires a **Writer Lock**. Only one thread can hold this lock at a time.
 - **Queueing**: If another thread tries to write while the lock is held, it will wait until the first transaction is committed or aborted.
 
-### 2.1 Write Transaction Isolation
+### 2.1 Concurrent Writes with WAL Mode
+With the introduction of **WAL mode**, Datalevin significantly improves write concurrency. While a single lock still coordinates the final commit to the B+tree, the **WAL append process** is highly optimized for concurrent callers.
 
-Every write operation (via `d/transact!` or `d/with-transaction`) creates a **new read-write transaction**. All reads and writes within a `with-transaction` block use the **same write transaction**, providing full isolation:
+- **Aggregate Throughput**: In WAL mode, multiple writer threads can achieve significantly higher aggregate throughput than a single thread (e.g., 4 threads can achieve ~2x throughput compared to a single thread).
+- **Reduced Wait Times**: Transactions spend less time holding the writer lock because the expensive synchronous disk flush happens sequentially in the background log.
+
+### 2.2 Write Transaction Isolation
+Every write operation (via `d/transact!` or `d/with-transaction`) creates a **new read-write transaction**. All reads and writes within a `with-transaction` block use the **same write transaction**, providing full isolation.
 
 ```clojure
 (d/with-transaction [tx conn]

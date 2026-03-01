@@ -65,12 +65,25 @@ In a Datalog AVE index, many keys share the same Attribute and Value (e.g., thou
 
 ---
 
-## 5. Summary: The Tuning Checklist
+## 5. Tuning WAL Mode
+
+When WAL mode is enabled, several additional parameters can be tuned to balance performance and safety:
+
+- **`:wal-durability-profile`**: `:strict` (sync on every commit) vs. `:relaxed` (batched syncs).
+- **`:wal-group-commit`**: Max writes per durability batch in `:relaxed` mode (default: 100).
+- **`:wal-group-commit-ms`**: Max milliseconds between batches in `:relaxed` mode (default: 100ms).
+- **Retention**: Control disk space with `:wal-retention-bytes` (default: 8GiB) and `:wal-retention-ms` (default: 7 days).
+
+---
+
+## 6. Summary: The Tuning Checklist
 
 When deploying Datalevin to production, follow this checklist:
 
 1.  **Set a large `:mapsize`**: Reserve enough virtual address space for your future growth.
 2.  **Monitor Page Cache usage**: Ensure your server has enough RAM to keep your working set in memory.
 3.  **Adjust `:max-readers`**: If you have a high-concurrency application, increase the reader limit.
+4.  **Configure WAL profile**: Use `:relaxed` for high-throughput write workloads if a small risk of data loss is acceptable.
+5.  **Monitor LSN Lag**: Use `txlog-watermarks` to ensure durability isn't lagging significantly behind commits.
 
 By tuning these parameters, you ensure that Datalevin's zero-copy architecture remains fast, stable, and efficient across any dataset size.

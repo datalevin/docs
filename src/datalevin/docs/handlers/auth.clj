@@ -139,7 +139,11 @@
               user (if existing
                      existing
                      (let [tx (auth/github-find-or-create-user-tx gh-user)
-                           tx (assoc tx :user/role :user :user/email-verified? true)]
+                           ;; Remove nil values — GitHub may not return email for private profiles
+                           tx (into {} (remove (fn [[_ v]] (nil? v))) tx)
+                           tx (assoc tx :user/role :user :user/email-verified? true)
+                           ;; Use GitHub username as fallback if no email
+                           tx (if (:user/email tx) tx (assoc tx :user/email (str (:login gh-user) "@github")))]
                        (d/transact! conn [tx])
                        tx))
               email (:user/email user)

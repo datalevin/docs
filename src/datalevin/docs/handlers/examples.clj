@@ -99,7 +99,7 @@
 (defn user-profile-handler [{:keys [path-params biff.datalevin/conn] :as req}]
   (let [username (:username path-params)
         db (d/db conn)
-        user (d/q '[:find (pull ?u [:user/id :user/username :user/avatar-url :user/created-at]) .
+        user (d/q '[:find (pull ?u [:db/id :user/id :user/username :user/avatar-url :user/created-at]) .
                     :in $ ?username
                     :where [?u :user/username ?username]]
                   db username)]
@@ -112,7 +112,7 @@
                             :where
                             [~'?e :example/author ~'?uid]
                             [~'?e :example/removed? false]]
-                          db (:db/id (d/entity db [:user/username username])))
+                          db (:db/id user))
             sorted (sort-by :example/created-at #(compare %2 %1) examples)]
         {:status 200
          :headers {"Content-Type" "text/html"}
@@ -146,7 +146,7 @@
      :headers {"Content-Type" "text/html"}
      :body (layout/base "Submit Example"
                         [:div {:class "max-w-2xl mx-auto py-8 px-4"}
-                         [:h1 {:class "text-3xl font-bold text-white mb-6"} "Submit Example"]
+                         [:h1 {:class "text-3xl font-bold mb-6" :style "color:var(--text-primary, #e5e7eb)"} "Submit Example"]
                          (when error-msg [:p {:class "p-3 rounded-lg mb-4 text-sm"
                                               :style "background:rgba(220,38,38,0.15); border:1px solid rgba(220,38,38,0.3); color:#fca5a5;"} error-msg])
                          (when success-msg [:p {:class "p-3 rounded-lg mb-4 text-sm"
@@ -156,8 +156,8 @@
                           [:input {:type "hidden" :name "doc-section" :value doc-section}]
                           [:textarea {:name "code" :required true :rows 10
                                       :placeholder "Paste your code example here\n;; Add comments to describe it"
-                                      :class "w-full px-3 py-2 rounded-lg outline-none font-mono text-sm text-white"
-                                      :style "background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);"}]
+                                      :class "w-full px-3 py-2 rounded-lg outline-none font-mono text-sm"
+                                      :style "background:var(--input-bg, rgba(255,255,255,0.05)); border:1px solid var(--input-border, rgba(255,255,255,0.1)); color:var(--text-primary, #e5e7eb);"}]
                           [:button {:type "submit"
                                     :class "w-full py-2.5 text-white rounded-lg font-medium transition"
                                     :style "background:linear-gradient(135deg,#06b6d4,#3b82f6);"} "Submit Example"]]])}))
@@ -171,13 +171,13 @@
             (h/html
              [:form {:method "post" :action "/examples"
                      :class "p-4 rounded-lg"
-                     :style "background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);"}
+                     :style "background:var(--bg-card, rgba(255,255,255,0.05)); border:1px solid var(--border-card, rgba(255,255,255,0.1));"}
               [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
               [:input {:type "hidden" :name "doc-section" :value doc-section}]
               [:textarea {:name "code" :required true :rows 8
                           :placeholder "Paste your code example here\n;; Add comments to describe it"
-                          :class "w-full px-3 py-2 rounded-lg outline-none font-mono text-sm mb-3 text-white"
-                          :style "background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);"}]
+                          :class "w-full px-3 py-2 rounded-lg outline-none font-mono text-sm mb-3"
+                          :style "background:var(--input-bg, rgba(255,255,255,0.05)); border:1px solid var(--input-border, rgba(255,255,255,0.1)); color:var(--text-primary, #e5e7eb);"}]
               [:div {:class "flex gap-3"}
                [:button {:type "submit"
                          :class "py-2 px-4 text-white rounded-lg font-medium"

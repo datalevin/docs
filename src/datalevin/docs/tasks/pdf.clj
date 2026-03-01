@@ -1,22 +1,17 @@
 (ns datalevin.docs.tasks.pdf
   (:require [datalevin.docs.handlers.pages :as pages]
             [clojure.java.io :as jio]
-            [clj-yaml.core :as yaml]
             [taoensso.timbre :as log])
-  (:import [org.commonmark.parser Parser]
-           [org.commonmark.renderer.html HtmlRenderer]
-           [java.io File]))
+  (:import [java.util.concurrent Semaphore TimeUnit]))
 
 (def docs-dir "resources/docs")
 (def pdf-cache-dir (or (System/getenv "PDF_CACHE_PATH") "data/pdf-cache"))
-(def parser* (.. Parser builder build))
-(def renderer* (.. HtmlRenderer builder build))
-
-(defn parse-markdown [markdown]
-  (.render renderer* (.parse parser* markdown)))
 
 ;; Cache for PDF generation to avoid repeated file I/O and parsing
 (defonce ^:private pdf-chapters-cache (atom nil))
+
+;; Only allow 1 concurrent PDF generation to prevent OOM on small instances
+(defonce ^:private pdf-semaphore (Semaphore. 1))
 
 (defn- clear-pdf-cache!
   "Clear PDF cache. Call when docs are updated."
@@ -40,7 +35,7 @@
                         :title (:title frontmatter)
                         :part (:part frontmatter)
                         :markdown markdown
-                        :html (parse-markdown markdown)})
+                        :html (pages/parse-markdown markdown)})
             sorted (sort-by :chapter chapters)]
         (reset! pdf-chapters-cache sorted)
         sorted)))
@@ -65,11 +60,12 @@
     blockquote { border-left: 4px solid #ddd; margin: 1rem 0; padding-left: 1rem; color: #666; }
   </style>")
 
-(defn- pandoc-available? []
-  (try
-    (let [proc (.start (ProcessBuilder. ["pandoc" "--version"]))]
-      (zero? (.waitFor proc)))
-    (catch Exception _ false)))
+(def ^:private pandoc-available?
+  (delay
+    (try
+      (let [proc (.start (ProcessBuilder. ["pandoc" "--version"]))]
+        (zero? (.waitFor proc)))
+      (catch Exception _ false))))
 
 (defn- build-combined-markdown [chapters]
   (apply str
@@ -117,24 +113,48 @@
           (log/warn "Pandoc exited" exit ":" output)
           nil)))))
 
+(defn- serve-cached-pdf
+  "Serves the cached PDF file if it exists."
+  []
+  (let [pdf-file (jio/file pdf-cache-dir "datalevin-book.pdf")]
+    (when (.exists pdf-file)
+      {:status 200
+       :headers {"Content-Type" "application/pdf"
+                 "Content-Disposition" "attachment; filename=\"datalevin-book.pdf\""
+                 "Content-Length" (str (.length pdf-file))}
+       :body (jio/input-stream pdf-file)})))
+
 (defn pdf-handler [{:keys [session] :as req}]
   (if-not (:user session)
     {:status 302 :headers {"Location" "/auth/login"}}
-    (let [chapters (load-all-chapters)]
-      (if (pandoc-available?)
-        (if-let [pdf-file (generate-pdf-via-pandoc chapters)]
-          {:status 200
-           :headers {"Content-Type" "application/pdf"
-                     "Content-Disposition" "attachment; filename=\"datalevin-book.pdf\""
-                     "Content-Length" (str (.length pdf-file))}
-           :body (jio/input-stream pdf-file)}
-          ;; Pandoc failed, fall back to HTML
-          {:status 200
-           :headers {"Content-Type" "text/html; charset=utf-8"
-                     "Content-Disposition" "attachment; filename=\"datalevin-book.html\""}
-           :body (build-html chapters)})
-        ;; No pandoc, serve HTML
-        {:status 200
-         :headers {"Content-Type" "text/html; charset=utf-8"
-                   "Content-Disposition" "attachment; filename=\"datalevin-book.html\""}
-         :body (build-html chapters)}))))
+    ;; Serve cached PDF immediately if available
+    (or (serve-cached-pdf)
+        ;; Otherwise generate — but limit concurrency to prevent OOM
+        (if (.tryAcquire pdf-semaphore 5 TimeUnit/SECONDS)
+          (try
+            ;; Double-check cache after acquiring semaphore
+            (or (serve-cached-pdf)
+                (let [chapters (load-all-chapters)]
+                  (if @pandoc-available?
+                    (if-let [pdf-file (generate-pdf-via-pandoc chapters)]
+                      {:status 200
+                       :headers {"Content-Type" "application/pdf"
+                                 "Content-Disposition" "attachment; filename=\"datalevin-book.pdf\""
+                                 "Content-Length" (str (.length pdf-file))}
+                       :body (jio/input-stream pdf-file)}
+                      ;; Pandoc failed, fall back to HTML
+                      {:status 200
+                       :headers {"Content-Type" "text/html; charset=utf-8"
+                                 "Content-Disposition" "attachment; filename=\"datalevin-book.html\""}
+                       :body (build-html chapters)})
+                    ;; No pandoc, serve HTML
+                    {:status 200
+                     :headers {"Content-Type" "text/html; charset=utf-8"
+                               "Content-Disposition" "attachment; filename=\"datalevin-book.html\""}
+                     :body (build-html chapters)})))
+            (finally
+              (.release pdf-semaphore)))
+          ;; Could not acquire semaphore — another generation is running
+          {:status 503
+           :headers {"Content-Type" "text/html" "Retry-After" "30"}
+           :body "PDF generation is in progress. Please try again shortly."}))))

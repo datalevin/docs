@@ -43,20 +43,22 @@
   (let [{:keys [example/id example/title example/code example/removed?
                 example/doc-section example/created-at]} ex
         author-name (get-in ex [:example/author :user/username] "Anonymous")]
-    [:div {:class (str "border rounded-lg p-4 "
-                       (if removed? "bg-red-50 border-red-200" "bg-white border-gray-200"))}
+    [:div {:class "rounded-lg p-4"
+           :style (if removed?
+                    "background:rgba(220,38,38,0.1); border:1px solid rgba(220,38,38,0.3);"
+                    "background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);")}
      [:div {:class "flex items-start justify-between gap-4"}
       [:div {:class "min-w-0 flex-1"}
        [:div {:class "flex items-center gap-2 mb-1"}
-        [:h3 {:class "font-semibold text-gray-900 truncate"} title]
+        [:h3 {:class "font-semibold truncate" :style "color:var(--text-primary, #e5e7eb)"} title]
         (when removed?
-          [:span {:class "text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full"} "Removed"])]
+          [:span {:class "text-xs px-2 py-0.5 rounded-full" :style "background:rgba(220,38,38,0.2); color:#fca5a5;"} "Removed"])]
        [:pre {:class "bg-gray-900 text-gray-100 p-2 rounded text-xs font-mono overflow-x-auto mt-2 max-h-24"}
         [:code code]]
        [:div {:class "flex items-center gap-3 mt-2 text-xs text-gray-500"}
-        [:span "by " [:a {:href (str "/users/" author-name) :class "text-blue-600 hover:underline"} author-name]]
+        [:span "by " [:a {:href (str "/users/" author-name) :class "text-cyan-400 hover:text-cyan-300 hover:underline"} author-name]]
         (when (seq doc-section)
-          [:span "in " [:a {:href (str "/docs/" doc-section) :class "text-blue-600 hover:underline"} doc-section]])
+          [:span "in " [:a {:href (str "/docs/" doc-section) :class "text-cyan-400 hover:text-cyan-300 hover:underline"} doc-section]])
         [:span (str created-at)]]]
       [:div {:class "flex-shrink-0"}
        (if removed?
@@ -73,42 +75,52 @@
 (defn admin-examples-handler [{:keys [biff.datalevin/conn params] :as req}]
   (let [db (d/db conn)
         filter-param (get params "filter" "all")
-        all-examples (d/q `[:find [(~'pull ~'?e ~admin-example-pull-expr) ...]
-                            :where [~'?e :example/id]]
-                          db)
-        filtered (case filter-param
-                   "removed" (filter :example/removed? all-examples)
-                   "active"  (remove :example/removed? all-examples)
-                   all-examples)
+        filtered (d/q (case filter-param
+                        "removed" `[:find [(~'pull ~'?e ~admin-example-pull-expr) ...]
+                                    :where [~'?e :example/id]
+                                    [~'?e :example/removed? true]]
+                        "active" `[:find [(~'pull ~'?e ~admin-example-pull-expr) ...]
+                                   :where [~'?e :example/id]
+                                   [~'?e :example/removed? false]]
+                        `[:find [(~'pull ~'?e ~admin-example-pull-expr) ...]
+                          :where [~'?e :example/id]])
+                      db)
         sorted (sort-by :example/created-at #(compare %2 %1) filtered)
         token (force anti-forgery/*anti-forgery-token*)
-        active-count (count (remove :example/removed? all-examples))
-        removed-count (count (filter :example/removed? all-examples))]
+        active-count (d/q '[:find (count ?e) .
+                            :where [?e :example/id]
+                            [?e :example/removed? false]] db)
+        removed-count (d/q '[:find (count ?e) .
+                             :where [?e :example/id]
+                             [?e :example/removed? true]] db)]
     {:status 200
      :headers {"Content-Type" "text/html"}
      :body (layout/base-with-req "Admin — Examples" req
-             [:div {:class "max-w-5xl mx-auto py-8 px-4"}
-              [:div {:class "flex items-center justify-between mb-2"}
-               [:h1 {:class "text-3xl font-bold text-gray-900"} "Manage Examples"]
-               [:form {:method "post" :action "/admin/reindex"}
-                [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
-                [:button {:type "submit" :class "px-3 py-1.5 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700"}
-                 "Reindex Search"]]]
-              [:p {:class "text-sm text-gray-500 mb-6"}
-               (str active-count " active, " removed-count " removed")]
-              [:div {:class "flex gap-2 mb-6"}
-               (for [[label val] [["All" "all"] ["Active" "active"] ["Removed" "removed"]]]
-                 [:a {:href (str "/admin/examples?filter=" val)
-                      :class (str "px-3 py-1.5 rounded-lg text-sm font-medium "
-                                  (if (= filter-param val)
-                                    "bg-blue-600 text-white"
-                                    "bg-gray-100 text-gray-700 hover:bg-gray-200"))}
-                  label])]
-              (if (empty? sorted)
-                [:p {:class "text-gray-500 py-8 text-center"} "No examples match this filter."]
-                [:div {:class "space-y-4"}
-                 (for [ex sorted]
-                   (render-admin-example ex token))])])}))
+                                 [:div {:class "max-w-5xl mx-auto py-8 px-4"}
+                                  [:div {:class "flex items-center justify-between mb-2"}
+                                   [:h1 {:class "text-3xl font-bold" :style "color:var(--text-primary, #e5e7eb)"} "Manage Examples"]
+                                   [:form {:method "post" :action "/admin/reindex"}
+                                    [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
+                                    [:button {:type "submit" :class "px-3 py-1.5 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700"}
+                                     "Reindex Search"]]]
+                                  [:p {:class "text-sm text-gray-500 mb-6"}
+                                   (str (or active-count 0) " active, " (or removed-count 0) " removed")]
+                                  [:div {:class "flex gap-2 mb-6"}
+                                   (for [[label val] [["All" "all"] ["Active" "active"] ["Removed" "removed"]]]
+                                     [:a {:href (str "/admin/examples?filter=" val)
+                                          :class (str "px-3 py-1.5 rounded-lg text-sm font-medium "
+                                                      (if (= filter-param val)
+                                                        "bg-blue-600 text-white"
+                                                        "text-gray-300 hover:text-white"))
+                                          :style (if (= filter-param val)
+                                                   ""
+                                                   "background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);")}
+                                      label])]
+                                  (if (empty? sorted)
+                                    [:p {:class "text-gray-500 py-8 text-center"} "No examples match this filter."]
+                                    [:div {:class "space-y-4"}
+                                     (for [ex sorted]
+                                       (render-admin-example ex token))])])}))
 
 (defn reindex-handler [{:keys [headers biff.datalevin/conn session] :as req}]
   (let [reindex-secret (:reindex-secret req)
@@ -123,23 +135,26 @@
               files (->> (jio/file docs-dir)
                          (.listFiles)
                          (filter #(and (.isFile %) (str/ends-with? (.getName %) ".md")))
-                         (remove #(= (.getName %) "toc.md")))]
-          (doseq [f files]
-            (let [filename (str/replace (.getName f) #"\.md$" "")
-                  content (slurp f)
-                  {:keys [frontmatter markdown]} (pages/parse-frontmatter content)
-                  doc-tx (cond-> {:doc/filename filename
-                                  :doc/content markdown
-                                  :doc/updated-at (Date.)}
-                           (:title frontmatter) (assoc :doc/title (:title frontmatter))
-                           (:chapter frontmatter) (assoc :doc/chapter (:chapter frontmatter))
-                           (:part frontmatter) (assoc :doc/part (:part frontmatter)))]
-              (d/transact! conn [doc-tx])))
+                         (remove #(= (.getName %) "toc.md")))
+              ;; Build all transactions, then batch-transact to reduce overhead
+              txs (doall
+                   (for [f files]
+                     (let [filename (str/replace (.getName f) #"\.md$" "")
+                           content (slurp f)
+                           {:keys [frontmatter markdown]} (pages/parse-frontmatter content)]
+                       (cond-> {:doc/filename filename
+                                :doc/content markdown
+                                :doc/updated-at (Date.)}
+                         (:title frontmatter) (assoc :doc/title (:title frontmatter))
+                         (:chapter frontmatter) (assoc :doc/chapter (:chapter frontmatter))
+                         (:part frontmatter) (assoc :doc/part (:part frontmatter))))))]
+          ;; Single batch transaction instead of one per file
+          (d/transact! conn txs)
           ;; Clear caches after reindex
           (pages/clear-all-caches!)
-          (log/info "Reindex complete:" (count files) "docs")
+          (log/info "Reindex complete:" (count txs) "docs")
           {:status 302
-           :session (assoc session :flash {:success (str "Reindexed " (count files) " documents")})
+           :session (assoc session :flash {:success (str "Reindexed " (count txs) " documents")})
            :headers {"Location" "/admin/examples"}})
         (catch Exception e
           (log/error e "Reindex failed")

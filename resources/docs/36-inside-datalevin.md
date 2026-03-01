@@ -34,7 +34,24 @@ Every Datalog triple `[E A V]` is mapped into the KV store using a compact binar
 
 ---
 
-## 3. The Query Pipeline: Rewrite and Optimize
+## 3. The Write-Ahead Log (WAL) Engine
+
+The WAL engine is the most recent addition to Datalevin's storage stack, designed to bridge the gap between B+Tree read performance and LSM-Tree write throughput.
+
+### 3.1 LSN Architecture
+Every transaction in WAL mode is assigned a contiguous **Log Sequence Number (LSN)**. The LSN is more than just an ID; it is the canonical position of a commit in the database's history.
+- **Watermarks**: Datalevin tracks `:last-committed-lsn` (application view), `:last-durable-lsn` (disk view), and `:last-applied-lsn` (main DB view).
+- **Segmentation**: The WAL is stored in **log segments** that are rolled based on size or age. This makes disk space management (Garbage Collection) predictable and efficient.
+
+### 3.2 Recovery and Replay
+On database startup, if the `last-applied-lsn` in the LMDB file is behind the `last-durable-lsn` in the WAL, Datalevin enters **Recovery Mode**:
+1.  **Scan**: It scans all WAL segments newer than the last applied checkpoint.
+2.  **Validate**: It validates the checksums and integrity of each log record.
+3.  **Replay**: It replays the transactions directly into the LMDB environment. This process is extremely fast because it bypasses the normal transaction overhead of Datalog.
+
+---
+
+## 4. The Query Pipeline: Rewrite and Optimize
 
 When you execute a query, it passes through several stages before a single byte is read from disk.
 

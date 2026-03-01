@@ -26,7 +26,7 @@ Datalevin's storage engine (LMDB) uses a **Copy-on-Write (CoW) B+Tree**.
 
 ## 2. Syncing to Disk: `msync` and Durability
 
-The speed of your writes is primarily limited by the speed of your disk's **synchronous flush (`msync`)**.
+In standard mode (the default for KV stores), the speed of your writes is primarily limited by the speed of your disk's **synchronous flush (`msync`)**.
 
 - **Safe by Default**: On every transaction commit, Datalevin tells the OS to flush the Page Cache to disk. This ensures that even if the OS crashes, your data is safe.
 - **Hardware Impact**: On high-speed NVMe drives, this flush is very fast. On older magnetic drives or cloud-based block storage (like AWS EBS), it can be a major bottleneck.
@@ -46,6 +46,7 @@ Datalevin supports faster, albeit less durable write modes by passing environmen
 ### 3.1 Setting Flags
 
 ```clojure
+(require '[datalevin.core :as d])
 (require '[datalevin.constants :as c])
 
 ;; Using :nosync for temporary bulk imports
@@ -67,7 +68,51 @@ You can also toggle flags dynamically:
 
 ---
 
-## 4. Online Snapshots: `d/copy`
+## 4. WAL-Based Durability: Performance + Safety
+
+While standard LMDB is extremely safe, it can be limited by disk I/O. Datalevin's **Write-Ahead Log (WAL) mode** (the default for new Datalog databases) is the recommended way to achieve high performance without sacrificing durability.
+
+### 4.1 The LSN Lifecycle
+In WAL mode, every transaction is assigned a **Log Sequence Number (LSN)**. This number is the canonical source of truth for the database's progress.
+
+- **Committed LSN**: The last transaction that the application successfully "finished".
+- **Durable LSN**: The last transaction that has been safely synced to the physical WAL file on disk.
+- **Applied LSN**: The last transaction that has been fully integrated into the main LMDB B+tree.
+
+By monitoring these watermarks with `txlog-watermarks`, you can precisely track the "lag" between application commits and physical disk durability.
+
+### 4.2 Durability Profiles
+- **`:strict`**: The database waits for the WAL to be synced to disk for *every* transaction. This is the safest mode.
+- **`:relaxed`**: Transactions are batched before syncing. This is significantly faster but risks losing the last few milliseconds of work in a crash.
+
+---
+
+## 5. Maintenance in WAL Mode
+
+WAL mode introduces two critical maintenance operations that should be performed periodically (e.g., via a background thread or a cron job).
+
+### 5.1 Snapshots and Checkpoints
+Call **`create-snapshot!`** periodically. This function performs several vital tasks:
+1.  **Flush**: It flushes all pending changes from the memory-mapped buffers to the main LMDB database file.
+2.  **Rotate**: It rotates the current WAL segment, starting a fresh log.
+3.  **Advance Floor**: It advances the "floor" for WAL retention, signaling that earlier log segments are no longer needed for basic recovery.
+
+```clojure
+;; In a background loop
+(d/create-snapshot! conn)
+```
+
+### 3.2 Garbage Collection
+Use **`gc-txlog-segments!`** to reclaim disk space by deleting old WAL segments. Datalevin respects the `:wal-retention-bytes` and `:wal-retention-ms` policies but requires an explicit call to perform the cleanup.
+
+```clojure
+;; Reclaim disk space
+(d/gc-txlog-segments! conn)
+```
+
+---
+
+## 6. Online Snapshots: `d/copy`
 
 Backing up a live database can be tricky. If you simply copy the file while a write is happening, the copy might be corrupted.
 
@@ -181,12 +226,14 @@ $ dtlv -d /dest/dir -f dump.edn -g load
 
 To ensure your data is safe and recoverable, follow this checklist:
 
-1.  **Monitor disk space**: LMDB needs enough free space to perform its CoW operations.
-2.  **Automate `d/copy`**: Run a daily or hourly snapshot and move the result to an off-site location (e.g., AWS S3).
-3.  **Test your restores**: Regularly practice restoring from a snapshot to a fresh server.
-4.  **Use NVMe for speed**: The durability of your database is directly tied to the IOPS and latency of your disk.
-5.  **Use non-durable flags for bulk imports**: When doing large one-time imports, use `:nosync` or `:writemap` for speed, then re-enable for production.
-6.  **Compact periodically**: Use `d/copy` with `{:compact? true}` to reclaim disk space after large deletions.
+1.  **Enable WAL mode**: It's the best balance of safety and performance.
+2.  **Automate `create-snapshot!`**: Set up a background task to flush the DB and rotate logs.
+3.  **Run `gc-txlog-segments!`**: Reclaim disk space regularly.
+4.  **Monitor disk space**: LMDB and WAL need enough free space to perform their operations.
+5.  **Automate `d/copy`**: Run a daily or hourly snapshot and move the result to an off-site location (e.g., AWS S3).
+6.  **Test your restores**: Regularly practice restoring from a snapshot or WAL log to a fresh server.
+7.  **Use NVMe for speed**: The durability of your database is directly tied to the IOPS and latency of your disk.
+8.  **Compact periodically**: Use `d/copy` with `{:compact? true}` to reclaim disk space after large deletions.
 7.  **Plan upgrades**: When upgrading Datalevin versions, use dump/load for databases older than 0.9.27.
 
 By leveraging Datalevin's rock-solid CoW architecture, you can sleep soundly knowing your data is safe from crashes and easy to recover from disasters.

@@ -9,16 +9,17 @@
    - Password reset: 3 per 15 minutes per IP")
 
 (def ^:private limits
-  {:login    {:max 5   :window-ms (* 15 60 1000)}
-   :register {:max 3   :window-ms (* 60 60 1000)}
-   :example  {:max 10  :window-ms (* 60 60 1000)}
-   :search   {:max 60  :window-ms (* 60 1000)}
-   :reset    {:max 3   :window-ms (* 15 60 1000)}})
+  {:login {:max 5 :window-ms (* 15 60 1000)}
+   :register {:max 3 :window-ms (* 60 60 1000)}
+   :example {:max 10 :window-ms (* 60 60 1000)}
+   :search {:max 60 :window-ms (* 60 1000)}
+   :reset {:max 3 :window-ms (* 15 60 1000)}})
 
 ;; {key {:timestamps [t1 t2 ...], :last-cleanup t}}
 (defonce ^:private state (atom {}))
 
 (def ^:private cleanup-interval-ms (* 10 60 1000)) ;; 10 minutes
+(def ^:private max-entries 1000) ;; Hard cap to prevent memory growth from bots/scans
 
 (defn- get-client-ip [request]
   (or (some-> (get-in request [:headers "x-forwarded-for"])
@@ -33,11 +34,20 @@
     (filterv #(> % cutoff) timestamps)))
 
 (defn- cleanup-old-entries!
-  "Removes entries with no recent timestamps from state. Called periodically."
+  "Removes entries with no recent timestamps from state. Called periodically.
+   Also enforces max-entries cap to prevent unbounded memory growth."
   [s now]
-  (into {} (filter (fn [[_k v]]
-                     (seq (:timestamps v))))
-        s))
+  (let [filtered (into {} (filter (fn [[_k v]]
+                                    (and (map? v) (seq (:timestamps v)))))
+                       s)]
+    ;; If still over max-entries, drop the oldest entries
+    (if (> (count filtered) max-entries)
+      (let [sorted-entries (sort-by (fn [[_k v]] (apply min (:timestamps v)))
+                                    (filter (fn [[_k v]] (map? v)) filtered))
+            to-keep (- max-entries (quot max-entries 4)) ;; Drop 25% when over
+            kept (into {} (take-last to-keep sorted-entries))]
+        kept)
+      filtered)))
 
 (defn- check-rate-limit!
   "Returns {:allowed? bool :remaining int :retry-after-ms int}."
@@ -45,26 +55,26 @@
   (let [{:keys [max window-ms]} (get limits action)
         key (str (name action) ":" identifier)
         now (System/currentTimeMillis)
-        result (volatile! nil)]  ;; Use volatile! instead of atom for single-threaded context
+        result (volatile! nil)] ;; Use volatile! instead of atom for single-threaded context
     (swap! state
            (fn [s]
              (let [entry (get s key)
                    timestamps (cleanup-window (or (:timestamps entry) []) now window-ms)
-                   count (count timestamps)
-                   last-cleanup (or (:last-cleanup s) 0)]
-               ;; Periodically clean up old entries from the entire state (every 10 minutes)
-               (let [s (if (> (- now last-cleanup) cleanup-interval-ms)
-                         (cleanup-old-entries! s now)
-                         s)]
-                 (if (< count max)
-                   (do (vreset! result {:allowed? true :remaining (- max count 1)})
-                       (assoc s key {:timestamps (conj timestamps now)
-                                     :last-cleanup now}))
-                   (let [oldest (first timestamps)
-                         retry-after (- (+ oldest window-ms) now)]
-                     (vreset! result {:allowed? false :remaining 0 :retry-after-ms (clojure.core/max retry-after 0)})
-                     s))))))
-    @result)))
+                   cnt (count timestamps)
+                   last-cleanup (or (::last-cleanup s) 0)
+                   ;; Periodically clean up, or if state is too large
+                   s (if (or (> (- now last-cleanup) cleanup-interval-ms)
+                             (> (count s) max-entries))
+                       (assoc (cleanup-old-entries! s now) ::last-cleanup now)
+                       s)]
+               (if (< cnt max)
+                 (do (vreset! result {:allowed? true :remaining (- max cnt 1)})
+                     (assoc s key {:timestamps (conj timestamps now)}))
+                 (let [oldest (first timestamps)
+                       retry-after (- (+ oldest window-ms) now)]
+                   (vreset! result {:allowed? false :remaining 0 :retry-after-ms (clojure.core/max retry-after 0)})
+                   s)))))
+    @result))
 
 (defn- rate-limit-response [retry-after-ms]
   {:status 429

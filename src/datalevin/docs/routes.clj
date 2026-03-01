@@ -42,13 +42,13 @@
   "rounded-xl p-8"  )
 
 (def ^:private glass-card-css
-  "background:rgba(255,255,255,0.06); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.12); box-shadow:0 8px 32px rgba(0,0,0,0.3);")
+  "background:var(--bg-card, rgba(255,255,255,0.06)); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border:1px solid var(--border-card, rgba(255,255,255,0.12)); box-shadow:0 8px 32px rgba(0,0,0,0.3);")
 
 (def ^:private dark-input-class
-  "w-full px-4 py-2 rounded-lg outline-none text-white")
+  "w-full px-4 py-2 rounded-lg outline-none")
 
 (def ^:private dark-input-css
-  "background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);")
+  "background:var(--input-bg, rgba(255,255,255,0.05)); border:1px solid var(--input-border, rgba(255,255,255,0.1)); color:var(--text-primary, #e5e7eb);")
 
 (def ^:private dark-input-focus-css
   "background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);")
@@ -78,18 +78,18 @@
                 (seq return-to) (assoc :return-to return-to))
      :body (layout/base "Login"
               [:div {:class "max-w-md mx-auto py-16 px-4"}
-               [:div {:class glass-card-style :style glass-card-css}
+               [:div {:class (str "auth-card " glass-card-style) :style glass-card-css}
                 [:h2 {:class "text-2xl font-bold text-white mb-6 text-center"} "Welcome back"]
                 (when error-msg [:p {:class "px-4 py-3 rounded-lg mb-4 text-sm" :style dark-error-style} error-msg])
                 (when github-configured?
                   [:div {:class "mb-6"}
                    [:a {:href "/auth/github" :hx-boost "false"
-                        :class "flex items-center justify-center gap-2 text-white px-4 py-2.5 rounded-lg font-medium transition"
+                        :class "auth-github flex items-center justify-center gap-2 text-white px-4 py-2.5 rounded-lg font-medium transition"
                         :style "background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.15);"}
                     [:svg {:xmlns "http://www.w3.org/2000/svg" :viewBox "0 0 16 16" :fill "currentColor" :width "20" :height "20"}
                      [:path {:d "M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"}]]
                     "Sign in with GitHub"]
-                   [:div {:class "mt-6 pb-2 text-center" :style "border-bottom:1px solid rgba(255,255,255,0.1);"}
+                   [:div {:class "auth-divider mt-6 pb-2 text-center" :style "border-bottom:1px solid rgba(255,255,255,0.1);"}
                     [:span {:class "text-sm text-gray-500"} "or sign in with email"]]])
                 [:form {:method "post" :action "/auth/login"}
                  [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
@@ -104,10 +104,10 @@
                  [:button {:type "submit" :class dark-submit-class :style dark-submit-css}
                   "Log in"]]
                 [:div {:class "mt-4 text-center"}
-                 [:a {:href "/auth/forgot-password" :class "text-sm text-cyan-400 hover:text-cyan-300"} "Forgot password?"]]
-                [:p {:class "mt-6 text-center text-sm text-gray-400"}
+                 [:a {:href "/auth/forgot-password" :class "auth-link text-sm text-cyan-400 hover:text-cyan-300"} "Forgot password?"]]
+                [:p {:class "auth-text mt-6 text-center text-sm text-gray-400"}
                  "Don't have an account? "
-                 [:a {:href "/auth/register" :class "text-cyan-400 hover:text-cyan-300 font-medium"} "Sign up"]]]])}))
+                 [:a {:href "/auth/register" :class "auth-link text-cyan-400 hover:text-cyan-300 font-medium"} "Sign up"]]]])}))
 
 (defn register-page [req]
   (let [token (force anti-forgery/*anti-forgery-token*)
@@ -117,7 +117,7 @@
      :headers {"Content-Type" "text/html"}
      :body (layout/base "Sign Up"
               [:div {:class "max-w-md mx-auto py-16 px-4"}
-               [:div {:class glass-card-style :style glass-card-css}
+               [:div {:class (str "auth-card " glass-card-style) :style glass-card-css}
                 [:h2 {:class "text-2xl font-bold text-white mb-6 text-center"} "Create your account"]
                 (when error-msg [:p {:class "px-4 py-3 rounded-lg mb-4 text-sm" :style dark-error-style} error-msg])
                 [:form {:method "post" :action "/auth/register"}
@@ -140,9 +140,9 @@
                            :class dark-input-class :style dark-input-css}]]
                  [:button {:type "submit" :class dark-submit-class :style dark-submit-css}
                   "Create account"]]
-                [:p {:class "mt-6 text-center text-sm text-gray-400"}
+                [:p {:class "auth-text mt-6 text-center text-sm text-gray-400"}
                  "Already have an account? "
-                 [:a {:href "/auth/login" :class "text-cyan-400 hover:text-cyan-300 font-medium"} "Log in"]]]])}))
+                 [:a {:href "/auth/login" :class "auth-link text-cyan-400 hover:text-cyan-300 font-medium"} "Log in"]]]])}))
 
 (defn forgot-password-page [req]
   (let [token (force anti-forgery/*anti-forgery-token*)
@@ -153,7 +153,7 @@
      :headers {"Content-Type" "text/html"}
      :body (layout/base "Forgot Password"
               [:div {:class "max-w-md mx-auto py-16 px-4"}
-               [:div {:class glass-card-style :style glass-card-css}
+               [:div {:class (str "auth-card " glass-card-style) :style glass-card-css}
                 [:h2 {:class "text-2xl font-bold text-white mb-6 text-center"} "Reset your password"]
                 (when error-msg [:p {:class "px-4 py-3 rounded-lg mb-4 text-sm" :style dark-error-style} error-msg])
                 (when success-msg [:p {:class "px-4 py-3 rounded-lg mb-4 text-sm" :style dark-success-style} success-msg])
@@ -165,8 +165,8 @@
                            :class dark-input-class :style dark-input-css}]]
                  [:button {:type "submit" :class dark-submit-class :style dark-submit-css}
                   "Send reset link"]]
-                [:p {:class "mt-6 text-center text-sm text-gray-400"}
-                 [:a {:href "/auth/login" :class "text-cyan-400 hover:text-cyan-300"} "Back to login"]]]])}))
+                [:p {:class "auth-text mt-6 text-center text-sm text-gray-400"}
+                 [:a {:href "/auth/login" :class "auth-link text-cyan-400 hover:text-cyan-300"} "Back to login"]]]])}))
 
 (defn reset-password-page [req]
   (let [token-param (get-in req [:params "token"] "")
@@ -177,7 +177,7 @@
      :headers {"Content-Type" "text/html"}
      :body (layout/base "Reset Password"
               [:div {:class "max-w-md mx-auto py-16 px-4"}
-               [:div {:class glass-card-style :style glass-card-css}
+               [:div {:class (str "auth-card " glass-card-style) :style glass-card-css}
                 [:h2 {:class "text-2xl font-bold text-white mb-6 text-center"} "Set new password"]
                 (when error-msg [:p {:class "px-4 py-3 rounded-lg mb-4 text-sm" :style dark-error-style} error-msg])
                 [:form {:method "post" :action "/auth/reset-password"}
@@ -235,22 +235,24 @@
         (assoc-in resp [:headers "Content-Type"] "text/html; charset=utf-8")
         resp))))
 
+(def ^:private security-headers
+  {"X-Frame-Options" "DENY"
+   "X-Content-Type-Options" "nosniff"
+   "X-XSS-Protection" "1; mode=block"
+   "Referrer-Policy" "strict-origin-when-cross-origin"
+   "Permissions-Policy" "camera=(), microphone=(), geolocation=()"
+   "Content-Security-Policy" (str "default-src 'self'; "
+                                  "script-src 'self' 'unsafe-inline'; "
+                                  "style-src 'self' 'unsafe-inline'; "
+                                  "img-src 'self' https://avatars.githubusercontent.com data:; "
+                                  "font-src 'self'; "
+                                  "connect-src 'self' https://api.github.com; "
+                                  "frame-ancestors 'none'")})
+
 (defn wrap-security-headers [handler]
   (fn [req]
     (when-let [resp (handler req)]
-      (update resp :headers merge
-              {"X-Frame-Options" "DENY"
-               "X-Content-Type-Options" "nosniff"
-               "X-XSS-Protection" "1; mode=block"
-               "Referrer-Policy" "strict-origin-when-cross-origin"
-               "Permissions-Policy" "camera=(), microphone=(), geolocation=()"
-               "Content-Security-Policy" (str "default-src 'self'; "
-                                              "script-src 'self' 'unsafe-inline'; "
-                                              "style-src 'self' 'unsafe-inline'; "
-                                              "img-src 'self' https://avatars.githubusercontent.com data:; "
-                                              "font-src 'self'; "
-                                              "connect-src 'self' https://api.github.com; "
-                                              "frame-ancestors 'none'")}))))
+      (update resp :headers merge security-headers))))
 
 (defn app [sys]
   (let [handler (ring/ring-handler

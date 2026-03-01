@@ -4,21 +4,18 @@ chapter: 21
 part: "V — Performance and Dataflow"
 ---
 
-# Chapter 21: Batching, Sorting, and High-Throughput Ingestion
+## 1. High-Throughput Ingestion: The Infrastructure
 
-While Datalevin is highly efficient for single transactions, its performance truly shines when you need to ingest millions of datoms. Ingesting large datasets requires a different strategy than standard interactive writes.
+Ingesting large datasets requires a different strategy than standard interactive writes. Datalevin provides several infrastructure features to support extreme throughput.
 
-This chapter covers the best practices for **High-Throughput Ingestion**, focusing on asynchronous transactions, non-durable modes, and bulk loading.
+### 1.1 WAL Mode with `:relaxed` Durability
+For the best balance of safety and speed during ingestion, enable **WAL mode** with the **`:relaxed` durability profile**. This allows Datalevin to batch disk syncs, achieving the write throughput of an LSM-tree while maintaining the read performance of a B+Tree.
 
----
+- **Benefit**: Sequential WAL appends are much faster than random B+Tree flushes.
+- **Tuning**: Adjust `:wal-group-commit` and `:wal-group-commit-ms` to optimize batching for your hardware.
 
-## 1. Asynchronous Transactions: The Key to High Throughput
-
-By default, each write transaction in Datalevin flushes to disk when it commits, which is expensive even with modern SSDs. The most impactful optimization for write-heavy workloads is **asynchronous transactions**.
-
-### 1.1 `d/transact-async!`
-
-The `d/transact-async!` function automatically batches transactions together to reduce the number of expensive commit calls. It returns a `future` that is realized only after data is flushed to disk.
+### 1.2 Asynchronous Transactions: `d/transact-async!`
+The `d/transact-async!` function automatically batches multiple transactions together. When combined with WAL mode, this provides the highest possible OLTP throughput.
 
 ```clojure
 ;; Fire multiple async transactions
@@ -98,10 +95,11 @@ For the fastest possible initial load into an empty database, bypass the transac
 
 When you need to ingest data at scale, follow this checklist:
 
-1.  **Use async transactions**: `d/transact-async!` provides adaptive batching for orders-of-magnitude throughput improvement
-2.  **Combine with manual batching**: The effects of auto-batching and manual batching compound
-3.  **Sort your data**: Sort by Entity ID before transacting to minimize B+Tree fragmentation
-4.  **Use `init-db`/`fill-db`** for the fastest possible initial load into an empty database
+1.  **Use WAL mode with `:relaxed` durability**: This provides the underlying storage performance needed for massive ingestion.
+2.  **Use async transactions**: `d/transact-async!` provides adaptive batching for orders-of-magnitude throughput improvement.
+3.  **Combine with manual batching**: The effects of auto-batching and manual batching compound.
+4.  **Sort your data**: Sort by Entity ID before transacting to minimize B+Tree fragmentation.
+5.  **Use `init-db`/`fill-db`** for the fastest possible initial load into an empty database.
 
 For non-durable modes that trade safety for speed, see Chapter 26.
 

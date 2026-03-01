@@ -26,9 +26,11 @@ Add the following to your `deps.edn` file:
 ### 1.2 Your First Query
 Open a REPL and run the following code to create a database, transact data, and query it.
 
+> **Note**: For new Datalog databases, **WAL (Write-Ahead Log) mode** is enabled by default. This provides high write performance while maintaining strong durability (Chapter 4).
+
 ```clojure
 (require '[datalevin.core :as d])
-
+...
 ;; 1. Create a connection (stores data in /tmp/mydb)
 (def conn (d/get-conn "/tmp/mydb" {}))
 

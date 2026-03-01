@@ -22,12 +22,7 @@ Traditional databases often manage their own "buffer pool", a chunk of RAM where
 LMDB uses **memory-mapping (`mmap`)**. It treats the database file as if it were a large array in the application's address space. When Datalevin reads data, the OS handles fetching the required pages from disk into the **Page Cache**.
 
 - **Zero-Copy Reads**: On the read hot-path, Datalevin doesn't copy data from a kernel buffer to a user-space buffer. Instead, it returns a `DirectByteBuffer` that points directly to the OS Page Cache. This bypasses JVM heap allocation and minimizes Garbage Collection (GC) overhead. By default, this memory map is **read-only**, allowing the OS to manage the pages with minimal overhead and perfect safety, as it knows the application cannot directly modify the underlying file through the map.
-- **Immediate Recovery**: LMDB uses a Copy-on-Write (CoW) B+tree. It never
-  overwrites data in place. When a transaction commits, it simply updates a
-  pointer to the new root of the tree. If the system crashes, the database is
-  always by default in a consistent state: no expensive "recovery" or log-replay
-  process is needed. For write intensive workloads, a Write Ahead Log (WAL) mode
-  is also available in Datalevin.
+- **Immediate Recovery**: LMDB uses a Copy-on-Write (CoW) B+tree. It never overwrites data in place. When a transaction commits, it simply updates a pointer to the new root of the tree. If the system crashes, the database is always by default in a consistent state: no expensive "recovery" or log-replay process is needed. For write-intensive workloads, a **Write-Ahead Log (WAL) mode** is also available in Datalevin, which provides explicit recovery and higher write throughput.
 
 ### 1.2 Read-Heavy Concurrency
 LMDB provides **MVCC (Multi-Version Concurrency Control)**. Readers never block writers, and writers never block readers. Because readers are zero-copy and lockless, Datalevin can scale to thousands of concurrent readers with near-linear performance.
@@ -132,32 +127,36 @@ The details of the KV API and its practical usage are covered in **Chapter 6**.
 
 ## 7. Persistence and Durability: WAL Mode
 
-By default, LMDB is extremely safe but can be limited by disk I/O because every write transaction requires a synchronous flush of the memory-mapped pages to disk (`msync`) to ensure durability. Datalevin introduces a **WAL (Write-Ahead Log) Mode** to overcome this.
+By default, LMDB is extremely safe but can be limited by disk I/O because every write transaction requires a synchronous flush of the memory-mapped pages to disk (`msync`) to ensure durability. Datalevin's **WAL (Write-Ahead Log) Mode** overcomes this.
 
 ### 7.1 How WAL Mode Works
 When WAL mode is enabled (`:wal? true`):
 
 1.  **Transaction**: A write request arrives.
 2.  **WAL Append**: The change is appended to a sequential log file and synced to disk. Sequential writes are significantly faster than random B+Tree updates.
-3.  **No Sync LMDB**: The change is also added to the KV store without syncing
-    to disk.
-4.  **Acknowledgment**: The application receives a "Success" response.
-5.  **Snapshots**: A background job makes consistent snapshots of the database
-   from time to time.
-6.  **Checkpoint**: Periodically, a background indexer call `msync` on the LMDB
-    B+tree to flush all pages to disk and clear the pending WAL. If a crash
-    happens when the `msync` has not being called, the database can be recovered
-    from the WAL using a recent snapshot.
+3.  **LSN Tracking**: Every transaction is assigned a strictly increasing, contiguous **Log Sequence Number (LSN)**, which serves as the canonical commit position.
+4.  **No-Sync LMDB**: The change is applied to the LMDB B+tree in `:nosync` mode. This allows the database to serve queries normally while the WAL handles durability.
+5.  **Acknowledgment**: The application receives a "Success" response once the WAL is durable (in `:strict` mode) or batched (in `:relaxed` mode).
+6.  **Recovery**: On restart, Datalevin scans the WAL segments, validates records, and replays any committed transactions that weren't yet fully persisted in the LMDB file.
 
-This provides the **write throughput of an LSM-tree** with the **read performance and stability of a B+Tree**.
+### 7.2 Durability Profiles
+Datalevin offers two distinct modes to balance performance and safety:
+- **`:strict`**: Every transaction waits for a durable acknowledgment (syncing the WAL to disk). This provides maximum safety.
+- **`:relaxed`**: Batches multiple transactions before syncing to disk. This significantly boosts throughput but carries a small risk of losing recent transactions in a system crash (though the database remains internally consistent).
 
-### 7.2 Programmable WAL API and Datalog CDC
-The WAL is not just an internal implementation detail; it is exposed as a first-class API at the **Key-Value (KV) level**. This allows for low-level interaction with the physical stream of changes.
+### 7.3 Operational Lifecycle
+For long-running services, WAL mode introduces a few simple operational tasks:
+- **`create-snapshot!`**: Periodically flushes the LMDB B+tree to disk and rotates the WAL log. This ensures the main database file is up-to-date and advances the "floor" for log retention.
+- **`gc-txlog-segments!`**: Deletes old WAL segments that are no longer needed for recovery or replication, reclaiming disk space.
+- **`txlog-watermarks`**: Check the current state of committed vs. durable vs. applied LSNs for monitoring or replication.
 
-- **KV-Level (WAL)**: Using `open-tx-log` and `gc-wal-segments!`, you can access the raw, physical transaction log. This is ideal for system-level tasks like **replication** or building low-level Change Data Capture (CDC) for non-Datalog data stored in the same KV environment.
-- **Datalog-Level (Listeners)**: For most application-level needs, Datalevin provides a higher-level CDC mechanism via **Datalog listeners**. By using `d/listen!`, you can subscribe to logical Datalog transactions, receiving the set of added and retracted datoms. This is the preferred way to trigger application logic, update search indexes, or sync with other high-level systems.
+### 7.4 Programmable WAL API and Datalog CDC
+The WAL is not just an internal implementation detail; it is exposed as a first-class API at the **Key-Value (KV) level**.
 
-By providing these two mechanisms at different levels, Datalevin gives you the choice between physical stream processing at the storage layer and logical event processing at the database layer.
+- **KV-Level (WAL)**: Using `open-tx-log` and `txlog-watermarks`, you can access the raw, physical transaction log. This is ideal for system-level tasks like **replication** or building low-level Change Data Capture (CDC).
+- **Datalog-Level (Listeners)**: For most application-level needs, `d/listen!` remains the preferred way to subscribe to logical transaction events.
+
+By providing these mechanisms, Datalevin gives you the choice between physical stream processing at the storage layer and logical event processing at the database layer.
 
 ---
 

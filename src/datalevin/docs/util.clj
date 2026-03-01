@@ -2,13 +2,18 @@
 
 (defn escape-html
   "Escapes HTML special characters to prevent XSS.
-   Uses single pass with replaceAll for better performance."
+   Single-pass scan via reduce over chars for better performance."
   [s]
   (when s
-    (-> (str s)
-        ;; Order matters: & must be first to avoid double-escaping
-        (clojure.string/replace "&" "&amp;")
-        (clojure.string/replace "<" "&lt;")
-        (clojure.string/replace ">" "&gt;")
-        (clojure.string/replace "\"" "&quot;")
-        (clojure.string/replace "'" "&#x27;"))))
+    (let [input (str s)
+          sb (StringBuilder. (count input))]
+      (dotimes [i (count input)]
+        (let [c (.charAt input i)]
+          (case c
+            \& (.append sb "&amp;")
+            \< (.append sb "&lt;")
+            \> (.append sb "&gt;")
+            \" (.append sb "&quot;")
+            \' (.append sb "&#x27;")
+            (.append sb c))))
+      (.toString sb))))

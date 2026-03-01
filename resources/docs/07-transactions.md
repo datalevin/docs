@@ -190,7 +190,11 @@ A transaction function must be a symbol that resolves to a function taking at le
 While the default synchronous model is extremely safe, it can limit write throughput. For demanding workloads, Datalevin provides two advanced features: WAL mode and asynchronous transactions.
 
 ### 5.1 WAL Mode
-As discussed in Chapter 4, **WAL (Write-Ahead Log) mode** dramatically increases write performance by first writing to a sequential log file. This provides the durability of `msync` with much lower latency.
+As discussed in Chapter 4, **WAL (Write-Ahead Log) mode** dramatically increases write performance, especially for concurrent writers. By writing to a sequential log file first, Datalevin can achieve the durability of `msync` with the throughput of an LSM-tree.
+
+- **Durability Profiles**: Choose `:strict` for maximum safety (sync on every commit) or `:relaxed` for maximum throughput (batched syncs).
+- **Concurrent Throughput**: WAL allows multiple writer threads to achieve significantly higher aggregate throughput than a single thread.
+- **Enabled by Default**: For new Datalog databases, WAL is enabled by default to provide the best balance of safety and performance.
 
 ### 5.2 Asynchronous Transactions (`transact-async`)
 For the absolute highest throughput, Datalevin offers `d/transact-async`. Instead of waiting for the transaction to be confirmed, this function returns a `Future` immediately.
