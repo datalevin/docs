@@ -192,7 +192,8 @@ While the default synchronous model is extremely safe, it can limit write throug
 ### 5.1 WAL Mode
 As discussed in Chapter 4, **WAL (Write-Ahead Log) mode** dramatically increases write performance, especially for concurrent writers. By writing to a sequential log file first, Datalevin can achieve the durability of `msync` with the throughput of an LSM-tree.
 
-- **Durability Profiles**: Choose `:strict` for maximum safety (sync on every commit) or `:relaxed` for maximum throughput (batched syncs).
+- **Durability Profiles**: Choose `:strict` for standard safety (sync on every commit), `:relaxed` for maximum throughput (batched syncs), or `:extra` for even stronger durability guarantees (e.g., `F_FULLSYNC` on macOS).
+- **Bulk Loading**: Note that bulk load operations like `init-db` and `fill-db` bypass the WAL for maximum performance and will not appear in the transaction log.
 - **Concurrent Throughput**: WAL allows multiple writer threads to achieve significantly higher aggregate throughput than a single thread.
 - **Enabled by Default**: For new Datalog databases, WAL is enabled by default to provide the best balance of safety and performance.
 

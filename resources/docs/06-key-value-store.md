@@ -42,8 +42,8 @@ Some common options for `open-kv` include:
 - `:wal?`: Set to `true` to enable high-throughput WAL mode that benefits from
   concurrent writers. Note that for new Datalog databases, WAL is enabled by
   default, but for KV stores it is **disabled by default**.
-- `:wal-durability-profile`: Choose between `:strict` (max safety) and
-  `:relaxed` (max throughput).
+- `:wal-durability-profile`: Choose between `:strict` (standard `fsync`),
+  `:relaxed` (batched syncs), and `:extra` (e.g., `F_FULLSYNC` on macOS).
 - `:wal-retention-bytes` and `:wal-retention-ms`: Set policies for how long to keep
   old WAL segments.
 - `:temp?`: Set to `true` to create a temporary store that is deleted on JVM exit. It automatically enables `:nosync`, bypassing the `msync` overhead.

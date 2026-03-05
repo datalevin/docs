@@ -66,7 +66,8 @@
 
          ;; Single DB with canonical schema
          all-schema schema/schema
-         conn (d/get-conn db-path all-schema)
+         conn (d/get-conn db-path all-schema
+                          {:search-domains {"datalevin" {:index-position? true}}})
 
          session-scheduler (start-session-cleanup conn)
 

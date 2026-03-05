@@ -64,7 +64,8 @@ Before you "go live," ensure your configuration matches these best practices.
 ### 4.1 Memory and Storage
 - [ ] **`:mapsize`**: Set to at least 2x your expected data size.
 - [ ] **`:max-readers`**: Increase to 512 or 1024 for high-concurrency web apps.
-- [ ] **WAL Mode**: Enable `:datalog-wal? true` for high write throughput.
+- [ ] **WAL Mode**: Enable `:wal? true` for high write throughput.
+- [ ] **Durability Profile**: Choose `:strict`, `:relaxed`, or `:extra` based on your safety requirements.
 - [ ] **`:nosync`**: Ensure this is **FALSE** (default) for production data safety.
 
 ### 4.2 Operating System Tuning

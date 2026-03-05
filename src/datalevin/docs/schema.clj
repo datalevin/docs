@@ -43,7 +43,7 @@
 
    ;; Examples
    :example/id {:db/valueType :db.type/uuid :db/unique :db.unique/identity}
-   :example/code {:db/valueType :db.type/string}
+   :example/code {:db/valueType :db.type/string :db/fulltext true}
    :example/author {:db/valueType :db.type/ref}
    :example/doc-section {:db/valueType :db.type/string}
    :example/removed? {:db/valueType :db.type/boolean}

@@ -75,15 +75,15 @@ While standard LMDB is extremely safe, it can be limited by disk I/O. Datalevin'
 ### 4.1 The LSN Lifecycle
 In WAL mode, every transaction is assigned a **Log Sequence Number (LSN)**. This number is the canonical source of truth for the database's progress.
 
-- **Committed LSN**: The last transaction that the application successfully "finished".
-- **Durable LSN**: The last transaction that has been safely synced to the physical WAL file on disk.
-- **Applied LSN**: The last transaction that has been fully integrated into the main LMDB B+tree.
+- **`:last-committed-lsn`**: The latest transaction that has been successfully committed in the database.
+- **`:last-durable-lsn`**: The latest transaction that has been safely synced to the physical WAL file on disk.
 
 By monitoring these watermarks with `txlog-watermarks`, you can precisely track the "lag" between application commits and physical disk durability.
 
 ### 4.2 Durability Profiles
-- **`:strict`**: The database waits for the WAL to be synced to disk for *every* transaction. This is the safest mode.
+- **`:strict`** (Default): The database waits for the WAL to be synced to disk for *every* transaction using a standard `fsync`.
 - **`:relaxed`**: Transactions are batched before syncing. This is significantly faster but risks losing the last few milliseconds of work in a crash.
+- **`:extra`**: Uses even stricter durability guarantees (e.g., `fcntl(F_FULLSYNC)` on macOS) to protect against hardware write-cache failures.
 
 ---
 
@@ -102,7 +102,7 @@ Call **`create-snapshot!`** periodically. This function performs several vital t
 (d/create-snapshot! conn)
 ```
 
-### 3.2 Garbage Collection
+### 5.2 Garbage Collection
 Use **`gc-txlog-segments!`** to reclaim disk space by deleting old WAL segments. Datalevin respects the `:wal-retention-bytes` and `:wal-retention-ms` policies but requires an explicit call to perform the cleanup.
 
 ```clojure

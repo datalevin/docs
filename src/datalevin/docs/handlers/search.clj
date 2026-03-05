@@ -7,73 +7,115 @@
 
 (def ^:private snippet-radius 60)
 
-(defn- extract-snippet
-  "Given content text and a query string, finds the best matching region
-   and returns a snippet with the matched terms wrapped in <mark> tags."
-  [content query]
-  (when (and (seq content) (seq query))
-    (let [terms (->> (str/split (str/lower-case query) #"\s+")
-                     (remove #(< (count %) 2)))
-          lower (str/lower-case content)
-          ;; Find the position of the first matching term
-          positions (for [t terms
-                          :let [idx (str/index-of lower t)]
-                          :when idx]
-                      [idx t])
-          best (first (sort-by first positions))]
-      (when best
-        (let [[pos _] best
-              start (max 0 (- pos snippet-radius))
-              end (min (count content) (+ pos snippet-radius))
-              raw (subs content start end)
-              ;; Add ellipsis
-              raw (str (when (pos? start) "...") raw (when (< end (count content)) "..."))
-              ;; Highlight all terms (case-insensitive replace with <mark>)
-              highlighted (reduce
-                            (fn [text term]
-                              (str/replace text
-                                           (re-pattern (str "(?i)" (java.util.regex.Pattern/quote term)))
-                                           (fn [match] (str "<mark class=\"search-hit\">" (util/escape-html match) "</mark>"))))
-                            (util/escape-html raw)
-                            terms)]
-          highlighted)))))
+(defn- token-length-at
+  "Returns the length of the word token starting at `pos` in `text`."
+  [^String text ^long pos]
+  (let [len (.length text)]
+    (if (>= pos len)
+      0
+      (loop [i pos]
+        (if (or (>= i len)
+                (not (Character/isLetterOrDigit (.charAt text i))))
+          (- i pos)
+          (recur (inc i)))))))
 
-(defn search-docs [conn query]
+(defn- merge-spans
+  "Merge overlapping or adjacent highlight spans sorted by start position."
+  [spans]
+  (reduce (fn [acc [s e]]
+            (if-let [[ps pe] (peek acc)]
+              (if (<= s pe)
+                (conj (pop acc) [ps (max pe e)])
+                (conj acc [s e]))
+              (conj acc [s e])))
+          [] spans))
+
+(defn- build-snippet
+  "Build a snippet with highlighted matches using search engine offsets.
+   `text` is the source text; `offsets` is a seq of [term [pos ...]] from fulltext."
+  [^String text offsets]
+  (when (and (seq text) (seq offsets))
+    (let [spans (->> offsets
+                     (mapcat (fn [[_term positions]]
+                               (keep (fn [pos]
+                                       (when (< pos (.length text))
+                                         (let [tlen (token-length-at text pos)]
+                                           [pos (+ pos (max tlen 1))])))
+                                     positions)))
+                     (sort-by first)
+                     merge-spans)
+          [first-start _] (first spans)
+          window-start (max 0 (- first-start snippet-radius))
+          window-end   (min (.length text) (+ first-start (* 2 snippet-radius)))
+          visible (->> spans
+                       (keep (fn [[s e]]
+                               (when (and (< s window-end) (> e window-start))
+                                 [(max s window-start) (min e window-end)]))))
+          sb (StringBuilder.)]
+      (when (pos? window-start) (.append sb "…"))
+      (loop [cursor window-start
+             rem    visible]
+        (if (seq rem)
+          (let [[s e] (first rem)]
+            (.append sb (util/escape-html (subs text cursor s)))
+            (.append sb "<mark class=\"search-hit\">")
+            (.append sb (util/escape-html (subs text s e)))
+            (.append sb "</mark>")
+            (recur e (rest rem)))
+          (.append sb (util/escape-html (subs text cursor window-end)))))
+      (when (< window-end (.length text)) (.append sb "…"))
+      (.toString sb))))
+
+(def ^:private max-query-length 200)
+
+(defn- doc-result? [attr] (#{:doc/title :doc/content} attr))
+
+(defn- result-for-doc [db entity attr offsets]
+  (let [text (get (d/pull db [attr] (:db/id entity)) attr)]
+    {:title    (:doc/title entity)
+     :filename (:doc/filename entity)
+     :chapter  (:doc/chapter entity)
+     :snippet  (build-snippet text offsets)
+     :type     :doc
+     :url      (str "/docs/" (:doc/filename entity))}))
+
+(defn- result-for-example [db entity attr offsets]
+  (let [text (get (d/pull db [attr] (:db/id entity)) attr)]
+    {:snippet     (build-snippet text offsets)
+     :doc-section (:example/doc-section entity)
+     :type        :example
+     :url         (if-let [s (:example/doc-section entity)]
+                    (str "/docs/" s)
+                    "/examples")}))
+
+(defn search [conn query]
   (when (and conn (seq query))
-    (let [q (str/trim query)
+    (let [q (-> (str/trim query) (subs 0 (min (count query) max-query-length)))
           db (d/db conn)]
       (when (seq q)
-        (->> (d/q '[:find [(pull ?e [:doc/title :doc/filename :doc/chapter :doc/content]) ...]
+        (->> (d/q '[:find (pull ?e [:db/id :doc/title :doc/filename :doc/chapter
+                                    :example/doc-section :example/removed?]) ?a ?offsets
                     :in $ ?q
-                    :where [(fulltext $ ?q {:top 20}) [[?e]]]]
+                    :where [(fulltext $ ?q {:top 20 :display :offsets})
+                            [[?e ?a _ ?offsets]]]]
                   db q)
-             (mapv (fn [doc]
-                     {:title (:doc/title doc)
-                      :filename (:doc/filename doc)
-                      :chapter (:doc/chapter doc)
-                      :snippet (extract-snippet (:doc/content doc) q)
-                      :type :doc
-                      :url (str "/docs/" (:doc/filename doc))})))))))
-
-(defn search-examples [conn query]
-  (when (and conn (seq query))
-    (let [q (str/trim query)
-          db (d/db conn)]
-      (when (seq q)
-        (->> (d/q '[:find [(pull ?e [:example/title :example/code :example/description :example/doc-section]) ...]
-                    :in $ ?q
-                    :where [(fulltext $ ?q {:top 10}) [[?e]]]
-                           [?e :example/removed? false]]
-                  db q)
-             (mapv (fn [ex]
-                     {:title (:example/title ex)
-                      :description (:example/description ex)
-                      :snippet (extract-snippet (or (:example/code ex) (:example/description ex)) q)
-                      :doc-section (:example/doc-section ex)
-                      :type :example
-                      :url (if-let [s (:example/doc-section ex)]
-                             (str "/docs/" s)
-                             "/examples")})))))))
+             ;; Filter out removed examples
+             (remove (fn [[entity _ _]] (:example/removed? entity)))
+             ;; Group by entity; prefer :doc/content or :example/code for snippet
+             (reduce (fn [m [entity a offsets]]
+                       (let [eid  (:db/id entity)
+                             prev (get m eid)]
+                         (if (or (nil? prev)
+                                 (and (not= (:attr prev) :doc/content)
+                                      (= a :doc/content)))
+                           (assoc m eid {:entity entity :attr a :offsets offsets})
+                           m)))
+                     {})
+             vals
+             (mapv (fn [{:keys [entity attr offsets]}]
+                     (if (doc-result? attr)
+                       (result-for-doc db entity attr offsets)
+                       (result-for-example db entity attr offsets)))))))))
 
 (defn render-result [r]
   (str "<a class=\"block p-4 rounded-lg transition\" style=\"background:var(--bg-card, rgba(255,255,255,0.05)); border:1px solid var(--border-card, rgba(255,255,255,0.1));\" onmouseover=\"this.style.borderColor='rgba(6,182,212,0.4)';this.style.boxShadow='0 0 16px rgba(6,182,212,0.12)'\" onmouseout=\"this.style.borderColor='var(--border-card, rgba(255,255,255,0.1))';this.style.boxShadow='none'\" href=\""
@@ -92,9 +134,7 @@
                    "</p>")
          :example (str "<div class=\"flex items-center gap-2\">"
                        "<span class=\"text-xs px-2 py-0.5 rounded-full\" style=\"background:rgba(34,197,94,0.15); color:#86efac;\">Example</span>"
-                       "<h3 class=\"text-lg font-medium\" style=\"color:var(--text-link, #22d3ee)\">"
-                       (util/escape-html (or (:title r) "Code example"))
-                       "</h3></div>"
+                       "</div>"
                        (when (:snippet r)
                          (str "<p class=\"text-sm mt-1 font-mono\" style=\"color:var(--text-secondary, #9ca3af); line-height:1.5;\">"
                               (:snippet r)
@@ -102,10 +142,7 @@
        "</a>"))
 
 (defn search-all [req query]
-  (let [conn (:biff.datalevin/conn req)
-        doc-results (search-docs conn query)
-        example-results (search-examples conn query)]
-    (into (vec doc-results) example-results)))
+  (search (:biff.datalevin/conn req) query))
 
 (defn search-api-handler [{:keys [params] :as req}]
   (let [query (or (:q params) "")

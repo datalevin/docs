@@ -70,7 +70,7 @@ If you are performing a bulk import (e.g., from a CSV or a SQL dump), sort your 
 
 ## 3. Bulk Load: `d/init-db` and `d/fill-db`
 
-For the fastest possible initial load into an empty database, bypass the transaction overhead entirely using `d/init-db` and `d/fill-db`.
+For the fastest possible initial load into an empty database, bypass the transaction overhead entirely using `d/init-db` and `d/fill-db`. Note that these functions **bypass the WAL** and will not appear in the transaction log.
 
 - **`d/init-db`**: Load a collection of prepared datoms into a fresh, empty database
 - **`d/fill-db`**: Bulk load additional datoms into an existing database

@@ -130,25 +130,32 @@ The details of the KV API and its practical usage are covered in **Chapter 6**.
 By default, LMDB is extremely safe but can be limited by disk I/O because every write transaction requires a synchronous flush of the memory-mapped pages to disk (`msync`) to ensure durability. Datalevin's **WAL (Write-Ahead Log) Mode** overcomes this.
 
 ### 7.1 How WAL Mode Works
-When WAL mode is enabled (`:wal? true`):
+When WAL mode is enabled:
+- **Datalog**: Enabled by default for all new databases.
+- **Key-Value**: Disabled by default; must be explicitly enabled with `{:wal? true}`.
 
 1.  **Transaction**: A write request arrives.
-2.  **WAL Append**: The change is appended to a sequential log file and synced to disk. Sequential writes are significantly faster than random B+Tree updates.
-3.  **LSN Tracking**: Every transaction is assigned a strictly increasing, contiguous **Log Sequence Number (LSN)**, which serves as the canonical commit position.
-4.  **No-Sync LMDB**: The change is applied to the LMDB B+tree in `:nosync` mode. This allows the database to serve queries normally while the WAL handles durability.
-5.  **Acknowledgment**: The application receives a "Success" response once the WAL is durable (in `:strict` mode) or batched (in `:relaxed` mode).
-6.  **Recovery**: On restart, Datalevin scans the WAL segments, validates records, and replays any committed transactions that weren't yet fully persisted in the LMDB file.
+2.  **WAL Append**: The change is encoded and appended to a sequential log segment file.
+3.  **LSN Tracking**: Every transaction is assigned a strictly increasing, contiguous **Log Sequence Number (LSN)**, which serves as the canonical commit position for replay and lag tracking.
+4.  **No-Sync LMDB**: The change is applied to the LMDB B+tree in `:nosync` mode (extremely fast).
+5.  **Durability Sync**: The WAL record is synced to disk based on the chosen **durability profile**.
+6.  **Acknowledgment**: The application receives a "Success" response once the WAL is durable.
+7.  **Recovery**: On restart, Datalevin scans the WAL segments and replays any committed transactions that weren't yet fully persisted in the LMDB file.
+
+**Note**: Bulk load operations (like `init-db` and `fill-db`) bypass the WAL for maximum performance and will not appear in the transaction log.
+
 
 ### 7.2 Durability Profiles
-Datalevin offers two distinct modes to balance performance and safety:
-- **`:strict`**: Every transaction waits for a durable acknowledgment (syncing the WAL to disk). This provides maximum safety.
-- **`:relaxed`**: Batches multiple transactions before syncing to disk. This significantly boosts throughput but carries a small risk of losing recent transactions in a system crash (though the database remains internally consistent).
+Datalevin offers three profiles to balance performance and safety:
+- **`:strict`** (Default): Waits for a standard `fsync`. This is the safest mode for most systems.
+- **`:relaxed`**: Batches multiple transactions before syncing. This provides the highest throughput but carries a small risk of losing recent transactions in a system crash.
+- **`:extra`**: Uses even stricter durability guarantees (e.g., `fcntl(F_FULLSYNC)` on macOS) to protect against hardware write-cache failures.
 
 ### 7.3 Operational Lifecycle
 For long-running services, WAL mode introduces a few simple operational tasks:
 - **`create-snapshot!`**: Periodically flushes the LMDB B+tree to disk and rotates the WAL log. This ensures the main database file is up-to-date and advances the "floor" for log retention.
-- **`gc-txlog-segments!`**: Deletes old WAL segments that are no longer needed for recovery or replication, reclaiming disk space.
-- **`txlog-watermarks`**: Check the current state of committed vs. durable vs. applied LSNs for monitoring or replication.
+- **`gc-txlog-segments!`**: Deletes old WAL segments that are no longer needed, reclaiming disk space based on your retention policy (default: 8 GiB or 7 days).
+- **`txlog-watermarks`**: Check the current state of the log, including `:last-committed-lsn` (latest transaction) and `:last-durable-lsn` (latest transaction safely on disk).
 
 ### 7.4 Programmable WAL API and Datalog CDC
 The WAL is not just an internal implementation detail; it is exposed as a first-class API at the **Key-Value (KV) level**.

@@ -65,10 +65,16 @@ The WAL engine is designed to bridge the gap between B+Tree read performance and
 
 ### 4.1 LSN Architecture
 Every transaction in WAL mode is assigned a contiguous **Log Sequence Number (LSN)**. The LSN is the canonical position of a commit in the database's history.
-- **Watermarks**: Datalevin tracks `:last-committed-lsn` (application view), `:last-durable-lsn` (disk view), and `:last-applied-lsn` (main DB view).
+- **Watermarks**: Datalevin tracks `:last-committed-lsn` (application view) and `:last-durable-lsn` (disk view).
 - **Segmentation**: The WAL is stored in **log segments** that are rolled based on size or age.
 
-### 4.2 Recovery and Replay
+### 4.2 Durability Profiles
+Datalevin offers three WAL durability profiles:
+- **`:strict`**: Standard `fsync` on every commit.
+- **`:relaxed`**: Batched `fsync` for higher throughput.
+- **`:extra`**: Stricter durability (e.g., `F_FULLSYNC` on macOS).
+
+### 4.3 Recovery and Replay
 On database startup, if the `last-applied-lsn` in the LMDB file is behind the `last-durable-lsn` in the WAL, Datalevin enters **Recovery Mode**:
 1.  **Scan**: It scans all WAL segments newer than the last applied checkpoint.
 2.  **Validate**: It validates the checksums and integrity of each log record.

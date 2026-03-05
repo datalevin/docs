@@ -69,7 +69,7 @@ In a Datalog AVE index, many keys share the same Attribute and Value (e.g., thou
 
 When WAL mode is enabled, several additional parameters can be tuned to balance performance and safety:
 
-- **`:wal-durability-profile`**: `:strict` (sync on every commit) vs. `:relaxed` (batched syncs).
+- **`:wal-durability-profile`**: `:strict` (standard `fsync`), `:relaxed` (batched syncs), or `:extra` (e.g., `F_FULLSYNC` on macOS).
 - **`:wal-group-commit`**: Max writes per durability batch in `:relaxed` mode (default: 100).
 - **`:wal-group-commit-ms`**: Max milliseconds between batches in `:relaxed` mode (default: 100ms).
 - **Retention**: Control disk space with `:wal-retention-bytes` (default: 8GiB) and `:wal-retention-ms` (default: 7 days).
