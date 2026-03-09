@@ -22,10 +22,30 @@ Unlike a traditional Java heap, the `:mapsize` is a **virtual memory** reservati
 - **Recommendation**: Set `:mapsize` to be significantly larger than your expected data size (e.g., if you expect 50GB of data, set it to 256GB).
 - **Default**: The default mapsize is often small (e.g., 10GB). You should almost always increase this for production use.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Set mapsize to 128GB (in bytes)
 (d/get-conn path schema {:mapsize (* 128 1024 1024 1024)})
 ```
+
+```java
+// Set mapsize to 128GB (in bytes)
+Connection conn = Datalevin.getConn(path, schema,
+    Map.of("mapsize", 128L * 1024 * 1024 * 1024));
+```
+
+```python
+# Set mapsize to 128GB (in bytes)
+conn = d.get_conn(path, schema, {"mapsize": 128 * 1024 * 1024 * 1024})
+```
+
+```javascript
+// Set mapsize to 128GB (in bytes)
+const conn = d.getConn(path, schema, { mapsize: 128 * 1024 * 1024 * 1024 });
+```
+
+</div>
 
 > **Note**: Datalevin will automatically grow the mapsize if it runs out of space, but this is an expensive operation that causes a significant performance spike. Setting an appropriately large mapsize upfront avoids this overhead.
 
@@ -49,9 +69,26 @@ LMDB uses a "lock-free" reader model, but it still needs to track active readers
 - **`:max-readers`**: This parameter (default: 126) defines how many concurrent reader threads can access the database.
 - **When to Increase**: If your application uses highly concurrent web servers or background workers, you may need to increase this to 512 or 1024.
 
+<div class="multi-lang">
+
 ```clojure
 (d/get-conn path schema {:max-readers 512})
 ```
+
+```java
+Connection conn = Datalevin.getConn(path, schema,
+    Map.of("max-readers", 512));
+```
+
+```python
+conn = d.get_conn(path, schema, {"max_readers": 512})
+```
+
+```javascript
+const conn = d.getConn(path, schema, { maxReaders: 512 });
+```
+
+</div>
 
 ---
 

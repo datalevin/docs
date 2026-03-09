@@ -17,12 +17,49 @@ This chapter explains how to choose the right model for your data and how to nav
 The most common way to model documents in Datalevin is to use **Component Attributes**. This is a "logical" document where data is stored as individual datoms but behaves as a single unit.
 
 ### Example: A Nested Blog Post
+<div class="multi-lang">
+
 ```clojure
 ;; Schema: :post/comments is a component ref
 {:post/comments {:db/valueType   :db.type/ref
                  :db/cardinality :db.cardinality/many
                  :db/isComponent true}}
 ```
+
+```java
+// Schema: post/comments is a component ref
+Map<String, Object> schema = Map.of(
+    "post/comments", Map.of(
+        "db/valueType", "db.type/ref",
+        "db/cardinality", "db.cardinality/many",
+        "db/isComponent", true
+    )
+);
+```
+
+```python
+# Schema: post/comments is a component ref
+schema = {
+    "post/comments": {
+        "db/valueType": "db.type/ref",
+        "db/cardinality": "db.cardinality/many",
+        "db/isComponent": True
+    }
+}
+```
+
+```javascript
+// Schema: post/comments is a component ref
+const schema = {
+  'post/comments': {
+    'db/valueType': 'db.type/ref',
+    'db/cardinality': 'db.cardinality/many',
+    'db/isComponent': true
+  }
+};
+```
+
+</div>
 
 **Why use Triples for Documents?**
 - **Granularity**: Every piece of data is an individual datom that can be queried, joined, and updated independently.
@@ -40,14 +77,47 @@ Unlike the triple model, an `idoc` stores an entire nested map or vector as a **
 ### 2.1 Defining an `idoc`
 You define an `idoc` attribute in your schema using the `:db.type/idoc` value type.
 
+<div class="multi-lang">
+
 ```clojure
 (def schema
   {:user/metadata {:db/valueType :db.type/idoc
                    :db/idocFormat :json}}) ; Formats: :edn (default), :json, :markdown
 ```
 
+```java
+Map<String, Object> schema = Map.of(
+    "user/metadata", Map.of(
+        "db/valueType", "db.type/idoc",
+        "db/idocFormat", "json"
+    )
+);
+```
+
+```python
+schema = {
+    "user/metadata": {
+        "db/valueType": "db.type/idoc",
+        "db/idocFormat": "json"  # Formats: "edn" (default), "json", "markdown"
+    }
+}
+```
+
+```javascript
+const schema = {
+  'user/metadata': {
+    'db/valueType': 'db.type/idoc',
+    'db/idocFormat': 'json' // Formats: 'edn' (default), 'json', 'markdown'
+  }
+};
+```
+
+</div>
+
 ### 2.2 Transacting and Patching
 You can transact an entire document at once, or use the **`:db.fn/patchIdoc`** function to perform granular updates (set, unset, update) without re-sending the whole document.
+
+<div class="multi-lang">
 
 ```clojure
 ;; Transact a nested document
@@ -56,6 +126,42 @@ You can transact an entire document at once, or use the **`:db.fn/patchIdoc`** f
 ;; Patch a single field deep in the document
 (d/transact! conn [[:db.fn/patchIdoc 101 :user/metadata [:theme] :set "light"]])
 ```
+
+```java
+// Transact a nested document
+Datalevin.transact(conn, List.of(
+    Map.of("db/id", 101,
+           "user/metadata", Map.of("theme", "dark", "font-size", 14))
+));
+
+// Patch a single field deep in the document
+Datalevin.transact(conn, List.of(
+    List.of("db.fn/patchIdoc", 101, "user/metadata",
+            List.of("theme"), "set", "light")
+));
+```
+
+```python
+# Transact a nested document
+d.transact(conn, [{"db/id": 101, "user/metadata": {"theme": "dark", "font-size": 14}}])
+
+# Patch a single field deep in the document
+d.transact(conn, [["db.fn/patchIdoc", 101, "user/metadata", ["theme"], "set", "light"]])
+```
+
+```javascript
+// Transact a nested document
+d.transact(conn, [
+  { 'db/id': 101, 'user/metadata': { theme: 'dark', 'font-size': 14 } }
+]);
+
+// Patch a single field deep in the document
+d.transact(conn, [
+  ['db.fn/patchIdoc', 101, 'user/metadata', ['theme'], 'set', 'light']
+]);
+```
+
+</div>
 
 ---
 
@@ -85,12 +191,37 @@ For triple-based documents, use the **Pull API** to navigate paths:
 ### 4.2 Querying `idoc` with `idoc-match`
 For native documents, use the **`idoc-match`** function in Datalog to find entities based on values at specific paths.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Find users with "dark" theme in their metadata idoc
 (d/q '[:find ?e
        :where [(idoc-match $ :user/metadata {:theme "dark"}) [[?e]]]]
      db)
 ```
+
+```java
+// Find users with "dark" theme in their metadata idoc
+Datalevin.q("[:find ?e " +
+            " :where [(idoc-match $ :user/metadata {:theme \"dark\"}) [[?e]]]]",
+            db);
+```
+
+```python
+# Find users with "dark" theme in their metadata idoc
+d.q('[:find ?e '
+     ' :where [(idoc-match $ :user/metadata {:theme "dark"}) [[?e]]]]',
+     db)
+```
+
+```javascript
+// Find users with "dark" theme in their metadata idoc
+d.q('[:find ?e ' +
+     ' :where [(idoc-match $ :user/metadata {:theme "dark"}) [[?e]]]]',
+     db);
+```
+
+</div>
 
 For a deep dive into the advanced path syntax and indexing mechanics of `idoc`, see **Chapter 19: Automatic Document Indexes**.
 

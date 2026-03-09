@@ -19,6 +19,8 @@ One of the most important decisions in schema design is how you identify your en
 ### 1.1 Lookup Refs
 When an attribute is marked as `:db.unique/identity`, it becomes a **Lookup Ref**. This allows you to refer to an entity by its natural key in any part of the API—transactions, queries, or `d/pull`—without knowing its internal integer ID.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Schema definition
 {:user/email {:db/valueType :db.type/string
@@ -31,6 +33,46 @@ When an attribute is marked as `:db.unique/identity`, it becomes a **Lookup Ref*
 (d/transact! conn [[:db/add [:user/email "alice@example.com"] :user/active? true]])
 ```
 
+```java
+// Schema definition
+Map schema = Map.of("user/email", Map.of(
+    "db/valueType", "db.type/string",
+    "db/unique", "db.unique/identity"));
+
+// Use the email as a handle to pull data
+Map result = Datalevin.pull(db, List.of("*"), List.of("user/email", "alice@example.com"));
+
+// Update a user by their email
+Datalevin.transact(conn, List.of(
+    List.of("db/add", List.of("user/email", "alice@example.com"), "user/active?", true)));
+```
+
+```python
+# Schema definition
+schema = {"user/email": {"db/valueType": "db.type/string",
+                         "db/unique": "db.unique/identity"}}
+
+# Use the email as a handle to pull data
+result = d.pull(db, ["*"], ["user/email", "alice@example.com"])
+
+# Update a user by their email
+d.transact(conn, [["db/add", ["user/email", "alice@example.com"], "user/active?", True]])
+```
+
+```javascript
+// Schema definition
+const schema = {'user/email': {'db/valueType': 'db.type/string',
+                               'db/unique': 'db.unique/identity'}};
+
+// Use the email as a handle to pull data
+const result = d.pull(db, ['*'], ['user/email', 'alice@example.com']);
+
+// Update a user by their email
+d.transact(conn, [['db/add', ['user/email', 'alice@example.com'], 'user/active?', true]]);
+```
+
+</div>
+
 ### 1.2 Upsert Behavior
 Attributes with `:db.unique/identity` enable **upsert** behavior. If you transact a map with a unique identity that already exists in the database, Datalevin will merge the new attributes into the existing entity instead of creating a duplicate.
 
@@ -39,6 +81,8 @@ While `:db.unique/identity` is used for attributes that uniquely identify a doma
 
 This is the standard way to represent **enums** or system-wide constants. Once an entity has a `:db/ident`, you can use that keyword anywhere you would use an entity ID or a lookup ref.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Define an "enum" entity for order status
 (d/transact! conn [{:db/ident :order.status/shipped}])
@@ -46,6 +90,33 @@ This is the standard way to represent **enums** or system-wide constants. Once a
 ;; Use the keyword directly in another transaction
 (d/transact! conn [{:order/id "123" :order/status :order.status/shipped}])
 ```
+
+```java
+// Define an "enum" entity for order status
+Datalevin.transact(conn, List.of(Map.of("db/ident", "order.status/shipped")));
+
+// Use the keyword directly in another transaction
+Datalevin.transact(conn, List.of(
+    Map.of("order/id", "123", "order/status", "order.status/shipped")));
+```
+
+```python
+# Define an "enum" entity for order status
+d.transact(conn, [{"db/ident": "order.status/shipped"}])
+
+# Use the keyword directly in another transaction
+d.transact(conn, [{"order/id": "123", "order/status": "order.status/shipped"}])
+```
+
+```javascript
+// Define an "enum" entity for order status
+d.transact(conn, [{'db/ident': 'order.status/shipped'}]);
+
+// Use the keyword directly in another transaction
+d.transact(conn, [{'order/id': '123', 'order/status': 'order.status/shipped'}]);
+```
+
+</div>
 
 The advantage of using `:db/ident` over raw strings or keywords is that the enum itself is a full-fledged entity. You can attach additional metadata to it (like `:order.status/label "Shipped"`) without changing your data.
 
@@ -120,6 +191,8 @@ While `:db/isComponent` is useful for true ownership, don't over-nest your data.
 ### 4.3 Modeling Enums with `:db/ident`
 For attributes that have a fixed set of values (like status or type), you can use raw Clojure keywords as values, but it is often better to model them as **enum entities** using `:db/ident`.
 
+<div class="multi-lang">
+
 ```clojure
 ;; 1. Define your "enum" entities first
 (d/transact! conn [{:db/ident :status/shipped}
@@ -128,6 +201,37 @@ For attributes that have a fixed set of values (like status or type), you can us
 ;; 2. Your data refers to these entities by their ident
 (d/transact! conn [{:order/id "123" :order/status :status/shipped}])
 ```
+
+```java
+// 1. Define your "enum" entities first
+Datalevin.transact(conn, List.of(
+    Map.of("db/ident", "status/shipped"),
+    Map.of("db/ident", "status/pending")));
+
+// 2. Your data refers to these entities by their ident
+Datalevin.transact(conn, List.of(
+    Map.of("order/id", "123", "order/status", "status/shipped")));
+```
+
+```python
+# 1. Define your "enum" entities first
+d.transact(conn, [{"db/ident": "status/shipped"},
+                  {"db/ident": "status/pending"}])
+
+# 2. Your data refers to these entities by their ident
+d.transact(conn, [{"order/id": "123", "order/status": "status/shipped"}])
+```
+
+```javascript
+// 1. Define your "enum" entities first
+d.transact(conn, [{'db/ident': 'status/shipped'},
+                  {'db/ident': 'status/pending'}]);
+
+// 2. Your data refers to these entities by their ident
+d.transact(conn, [{'order/id': '123', 'order/status': 'status/shipped'}]);
+```
+
+</div>
 
 By modeling enums as entities with `:db/ident`, you gain:
 1.  **Metadata**: You can attach display names, descriptions, or translations directly to the enum entity.

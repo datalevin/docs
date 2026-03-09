@@ -16,6 +16,8 @@ This chapter explains how to configure vector attributes, perform nearest neighb
 
 To store vectors in Datalevin, define an attribute with type `:db.type/vec`. Vector dimensions and similarity metrics are configured at the database level, not per-attribute:
 
+<div class="multi-lang">
+
 ```clojure
 (def conn (d/create-conn
            "/tmp/mydb"
@@ -25,6 +27,47 @@ To store vectors in Datalevin, define an attribute with type `:db.type/vec`. Vec
            {:vector-opts {:dimensions  300
                           :metric-type :cosine}}))
 ```
+
+```java
+Connection conn = Datalevin.createConn(
+    "/tmp/mydb",
+    Map.of(
+        "id", Map.of("db/valueType", "db.type/string",
+                      "db/unique", "db.unique/identity"),
+        "embedding", Map.of("db/valueType", "db.type/vec")
+    ),
+    Map.of("vector-opts", Map.of(
+        "dimensions", 300,
+        "metric-type", "cosine"
+    ))
+);
+```
+
+```python
+conn = d.create_conn(
+    "/tmp/mydb",
+    {
+        "id": {"db/valueType": "db.type/string",
+               "db/unique": "db.unique/identity"},
+        "embedding": {"db/valueType": "db.type/vec"}
+    },
+    {"vector_opts": {"dimensions": 300, "metric_type": "cosine"}}
+)
+```
+
+```javascript
+const conn = d.createConn(
+  '/tmp/mydb',
+  {
+    id: { 'db/valueType': 'db.type/string',
+          'db/unique': 'db.unique/identity' },
+    embedding: { 'db/valueType': 'db.type/vec' }
+  },
+  { vectorOpts: { dimensions: 300, metricType: 'cosine' } }
+);
+```
+
+</div>
 
 ### 1.1 Vector Options
 
@@ -53,6 +96,8 @@ By default, each `:db.type/vec` attribute becomes its own search domain. For `:e
 
 The `vec-neighbors` function returns matching datoms as `[e a v]` triples, ordered by similarity:
 
+<div class="multi-lang">
+
 ```clojure
 (d/q '[:find ?i ?v
        :in $ ?q
@@ -61,6 +106,35 @@ The `vec-neighbors` function returns matching datoms as `[e a v]` triples, order
        [?e :id ?i]]
      (d/db conn) query-vector)
 ```
+
+```java
+Datalevin.q("[:find ?i ?v " +
+            " :in $ ?q " +
+            " :where " +
+            " [(vec-neighbors $ :embedding ?q {:top 4}) [[?e ?a ?v]]] " +
+            " [?e :id ?i]]",
+            Datalevin.db(conn), queryVector);
+```
+
+```python
+d.q('[:find ?i ?v '
+     ' :in $ ?q '
+     ' :where '
+     ' [(vec-neighbors $ :embedding ?q {:top 4}) [[?e ?a ?v]]] '
+     ' [?e :id ?i]]',
+     d.db(conn), query_vector)
+```
+
+```javascript
+d.q('[:find ?i ?v ' +
+     ' :in $ ?q ' +
+     ' :where ' +
+     ' [(vec-neighbors $ :embedding ?q {:top 4}) [[?e ?a ?v]]] ' +
+     ' [?e :id ?i]]',
+     d.db(conn), queryVector);
+```
+
+</div>
 
 ### 2.1 Search Options
 
@@ -85,6 +159,8 @@ Search across multiple domains:
 
 Datalevin can be used as a standalone vector database:
 
+<div class="multi-lang">
+
 ```clojure
 (def lmdb (d/open-kv "/tmp/vector-db"))
 (def index (d/new-vector-index lmdb {:dimensions 300}))
@@ -95,6 +171,42 @@ Datalevin can be used as a standalone vector database:
 (d/search-vec index query-vector {:top 2})
 ;=> ("cat" "dog")
 ```
+
+```java
+LMDB lmdb = Datalevin.openKv("/tmp/vector-db");
+VectorIndex index = Datalevin.newVectorIndex(lmdb,
+    Map.of("dimensions", 300));
+
+Datalevin.addVec(index, "cat", catVector);
+Datalevin.addVec(index, "dog", dogVector);
+
+Datalevin.searchVec(index, queryVector, Map.of("top", 2));
+// => ["cat", "dog"]
+```
+
+```python
+lmdb = d.open_kv("/tmp/vector-db")
+index = d.new_vector_index(lmdb, {"dimensions": 300})
+
+d.add_vec(index, "cat", cat_vector)
+d.add_vec(index, "dog", dog_vector)
+
+d.search_vec(index, query_vector, {"top": 2})
+# => ["cat", "dog"]
+```
+
+```javascript
+const lmdb = d.openKv('/tmp/vector-db');
+const index = d.newVectorIndex(lmdb, { dimensions: 300 });
+
+d.addVec(index, 'cat', catVector);
+d.addVec(index, 'dog', dogVector);
+
+d.searchVec(index, queryVector, { top: 2 });
+// => ['cat', 'dog']
+```
+
+</div>
 
 **Vector References**: In Datalog's `vec-neighbors`, results are datoms `[e a v]`. In standalone mode, `vec-ref` can be any Clojure data (under 512 bytes)—strings, numbers, maps, or any identifier meaningful to your application.
 
@@ -126,6 +238,8 @@ Search starts at the top layer and "zooms in" through descending layers to find 
 
 Vector search integrates with Datalog, enabling hybrid queries that combine semantic similarity with structured filters:
 
+<div class="multi-lang">
+
 ```clojure
 (d/q '[:find ?title ?v
        :in $ ?target-vec
@@ -137,6 +251,44 @@ Vector search integrates with Datalog, enabling hybrid queries that combine sema
        [(< ?price 100.0)]]
      db query-vec)
 ```
+
+```java
+Datalevin.q("[:find ?title ?v " +
+            " :in $ ?target-vec " +
+            " :where " +
+            " [(vec-neighbors $ :product/embedding ?target-vec {:top 10}) [[?e _ ?v]]] " +
+            " [?e :product/title ?title] " +
+            " [?e :product/status :status/in-stock] " +
+            " [?e :product/price ?price] " +
+            " [(< ?price 100.0)]]",
+            db, queryVec);
+```
+
+```python
+d.q('[:find ?title ?v '
+     ' :in $ ?target-vec '
+     ' :where '
+     ' [(vec-neighbors $ :product/embedding ?target-vec {:top 10}) [[?e _ ?v]]] '
+     ' [?e :product/title ?title] '
+     ' [?e :product/status :status/in-stock] '
+     ' [?e :product/price ?price] '
+     ' [(< ?price 100.0)]]',
+     db, query_vec)
+```
+
+```javascript
+d.q('[:find ?title ?v ' +
+     ' :in $ ?target-vec ' +
+     ' :where ' +
+     ' [(vec-neighbors $ :product/embedding ?target-vec {:top 10}) [[?e _ ?v]]] ' +
+     ' [?e :product/title ?title] ' +
+     ' [?e :product/status :status/in-stock] ' +
+     ' [?e :product/price ?price] ' +
+     ' [(< ?price 100.0)]]',
+     db, queryVec);
+```
+
+</div>
 
 This is essential for **Retrieval-Augmented Generation (RAG)**: find semantically similar documents, then filter by metadata, access control, or recency.
 

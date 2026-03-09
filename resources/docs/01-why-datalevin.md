@@ -124,6 +124,8 @@ module status inside nested document metadata.
 The example below combines full-text retrieval, idoc filtering, and metadata
 constraints in one query:
 
+<div class="multi-lang">
+
 ```clojure
 (require '[datalevin.core :as d])
 
@@ -155,6 +157,104 @@ constraints in one query:
        [?e :doc/lang :en]]
      (d/db conn) "vector")
 ```
+
+```java
+import datalevin.core.*;
+import java.util.*;
+
+// Datalevin is Schema on Write, so schema is optional, but strongly recommended
+Map<String, Object> schema = Map.of(
+    "doc/body", Map.of("db/valueType", "db.type/string",
+                       "db/fulltext", true),
+    "doc/lang", Map.of("db/valueType", "db.type/keyword"),
+    "doc/idoc", Map.of("db/valueType", "db.type/idoc"));
+
+// Obtain a DB connection. DB will be at data/ch1 directory
+Connection conn = Datalevin.getConn("data/ch1", schema);
+
+// Transact an entity
+Datalevin.transact(conn, List.of(
+    Map.of("db/id", -1,
+           "doc/lang", "en",
+           "doc/body", "Datalevin adds idoc indexing and vector search.",
+           "doc/idoc", Map.of("module", Map.of("name", "search", "status", "stable")))));
+
+// Query
+Set<List<Object>> results = Datalevin.q(
+    "[:find ?e " +
+    " :in $ ?term " +
+    " :where " +
+    " [(fulltext $ :doc/body ?term) [[?e _ _]]] " +
+    " [(idoc-match $ :doc/idoc {:module {:status \"stable\"}}) [[?e _ _]]] " +
+    " [?e :doc/lang :en]]",
+    Datalevin.db(conn), "vector");
+```
+
+```python
+import datalevin as d
+
+# Datalevin is Schema on Write, so schema is optional, but strongly recommended
+schema = {
+    "doc/body": {"db/valueType": "db.type/string",
+                 "db/fulltext": True},
+    "doc/lang": {"db/valueType": "db.type/keyword"},
+    "doc/idoc": {"db/valueType": "db.type/idoc"}}
+
+# Obtain a DB connection. DB will be at data/ch1 directory
+conn = d.get_conn("data/ch1", schema)
+
+# Transact an entity
+d.transact(conn, [
+    {"db/id": -1,
+     "doc/lang": "en",
+     "doc/body": "Datalevin adds idoc indexing and vector search.",
+     "doc/idoc": {"module": {"name": "search", "status": "stable"}}}])
+
+# Query
+results = d.q("""
+    [:find ?e
+     :in $ ?term
+     :where
+     [(fulltext $ :doc/body ?term) [[?e _ _]]]
+     [(idoc-match $ :doc/idoc {:module {:status "stable"}}) [[?e _ _]]]
+     [?e :doc/lang :en]]""",
+    d.db(conn), "vector")
+```
+
+```javascript
+import { Datalevin } from 'datalevin';
+
+// Datalevin is Schema on Write, so schema is optional, but strongly recommended
+const schema = {
+  "doc/body": {"db/valueType": "db.type/string",
+               "db/fulltext": true},
+  "doc/lang": {"db/valueType": "db.type/keyword"},
+  "doc/idoc": {"db/valueType": "db.type/idoc"}
+};
+
+// Obtain a DB connection. DB will be at data/ch1 directory
+const conn = d.getConn("data/ch1", schema);
+
+// Transact an entity
+d.transact(conn, [
+  {"db/id": -1,
+   "doc/lang": "en",
+   "doc/body": "Datalevin adds idoc indexing and vector search.",
+   "doc/idoc": {"module": {"name": "search", "status": "stable"}}}
+]);
+
+// Query
+const results = d.q(
+  `[:find ?e
+    :in $ ?term
+    :where
+    [(fulltext $ :doc/body ?term) [[?e _ _]]]
+    [(idoc-match $ :doc/idoc {:module {:status "stable"}}) [[?e _ _]]]
+    [?e :doc/lang :en]]`,
+  d.db(conn), "vector");
+```
+
+</div>
 
 What happens in this query:
 

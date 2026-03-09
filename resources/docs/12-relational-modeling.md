@@ -62,6 +62,8 @@ A schema is not just for the database engine; it is for the developers who will 
 
 Datalevin supports a **`:db/doc`** property in the schema map. Use it to explain the purpose and constraints of an attribute.
 
+<div class="multi-lang">
+
 ```clojure
 (def schema
   {:user/email {:db/valueType :db.type/string
@@ -70,6 +72,37 @@ Datalevin supports a **`:db/doc`** property in the schema map. Use it to explain
    :order/total {:db/valueType :db.type/bigdec
                  :db/doc       "The total price of the order in USD, including tax."}})
 ```
+
+```java
+Map schema = Map.of(
+    "user/email", Map.of(
+        "db/valueType", "db.type/string",
+        "db/unique", "db.unique/identity",
+        "db/doc", "The primary unique identifier for a user account."),
+    "order/total", Map.of(
+        "db/valueType", "db.type/bigdec",
+        "db/doc", "The total price of the order in USD, including tax."));
+```
+
+```python
+schema = {
+    "user/email": {"db/valueType": "db.type/string",
+                   "db/unique": "db.unique/identity",
+                   "db/doc": "The primary unique identifier for a user account."},
+    "order/total": {"db/valueType": "db.type/bigdec",
+                    "db/doc": "The total price of the order in USD, including tax."}}
+```
+
+```javascript
+const schema = {
+    'user/email': {'db/valueType': 'db.type/string',
+                   'db/unique': 'db.unique/identity',
+                   'db/doc': 'The primary unique identifier for a user account.'},
+    'order/total': {'db/valueType': 'db.type/bigdec',
+                    'db/doc': 'The total price of the order in USD, including tax.'}};
+```
+
+</div>
 
 Think of `:db/doc` as "comments that live in the database." They can be queried and used to generate documentation automatically.
 
@@ -87,6 +120,8 @@ Think of `:db/doc` as "comments that live in the database." They can be queried 
 
 ### Example: A Normalized E-commerce Model
 
+<div class="multi-lang">
+
 ```clojure
 (def ecommerce-schema
   {;; Noun: Product
@@ -103,6 +138,53 @@ Think of `:db/doc` as "comments that live in the database." They can be queried 
    :line-item/product  {:db/valueType :db.type/ref}
    :line-item/quantity {:db/valueType :db.type/long}})
 ```
+
+```java
+Map ecommerceSchema = Map.ofEntries(
+    // Noun: Product
+    Map.entry("product/sku", Map.of("db/unique", "db.unique/identity", "db/valueType", "db.type/string")),
+    Map.entry("product/title", Map.of("db/fulltext", true, "db/valueType", "db.type/string")),
+    Map.entry("product/price", Map.of("db/valueType", "db.type/long")),
+    // Noun: Order
+    Map.entry("order/id", Map.of("db/unique", "db.unique/identity", "db/valueType", "db.type/string")),
+    Map.entry("order/user", Map.of("db/valueType", "db.type/ref")),
+    // Verb/Associative Entity: Line Item (joins Order and Product)
+    Map.entry("line-item/order", Map.of("db/valueType", "db.type/ref")),
+    Map.entry("line-item/product", Map.of("db/valueType", "db.type/ref")),
+    Map.entry("line-item/quantity", Map.of("db/valueType", "db.type/long")));
+```
+
+```python
+ecommerce_schema = {
+    # Noun: Product
+    "product/sku": {"db/unique": "db.unique/identity", "db/valueType": "db.type/string"},
+    "product/title": {"db/fulltext": True, "db/valueType": "db.type/string"},
+    "product/price": {"db/valueType": "db.type/long"},
+    # Noun: Order
+    "order/id": {"db/unique": "db.unique/identity", "db/valueType": "db.type/string"},
+    "order/user": {"db/valueType": "db.type/ref"},
+    # Verb/Associative Entity: Line Item (joins Order and Product)
+    "line-item/order": {"db/valueType": "db.type/ref"},
+    "line-item/product": {"db/valueType": "db.type/ref"},
+    "line-item/quantity": {"db/valueType": "db.type/long"}}
+```
+
+```javascript
+const ecommerceSchema = {
+    // Noun: Product
+    'product/sku': {'db/unique': 'db.unique/identity', 'db/valueType': 'db.type/string'},
+    'product/title': {'db/fulltext': true, 'db/valueType': 'db.type/string'},
+    'product/price': {'db/valueType': 'db.type/long'},
+    // Noun: Order
+    'order/id': {'db/unique': 'db.unique/identity', 'db/valueType': 'db.type/string'},
+    'order/user': {'db/valueType': 'db.type/ref'},
+    // Verb/Associative Entity: Line Item (joins Order and Product)
+    'line-item/order': {'db/valueType': 'db.type/ref'},
+    'line-item/product': {'db/valueType': 'db.type/ref'},
+    'line-item/quantity': {'db/valueType': 'db.type/long'}};
+```
+
+</div>
 
 ---
 

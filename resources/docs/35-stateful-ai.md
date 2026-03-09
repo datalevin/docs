@@ -28,6 +28,8 @@ Imagine an AI tutor that helps a student learn Clojure over six months.
 - **Episodic Memory**: Every question the student asks and every mistake they make is stored as an episode.
 - **Semantic State**: A "Student Knowledge Graph" tracks which concepts (e.g., "Recursion", "Macros", "Transducers") the student has mastered.
 - **Stateful Logic**:
+    <div class="multi-lang">
+
     ```clojure
     ;; Find concepts the student hasn't mastered but has prerequisite knowledge for
     (d/q '[:find ?concept
@@ -39,6 +41,49 @@ Imagine an AI tutor that helps a student learn Clojure over six months.
                   [?student :student/mastered ?pre]]
          db)
     ```
+
+    ```java
+    import datalevin.core.*;
+
+    // Find concepts the student hasn't mastered but has prerequisite knowledge for
+    var results = Datalevin.q(
+        "[:find ?concept " +
+        " :where [?student :student/level ?level]" +
+        "        [?concept :concept/difficulty ?d]" +
+        "        [(< ?d ?level)]" +
+        "        (not [?student :student/mastered ?concept])" +
+        "        [?concept :concept/prereq ?pre]" +
+        "        [?student :student/mastered ?pre]]",
+        db);
+    ```
+
+    ```python
+    # Find concepts the student hasn't mastered but has prerequisite knowledge for
+    results = d.q(
+        """[:find ?concept
+            :where [?student :student/level ?level]
+                   [?concept :concept/difficulty ?d]
+                   [(< ?d ?level)]
+                   (not [?student :student/mastered ?concept])
+                   [?concept :concept/prereq ?pre]
+                   [?student :student/mastered ?pre]]""",
+        db)
+    ```
+
+    ```javascript
+    // Find concepts the student hasn't mastered but has prerequisite knowledge for
+    const results = d.q(
+        `[:find ?concept
+          :where [?student :student/level ?level]
+                 [?concept :concept/difficulty ?d]
+                 [(< ?d ?level)]
+                 (not [?student :student/mastered ?concept])
+                 [?concept :concept/prereq ?pre]
+                 [?student :student/mastered ?pre]]`,
+        db);
+    ```
+
+    </div>
 The tutor's advice is always **grounded** in the student's actual history.
 
 ---

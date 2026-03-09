@@ -17,6 +17,8 @@ full-text and vector indices, so you can index the same document multiple ways a
 
 Declare idoc attributes with `:db/valueType :db.type/idoc`:
 
+<div class="multi-lang">
+
 ```clojure
 (def schema
   {:doc/edn  {:db/valueType  :db.type/idoc
@@ -27,6 +29,59 @@ Declare idoc attributes with `:db/valueType :db.type/idoc`:
               :db/idocFormat :markdown}})
 ```
 
+```java
+Map<String, Object> schema = Map.of(
+    "doc/edn", Map.of(
+        "db/valueType", "db.type/idoc",
+        "db/domain", "profiles"
+    ),
+    "doc/json", Map.of(
+        "db/valueType", "db.type/idoc",
+        "db/idocFormat", "json"
+    ),
+    "doc/md", Map.of(
+        "db/valueType", "db.type/idoc",
+        "db/idocFormat", "markdown"
+    )
+);
+```
+
+```python
+schema = {
+    "doc/edn": {
+        "db/valueType": "db.type/idoc",
+        "db/domain": "profiles"
+    },
+    "doc/json": {
+        "db/valueType": "db.type/idoc",
+        "db/idocFormat": "json"
+    },
+    "doc/md": {
+        "db/valueType": "db.type/idoc",
+        "db/idocFormat": "markdown"
+    }
+}
+```
+
+```javascript
+const schema = {
+  'doc/edn': {
+    'db/valueType': 'db.type/idoc',
+    'db/domain': 'profiles'
+  },
+  'doc/json': {
+    'db/valueType': 'db.type/idoc',
+    'db/idocFormat': 'json'
+  },
+  'doc/md': {
+    'db/valueType': 'db.type/idoc',
+    'db/idocFormat': 'markdown'
+  }
+};
+```
+
+</div>
+
 - **`:db/idocFormat`** — `:edn` (default), `:json`, or `:markdown`
 - **`:db/domain`** — Optional domain string for scoped search. Defaults to attribute name (namespace becomes underscore: `:doc/edn` → `"doc_edn"`)
 
@@ -35,6 +90,8 @@ Declare idoc attributes with `:db/valueType :db.type/idoc`:
 ## 2. Transacting Documents
 
 Idoc values must be maps with keyword or string keys. Vectors are allowed as arrays:
+
+<div class="multi-lang">
 
 ```clojure
 (d/transact! conn
@@ -45,6 +102,45 @@ Idoc values must be maps with keyword or string keys. Vectors are allowed as arr
     :doc/json "{\"name\":\"Alice\",\"age\":30}"
     :doc/md   "# User Profile\n## Getting Started\nName: Alice"}])
 ```
+
+```java
+Datalevin.transact(conn, List.of(
+    Map.of(
+        "db/id", 1,
+        "doc/edn", Map.of(
+            "status", "active",
+            "profile", Map.of("age", 30, "name", "Alice"),
+            "tags", List.of("a", "b", "c")
+        ),
+        "doc/json", "{\"name\":\"Alice\",\"age\":30}",
+        "doc/md", "# User Profile\n## Getting Started\nName: Alice"
+    )
+));
+```
+
+```python
+d.transact(conn, [
+    {"db/id": 1,
+     "doc/edn": {"status": "active",
+                  "profile": {"age": 30, "name": "Alice"},
+                  "tags": ["a", "b", "c"]},
+     "doc/json": '{"name":"Alice","age":30}',
+     "doc/md": "# User Profile\n## Getting Started\nName: Alice"}
+])
+```
+
+```javascript
+d.transact(conn, [
+  { 'db/id': 1,
+    'doc/edn': { status: 'active',
+                 profile: { age: 30, name: 'Alice' },
+                 tags: ['a', 'b', 'c'] },
+    'doc/json': '{"name":"Alice","age":30}',
+    'doc/md': '# User Profile\n## Getting Started\nName: Alice' }
+]);
+```
+
+</div>
 
 **Document rules:**
 - Top-level must be a map
@@ -58,6 +154,8 @@ Idoc values must be maps with keyword or string keys. Vectors are allowed as arr
 
 Use `:db.fn/patchIdoc` for partial updates without rewriting the full document:
 
+<div class="multi-lang">
+
 ```clojure
 (d/transact! conn
   [[:db.fn/patchIdoc 1 :doc/edn
@@ -65,6 +163,37 @@ Use `:db.fn/patchIdoc` for partial updates without rewriting the full document:
      [:unset  [:profile :middle]]
      [:update [:tags] :conj "d"]]]])
 ```
+
+```java
+Datalevin.transact(conn, List.of(
+    List.of("db.fn/patchIdoc", 1, "doc/edn",
+        List.of(
+            List.of("set", List.of("profile", "age"), 31),
+            List.of("unset", List.of("profile", "middle")),
+            List.of("update", List.of("tags"), "conj", "d")
+        ))
+));
+```
+
+```python
+d.transact(conn, [
+    ["db.fn/patchIdoc", 1, "doc/edn",
+     [["set",    ["profile", "age"], 31],
+      ["unset",  ["profile", "middle"]],
+      ["update", ["tags"], "conj", "d"]]]
+])
+```
+
+```javascript
+d.transact(conn, [
+  ['db.fn/patchIdoc', 1, 'doc/edn',
+    [['set',    ['profile', 'age'], 31],
+     ['unset',  ['profile', 'middle']],
+     ['update', ['tags'], 'conj', 'd']]]
+]);
+```
+
+</div>
 
 Patch operations:
 - `:set` — Set value at path
@@ -79,6 +208,8 @@ Paths are vectors of keys and indices. For cardinality-many attributes, provide 
 
 `idoc-match` returns matching datoms as `[e a v]` triples:
 
+<div class="multi-lang">
+
 ```clojure
 (d/q '[:find ?e ?a ?v
        :in $ ?q
@@ -87,9 +218,37 @@ Paths are vectors of keys and indices. For cardinality-many attributes, provide 
      {:status "active" :profile {:age 30}})
 ```
 
+```java
+Datalevin.q("[:find ?e ?a ?v " +
+            " :in $ ?q " +
+            " :where [(idoc-match $ :doc/edn ?q) [[?e ?a ?v]]]]",
+            db,
+            Map.of("status", "active", "profile", Map.of("age", 30)));
+```
+
+```python
+d.q('[:find ?e ?a ?v '
+     ' :in $ ?q '
+     ' :where [(idoc-match $ :doc/edn ?q) [[?e ?a ?v]]]]',
+     db,
+     {"status": "active", "profile": {"age": 30}})
+```
+
+```javascript
+d.q('[:find ?e ?a ?v ' +
+     ' :in $ ?q ' +
+     ' :where [(idoc-match $ :doc/edn ?q) [[?e ?a ?v]]]]',
+     db,
+     { status: 'active', profile: { age: 30 } });
+```
+
+</div>
+
 ### 4.1 Nested Maps and Arrays
 
 Vectors are treated as arrays—a match succeeds if **any** element matches:
+
+<div class="multi-lang">
 
 ```clojure
 (d/q '[:find ?e
@@ -98,9 +257,34 @@ Vectors are treated as arrays—a match succeeds if **any** element matches:
      db)
 ```
 
+```java
+Datalevin.q("[:find ?e " +
+            " :in $ " +
+            " :where [(idoc-match $ :doc/edn {:tags \"b\"}) [[?e ?a ?v]]]]",
+            db);
+```
+
+```python
+d.q('[:find ?e '
+     ' :in $ '
+     ' :where [(idoc-match $ :doc/edn {:tags "b"}) [[?e ?a ?v]]]]',
+     db)
+```
+
+```javascript
+d.q('[:find ?e ' +
+     ' :in $ ' +
+     ' :where [(idoc-match $ :doc/edn {:tags "b"}) [[?e ?a ?v]]]]',
+     db);
+```
+
+</div>
+
 ### 4.2 Logical Combinators
 
 Use `[:and ...]`, `[:or ...]`, `[:not ...]` inside query maps:
+
+<div class="multi-lang">
 
 ```clojure
 (d/q '[:find ?e
@@ -111,9 +295,40 @@ Use `[:and ...]`, `[:or ...]`, `[:not ...]` inside query maps:
      db)
 ```
 
+```java
+Datalevin.q("[:find ?e " +
+            " :in $ " +
+            " :where [(idoc-match $ :doc/edn " +
+            "          {:profile [:or {:age 30} {:age 40}]}) " +
+            "         [[?e ?a ?v]]]]",
+            db);
+```
+
+```python
+d.q('[:find ?e '
+     ' :in $ '
+     ' :where [(idoc-match $ :doc/edn '
+     '          {:profile [:or {:age 30} {:age 40}]}) '
+     '         [[?e ?a ?v]]]]',
+     db)
+```
+
+```javascript
+d.q('[:find ?e ' +
+     ' :in $ ' +
+     ' :where [(idoc-match $ :doc/edn ' +
+     '          {:profile [:or {:age 30} {:age 40}]}) ' +
+     '         [[?e ?a ?v]]]]',
+     db);
+```
+
+</div>
+
 ### 4.3 Predicates
 
 Predicates can be inline or path-based:
+
+<div class="multi-lang">
 
 ```clojure
 ;; inline predicate
@@ -137,6 +352,68 @@ Predicates can be inline or path-based:
      '(< 20 [:profile :age] 40))
 ```
 
+```java
+// inline predicate
+Datalevin.q("[:find ?e " +
+            " :in $ " +
+            " :where [(idoc-match $ :doc/edn {:age (> 21)}) [[?e ?a ?v]]]]",
+            db);
+
+// path predicate
+Datalevin.q("[:find ?e " +
+            " :in $ ?q " +
+            " :where [(idoc-match $ :doc/edn ?q) [[?e ?a ?v]]]]",
+            db, "(>= [:profile :age] 30)");
+
+// range via multi-arity comparison
+Datalevin.q("[:find ?e " +
+            " :in $ ?q " +
+            " :where [(idoc-match $ :doc/edn ?q) [[?e ?a ?v]]]]",
+            db, "(< 20 [:profile :age] 40)");
+```
+
+```python
+# inline predicate
+d.q('[:find ?e '
+     ' :in $ '
+     ' :where [(idoc-match $ :doc/edn {:age (> 21)}) [[?e ?a ?v]]]]',
+     db)
+
+# path predicate
+d.q('[:find ?e '
+     ' :in $ ?q '
+     ' :where [(idoc-match $ :doc/edn ?q) [[?e ?a ?v]]]]',
+     db, "(>= [:profile :age] 30)")
+
+# range via multi-arity comparison
+d.q('[:find ?e '
+     ' :in $ ?q '
+     ' :where [(idoc-match $ :doc/edn ?q) [[?e ?a ?v]]]]',
+     db, "(< 20 [:profile :age] 40)")
+```
+
+```javascript
+// inline predicate
+d.q('[:find ?e ' +
+     ' :in $ ' +
+     ' :where [(idoc-match $ :doc/edn {:age (> 21)}) [[?e ?a ?v]]]]',
+     db);
+
+// path predicate
+d.q('[:find ?e ' +
+     ' :in $ ?q ' +
+     ' :where [(idoc-match $ :doc/edn ?q) [[?e ?a ?v]]]]',
+     db, '(>= [:profile :age] 30)');
+
+// range via multi-arity comparison
+d.q('[:find ?e ' +
+     ' :in $ ?q ' +
+     ' :where [(idoc-match $ :doc/edn ?q) [[?e ?a ?v]]]]',
+     db, '(< 20 [:profile :age] 40)');
+```
+
+</div>
+
 Supported predicates: `nil?`, `>`, `>=`, `<`, `<=`
 
 ### 4.4 Wildcard Paths
@@ -156,12 +433,37 @@ Supported predicates: `nil?`, `>`, `>=`, `<`, `<=`
 
 To match null values, use `(nil?)`:
 
+<div class="multi-lang">
+
 ```clojure
 (d/q '[:find ?e
        :in $
        :where [(idoc-match $ :doc/json {"middle" (nil?)}) [[?e ?a ?v]]]]
      db)
 ```
+
+```java
+Datalevin.q("[:find ?e " +
+            " :in $ " +
+            " :where [(idoc-match $ :doc/json {\"middle\" (nil?)}) [[?e ?a ?v]]]]",
+            db);
+```
+
+```python
+d.q('[:find ?e '
+     ' :in $ '
+     ' :where [(idoc-match $ :doc/json {"middle" (nil?)}) [[?e ?a ?v]]]]',
+     db)
+```
+
+```javascript
+d.q('[:find ?e ' +
+     ' :in $ ' +
+     ' :where [(idoc-match $ :doc/json {"middle" (nil?)}) [[?e ?a ?v]]]]',
+     db);
+```
+
+</div>
 
 Note: JSON keys are strings—match with `"middle"`, not `:middle`.
 
@@ -171,11 +473,33 @@ Note: JSON keys are strings—match with `"middle"`, not `:middle`.
 
 `idoc-get` extracts a value by path from an idoc document:
 
+<div class="multi-lang">
+
 ```clojure
 (def doc (:doc/edn (d/entity db 1)))
 (idoc-get doc :profile :age)     ;; => 30
 (idoc-get doc :tags)             ;; => ["a" "b" "c"]
 ```
+
+```java
+Object doc = Datalevin.entity(db, 1).get("doc/edn");
+Datalevin.idocGet(doc, "profile", "age");     // => 30
+Datalevin.idocGet(doc, "tags");               // => ["a", "b", "c"]
+```
+
+```python
+doc = d.entity(db, 1)["doc/edn"]
+d.idoc_get(doc, "profile", "age")     # => 30
+d.idoc_get(doc, "tags")               # => ["a", "b", "c"]
+```
+
+```javascript
+const doc = d.entity(db, 1)['doc/edn'];
+d.idocGet(doc, 'profile', 'age');     // => 30
+d.idocGet(doc, 'tags');               // => ['a', 'b', 'c']
+```
+
+</div>
 
 Returns a vector when the path traverses arrays.
 

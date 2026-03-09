@@ -17,9 +17,27 @@ This chapter focuses on the **Pull API**, a convenient way to fetch the data for
 While `d/q` is designed to find a *set* of entities that match a complex query, `d/pull` is designed to retrieve a rich, hierarchical document for a *single* entity whose ID you already know.
 
 The basic syntax is:
+
+<div class="multi-lang">
+
 ```clojure
 (d/pull db pattern eid)
 ```
+
+```java
+Object result = Datalevin.pull(db, pattern, eid);
+```
+
+```python
+result = d.pull(db, pattern, eid)
+```
+
+```javascript
+const result = d.pull(db, pattern, eid);
+```
+
+</div>
+
 - **`db`**: The database value.
 - **`pattern`**: A vector describing which attributes to retrieve.
 - **`eid`**: The entity ID to pull data for.
@@ -30,10 +48,29 @@ The basic syntax is:
 
 The simplest way to use `d/pull` is with the wildcard `[*]` pattern, which retrieves all attributes for a given entity.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Assuming entity 101 has :user/name and :user/email attributes
 (d/pull (d/db conn) '[*] 101)
 ```
+
+```java
+// Assuming entity 101 has :user/name and :user/email attributes
+Map result = Datalevin.pull(Datalevin.db(conn), List.of("*"), 101);
+```
+
+```python
+# Assuming entity 101 has :user/name and :user/email attributes
+result = d.pull(d.db(conn), ["*"], 101)
+```
+
+```javascript
+// Assuming entity 101 has :user/name and :user/email attributes
+const result = d.pull(d.db(conn), ['*'], 101);
+```
+
+</div>
 
 **Result:**
 ```clojure
@@ -50,18 +87,54 @@ The result is a map, which is often much more convenient to work with in applica
 The true strength of the Pull API is its ability to traverse relationships and create nested data structures automatically. This is something that is difficult to achieve with a single Datalog query.
 
 Imagine you have an order that refers to a customer:
+
+<div class="multi-lang">
+
 ```clojure
 (d/transact! conn
   [{:db/id 1, :user/name "Alice"}
    {:order/id "o123", :order/customer 1}]) ; :order/customer is a ref
-```
 
-You can pull the order and "expand" the customer information in one go:
-```clojure
+;; Pull the order and "expand" the customer information in one go
 (d/pull (d/db conn)
         '[:order/id {:order/customer [:user/name]}]
         [:order/id "o123"])
 ```
+
+```java
+Datalevin.transact(conn, List.of(
+    Map.of("db/id", 1, "user/name", "Alice"),
+    Map.of("order/id", "o123", "order/customer", 1))); // :order/customer is a ref
+
+// Pull the order and "expand" the customer information in one go
+Map result = Datalevin.pull(Datalevin.db(conn),
+    List.of("order/id", Map.of("order/customer", List.of("user/name"))),
+    List.of("order/id", "o123"));
+```
+
+```python
+d.transact(conn, [
+    {"db/id": 1, "user/name": "Alice"},
+    {"order/id": "o123", "order/customer": 1}])  # :order/customer is a ref
+
+# Pull the order and "expand" the customer information in one go
+result = d.pull(d.db(conn),
+    ["order/id", {"order/customer": ["user/name"]}],
+    ["order/id", "o123"])
+```
+
+```javascript
+d.transact(conn, [
+    {"db/id": 1, "user/name": "Alice"},
+    {"order/id": "o123", "order/customer": 1}]); // :order/customer is a ref
+
+// Pull the order and "expand" the customer information in one go
+const result = d.pull(d.db(conn),
+    ["order/id", {"order/customer": ["user/name"]}],
+    ["order/id", "o123"]);
+```
+
+</div>
 
 **Result:**
 ```clojure
@@ -93,12 +166,38 @@ The Pull API supports several advanced patterns for fine-grained control over th
 ### 5.1 Reverse Lookups
 You can find all entities that *refer to* the current entity. The syntax is `_attribute`.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Find all orders placed by Alice (entity 1)
 (d/pull (d/db conn)
         '[:user/name :_order/customer] ; a "reverse" lookup
         1)
 ```
+
+```java
+// Find all orders placed by Alice (entity 1)
+Map result = Datalevin.pull(Datalevin.db(conn),
+    List.of("user/name", "_order/customer"), // a "reverse" lookup
+    1);
+```
+
+```python
+# Find all orders placed by Alice (entity 1)
+result = d.pull(d.db(conn),
+    ["user/name", "_order/customer"],  # a "reverse" lookup
+    1)
+```
+
+```javascript
+// Find all orders placed by Alice (entity 1)
+const result = d.pull(d.db(conn),
+    ['user/name', '_order/customer'], // a "reverse" lookup
+    1);
+```
+
+</div>
+
 **Result:**
 ```clojure
 {:user/name "Alice",
@@ -107,17 +206,57 @@ You can find all entities that *refer to* the current entity. The syntax is `_at
 
 ### 5.2 Limiting `:cardinality/many` Attributes
 You can limit the number of results for a multi-valued attribute:
+
+<div class="multi-lang">
+
 ```clojure
 ;; Pull the first 5 tags for an entity
 (pull db '[(:user/tags :limit 5)] eid)
 ```
 
+```java
+// Pull the first 5 tags for an entity
+Map result = Datalevin.pull(db, List.of(List.of("user/tags", "limit", 5)), eid);
+```
+
+```python
+# Pull the first 5 tags for an entity
+result = d.pull(db, [("user/tags", {"limit": 5})], eid)
+```
+
+```javascript
+// Pull the first 5 tags for an entity
+const result = d.pull(db, [['user/tags', {limit: 5}]], eid);
+```
+
+</div>
+
 ### 5.3 Default Values
 You can provide a default value if an attribute is not present:
+
+<div class="multi-lang">
+
 ```clojure
 ;; If :user/active? is missing, return true
 (pull db '[:user/name (:user/active? :default true)] eid)
 ```
+
+```java
+// If :user/active? is missing, return true
+Map result = Datalevin.pull(db, List.of("user/name", List.of("user/active?", "default", true)), eid);
+```
+
+```python
+# If :user/active? is missing, return true
+result = d.pull(db, ["user/name", ("user/active?", {"default": True})], eid)
+```
+
+```javascript
+// If :user/active? is missing, return true
+const result = d.pull(db, ['user/name', ['user/active?', {default: true}]], eid);
+```
+
+</div>
 
 ---
 

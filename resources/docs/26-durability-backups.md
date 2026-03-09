@@ -45,6 +45,8 @@ Datalevin supports faster, albeit less durable write modes by passing environmen
 
 ### 3.1 Setting Flags
 
+<div class="multi-lang">
+
 ```clojure
 (require '[datalevin.core :as d])
 (require '[datalevin.constants :as c])
@@ -58,11 +60,61 @@ Datalevin supports faster, albeit less durable write modes by passing environmen
                                                          (conj :mapasync))}}))
 ```
 
+```java
+import datalevin.core.*;
+
+// Using NOSYNC for temporary bulk imports
+Connection conn = Datalevin.getConn(path, schema,
+    Map.of("kv-opts", Map.of("flags", List.of("nosync"))));
+
+// Using WRITEMAP + MAPASYNC for maximum speed
+Connection conn = Datalevin.getConn(path, schema,
+    Map.of("kv-opts", Map.of("flags", List.of("writemap", "mapasync"))));
+```
+
+```python
+# Using nosync for temporary bulk imports
+conn = d.get_conn(path, schema,
+    {"kv_opts": {"flags": ["nosync"]}})
+
+# Using writemap + mapasync for maximum speed
+conn = d.get_conn(path, schema,
+    {"kv_opts": {"flags": ["writemap", "mapasync"]}})
+```
+
+```javascript
+// Using nosync for temporary bulk imports
+const conn = d.getConn(path, schema,
+  { kvOpts: { flags: ['nosync'] } });
+
+// Using writemap + mapasync for maximum speed
+const conn2 = d.getConn(path, schema,
+  { kvOpts: { flags: ['writemap', 'mapasync'] } });
+```
+
+</div>
+
 You can also toggle flags dynamically:
+
+<div class="multi-lang">
 
 ```clojure
 (d/set-env-flags kv-db [:nosync] false)
 ```
+
+```java
+Datalevin.setEnvFlags(kvDb, List.of("nosync"), false);
+```
+
+```python
+d.set_env_flags(kv_db, ["nosync"], False)
+```
+
+```javascript
+d.setEnvFlags(kvDb, ['nosync'], false);
+```
+
+</div>
 
 > **Warning**: These flags risk data loss or DB corruption on system crash. Only use for temporary bulk imports. Call `d/sync` manually to force flushes at safe points.
 
@@ -97,18 +149,56 @@ Call **`create-snapshot!`** periodically. This function performs several vital t
 2.  **Rotate**: It rotates the current WAL segment, starting a fresh log.
 3.  **Advance Floor**: It advances the "floor" for WAL retention, signaling that earlier log segments are no longer needed for basic recovery.
 
+<div class="multi-lang">
+
 ```clojure
 ;; In a background loop
 (d/create-snapshot! conn)
 ```
 
+```java
+// In a background loop
+Datalevin.createSnapshot(conn);
+```
+
+```python
+# In a background loop
+d.create_snapshot(conn)
+```
+
+```javascript
+// In a background loop
+d.createSnapshot(conn);
+```
+
+</div>
+
 ### 5.2 Garbage Collection
 Use **`gc-txlog-segments!`** to reclaim disk space by deleting old WAL segments. Datalevin respects the `:wal-retention-bytes` and `:wal-retention-ms` policies but requires an explicit call to perform the cleanup.
+
+<div class="multi-lang">
 
 ```clojure
 ;; Reclaim disk space
 (d/gc-txlog-segments! conn)
 ```
+
+```java
+// Reclaim disk space
+Datalevin.gcTxlogSegments(conn);
+```
+
+```python
+# Reclaim disk space
+d.gc_txlog_segments(conn)
+```
+
+```javascript
+// Reclaim disk space
+d.gcTxlogSegments(conn);
+```
+
+</div>
 
 ---
 
@@ -118,10 +208,29 @@ Backing up a live database can be tricky. If you simply copy the file while a wr
 
 Datalevin's **`d/copy`** function creates a consistent snapshot of the database. It can run while the database is actively used—readers can continue accessing the source while the copy is being made.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Create a snapshot of the live database
 (d/copy conn "/path/to/backup-db")
 ```
+
+```java
+// Create a snapshot of the live database
+Datalevin.copy(conn, "/path/to/backup-db");
+```
+
+```python
+# Create a snapshot of the live database
+d.copy(conn, "/path/to/backup-db")
+```
+
+```javascript
+// Create a snapshot of the live database
+d.copy(conn, '/path/to/backup-db');
+```
+
+</div>
 
 - **Live Backups**: You can run `copy` while the database is being actively queried and written to.
 - **Consistency**: The copy represents a single, transactionally consistent point in time.
@@ -137,10 +246,29 @@ Datalevin provides comprehensive command-line and API tools for database mainten
 
 LMDB's copy functionality creates a compacted copy of the database. This reclaims all free space from deleted data and optimizes the B+Tree for maximum read speed.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Copy and compact the database
 (d/copy conn "/path/to/backup-db" {:compact? true})
 ```
+
+```java
+// Copy and compact the database
+Datalevin.copy(conn, "/path/to/backup-db", Map.of("compact", true));
+```
+
+```python
+# Copy and compact the database
+d.copy(conn, "/path/to/backup-db", {"compact": True})
+```
+
+```javascript
+// Copy and compact the database
+d.copy(conn, '/path/to/backup-db', { compact: true });
+```
+
+</div>
 
 The copy operation can run **regardless of whether the database is currently in use**—readers can continue accessing the source while the copy is being made.
 
@@ -192,10 +320,29 @@ $ dtlv -d /data/newdb -n -f ~/backup.nippy load
 
 Datalevin provides a `re-index` function that rebuilds the in-memory index structures from the on-disk data. This can be useful in recovery scenarios or when index structures become stale.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Rebuild indexes
 (def reindexed-db (d/re-index db))
 ```
+
+```java
+// Rebuild indexes
+Database reindexedDb = Datalevin.reIndex(db);
+```
+
+```python
+# Rebuild indexes
+reindexed_db = d.re_index(db)
+```
+
+```javascript
+// Rebuild indexes
+const reindexedDb = d.reIndex(db);
+```
+
+</div>
 
 ---
 

@@ -16,6 +16,8 @@ This chapter explains how to enable full-text search, craft powerful search quer
 
 To search for text within an attribute, declare `:db/fulltext true` in your schema:
 
+<div class="multi-lang">
+
 ```clojure
 (def schema
   {:post/title   {:db/valueType :db.type/string
@@ -25,6 +27,50 @@ To search for text within an attribute, declare `:db/fulltext true` in your sche
                   :db/fulltext  true}})
 ```
 
+```java
+Map<String, Object> schema = Map.of(
+    "post/title", Map.of(
+        "db/valueType", "db.type/string",
+        "db/fulltext", true,
+        "db.fulltext/autoDomain", true
+    ),
+    "post/content", Map.of(
+        "db/valueType", "db.type/string",
+        "db/fulltext", true
+    )
+);
+```
+
+```python
+schema = {
+    "post/title": {
+        "db/valueType": "db.type/string",
+        "db/fulltext": True,
+        "db.fulltext/autoDomain": True
+    },
+    "post/content": {
+        "db/valueType": "db.type/string",
+        "db/fulltext": True
+    }
+}
+```
+
+```javascript
+const schema = {
+  'post/title': {
+    'db/valueType': 'db.type/string',
+    'db/fulltext': true,
+    'db.fulltext/autoDomain': true
+  },
+  'post/content': {
+    'db/valueType': 'db.type/string',
+    'db/fulltext': true
+  }
+};
+```
+
+</div>
+
 Attributes with `:db.fulltext/autoDomain true` become their own search domain (named after the attribute). By default, all full-text attributes participate in the `datalevin` domain.
 
 ---
@@ -32,6 +78,8 @@ Attributes with `:db.fulltext/autoDomain true` become their own search domain (n
 ## 2. Querying with `fulltext`
 
 The `fulltext` function returns matching datoms as `[e a v]` triples, ordered by relevance:
+
+<div class="multi-lang">
 
 ```clojure
 (d/q '[:find ?e ?a ?v
@@ -41,9 +89,34 @@ The `fulltext` function returns matching datoms as `[e a v]` triples, ordered by
      "red fox")
 ```
 
+```java
+Datalevin.q("[:find ?e ?a ?v " +
+            " :in $ ?q " +
+            " :where [(fulltext $ ?q) [[?e ?a ?v]]]]",
+            db, "red fox");
+```
+
+```python
+d.q('[:find ?e ?a ?v '
+     ' :in $ ?q '
+     ' :where [(fulltext $ ?q) [[?e ?a ?v]]]]',
+     db, "red fox")
+```
+
+```javascript
+d.q('[:find ?e ?a ?v ' +
+     ' :in $ ?q ' +
+     ' :where [(fulltext $ ?q) [[?e ?a ?v]]]]',
+     db, 'red fox');
+```
+
+</div>
+
 ### 2.1 Attribute-Specific Search
 
 To search within a specific attribute:
+
+<div class="multi-lang">
 
 ```clojure
 (d/q '[:find ?e ?a ?v
@@ -53,9 +126,34 @@ To search within a specific attribute:
      "clojure")
 ```
 
+```java
+Datalevin.q("[:find ?e ?a ?v " +
+            " :in $ ?q " +
+            " :where [(fulltext $ :post/title ?q) [[?e ?a ?v]]]]",
+            db, "clojure");
+```
+
+```python
+d.q('[:find ?e ?a ?v '
+     ' :in $ ?q '
+     ' :where [(fulltext $ :post/title ?q) [[?e ?a ?v]]]]',
+     db, "clojure")
+```
+
+```javascript
+d.q('[:find ?e ?a ?v ' +
+     ' :in $ ?q ' +
+     ' :where [(fulltext $ :post/title ?q) [[?e ?a ?v]]]]',
+     db, 'clojure');
+```
+
+</div>
+
 ### 2.2 Search Options
 
 Pass an option map as the last argument:
+
+<div class="multi-lang">
 
 ```clojure
 (d/q '[:find ?e ?a ?v
@@ -64,6 +162,29 @@ Pass an option map as the last argument:
      db
      "database")
 ```
+
+```java
+Datalevin.q("[:find ?e ?a ?v " +
+            " :in $ ?q " +
+            " :where [(fulltext $ :post/content ?q {:top 5}) [[?e ?a ?v]]]]",
+            db, "database");
+```
+
+```python
+d.q('[:find ?e ?a ?v '
+     ' :in $ ?q '
+     ' :where [(fulltext $ :post/content ?q {:top 5}) [[?e ?a ?v]]]]',
+     db, "database")
+```
+
+```javascript
+d.q('[:find ?e ?a ?v ' +
+     ' :in $ ?q ' +
+     ' :where [(fulltext $ :post/content ?q {:top 5}) [[?e ?a ?v]]]]',
+     db, 'database');
+```
+
+</div>
 
 Available options:
 - `:top` — number of results (default 10)
@@ -145,6 +266,8 @@ This reflects the intuition that query terms appearing closer together indicate 
 
 Datalevin can be used as a standalone search engine outside of Datalog:
 
+<div class="multi-lang">
+
 ```clojure
 (def lmdb (d/open-kv "/tmp/search-db"))
 (def engine (d/new-search-engine lmdb {:index-position? true}))
@@ -158,6 +281,51 @@ Datalevin can be used as a standalone search engine outside of Datalog:
 (d/search engine "red" {:display :offsets})
 ;=> ([1 (["red" [10 39]])] [2 (["red" [40]])])
 ```
+
+```java
+LMDB lmdb = Datalevin.openKv("/tmp/search-db");
+SearchEngine engine = Datalevin.newSearchEngine(lmdb,
+    Map.of("index-position?", true));
+
+Datalevin.addDoc(engine, 1, "The quick red fox jumped over the lazy red dogs.");
+Datalevin.addDoc(engine, 2, "Mary had a little lamb whose fleece was red as fire.");
+
+Datalevin.search(engine, "red");
+// => [1, 2]
+
+Datalevin.search(engine, "red", Map.of("display", "offsets"));
+// => [[1, [["red", [10, 39]]]], [2, [["red", [40]]]]]
+```
+
+```python
+lmdb = d.open_kv("/tmp/search-db")
+engine = d.new_search_engine(lmdb, {"index_position": True})
+
+d.add_doc(engine, 1, "The quick red fox jumped over the lazy red dogs.")
+d.add_doc(engine, 2, "Mary had a little lamb whose fleece was red as fire.")
+
+d.search(engine, "red")
+# => [1, 2]
+
+d.search(engine, "red", {"display": "offsets"})
+# => [[1, [["red", [10, 39]]]], [2, [["red", [40]]]]]
+```
+
+```javascript
+const lmdb = d.openKv('/tmp/search-db');
+const engine = d.newSearchEngine(lmdb, { indexPosition: true });
+
+d.addDoc(engine, 1, 'The quick red fox jumped over the lazy red dogs.');
+d.addDoc(engine, 2, 'Mary had a little lamb whose fleece was red as fire.');
+
+d.search(engine, 'red');
+// => [1, 2]
+
+d.search(engine, 'red', { display: 'offsets' });
+// => [[1, [['red', [10, 39]]]], [2, [['red', [40]]]]]
+```
+
+</div>
 
 **Document References**: In Datalog's `fulltext`, results are datoms `[e a v]`. In standalone mode, the "doc-ref" can be anything—numbers, strings, maps—whatever uniquely identifies a document in your application. This flexibility lets you index external content without storing it in the database.
 

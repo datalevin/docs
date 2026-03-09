@@ -17,6 +17,8 @@ For the best balance of safety and speed during ingestion, enable **WAL mode** w
 ### 1.2 Asynchronous Transactions: `d/transact-async!`
 The `d/transact-async!` function automatically batches multiple transactions together. When combined with WAL mode, this provides the highest possible OLTP throughput.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Fire multiple async transactions
 (d/transact-async! conn batch-1)
@@ -27,11 +29,45 @@ The `d/transact-async!` function automatically batches multiple transactions tog
 (deref (d/transact-async! conn batch-4))
 ```
 
+```java
+// Fire multiple async transactions
+Datalevin.transactAsync(conn, batch1);
+Datalevin.transactAsync(conn, batch2);
+Datalevin.transactAsync(conn, batch3);
+
+// Block on the last one to ensure all are committed
+Datalevin.transactAsync(conn, batch4).get();
+```
+
+```python
+# Fire multiple async transactions
+d.transact_async(conn, batch_1)
+d.transact_async(conn, batch_2)
+d.transact_async(conn, batch_3)
+
+# Block on the last one to ensure all are committed
+d.transact_async(conn, batch_4).result()
+```
+
+```javascript
+// Fire multiple async transactions
+d.transactAsync(conn, batch1);
+d.transactAsync(conn, batch2);
+d.transactAsync(conn, batch3);
+
+// Block on the last one to ensure all are committed
+await d.transactAsync(conn, batch4);
+```
+
+</div>
+
 The batching is **adaptive**: the higher the write load, the bigger the batch size. This combines with manual batching for compound performance gains.
 
 ### 1.2 Sync + Async Combo
 
 For applications that need both good throughput and deterministic commit points, use a sequence of async transactions followed by a sync call:
+
+<div class="multi-lang">
 
 ```clojure
 ;; Async writes for throughput
@@ -42,6 +78,38 @@ For applications that need both good throughput and deterministic commit points,
 ;; Sync commit to ensure all are persisted
 (d/transact! conn [])
 ```
+
+```java
+// Async writes for throughput
+Datalevin.transactAsync(conn, batch1);
+Datalevin.transactAsync(conn, batch2);
+Datalevin.transactAsync(conn, batch3);
+
+// Sync commit to ensure all are persisted
+Datalevin.transact(conn, List.of());
+```
+
+```python
+# Async writes for throughput
+d.transact_async(conn, batch_1)
+d.transact_async(conn, batch_2)
+d.transact_async(conn, batch_3)
+
+# Sync commit to ensure all are persisted
+d.transact(conn, [])
+```
+
+```javascript
+// Async writes for throughput
+d.transactAsync(conn, batch1);
+d.transactAsync(conn, batch2);
+d.transactAsync(conn, batch3);
+
+// Sync commit to ensure all are persisted
+d.transact(conn, []);
+```
+
+</div>
 
 Since async transactions are still committed in order, the last realized future indicates all prior calls are already committed.
 
@@ -59,12 +127,40 @@ If you are performing a bulk import (e.g., from a CSV or a SQL dump), sort your 
 1.  **Group by Entity ID**: This ensures that all attributes for a single entity are written to the EAV index contiguously.
 2.  **Group by Attribute and Value**: This ensures that updates to the AVE index are also localized.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Sort data by Entity, then Attribute
 (let [sorted-datoms (sort-by (juxt :db/id identity) raw-data)]
   (doseq [batch (partition-all 5000 sorted-datoms)]
     (d/transact! conn batch)))
 ```
+
+```java
+// Sort data by Entity, then Attribute
+rawData.sort(Comparator.comparing(m -> (Long) m.get("db/id")));
+List<List<Map>> batches = partition(rawData, 5000);
+for (List<Map> batch : batches) {
+    Datalevin.transact(conn, batch);
+}
+```
+
+```python
+# Sort data by Entity, then Attribute
+sorted_datoms = sorted(raw_data, key=lambda x: x["db/id"])
+for batch in partition_all(sorted_datoms, 5000):
+    d.transact(conn, batch)
+```
+
+```javascript
+// Sort data by Entity, then Attribute
+const sortedDatoms = rawData.sort((a, b) => a['db/id'] - b['db/id']);
+for (const batch of partitionAll(sortedDatoms, 5000)) {
+  d.transact(conn, batch);
+}
+```
+
+</div>
 
 ---
 
@@ -74,6 +170,8 @@ For the fastest possible initial load into an empty database, bypass the transac
 
 - **`d/init-db`**: Load a collection of prepared datoms into a fresh, empty database
 - **`d/fill-db`**: Bulk load additional datoms into an existing database
+
+<div class="multi-lang">
 
 ```clojure
 ;; Prepare datoms with approximate entity IDs (caller's responsibility)
@@ -86,6 +184,47 @@ For the fastest possible initial load into an empty database, bypass the transac
 ;; Load into empty database
 (def db (d/init-db prepared-datoms schema))
 ```
+
+```java
+// Prepare datoms with approximate entity IDs (caller's responsibility)
+List<Object[]> preparedDatoms = List.of(
+    new Object[]{1, "user/name", "Alice"},
+    new Object[]{1, "user/age", 30},
+    new Object[]{2, "user/name", "Bob"},
+    new Object[]{2, "user/age", 25}
+);
+
+// Load into empty database
+Database db = Datalevin.initDb(preparedDatoms, schema);
+```
+
+```python
+# Prepare datoms with approximate entity IDs (caller's responsibility)
+prepared_datoms = [
+    [1, "user/name", "Alice"],
+    [1, "user/age", 30],
+    [2, "user/name", "Bob"],
+    [2, "user/age", 25],
+]
+
+# Load into empty database
+db = d.init_db(prepared_datoms, schema)
+```
+
+```javascript
+// Prepare datoms with approximate entity IDs (caller's responsibility)
+const preparedDatoms = [
+  [1, 'user/name', 'Alice'],
+  [1, 'user/age', 30],
+  [2, 'user/name', 'Bob'],
+  [2, 'user/age', 25],
+];
+
+// Load into empty database
+const db = d.initDb(preparedDatoms, schema);
+```
+
+</div>
 
 > **Note**: These functions skip data integrity checks and temporary entity ID resolution. You must ensure the datoms are correct before calling them.
 

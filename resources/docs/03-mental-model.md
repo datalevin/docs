@@ -58,6 +58,8 @@ attributes associated with a `:user`, a `:customer`, and an `:employee`
 simultaneously. You don't "join" these tables; you simply query for an ID
 that possesses all those attributes.
 
+<div class="multi-lang">
+
 ```clojure
 ;; The schema defines the behavior of properties, not the shape of rows.
 (def schema
@@ -72,6 +74,55 @@ that possesses all those attributes.
   [{:db/id -1 :person/name "Alice" :person/age 30 :person/school -10}
    {:db/id -10 :school/name "MIT" :school/country "USA"}])
 ```
+
+```java
+// The schema defines the behavior of properties, not the shape of rows.
+Map<String, Object> schema = Map.of(
+    "person/name",   Map.of("db/valueType", "db.type/string"),
+    "person/age",    Map.of("db/valueType", "db.type/long"),
+    "person/school", Map.of("db/valueType", "db.type/ref"),  // A reference to another entity
+    "school/name",   Map.of("db/valueType", "db.type/string"));
+
+// Data is asserted as a collection of facts.
+// Notice how 'Alice' and 'MIT' are just sets of attributes.
+Datalevin.transact(conn, List.of(
+    Map.of("db/id", -1, "person/name", "Alice", "person/age", 30, "person/school", -10),
+    Map.of("db/id", -10, "school/name", "MIT", "school/country", "USA")));
+```
+
+```python
+# The schema defines the behavior of properties, not the shape of rows.
+schema = {
+    "person/name":   {"db/valueType": "db.type/string"},
+    "person/age":    {"db/valueType": "db.type/long"},
+    "person/school": {"db/valueType": "db.type/ref"},  # A reference to another entity
+    "school/name":   {"db/valueType": "db.type/string"}}
+
+# Data is asserted as a collection of facts.
+# Notice how 'Alice' and 'MIT' are just sets of attributes.
+d.transact(conn, [
+    {"db/id": -1, "person/name": "Alice", "person/age": 30, "person/school": -10},
+    {"db/id": -10, "school/name": "MIT", "school/country": "USA"}])
+```
+
+```javascript
+// The schema defines the behavior of properties, not the shape of rows.
+const schema = {
+  "person/name":   {"db/valueType": "db.type/string"},
+  "person/age":    {"db/valueType": "db.type/long"},
+  "person/school": {"db/valueType": "db.type/ref"},  // A reference to another entity
+  "school/name":   {"db/valueType": "db.type/string"}
+};
+
+// Data is asserted as a collection of facts.
+// Notice how 'Alice' and 'MIT' are just sets of attributes.
+d.transact(conn, [
+  {"db/id": -1, "person/name": "Alice", "person/age": 30, "person/school": -10},
+  {"db/id": -10, "school/name": "MIT", "school/country": "USA"}
+]);
+```
+
+</div>
 
 This fluidity allows your data model to evolve alongside your application. You
 never have to worry about "breaking the schema" by adding a new attribute to an
@@ -161,6 +212,8 @@ engine to "JOIN table A with table B." You are stating: "I am looking for an
 Entity `?e` that has Attribute `:user/name` with Value `'Alice'`, and that same
 Entity `?e` must also have an Attribute `:user/age` which is `?age`."
 
+<div class="multi-lang">
+
 ```clojure
 (d/q '[:find ?age
        :where
@@ -168,6 +221,35 @@ Entity `?e` must also have an Attribute `:user/age` which is `?age`."
        [?e :user/age ?age]]
      db)
 ```
+
+```java
+Set<List<Object>> results = Datalevin.q(
+    "[:find ?age " +
+    " :where " +
+    " [?e :user/name \"Alice\"] " +
+    " [?e :user/age ?age]]",
+    db);
+```
+
+```python
+results = d.q("""
+    [:find ?age
+     :where
+     [?e :user/name "Alice"]
+     [?e :user/age ?age]]""",
+    db)
+```
+
+```javascript
+const results = d.q(
+  `[:find ?age
+    :where
+    [?e :user/name "Alice"]
+    [?e :user/age ?age]]`,
+  db);
+```
+
+</div>
 
 The engine takes these statements and finds the set of values that makes all
 of them true simultaneously. This is **Logic Programming**. Because joins are
@@ -186,6 +268,8 @@ When you perform a full-text search, the search function behaves just like any
 other Datalog clause. It returns a set of datoms (`[e a v]`) that can be
 immediately joined with other relational facts.
 
+<div class="multi-lang">
+
 ```clojure
 ;; A "Hybrid" query: Search for text, then filter by metadata
 (d/q '[:find ?title
@@ -195,6 +279,41 @@ immediately joined with other relational facts.
        [?e :doc/title ?title]]                   ; Retrieve the title
      db)
 ```
+
+```java
+// A "Hybrid" query: Search for text, then filter by metadata
+Set<List<Object>> results = Datalevin.q(
+    "[:find ?title " +
+    " :where " +
+    " [(fulltext $ :doc/body \"clojure\") [[?e]]] " +
+    " [?e :doc/status :published] " +
+    " [?e :doc/title ?title]]",
+    db);
+```
+
+```python
+# A "Hybrid" query: Search for text, then filter by metadata
+results = d.q("""
+    [:find ?title
+     :where
+     [(fulltext $ :doc/body "clojure") [[?e]]]
+     [?e :doc/status :published]
+     [?e :doc/title ?title]]""",
+    db)
+```
+
+```javascript
+// A "Hybrid" query: Search for text, then filter by metadata
+const results = d.q(
+  `[:find ?title
+    :where
+    [(fulltext $ :doc/body "clojure") [[?e]]]
+    [?e :doc/status :published]
+    [?e :doc/title ?title]]`,
+  db);
+```
+
+</div>
 
 This "Unified Retrieval" model means you never have to worry about syncing
 your database with an external search engine. Your search results are always
@@ -209,6 +328,8 @@ can define a rule called `premium-user`.
 Rules can also be **recursive**, which is essential for graph traversal. A
 classic example is finding ancestors in a family tree:
 
+<div class="multi-lang">
+
 ```clojure
 (def ancestry-rules
   '[[(ancestor ?x ?y)      ; Rule name and arguments
@@ -218,6 +339,38 @@ classic example is finding ancestors in a family tree:
      [?x :parent ?z]       ; z is the parent of x
      (ancestor ?z ?y)]])   ; y is an ancestor of z
 ```
+
+```java
+// Rules are passed as a Datalog string
+String ancestryRules =
+    "[[(ancestor ?x ?y) " +
+    "  [?x :parent ?y]] " +
+    " [(ancestor ?x ?y) " +
+    "  [?x :parent ?z] " +
+    "  (ancestor ?z ?y)]]";
+```
+
+```python
+# Rules are passed as a Datalog string
+ancestry_rules = """
+    [[(ancestor ?x ?y)
+      [?x :parent ?y]]
+     [(ancestor ?x ?y)
+      [?x :parent ?z]
+      (ancestor ?z ?y)]]"""
+```
+
+```javascript
+// Rules are passed as a Datalog string
+const ancestryRules = `
+    [[(ancestor ?x ?y)
+      [?x :parent ?y]]
+     [(ancestor ?x ?y)
+      [?x :parent ?z]
+      (ancestor ?z ?y)]]`;
+```
+
+</div>
 
 By defining this rule, you've taught the database the *concept* of an ancestor.
 You can now ask "Who are all the ancestors of Entity 42?" and the engine will

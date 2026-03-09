@@ -16,6 +16,8 @@ This chapter covers how to **Profile** your Datalog queries and understand the p
 
 Datalevin provides a specialized profiling mechanism called **`trace`**. By adding a `:trace true` modifier to your query, the engine will return not just the results, but a detailed **Execution Trace**.
 
+<div class="multi-lang">
+
 ```clojure
 (d/q '[:find ?name
        :where [?e :user/name ?name]
@@ -25,6 +27,39 @@ Datalevin provides a specialized profiling mechanism called **`trace`**. By addi
      db)
 ```
 
+```java
+Collection results = Datalevin.q(
+    "[:find ?name " +
+    " :where [?e :user/name ?name] " +
+    "        [?e :user/age ?age] " +
+    "        [(> ?age 30)] " +
+    " :trace true]",
+    db);
+```
+
+```python
+results = d.q(
+    """[:find ?name
+        :where [?e :user/name ?name]
+               [?e :user/age ?age]
+               [(> ?age 30)]
+        :trace true]""",
+    db)
+```
+
+```javascript
+const results = d.q(
+  `[:find ?name
+    :where [?e :user/name ?name]
+           [?e :user/age ?age]
+           [(> ?age 30)]
+    :trace true]`,
+  db
+);
+```
+
+</div>
+
 The trace output includes the **Cost**, **Cardinality**, and **Execution Time** for every single clause in the query.
 
 ---
@@ -33,6 +68,8 @@ The trace output includes the **Cost**, **Cardinality**, and **Execution Time** 
 
 Datalevin provides the **`d/explain`** function to inspect the query plan without executing the query. This helps you understand how the optimizer will process your query.
 
+<div class="multi-lang">
+
 ```clojure
 (d/explain db
   '[:find ?name
@@ -40,6 +77,35 @@ Datalevin provides the **`d/explain`** function to inspect the query plan withou
            [?e :user/age ?age]
            [(> ?age 30)]])
 ```
+
+```java
+Object plan = Datalevin.explain(db,
+    "[:find ?name " +
+    " :where [?e :user/name ?name] " +
+    "        [?e :user/age ?age] " +
+    "        [(> ?age 30)]]");
+```
+
+```python
+plan = d.explain(
+    db,
+    """[:find ?name
+        :where [?e :user/name ?name]
+               [?e :user/age ?age]
+               [(> ?age 30)]]""")
+```
+
+```javascript
+const plan = d.explain(
+  db,
+  `[:find ?name
+    :where [?e :user/name ?name]
+           [?e :user/age ?age]
+           [(> ?age 30)]]`
+);
+```
+
+</div>
 
 The output shows:
 - **Join order**: The sequence of clauses the optimizer chose

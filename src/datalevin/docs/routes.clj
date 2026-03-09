@@ -290,7 +290,7 @@
                      ["/examples/form" {:get {:handler new-example-fragment}}]
                      ["/examples/:id" {:get {:handler examples/view-example-handler}}]
                      ["/users/:username" {:get {:handler examples/user-profile-handler}}]
-                     ["/pdf" {:get {:handler (wrap-auth pdf/pdf-handler)}}]
+                     ["/pdf" {:get {:handler pdf/pdf-handler}}]
 
                      ;; Admin routes
                      ["/admin/examples" {:get {:handler (-> admin/admin-examples-handler

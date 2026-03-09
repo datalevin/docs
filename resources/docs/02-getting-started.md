@@ -17,20 +17,45 @@ This chapter provides a quick-start guide for the three primary ways to use Data
 Embedded mode is the most common way to use Datalevin in the Clojure ecosystem.
 
 ### 1.1 Add the Dependency
-Add the following to your `deps.edn` file:
+
+<div class="multi-lang">
 
 ```clojure
+;; deps.edn
 {datalevin/datalevin {:mvn/version "0.9.22"}}
 ```
+
+```java
+// Maven pom.xml
+// <dependency>
+//   <groupId>datalevin</groupId>
+//   <artifactId>datalevin</artifactId>
+//   <version>0.9.22</version>
+// </dependency>
+```
+
+```python
+# pip
+pip install datalevin
+```
+
+```javascript
+// npm
+npm install datalevin
+```
+
+</div>
 
 ### 1.2 Your First Query
 Open a REPL and run the following code to create a database, transact data, and query it.
 
 > **Note**: For new Datalog databases, **WAL (Write-Ahead Log) mode** is enabled by default. This provides high write performance while maintaining strong durability (Chapter 4).
 
+<div class="multi-lang">
+
 ```clojure
 (require '[datalevin.core :as d])
-...
+
 ;; 1. Create a connection (stores data in /tmp/mydb)
 (def conn (d/get-conn "/tmp/mydb" {}))
 
@@ -49,6 +74,86 @@ Open a REPL and run the following code to create a database, transact data, and 
 ;; 4. Close the connection
 (d/close-conn conn)
 ```
+
+```java
+import datalevin.core.*;
+
+// 1. Create a connection (stores data in /tmp/mydb)
+Connection conn = Datalevin.getConn("/tmp/mydb");
+
+// 2. Transact some data
+conn.transact(List.of(
+    Map.of("user/name", "Alice", "user/age", 30),
+    Map.of("user/name", "Bob",   "user/age", 25)
+));
+
+// 3. Run a Datalog query
+Set results = Datalevin.q(
+    "[:find ?name " +
+    " :where [?e :user/name ?name] " +
+    "        [?e :user/age ?age] " +
+    "        [(> ?age 28)]]",
+    conn.db()
+);
+// => #{["Alice"]}
+
+// 4. Close the connection
+conn.close();
+```
+
+```python
+from datalevin import Datalevin
+
+# 1. Create a connection (stores data in /tmp/mydb)
+conn = Datalevin.get_conn("/tmp/mydb")
+
+# 2. Transact some data
+conn.transact([
+    {"user/name": "Alice", "user/age": 30},
+    {"user/name": "Bob",   "user/age": 25},
+])
+
+# 3. Run a Datalog query
+results = Datalevin.q(
+    '''[:find ?name
+        :where [?e :user/name ?name]
+               [?e :user/age ?age]
+               [(> ?age 28)]]''',
+    conn.db()
+)
+# => {("Alice",)}
+
+# 4. Close the connection
+conn.close()
+```
+
+```javascript
+import { Datalevin } from 'datalevin';
+
+// 1. Create a connection (stores data in /tmp/mydb)
+const conn = Datalevin.getConn('/tmp/mydb');
+
+// 2. Transact some data
+conn.transact([
+  { 'user/name': 'Alice', 'user/age': 30 },
+  { 'user/name': 'Bob',   'user/age': 25 },
+]);
+
+// 3. Run a Datalog query
+const results = Datalevin.q(
+  `[:find ?name
+    :where [?e :user/name ?name]
+           [?e :user/age ?age]
+           [(> ?age 28)]]`,
+  conn.db()
+);
+// => Set([["Alice"]])
+
+// 4. Close the connection
+conn.close();
+```
+
+</div>
 
 ---
 

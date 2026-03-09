@@ -24,6 +24,8 @@ To use Datalevin, add the dependency to your project:
 ### 1.1 Managing the Connection
 Datalevin requires a clean shutdown to ensure the LMDB environment is closed correctly. In Clojure, it is best practice to manage this via a state management library like **Integrant** or **Mount**, or a simple `with-open` block.
 
+<div class="multi-lang">
+
 ```clojure
 (defn start-app [config]
   (let [conn (d/get-conn (:db-path config) schema)]
@@ -32,6 +34,34 @@ Datalevin requires a clean shutdown to ensure the LMDB environment is closed cor
 (defn stop-app [system]
   (d/close-conn (:conn system)))
 ```
+
+```java
+import datalevin.core.*;
+
+// Start: open a connection
+Connection conn = Datalevin.getConn(config.getDbPath(), schema);
+
+// Stop: close the connection
+Datalevin.closeConn(conn);
+```
+
+```python
+# Start: open a connection
+conn = d.get_conn(config["db_path"], schema)
+
+# Stop: close the connection
+d.close_conn(conn)
+```
+
+```javascript
+// Start: open a connection
+const conn = d.getConn(config.dbPath, schema);
+
+// Stop: close the connection
+d.closeConn(conn);
+```
+
+</div>
 
 ---
 
@@ -51,9 +81,27 @@ Datalevin makes testing incredibly fast and simple.
 ### 3.1 Fast In-Memory Tests
 Use the `:temp? true` option when creating a connection for your tests. This creates a temporary database in a ramdisk or temporary directory that is automatically deleted when the JVM exits.
 
+<div class="multi-lang">
+
 ```clojure
 (def test-conn (d/get-conn "/tmp/test-db" schema {:temp? true}))
 ```
+
+```java
+import datalevin.core.*;
+
+Connection testConn = Datalevin.getConn("/tmp/test-db", schema, Map.of("temp?", true));
+```
+
+```python
+test_conn = d.get_conn("/tmp/test-db", schema, {"temp?": True})
+```
+
+```javascript
+const testConn = d.getConn('/tmp/test-db', schema, { 'temp?': true });
+```
+
+</div>
 
 ### 3.2 Test Isolation
 Because Datalevin startup is sub-millisecond, you can afford to create a **fresh database for every single test case**. This eliminates "leaky state" between tests and makes your suite much more reliable.

@@ -35,16 +35,10 @@
   (reset! doc-cache {}))
 
 (defn clear-all-caches!
-  "Clear all caches including PDF cache. Call when docs are updated."
+  "Clear all caches. Call when docs are updated."
   []
   (clear-chapter-cache!)
-  (clear-doc-cache!)
-  ;; Also clear PDF cache if the namespace is loaded
-  (try
-    (require 'datalevin.docs.tasks.pdf)
-    ((resolve 'datalevin.docs.tasks.pdf/clear-pdf-cache!))
-    (catch Exception _)))
-      ;; PDF namespace may not be loaded in production
+  (clear-doc-cache!))
 
 (defn parse-frontmatter [content]
   (let [yaml-re #"^---\n([\s\S]*?)\n---\n([\s\S]*)$"
@@ -121,7 +115,7 @@
                          [:div {:style "text-align:center;padding:4rem 1rem 0"}
                           [:h1 {:style "font-size:3.5rem;font-weight:bold;margin-bottom:1.5rem;background:linear-gradient(135deg,#06b6d4,#3b82f6,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;"} "Datalevin"]
                           [:p {:style "font-size:1.25rem;color:#9ca3af;margin-bottom:2rem"}
-                           "A simple, fast, and versatile open-source Datalog database"]
+                           "SQLite for connected data: an open-source deploy-agnostic database"]
                           [:div {:style "display:flex;justify-content:center;gap:1rem;margin-bottom:3rem"}
                            [:a {:href "/docs/02-getting-started" :class "dl-btn-primary"} "Get Started"]
                            [:a {:href "/docs" :class "dl-btn"} "Read the Book"]]]
@@ -173,7 +167,8 @@
         grouped (partition-by :part chapters)
         toc-html (apply str
                         "<div class=\"max-w-3xl mx-auto px-4 py-8\">"
-                        "<h1 class=\"text-3xl font-bold mb-8\" style=\"color:var(--text-primary, #e5e7eb)\"><i>Datalevin: The Definitive Guide</i></h1>"                        (concat
+                        "<h1 class=\"text-3xl font-bold mb-8\" style=\"color:var(--text-primary, #e5e7eb)\"><i>Datalevin: The Definitive Guide</i></h1>"
+                        "<p class=\"mb-6\"><a href=\"/pdf\" class=\"dl-btn\">Download PDF</a></p>"                        (concat
                          (for [group grouped
                                :let [part (:part (first group))]]
                            (str "<div class=\"mb-8\">"

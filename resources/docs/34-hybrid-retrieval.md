@@ -34,24 +34,69 @@ A production-grade RAG system using Datalevin uses three lenses simultaneously:
 
 In Datalevin, these three lenses are combined in a single `:where` block.
 
+<div class="multi-lang">
+
 ```clojure
 (d/q '[:find ?content ?combined-score
        :in $ ?q-text ?q-vec ?user-id ?k
        :where ;; 1. Keyword search (FTS)
               [(fulltext $ :doc/content ?q-text) [[?e _ ?fts-score]]]
-              
+
               ;; 2. Semantic search (Vector)
               [(vsearch $ :doc/vec ?q-vec ?k) [[?e _ ?vec-score]]]
-              
+
               ;; 3. Logical constraints (Datalog)
               [?e :doc/content ?content]
               [?e :doc/status :published]
               [?user-id :user/permissions ?e] ; Security join
-              
+
               ;; 4. Combined Ranking
               [(+ ?fts-score ?vec-score) ?combined-score]]
      db "performance tuning" query-embedding user-id 10)
 ```
+
+```java
+import datalevin.core.*;
+
+var results = Datalevin.q(
+    "[:find ?content ?combined-score " +
+    " :in $ ?q-text ?q-vec ?user-id ?k " +
+    " :where [(fulltext $ :doc/content ?q-text) [[?e _ ?fts-score]]]" +
+    "        [(vsearch $ :doc/vec ?q-vec ?k) [[?e _ ?vec-score]]]" +
+    "        [?e :doc/content ?content]" +
+    "        [?e :doc/status :published]" +
+    "        [?user-id :user/permissions ?e]" +
+    "        [(+ ?fts-score ?vec-score) ?combined-score]]",
+    db, "performance tuning", queryEmbedding, userId, 10);
+```
+
+```python
+results = d.q(
+    """[:find ?content ?combined-score
+        :in $ ?q-text ?q-vec ?user-id ?k
+        :where [(fulltext $ :doc/content ?q-text) [[?e _ ?fts-score]]]
+               [(vsearch $ :doc/vec ?q-vec ?k) [[?e _ ?vec-score]]]
+               [?e :doc/content ?content]
+               [?e :doc/status :published]
+               [?user-id :user/permissions ?e]
+               [(+ ?fts-score ?vec-score) ?combined-score]]""",
+    db, "performance tuning", query_embedding, user_id, 10)
+```
+
+```javascript
+const results = d.q(
+    `[:find ?content ?combined-score
+      :in $ ?q-text ?q-vec ?user-id ?k
+      :where [(fulltext $ :doc/content ?q-text) [[?e _ ?fts-score]]]
+             [(vsearch $ :doc/vec ?q-vec ?k) [[?e _ ?vec-score]]]
+             [?e :doc/content ?content]
+             [?e :doc/status :published]
+             [?user-id :user/permissions ?e]
+             [(+ ?fts-score ?vec-score) ?combined-score]]`,
+    db, 'performance tuning', queryEmbedding, userId, 10);
+```
+
+</div>
 
 ### 3.1 Reciprocal Rank Fusion (RRF)
 While the example above uses simple addition for scoring, many advanced systems use **Reciprocal Rank Fusion (RRF)** to combine results from different indexes. You can implement RRF logic directly in your Datalog query using custom functions.

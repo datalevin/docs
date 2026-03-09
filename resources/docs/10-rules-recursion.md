@@ -23,16 +23,47 @@ A rule consists of a **Head** and a **Body**:
 
 Rules are typically defined as a vector of vectors (a "rule set"):
 
+<div class="multi-lang">
+
 ```clojure
 (def user-rules
   '[[(is-active? ?e)
      [?e :user/status :active]
      [?e :user/verified? true]]
-     
+
     [(is-admin? ?e)
      (is-active? ?e) ; Rules can call other rules!
      [?e :user/role :admin]]])
 ```
+
+```java
+String userRules = "[[(is-active? ?e) " +
+    "[?e :user/status :active] " +
+    "[?e :user/verified? true]] " +
+    "[(is-admin? ?e) " +
+    "(is-active? ?e) " +   // Rules can call other rules!
+    "[?e :user/role :admin]]]";
+```
+
+```python
+user_rules = ('[[(is-active? ?e) '
+    '[?e :user/status :active] '
+    '[?e :user/verified? true]] '
+    '[(is-admin? ?e) '
+    '(is-active? ?e) '   # Rules can call other rules!
+    '[?e :user/role :admin]]]')
+```
+
+```javascript
+const userRules = '[[(is-active? ?e) ' +
+    '[?e :user/status :active] ' +
+    '[?e :user/verified? true]] ' +
+    '[(is-admin? ?e) ' +
+    '(is-active? ?e) ' +   // Rules can call other rules!
+    '[?e :user/role :admin]]]';
+```
+
+</div>
 
 > **Key Takeaway**: Rules are your primary tool for **abstraction** and **composition**. Use them to name common patterns and build more complex logic out of simpler, reusable components.
 
@@ -45,6 +76,8 @@ To use rules in a query, you must:
 2. Pass the rule set as an argument to `d/q` (usually after the database).
 3. Invoke the rule in the `:where` clause using its head syntax.
 
+<div class="multi-lang">
+
 ```clojure
 (let [rules '[[(is-active? ?e)
                [?e :user/status :active]
@@ -56,6 +89,44 @@ To use rules in a query, you must:
        db rules))
 ```
 
+```java
+String rules = "[[(is-active? ?e) " +
+    "[?e :user/status :active] " +
+    "[?e :user/verified? true]]]";
+
+Set result = Datalevin.q("[:find ?name " +
+    ":in $ % " +
+    ":where [?e :user/name ?name] " +
+    "       (is-active? ?e)]",
+    db, rules);
+```
+
+```python
+rules = ('[[(is-active? ?e) '
+    '[?e :user/status :active] '
+    '[?e :user/verified? true]]]')
+
+result = d.q('[:find ?name '
+    ':in $ % '
+    ':where [?e :user/name ?name] '
+    '       (is-active? ?e)]',
+    db, rules)
+```
+
+```javascript
+const rules = '[[(is-active? ?e) ' +
+    '[?e :user/status :active] ' +
+    '[?e :user/verified? true]]]';
+
+const result = d.q('[:find ?name ' +
+    ':in $ % ' +
+    ':where [?e :user/name ?name] ' +
+    '       (is-active? ?e)]',
+    db, rules);
+```
+
+</div>
+
 In this example, `(is-active? ?e)` acts as a filter. For every entity `?e` that has a name, the engine checks if that entity also satisfies the clauses defined in the `is-active?` rule.
 
 ---
@@ -66,18 +137,52 @@ In standard Datalog, all clauses in a `:where` block are joined by an implicit `
 
 If you define a rule with the same name multiple times, the engine treats these definitions as alternatives. If *any* of the definitions match, the rule is satisfied.
 
+<div class="multi-lang">
+
 ```clojure
 (def access-rules
   '[[(has-access? ?user ?resource)
      [?user :user/role :admin]] ; Admins have access to everything
-     
+
     [(has-access? ?user ?resource)
      [?user :user/permissions ?resource]] ; Specific permission
-     
+
     [(has-access? ?user ?resource)
      [?user :user/team ?team]
      [?team :team/permissions ?resource]]]) ; Team-based permission
 ```
+
+```java
+String accessRules = "[[(has-access? ?user ?resource) " +
+    "[?user :user/role :admin]] " +            // Admins have access to everything
+    "[(has-access? ?user ?resource) " +
+    "[?user :user/permissions ?resource]] " +   // Specific permission
+    "[(has-access? ?user ?resource) " +
+    "[?user :user/team ?team] " +
+    "[?team :team/permissions ?resource]]]";    // Team-based permission
+```
+
+```python
+access_rules = ('[[(has-access? ?user ?resource) '
+    '[?user :user/role :admin]] '            # Admins have access to everything
+    '[(has-access? ?user ?resource) '
+    '[?user :user/permissions ?resource]] '   # Specific permission
+    '[(has-access? ?user ?resource) '
+    '[?user :user/team ?team] '
+    '[?team :team/permissions ?resource]]]')  # Team-based permission
+```
+
+```javascript
+const accessRules = '[[(has-access? ?user ?resource) ' +
+    '[?user :user/role :admin]] ' +            // Admins have access to everything
+    '[(has-access? ?user ?resource) ' +
+    '[?user :user/permissions ?resource]] ' +   // Specific permission
+    '[(has-access? ?user ?resource) ' +
+    '[?user :user/team ?team] ' +
+    '[?team :team/permissions ?resource]]]';    // Team-based permission
+```
+
+</div>
 
 When you query `(has-access? ?u ?r)`, Datalevin will return results if the user is an admin, OR has a direct permission, OR has a team permission. This is much cleaner and more maintainable than using a complex `(or ...)` block in every query.
 
@@ -89,6 +194,8 @@ Because Datalevin's rule engine evaluates rules from the bottom up (see Chapter 
 
 ### Example: Automated Classification (Expert Systems)
 Imagine an e-commerce system that needs to determine if a user qualifies for "VIP Status" based on a complex set of evolving business rules. Instead of hard-coding these rules in your application, you can define them as a reasoning set.
+
+<div class="multi-lang">
 
 ```clojure
 (def reasoning-rules
@@ -112,6 +219,65 @@ Imagine an e-commerce system that needs to determine if a user qualifies for "VI
          (is-frequent-shopper? ?u))]])
 ```
 
+```java
+String reasoningRules = "["
+    // Rule 1: High Spender
+    + "[(is-high-spender? ?u) "
+    + "[?u :user/total-spent ?amount] "
+    + "[(> ?amount 5000)]] "
+    // Rule 2: Frequent Shopper
+    + "[(is-frequent-shopper? ?u) "
+    + "[?u :user/order-count ?count] "
+    + "[(> ?count 20)]] "
+    // Rule 3: Reasoner for VIP Status
+    + "[(vip-status ?u :gold) "
+    + "(is-high-spender? ?u) "
+    + "(is-frequent-shopper? ?u)] "
+    + "[(vip-status ?u :silver) "
+    + "(or (is-high-spender? ?u) "
+    + "    (is-frequent-shopper? ?u))]]";
+```
+
+```python
+reasoning_rules = ('['
+    # Rule 1: High Spender
+    '[(is-high-spender? ?u) '
+    '[?u :user/total-spent ?amount] '
+    '[(> ?amount 5000)]] '
+    # Rule 2: Frequent Shopper
+    '[(is-frequent-shopper? ?u) '
+    '[?u :user/order-count ?count] '
+    '[(> ?count 20)]] '
+    # Rule 3: Reasoner for VIP Status
+    '[(vip-status ?u :gold) '
+    '(is-high-spender? ?u) '
+    '(is-frequent-shopper? ?u)] '
+    '[(vip-status ?u :silver) '
+    '(or (is-high-spender? ?u) '
+    '    (is-frequent-shopper? ?u))]]')
+```
+
+```javascript
+const reasoningRules = '['
+    // Rule 1: High Spender
+    + '[(is-high-spender? ?u) '
+    + '[?u :user/total-spent ?amount] '
+    + '[(> ?amount 5000)]] '
+    // Rule 2: Frequent Shopper
+    + '[(is-frequent-shopper? ?u) '
+    + '[?u :user/order-count ?count] '
+    + '[(> ?count 20)]] '
+    // Rule 3: Reasoner for VIP Status
+    + '[(vip-status ?u :gold) '
+    + '(is-high-spender? ?u) '
+    + '(is-frequent-shopper? ?u)] '
+    + '[(vip-status ?u :silver) '
+    + '(or (is-high-spender? ?u) '
+    + '    (is-frequent-shopper? ?u))]]';
+```
+
+</div>
+
 By querying `(vip-status ?u ?tier)`, you are treating Datalevin as an **Expert System**. The database takes the base facts (amount spent, order count) and "chains" them forward through your rules to derive the `vip-status`. 
 
 This approach is far superior to standard database views because:
@@ -132,19 +298,18 @@ A recursive rule follows the standard recursive pattern:
 ### Example: Organizational Hierarchy
 Suppose you have an `:employee/manager` attribute that points to another employee. To find everyone who reports to a manager—either directly or indirectly—you can use a recursive `reports-to` rule.
 
+<div class="multi-lang">
+
 ```clojure
 (def org-rules
   '[[(reports-to ?sub ?boss)
      [?sub :employee/manager ?boss]] ; Base case: direct report
-     
+
     [(reports-to ?sub ?boss)
      [?sub :employee/manager ?intermediate] ; Recursive case
      (reports-to ?intermediate ?boss)]])    ; Call itself
-```
 
-Now, finding all subordinates of "Alice" is simple:
-
-```clojure
+;; Finding all subordinates of "Alice"
 (d/q '[:find ?name
        :in $ % ?boss-name
        :where [?boss :employee/name ?boss-name]
@@ -152,6 +317,58 @@ Now, finding all subordinates of "Alice" is simple:
               [?sub :employee/name ?name]]
      db org-rules "Alice")
 ```
+
+```java
+String orgRules = "[[(reports-to ?sub ?boss) " +
+    "[?sub :employee/manager ?boss]] " +      // Base case: direct report
+    "[(reports-to ?sub ?boss) " +
+    "[?sub :employee/manager ?intermediate] " + // Recursive case
+    "(reports-to ?intermediate ?boss)]]";       // Call itself
+
+// Finding all subordinates of "Alice"
+Set result = Datalevin.q("[:find ?name " +
+    ":in $ % ?boss-name " +
+    ":where [?boss :employee/name ?boss-name] " +
+    "       (reports-to ?sub ?boss) " +
+    "       [?sub :employee/name ?name]]",
+    db, orgRules, "Alice");
+```
+
+```python
+org_rules = ('[[(reports-to ?sub ?boss) '
+    '[?sub :employee/manager ?boss]] '       # Base case: direct report
+    '[(reports-to ?sub ?boss) '
+    '[?sub :employee/manager ?intermediate] ' # Recursive case
+    '(reports-to ?intermediate ?boss)]]')     # Call itself
+
+# Finding all subordinates of "Alice"
+result = d.q('[:find ?name '
+    ':in $ % ?boss-name '
+    ':where [?boss :employee/name ?boss-name] '
+    '       (reports-to ?sub ?boss) '
+    '       [?sub :employee/name ?name]]',
+    db, org_rules, 'Alice')
+```
+
+```javascript
+const orgRules = '[[(reports-to ?sub ?boss) ' +
+    '[?sub :employee/manager ?boss]] ' +       // Base case: direct report
+    '[(reports-to ?sub ?boss) ' +
+    '[?sub :employee/manager ?intermediate] ' + // Recursive case
+    '(reports-to ?intermediate ?boss)]]';       // Call itself
+
+// Finding all subordinates of "Alice"
+const result = d.q('[:find ?name ' +
+    ':in $ % ?boss-name ' +
+    ':where [?boss :employee/name ?boss-name] ' +
+    '       (reports-to ?sub ?boss) ' +
+    '       [?sub :employee/name ?name]]',
+    db, orgRules, 'Alice');
+```
+
+</div>
+
+Now, finding all subordinates of "Alice" is simple, as shown above.
 
 Datalevin's Datalog engine handles the recursive expansion and ensures that the query terminates (preventing infinite loops even if your data has cycles).
 
@@ -161,15 +378,49 @@ Datalevin's Datalog engine handles the recursive expansion and ensures that the 
 
 Rules are not limited to single variables. They can take multiple parameters, and those parameters can be either bound (input) or unbound (output).
 
+<div class="multi-lang">
+
 ```clojure
 [[(distance ?p1 ?p2 ?d)
   [?p1 :point/x ?x1]
   [?p1 :point/y ?y1]
   [?p2 :point/x ?x2]
   [?p2 :point/y ?y2]
-  [(Math/sqrt (+ (Math/pow (- ?x2 ?x1) 2) 
+  [(Math/sqrt (+ (Math/pow (- ?x2 ?x1) 2)
                  (Math/pow (- ?y2 ?y1) 2))) ?d]]]
 ```
+
+```java
+String distanceRule = "[[(distance ?p1 ?p2 ?d) " +
+    "[?p1 :point/x ?x1] " +
+    "[?p1 :point/y ?y1] " +
+    "[?p2 :point/x ?x2] " +
+    "[?p2 :point/y ?y2] " +
+    "[(Math/sqrt (+ (Math/pow (- ?x2 ?x1) 2) " +
+    "               (Math/pow (- ?y2 ?y1) 2))) ?d]]]";
+```
+
+```python
+distance_rule = ('[[(distance ?p1 ?p2 ?d) '
+    '[?p1 :point/x ?x1] '
+    '[?p1 :point/y ?y1] '
+    '[?p2 :point/x ?x2] '
+    '[?p2 :point/y ?y2] '
+    '[(Math/sqrt (+ (Math/pow (- ?x2 ?x1) 2) '
+    '               (Math/pow (- ?y2 ?y1) 2))) ?d]]]')
+```
+
+```javascript
+const distanceRule = '[[(distance ?p1 ?p2 ?d) ' +
+    '[?p1 :point/x ?x1] ' +
+    '[?p1 :point/y ?y1] ' +
+    '[?p2 :point/x ?x2] ' +
+    '[?p2 :point/y ?y2] ' +
+    '[(Math/sqrt (+ (Math/pow (- ?x2 ?x1) 2) ' +
+    '               (Math/pow (- ?y2 ?y1) 2))) ?d]]]';
+```
+
+</div>
 
 You can use this rule in different ways:
 - **Filter**: `(distance ?a ?b 10.0)` — Find pairs exactly 10 units apart.
@@ -185,6 +436,8 @@ Imagine a complex "Product Pricing" engine where the final price depends on user
 
 This keeps your queries readable:
 
+<div class="multi-lang">
+
 ```clojure
 (d/q '[:find ?product ?final-price
        :in $ % ?user
@@ -192,6 +445,32 @@ This keeps your queries readable:
               (calculated-price ?user ?product ?final-price)]
      db pricing-rules user-id)
 ```
+
+```java
+Set result = Datalevin.q("[:find ?product ?final-price " +
+    ":in $ % ?user " +
+    ":where [?product :product/id] " +
+    "       (calculated-price ?user ?product ?final-price)]",
+    db, pricingRules, userId);
+```
+
+```python
+result = d.q('[:find ?product ?final-price '
+    ':in $ % ?user '
+    ':where [?product :product/id] '
+    '       (calculated-price ?user ?product ?final-price)]',
+    db, pricing_rules, user_id)
+```
+
+```javascript
+const result = d.q('[:find ?product ?final-price ' +
+    ':in $ % ?user ' +
+    ':where [?product :product/id] ' +
+    '       (calculated-price ?user ?product ?final-price)]',
+    db, pricingRules, userId);
+```
+
+</div>
 
 By moving this logic into rules, you gain:
 1. **Consistency**: The "price" is calculated the same way across the entire system.

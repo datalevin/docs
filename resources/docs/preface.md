@@ -56,6 +56,8 @@ declaratively express complex relational queries. In addition, query
 clauses in Datalog can be grouped into named reusable components called
 **rules**, which allow logical derivation of new facts and navigation in graphs.
 
+<div class="multi-lang">
+
 ```clojure
 (require '[datalevin.core :as d])
 
@@ -83,6 +85,101 @@ clauses in Datalog can be grouped into named reusable components called
      (d/db conn))
 ;; => #{["Bob" "Carol"]}
 ```
+
+```java
+import datalevin.core.*;
+import java.util.*;
+
+// Define a schema and open a database
+Map<String, Object> schema = Map.of(
+    "person/name",  Map.of("db/unique", "db.unique/identity"),
+    "person/follows", Map.of("db/valueType", "db.type/ref",
+                             "db/cardinality", "db.cardinality/many"));
+
+Connection conn = Datalevin.getConn("/tmp/preface-demo", schema);
+
+// Transact some facts
+Datalevin.transact(conn, List.of(
+    Map.of("person/name", "Alice", "person/follows", List.of(Map.of("person/name", "Bob"))),
+    Map.of("person/name", "Bob",   "person/follows", List.of(Map.of("person/name", "Carol"))),
+    Map.of("person/name", "Carol", "person/follows", List.of(Map.of("person/name", "Alice")))));
+
+// Query: who does Alice follow, and who do they follow?
+Set<List<Object>> results = Datalevin.q(
+    "[:find ?name ?follows-name " +
+    " :where " +
+    " [?alice :person/name \"Alice\"] " +
+    " [?alice :person/follows ?friend] " +
+    " [?friend :person/name ?name] " +
+    " [?friend :person/follows ?fof] " +
+    " [?fof :person/name ?follows-name]]",
+    Datalevin.db(conn));
+// => #{["Bob" "Carol"]}
+```
+
+```python
+import datalevin as d
+
+# Define a schema and open a database
+schema = {
+    "person/name":  {"db/unique": "db.unique/identity"},
+    "person/follows": {"db/valueType": "db.type/ref",
+                       "db/cardinality": "db.cardinality/many"}}
+
+conn = d.get_conn("/tmp/preface-demo", schema)
+
+# Transact some facts
+d.transact(conn, [
+    {"person/name": "Alice", "person/follows": [{"person/name": "Bob"}]},
+    {"person/name": "Bob",   "person/follows": [{"person/name": "Carol"}]},
+    {"person/name": "Carol", "person/follows": [{"person/name": "Alice"}]}])
+
+# Query: who does Alice follow, and who do they follow?
+results = d.q("""
+    [:find ?name ?follows-name
+     :where
+     [?alice :person/name "Alice"]
+     [?alice :person/follows ?friend]
+     [?friend :person/name ?name]
+     [?friend :person/follows ?fof]
+     [?fof :person/name ?follows-name]]""",
+    d.db(conn))
+# => {("Bob", "Carol")}
+```
+
+```javascript
+import { Datalevin } from 'datalevin';
+
+// Define a schema and open a database
+const schema = {
+  "person/name":  {"db/unique": "db.unique/identity"},
+  "person/follows": {"db/valueType": "db.type/ref",
+                     "db/cardinality": "db.cardinality/many"}
+};
+
+const conn = d.getConn("/tmp/preface-demo", schema);
+
+// Transact some facts
+d.transact(conn, [
+  {"person/name": "Alice", "person/follows": [{"person/name": "Bob"}]},
+  {"person/name": "Bob",   "person/follows": [{"person/name": "Carol"}]},
+  {"person/name": "Carol", "person/follows": [{"person/name": "Alice"}]}
+]);
+
+// Query: who does Alice follow, and who do they follow?
+const results = d.q(
+  `[:find ?name ?follows-name
+    :where
+    [?alice :person/name "Alice"]
+    [?alice :person/follows ?friend]
+    [?friend :person/name ?name]
+    [?friend :person/follows ?fof]
+    [?fof :person/name ?follows-name]]`,
+  d.db(conn));
+// => Set([["Bob", "Carol"]])
+```
+
+</div>
 
 The triple model also allows rich secondary indices on attributes and their
 values. For example, full-text search, vector similarity, and automatic document

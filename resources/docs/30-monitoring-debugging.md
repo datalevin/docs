@@ -33,9 +33,25 @@ Because Datalevin uses memory-mapping, the OS Page Cache is your "buffer pool."
 
 You can inspect the internal health of the B+Tree using the `db-stats` function.
 
+<div class="multi-lang">
+
 ```clojure
 (d/db-stats db)
 ```
+
+```java
+Map<String, Object> stats = Datalevin.dbStats(db);
+```
+
+```python
+stats = d.db_stats(db)
+```
+
+```javascript
+const stats = d.dbStats(db);
+```
+
+</div>
 
 This returns metrics such as:
 - **`branch_pages` / `leaf_pages`**: The structure of your tree.

@@ -30,11 +30,34 @@ The primary function for writing data is `d/transact!`. It takes a connection an
 
 The most common way to express an entity is using a map. Each map represents an entity with its attributes and values:
 
+<div class="multi-lang">
+
 ```clojure
 (d/transact! conn
   [{:user/name "Alice" :user/email "alice@example.com"}
    {:user/name "Bob" :user/email "bob@example.com"}])
 ```
+
+```java
+Datalevin.transact(conn, List.of(
+    Map.of("user/name", "Alice", "user/email", "alice@example.com"),
+    Map.of("user/name", "Bob", "user/email", "bob@example.com")));
+```
+
+```python
+d.transact(conn, [
+    {"user/name": "Alice", "user/email": "alice@example.com"},
+    {"user/name": "Bob", "user/email": "bob@example.com"}])
+```
+
+```javascript
+d.transact(conn, [
+  {"user/name": "Alice", "user/email": "alice@example.com"},
+  {"user/name": "Bob", "user/email": "bob@example.com"}
+]);
+```
+
+</div>
 
 When you omit `:db/id`, Datalevin assigns a new unique entity ID automatically.
 
@@ -42,10 +65,30 @@ When you omit `:db/id`, Datalevin assigns a new unique entity ID automatically.
 
 To update an existing entity, include its entity ID in the map:
 
+<div class="multi-lang">
+
 ```clojure
 (d/transact! conn
   [{:db/id 101, :user/active? false}])
 ```
+
+```java
+Datalevin.transact(conn, List.of(
+    Map.of("db/id", 101, "user/active?", false)));
+```
+
+```python
+d.transact(conn, [
+    {"db/id": 101, "user/active?": False}])
+```
+
+```javascript
+d.transact(conn, [
+  {"db/id": 101, "user/active?": false}
+]);
+```
+
+</div>
 
 This updates the entity with ID 101 to set `:user/active?` to false.
 
@@ -53,11 +96,34 @@ This updates the entity with ID 101 to set `:user/active?` to false.
 
 When creating new entities that will be referenced by other entities in the same transaction, use **temporary entity IDs** (temp eids). These are negative numbers that act as placeholders:
 
+<div class="multi-lang">
+
 ```clojure
 (d/transact! conn
   [{:db/id -1, :user/name "Alice" :user/friend -2}
    {:db/id -2, :user/name "Bob"}])
 ```
+
+```java
+Datalevin.transact(conn, List.of(
+    Map.of("db/id", -1, "user/name", "Alice", "user/friend", -2),
+    Map.of("db/id", -2, "user/name", "Bob")));
+```
+
+```python
+d.transact(conn, [
+    {"db/id": -1, "user/name": "Alice", "user/friend": -2},
+    {"db/id": -2, "user/name": "Bob"}])
+```
+
+```javascript
+d.transact(conn, [
+  {"db/id": -1, "user/name": "Alice", "user/friend": -2},
+  {"db/id": -2, "user/name": "Bob"}
+]);
+```
+
+</div>
 
 In this example, `-1` references `-2` as a friend. Datalevin resolves these temp eids during the transaction, replacing them with real entity IDs.
 
@@ -65,10 +131,30 @@ In this example, `-1` references `-2` as a friend. Datalevin resolves these temp
 
 Instead of knowing the entity ID, you can use a **lookup ref** to identify an existing entity by a unique attribute. A lookup ref is a vector `[attribute value]`:
 
+<div class="multi-lang">
+
 ```clojure
 (d/transact! conn
   [[[:user/email "alice@example.com"] :user/active? false]])
 ```
+
+```java
+Datalevin.transact(conn, List.of(
+    List.of(List.of("user/email", "alice@example.com"), "user/active?", false)));
+```
+
+```python
+d.transact(conn, [
+    [["user/email", "alice@example.com"], "user/active?", False]])
+```
+
+```javascript
+d.transact(conn, [
+  [["user/email", "alice@example.com"], "user/active?", false]
+]);
+```
+
+</div>
 
 This finds the entity with `:user/email` equal to `"alice@example.com"` and updates it. If no entity exists with that email, the transaction will fail.
 
@@ -77,6 +163,8 @@ Lookup refs are particularly useful when you only have a unique identifier (like
 ### 2.5 Unique Attributes and Upsert
 
 When an attribute is marked as `:db.unique/identity`, Datalevin automatically performs an **upsert**: if an entity with that value exists, it updates that entity; otherwise, it creates a new one:
+
+<div class="multi-lang">
 
 ```clojure
 ;; First, add a schema with unique identity
@@ -90,11 +178,53 @@ When an attribute is marked as `:db.unique/identity`, Datalevin automatically pe
   [{:user/email "alice@example.com" :user/name "Alice v2"}])
 ```
 
+```java
+// First, add a schema with unique identity
+Datalevin.transact(conn, List.of(
+    Map.of("db/ident", "user/email",
+           "db/valueType", "db.type/string",
+           "db/unique", "db.unique/identity")));
+
+// Now upsert based on email
+Datalevin.transact(conn, List.of(
+    Map.of("user/email", "alice@example.com", "user/name", "Alice v2")));
+```
+
+```python
+# First, add a schema with unique identity
+d.transact(conn, [
+    {"db/ident": "user/email",
+     "db/valueType": "db.type/string",
+     "db/unique": "db.unique/identity"}])
+
+# Now upsert based on email
+d.transact(conn, [
+    {"user/email": "alice@example.com", "user/name": "Alice v2"}])
+```
+
+```javascript
+// First, add a schema with unique identity
+d.transact(conn, [
+  {"db/ident": "user/email",
+   "db/valueType": "db.type/string",
+   "db/unique": "db.unique/identity"}
+]);
+
+// Now upsert based on email
+d.transact(conn, [
+  {"user/email": "alice@example.com", "user/name": "Alice v2"}
+]);
+```
+
+</div>
+
 If `"alice@example.com"` already exists, this updates the existing entity. If not, it creates a new one. This eliminates the need to check for existence before transacting.
 
 ### 2.6 Raw Datom Vectors
 
 For fine-grained control, you can express changes as raw datom vectors `[op entity attribute value]`:
+
+<div class="multi-lang">
 
 ```clojure
 (d/transact! conn
@@ -102,6 +232,30 @@ For fine-grained control, you can express changes as raw datom vectors `[op enti
    [:db/add -1 :user/email "alice@example.com"]
    [:db/retract 101 :user/active? true]])
 ```
+
+```java
+Datalevin.transact(conn, List.of(
+    List.of("db/add", -1, "user/name", "Alice"),
+    List.of("db/add", -1, "user/email", "alice@example.com"),
+    List.of("db/retract", 101, "user/active?", true)));
+```
+
+```python
+d.transact(conn, [
+    ["db/add", -1, "user/name", "Alice"],
+    ["db/add", -1, "user/email", "alice@example.com"],
+    ["db/retract", 101, "user/active?", True]])
+```
+
+```javascript
+d.transact(conn, [
+  ["db/add", -1, "user/name", "Alice"],
+  ["db/add", -1, "user/email", "alice@example.com"],
+  ["db/retract", 101, "user/active?", true]
+]);
+```
+
+</div>
 
 The operations are:
 - `:db/add` — adds or updates an attribute value
@@ -111,6 +265,8 @@ The operations are:
 
 You can mix all these forms in a single transaction:
 
+<div class="multi-lang">
+
 ```clojure
 (d/transact! conn
   [{:user/email "new@example.com" :user/name "New User"}  ; upsert
@@ -118,6 +274,33 @@ You can mix all these forms in a single transaction:
    {:db/id -1, :user/friend [[:user/email "bob@example.com"]]} ; temp eid + lookup ref
    [:db/add -1 :user/notes "Added via datom vector"]}) ; raw datom
 ```
+
+```java
+Datalevin.transact(conn, List.of(
+    Map.of("user/email", "new@example.com", "user/name", "New User"),  // upsert
+    List.of(List.of("user/email", "alice@example.com"), "user/status", "active"), // lookup ref
+    Map.of("db/id", -1, "user/friend", List.of(List.of("user/email", "bob@example.com"))), // temp eid + lookup ref
+    List.of("db/add", -1, "user/notes", "Added via datom vector"))); // raw datom
+```
+
+```python
+d.transact(conn, [
+    {"user/email": "new@example.com", "user/name": "New User"},  # upsert
+    [["user/email", "alice@example.com"], "user/status", "active"],  # lookup ref
+    {"db/id": -1, "user/friend": [["user/email", "bob@example.com"]]},  # temp eid + lookup ref
+    ["db/add", -1, "user/notes", "Added via datom vector"]])  # raw datom
+```
+
+```javascript
+d.transact(conn, [
+  {"user/email": "new@example.com", "user/name": "New User"},  // upsert
+  [["user/email", "alice@example.com"], "user/status", "active"],  // lookup ref
+  {"db/id": -1, "user/friend": [["user/email", "bob@example.com"]]},  // temp eid + lookup ref
+  ["db/add", -1, "user/notes", "Added via datom vector"]  // raw datom
+]);
+```
+
+</div>
 
 This flexibility allows you to choose the most convenient form for each operation in your transaction.
 
@@ -156,12 +339,46 @@ Datalevin does type coercion for you, so your `(int 42)` will be stored as a
 
 Often, you need to read a value, modify it, and write it back as a single atomic operation. This is a classic race condition if not handled carefully. Datalevin provides the `with-transaction` macro for this purpose.
 
+<div class="multi-lang">
+
 ```clojure
 (d/with-transaction [tx conn]
   (let [current-balance (d/q '[:find ?bal . :where [101 :account/balance ?bal]] (d/db tx))
         new-balance (- current-balance 100)]
     (d/transact! tx [{:db/id 101, :account/balance new-balance}])))
 ```
+
+```java
+Datalevin.withTransaction(conn, tx -> {
+    Long currentBalance = Datalevin.q(
+        "[:find ?bal . :where [101 :account/balance ?bal]]",
+        Datalevin.db(tx));
+    long newBalance = currentBalance - 100;
+    Datalevin.transact(tx, List.of(
+        Map.of("db/id", 101, "account/balance", newBalance)));
+});
+```
+
+```python
+with d.transaction(conn) as tx:
+    current_balance = d.q(
+        "[:find ?bal . :where [101 :account/balance ?bal]]",
+        d.db(tx))
+    new_balance = current_balance - 100
+    d.transact(tx, [{"db/id": 101, "account/balance": new_balance}])
+```
+
+```javascript
+d.withTransaction(conn, (tx) => {
+  const currentBalance = d.q(
+    '[:find ?bal . :where [101 :account/balance ?bal]]',
+    d.db(tx));
+  const newBalance = currentBalance - 100;
+  d.transact(tx, [{"db/id": 101, "account/balance": newBalance}]);
+});
+```
+
+</div>
 The `with-transaction` macro ensures that the reads (e.g., `d/q`) and the write (`d/transact!`) happen within the same isolated transaction, preventing any other concurrent write from interfering.
 
 ---
@@ -200,11 +417,34 @@ As discussed in Chapter 4, **WAL (Write-Ahead Log) mode** dramatically increases
 ### 5.2 Asynchronous Transactions (`transact-async`)
 For the absolute highest throughput, Datalevin offers `d/transact-async`. Instead of waiting for the transaction to be confirmed, this function returns a `Future` immediately.
 
+<div class="multi-lang">
+
 ```clojure
 (let [fut (d/transact-async conn [{:user/name "Charlie"}])]
   ;; ... do other work ...
   @fut) ; Dereference the future to wait for completion and get the result
 ```
+
+```java
+Future<Object> fut = Datalevin.transactAsync(conn, List.of(
+    Map.of("user/name", "Charlie")));
+// ... do other work ...
+fut.get(); // Wait for completion and get the result
+```
+
+```python
+fut = d.transact_async(conn, [{"user/name": "Charlie"}])
+# ... do other work ...
+fut.result()  # Wait for completion and get the result
+```
+
+```javascript
+const promise = d.transactAsync(conn, [{"user/name": "Charlie"}]);
+// ... do other work ...
+await promise; // Wait for completion and get the result
+```
+
+</div>
 
 ### 5.3 Adaptive Batching
 Under the hood, `transact-async` uses a powerful **adaptive batching** strategy. It collects multiple concurrent asynchronous transactions and commits them together in batches. The batch size dynamically adjusts based on system load, allowing Datalevin to achieve both high throughput during busy periods and low latency when the system is quiet. This advanced technique is key to Datalevin's best-in-class OLTP performance.

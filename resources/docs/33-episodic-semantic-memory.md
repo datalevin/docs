@@ -29,6 +29,8 @@ An "Episode" should be a lightweight entity that captures the *who, what, when, 
 ### 1.2 Temporal Retrieval
 The primary way to query episodic memory is by time. Because Datalevin indexes every attribute in AVE, range queries on `:episode/timestamp` are extremely fast.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Find all chat episodes from the last 24 hours
 (d/q '[:find ?summary
@@ -39,6 +41,44 @@ The primary way to query episodic memory is by time. Because Datalevin indexes e
               [?e :episode/summary ?summary]]
      db twenty-four-hours-ago)
 ```
+
+```java
+// Find all chat episodes from the last 24 hours
+Collection results = Datalevin.q(
+    "[:find ?summary " +
+    " :in $ ?since " +
+    " :where [?e :episode/type :event.type/chat] " +
+    "        [?e :episode/timestamp ?ts] " +
+    "        [(> ?ts ?since)] " +
+    "        [?e :episode/summary ?summary]]",
+    db, twentyFourHoursAgo);
+```
+
+```python
+# Find all chat episodes from the last 24 hours
+results = d.q(
+    '[:find ?summary '
+    ' :in $ ?since '
+    ' :where [?e :episode/type :event.type/chat] '
+    '        [?e :episode/timestamp ?ts] '
+    '        [(> ?ts ?since)] '
+    '        [?e :episode/summary ?summary]]',
+    db, twenty_four_hours_ago)
+```
+
+```javascript
+// Find all chat episodes from the last 24 hours
+const results = d.q(
+    '[:find ?summary ' +
+    ' :in $ ?since ' +
+    ' :where [?e :episode/type :event.type/chat] ' +
+    '        [?e :episode/timestamp ?ts] ' +
+    '        [(> ?ts ?since)] ' +
+    '        [?e :episode/summary ?summary]]',
+    db, twentyFourHoursAgo);
+```
+
+</div>
 
 ---
 
@@ -81,6 +121,8 @@ When an agent needs context, it should query both memory types:
 1.  **Episodic Lens**: "Have I talked about this specific topic with this user recently?"
 2.  **Semantic Lens**: "What are the fundamental facts about this topic?"
 
+<div class="multi-lang">
+
 ```clojure
 (d/q '[:find ?fact
        :in $ % ?topic ?user ?now
@@ -89,12 +131,56 @@ When an agent needs context, it should query both memory types:
                        [?e :episode/timestamp ?ts]
                        [(> ?ts ?one-hour-ago)]
                        [?e :episode/summary ?fact])
-                  
+
                   ;; Lens 2: Semantic knowledge
                   (and [?c :concept/name ?topic]
                        [?c :concept/description ?fact]))]
      db memory-rules "Vector Search" user-id now)
 ```
+
+```java
+// Double-Lens Query: episodic + semantic
+Collection results = Datalevin.q(
+    "[:find ?fact " +
+    " :in $ % ?topic ?user ?now " +
+    " :where (or (and [?e :episode/user ?user] " +
+    "                 [?e :episode/timestamp ?ts] " +
+    "                 [(> ?ts ?one-hour-ago)] " +
+    "                 [?e :episode/summary ?fact]) " +
+    "            (and [?c :concept/name ?topic] " +
+    "                 [?c :concept/description ?fact]))]",
+    db, memoryRules, "Vector Search", userId, now);
+```
+
+```python
+# Double-Lens Query: episodic + semantic
+results = d.q(
+    '[:find ?fact '
+    ' :in $ % ?topic ?user ?now '
+    ' :where (or (and [?e :episode/user ?user] '
+    '                 [?e :episode/timestamp ?ts] '
+    '                 [(> ?ts ?one-hour-ago)] '
+    '                 [?e :episode/summary ?fact]) '
+    '            (and [?c :concept/name ?topic] '
+    '                 [?c :concept/description ?fact]))]',
+    db, memory_rules, "Vector Search", user_id, now)
+```
+
+```javascript
+// Double-Lens Query: episodic + semantic
+const results = d.q(
+    '[:find ?fact ' +
+    ' :in $ % ?topic ?user ?now ' +
+    ' :where (or (and [?e :episode/user ?user] ' +
+    '                 [?e :episode/timestamp ?ts] ' +
+    '                 [(> ?ts ?one-hour-ago)] ' +
+    '                 [?e :episode/summary ?fact]) ' +
+    '            (and [?c :concept/name ?topic] ' +
+    '                 [?c :concept/description ?fact]))]',
+    db, memoryRules, 'Vector Search', userId, now);
+```
+
+</div>
 
 ---
 

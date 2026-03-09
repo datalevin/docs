@@ -30,6 +30,8 @@ A major challenge in AI is "hallucination" or "drift." An agent might accept con
 ### 2.1 Logical Validation with Datalog
 Before committing a new "belief" to memory, the engine can run a Datalog query to check for contradictions.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Query to check if a new fact contradicts existing knowledge
 (d/q '[:find ?contradiction
@@ -37,6 +39,35 @@ Before committing a new "belief" to memory, the engine can run a Datalog query t
        :where [(is-contradictory? $ ?new-fact) ?contradiction]]
      db proposed-fact)
 ```
+
+```java
+// Query to check if a new fact contradicts existing knowledge
+Collection results = Datalevin.q(
+    "[:find ?contradiction " +
+    " :in $ ?new-fact " +
+    " :where [(is-contradictory? $ ?new-fact) ?contradiction]]",
+    db, proposedFact);
+```
+
+```python
+# Query to check if a new fact contradicts existing knowledge
+results = d.q(
+    '[:find ?contradiction '
+    ' :in $ ?new-fact '
+    ' :where [(is-contradictory? $ ?new-fact) ?contradiction]]',
+    db, proposed_fact)
+```
+
+```javascript
+// Query to check if a new fact contradicts existing knowledge
+const results = d.q(
+    '[:find ?contradiction ' +
+    ' :in $ ?new-fact ' +
+    ' :where [(is-contradictory? $ ?new-fact) ?contradiction]]',
+    db, proposedFact);
+```
+
+</div>
 
 ### 2.2 Truth Maintenance
 If new data is transacted that supersedes old data, the engine uses Datalevin's atomic transactions to update the state. Because Datalevin is fact-centric (datoms), you can retract specific old facts while keeping the rest of the model intact.

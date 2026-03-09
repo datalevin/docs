@@ -26,6 +26,8 @@ Find products that:
 3. Are in stock and in a specific category (Datalog)
 4. Have specific nested metadata (idoc)
 
+<div class="multi-lang">
+
 ```clojure
 (d/q '[:find ?title ?dist
        :in $ ?search-term ?target-vec ?category
@@ -43,6 +45,50 @@ Find products that:
        [(idoc-match $ :product/metadata {:discounted true}) [[?e _ _]]]]
      db "clojure" user-embedding :books)
 ```
+
+```java
+Datalevin.q("[:find ?title ?dist " +
+            " :in $ ?search-term ?target-vec ?category " +
+            " :where " +
+            " [(fulltext $ :product/desc ?search-term) [[?e ?a ?v]]] " +
+            " [(vec-neighbors $ :product/embedding ?target-vec " +
+            "                 {:top 20 :display :refs+dists}) [[?e _ _ ?dist]]] " +
+            " [?e :product/status :status/in-stock] " +
+            " [?e :product/category ?category] " +
+            " [?e :product/title ?title] " +
+            " [(idoc-match $ :product/metadata {:discounted true}) [[?e _ _]]]]",
+            db, "clojure", userEmbedding, "books");
+```
+
+```python
+d.q('[:find ?title ?dist '
+     ' :in $ ?search-term ?target-vec ?category '
+     ' :where '
+     ' [(fulltext $ :product/desc ?search-term) [[?e ?a ?v]]] '
+     ' [(vec-neighbors $ :product/embedding ?target-vec '
+     '                 {:top 20 :display :refs+dists}) [[?e _ _ ?dist]]] '
+     ' [?e :product/status :status/in-stock] '
+     ' [?e :product/category ?category] '
+     ' [?e :product/title ?title] '
+     ' [(idoc-match $ :product/metadata {:discounted true}) [[?e _ _]]]]',
+     db, "clojure", user_embedding, "books")
+```
+
+```javascript
+d.q('[:find ?title ?dist ' +
+     ' :in $ ?search-term ?target-vec ?category ' +
+     ' :where ' +
+     ' [(fulltext $ :product/desc ?search-term) [[?e ?a ?v]]] ' +
+     ' [(vec-neighbors $ :product/embedding ?target-vec ' +
+     '                 {:top 20 :display :refs+dists}) [[?e _ _ ?dist]]] ' +
+     ' [?e :product/status :status/in-stock] ' +
+     ' [?e :product/category ?category] ' +
+     ' [?e :product/title ?title] ' +
+     ' [(idoc-match $ :product/metadata {:discounted true}) [[?e _ _]]]]',
+     db, 'clojure', userEmbedding, 'books');
+```
+
+</div>
 
 Each index function returns datoms as `[e a v]` triples (or `[e a v dist]` with `:refs+dists`). The shared `?e` variable joins all results together.
 
@@ -63,6 +109,8 @@ You don't need to manually optimize clause order. State your constraints clearly
 
 Hybrid search is the foundation of modern AI applications. Combining **keyword matching** (for exact terms like product IDs or jargon) with **vector similarity** (for semantic meaning) provides the most relevant context to LLMs.
 
+<div class="multi-lang">
+
 ```clojure
 (d/q '[:find ?title ?chunk ?dist
        :in $ ?query ?query-vec
@@ -80,6 +128,47 @@ Hybrid search is the foundation of modern AI applications. Combining **keyword m
      db user-query query-embedding)
 ```
 
+```java
+Datalevin.q("[:find ?title ?chunk ?dist " +
+            " :in $ ?query ?query-vec " +
+            " :where " +
+            " [(vec-neighbors $ :doc/embedding ?query-vec {:top 10}) [[?e _ ?chunk ?dist]]] " +
+            " [(fulltext $ :doc/content ?query {:top 50}) [[?ft-e _ _]]] " +
+            " [(= ?e ?ft-e)] " +
+            " [?e :doc/owner ?owner] " +
+            " [(contains? allowed-users ?owner)] " +
+            " [?e :doc/title ?title]]",
+            db, userQuery, queryEmbedding);
+```
+
+```python
+d.q('[:find ?title ?chunk ?dist '
+     ' :in $ ?query ?query-vec '
+     ' :where '
+     ' [(vec-neighbors $ :doc/embedding ?query-vec {:top 10}) [[?e _ ?chunk ?dist]]] '
+     ' [(fulltext $ :doc/content ?query {:top 50}) [[?ft-e _ _]]] '
+     ' [(= ?e ?ft-e)] '
+     ' [?e :doc/owner ?owner] '
+     ' [(contains? allowed-users ?owner)] '
+     ' [?e :doc/title ?title]]',
+     db, user_query, query_embedding)
+```
+
+```javascript
+d.q('[:find ?title ?chunk ?dist ' +
+     ' :in $ ?query ?query-vec ' +
+     ' :where ' +
+     ' [(vec-neighbors $ :doc/embedding ?query-vec {:top 10}) [[?e _ ?chunk ?dist]]] ' +
+     ' [(fulltext $ :doc/content ?query {:top 50}) [[?ft-e _ _]]] ' +
+     ' [(= ?e ?ft-e)] ' +
+     ' [?e :doc/owner ?owner] ' +
+     ' [(contains? allowed-users ?owner)] ' +
+     ' [?e :doc/title ?title]]',
+     db, userQuery, queryEmbedding);
+```
+
+</div>
+
 Structured filters ensure AI applications are not only smart but also secure and accurate—only searching documents the user has permission to see.
 
 ---
@@ -88,6 +177,8 @@ Structured filters ensure AI applications are not only smart but also secure and
 
 For absolute performance, combine raw Key-Value layer access with Datalog using function bindings:
 
+<div class="multi-lang">
+
 ```clojure
 (d/q '[:find ?e
        :where [?e :user/id ?id]
@@ -95,6 +186,32 @@ For absolute performance, combine raw Key-Value layer access with Datalog using 
               [(false? ?blocked?)]]
      db)
 ```
+
+```java
+Datalevin.q("[:find ?e " +
+            " :where [?e :user/id ?id] " +
+            "        [(my-app.kv/check-blacklist? ?id) ?blocked?] " +
+            "        [(false? ?blocked?)]]",
+            db);
+```
+
+```python
+d.q('[:find ?e '
+     ' :where [?e :user/id ?id] '
+     '        [(my-app.kv/check-blacklist? ?id) ?blocked?] '
+     '        [(false? ?blocked?)]]',
+     db)
+```
+
+```javascript
+d.q('[:find ?e ' +
+     ' :where [?e :user/id ?id] ' +
+     '        [(my-app.kv/check-blacklist? ?id) ?blocked?] ' +
+     '        [(false? ?blocked?)]]',
+     db);
+```
+
+</div>
 
 The underlying KV layer is a first-class capability, allowing custom logic and specialized indexes.
 

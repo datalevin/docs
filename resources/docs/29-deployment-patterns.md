@@ -64,8 +64,26 @@ Babashka is a fast-starting Clojure interpreter for scripting. Datalevin provide
 | **Communication** | Direct (Function calls) | Network (TCP) | IPC (Stdio/Sockets) |
 | **Overhead** | None (Zero-copy) | High (Serialization + TCP) | Medium (Serialization + IPC) |
 | **Security** | OS-level (File permissions) | Full RBAC (Users/Roles) | OS-level |
+---
 | **Concurrency** | Single-Writer (process) | Multi-client (server-side) | Single-Writer (process) |
 | **Tech Stack** | JVM (Clojure/Java) | Language Independent | Babashka |
+
+---
+
+## 5. Case Study: High-Density Multi-Tenancy
+
+A powerful but less common deployment pattern is **high-density multi-tenancy**. Instead of a single massive database for all users, you create a separate Datalevin database for every user or workspace.
+
+### The PKM Pattern
+One known use case of Datalevin is in **Personal Knowledge Management (PKM)** systems. Some PKM companies deploy thousands of individual Datalevin databases on a single physical machine. In this architecture, each user or workspace gets its own dedicated database file.
+
+### Why It Works
+Datalevin is exceptionally lightweight because it is built on LMDB, which uses memory-mapped files (mmap). 
+
+- **Minimal Overhead**: The memory overhead for an idle Datalevin instance is nearly zero. The OS kernel manages the page cache across all database files, ensuring that only the active data for active users resides in physical RAM.
+- **Strict Isolation**: Because each user has a physically separate database, there is zero risk of "cross-talk" or accidental data leakage between tenants at the database level.
+- **Operational Simplicity**: Tasks like per-user backups, data migrations, or even "deleting an account" become simple file-system operations. You don't need complex `WHERE user_id = ?` logic for every single query.
+- **Local-First Synchronization**: The same database file used on the server can be transferred to a user's local device and opened with the same Datalevin library, making it an ideal choice for local-first applications that require robust offline capabilities.
 
 ---
 

@@ -63,6 +63,8 @@ One of the most powerful features of Datalevin is that it exposes these indexes 
 ### 4.1 `d/datoms`: Low-Level Index Scans
 The `d/datoms` function allows you to perform a raw scan of an index. This is often faster than a full Datalog query for simple lookups.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Get all attributes for entity 101 from the EAV index
 (d/datoms db :eav 101)
@@ -71,13 +73,58 @@ The `d/datoms` function allows you to perform a raw scan of an index. This is of
 (d/datoms db :ave :user/age 30)
 ```
 
+```java
+// Get all attributes for entity 101 from the EAV index
+Datalevin.datoms(db, "eav", 101);
+
+// Get all entities with age 30 from the AVE index
+Datalevin.datoms(db, "ave", "user/age", 30);
+```
+
+```python
+# Get all attributes for entity 101 from the EAV index
+d.datoms(db, "eav", 101)
+
+# Get all entities with age 30 from the AVE index
+d.datoms(db, "ave", "user/age", 30)
+```
+
+```javascript
+// Get all attributes for entity 101 from the EAV index
+d.datoms(db, 'eav', 101);
+
+// Get all entities with age 30 from the AVE index
+d.datoms(db, 'ave', 'user/age', 30);
+```
+
+</div>
+
 ### 4.2 `d/index-range`: Precise Range Scans
 The `d/index-range` function allows you to scan a specific part of the AVE index using a range of values.
+
+<div class="multi-lang">
 
 ```clojure
 ;; Find users with age between 20 and 30
 (d/index-range db :user/age 20 30)
 ```
+
+```java
+// Find users with age between 20 and 30
+Datalevin.indexRange(db, "user/age", 20, 30);
+```
+
+```python
+# Find users with age between 20 and 30
+d.index_range(db, "user/age", 20, 30)
+```
+
+```javascript
+// Find users with age between 20 and 30
+d.indexRange(db, 'user/age', 20, 30);
+```
+
+</div>
 
 ---
 

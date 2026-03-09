@@ -19,6 +19,8 @@ directory location when calling `open-kv`, and Datalevin initializes the LMDB
 environment there. The directory needs not to exists already, but the permission
 to create it is needed.
 
+<div class="multi-lang">
+
 ```clojure
 (require '[datalevin.core :as d])
 
@@ -29,8 +31,45 @@ to create it is needed.
 
 ;; Always remember to close it when the application shuts down
 (d/close-kv kv)
-
 ```
+
+```java
+import datalevin.core.*;
+
+// Open the store
+KVStore kv = Datalevin.openKv("/tmp/my-kv-store");
+
+// KV ops ...
+
+// Always remember to close it when the application shuts down
+Datalevin.closeKv(kv);
+```
+
+```python
+import datalevin as d
+
+# Open the store
+kv = d.open_kv("/tmp/my-kv-store")
+
+# KV ops ...
+
+# Always remember to close it when the application shuts down
+d.close_kv(kv)
+```
+
+```javascript
+import { Datalevin } from 'datalevin';
+
+// Open the store
+const kv = d.openKv('/tmp/my-kv-store');
+
+// KV ops ...
+
+// Always remember to close it when the application shuts down
+d.closeKv(kv);
+```
+
+</div>
 
 ### Options
 
@@ -53,11 +92,29 @@ Some common options for `open-kv` include:
 `:temp?` or `:inmemory` stores are ideal for ephemeral data like session caches,
 intermediate computation results, or high-speed buffers.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Open an in-memory KV store (no file persistence), directory can be nil
 (def mem-kv (d/open-kv nil {:inmemory true}))
-
 ```
+
+```java
+// Open an in-memory KV store (no file persistence), directory can be null
+KVStore memKv = Datalevin.openKv(null, Map.of("inmemory", true));
+```
+
+```python
+# Open an in-memory KV store (no file persistence), directory can be None
+mem_kv = d.open_kv(None, {"inmemory": True})
+```
+
+```javascript
+// Open an in-memory KV store (no file persistence), directory can be null
+const memKv = d.openKv(null, { inmemory: true });
+```
+
+</div>
 
 ---
 
@@ -75,10 +132,29 @@ There are two types of DBI:
 A standard KV mapping where one key points to exactly one value, and this type
 of DBI is opened with `open-dbi`.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Open a regular dbi called "people" in kv store
 (d/open-dbi kv "people")
 ```
+
+```java
+// Open a regular dbi called "people" in kv store
+Datalevin.openDbi(kv, "people");
+```
+
+```python
+# Open a regular dbi called "people" in kv store
+d.open_dbi(kv, "people")
+```
+
+```javascript
+// Open a regular dbi called "people" in kv store
+d.openDbi(kv, 'people');
+```
+
+</div>
 
 ### 3.2 List DBI
 
@@ -86,10 +162,29 @@ Leverages LMDB's `DUPSORT` feature. A single key can map to **multiple sorted
 values** (i.e. a list). This is effectively a "B+Tree of B+Trees.". This type of
 DBI is opened with `open-list-dbi`.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Open a list-dbi (DUPSORT DBI) called "tags"
 (d/open-list-dbi kv "tags")
 ```
+
+```java
+// Open a list-dbi (DUPSORT DBI) called "tags"
+Datalevin.openListDbi(kv, "tags");
+```
+
+```python
+# Open a list-dbi (DUPSORT DBI) called "tags"
+d.open_list_dbi(kv, "tags")
+```
+
+```javascript
+// Open a list-dbi (DUPSORT DBI) called "tags"
+d.openListDbi(kv, 'tags');
+```
+
+</div>
 ---
 
 ## 3. KV Operations
@@ -98,12 +193,38 @@ DBI is opened with `open-list-dbi`.
 
 Data are transacted to a KV store using `transact-kv` function.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Add multiple values to the same key in a list dbi
 (d/transact-kv kv
   [[:put "tags" "clojure" "fast" :string]
    [:put "tags" "clojure" "expressive" :string]])
 ```
+
+```java
+// Add multiple values to the same key in a list dbi
+Datalevin.transactKv(kv, List.of(
+    List.of("put", "tags", "clojure", "fast", "string"),
+    List.of("put", "tags", "clojure", "expressive", "string")));
+```
+
+```python
+# Add multiple values to the same key in a list dbi
+d.transact_kv(kv, [
+    ["put", "tags", "clojure", "fast", "string"],
+    ["put", "tags", "clojure", "expressive", "string"]])
+```
+
+```javascript
+// Add multiple values to the same key in a list dbi
+d.transactKv(kv, [
+  ['put', 'tags', 'clojure', 'fast', 'string'],
+  ['put', 'tags', 'clojure', 'expressive', 'string']
+]);
+```
+
+</div>
 
 The transaction data is a sequence of transaction item, which is a vector of
 [operation, DBI name, key, value, key type, and value type]. The operation can
@@ -114,11 +235,33 @@ be `:put` or `:del`.
 The value of a key can be retrieved with `get-value`. If the DBI is a list DBI, the list of a
 key can be retrieved with `get-list`. These are single key point queries.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Get all values for a key
 (d/get-list kv "tags" "clojure")
 ;; => ("expressive" "fast") ; sorted values
 ```
+
+```java
+// Get all values for a key
+List<Object> values = Datalevin.getList(kv, "tags", "clojure");
+// => ["expressive", "fast"] ; sorted values
+```
+
+```python
+# Get all values for a key
+values = d.get_list(kv, "tags", "clojure")
+# => ["expressive", "fast"]  # sorted values
+```
+
+```javascript
+// Get all values for a key
+const values = d.getList(kv, 'tags', 'clojure');
+// => ['expressive', 'fast'] // sorted values
+```
+
+</div>
 
 ### 3.3 Range query
 
@@ -198,6 +341,8 @@ LMDB (and thus Datalevin) has a hard limit on the size of a key. In Datalevin, t
 
 `transact-kv` is the standard way to write data. However, for complex logic involving reads and writes that must be atomic, use the `with-transaction-kv` macro.
 
+<div class="multi-lang">
+
 ```clojure
 (d/with-transaction-kv [tx kv]
   (let [current (or (d/get-value tx "counters" "hits") 0)
@@ -205,6 +350,32 @@ LMDB (and thus Datalevin) has a hard limit on the size of a key. In Datalevin, t
     (d/transact-kv tx
       [[:put "counters" "hits" new-val]])))
 ```
+
+```java
+Datalevin.withTransactionKv(kv, tx -> {
+    Object current = Datalevin.getValue(tx, "counters", "hits");
+    long newVal = (current != null ? (long) current : 0) + 1;
+    Datalevin.transactKv(tx, List.of(
+        List.of("put", "counters", "hits", newVal)));
+});
+```
+
+```python
+with d.transaction_kv(kv) as tx:
+    current = d.get_value(tx, "counters", "hits") or 0
+    new_val = current + 1
+    d.transact_kv(tx, [["put", "counters", "hits", new_val]])
+```
+
+```javascript
+d.withTransactionKv(kv, (tx) => {
+  const current = d.getValue(tx, 'counters', 'hits') ?? 0;
+  const newVal = current + 1;
+  d.transactKv(tx, [['put', 'counters', 'hits', newVal]]);
+});
+```
+
+</div>
 
 This macro ensures that:
 1. All reads and writes inside the block share the same transaction snapshot.

@@ -19,10 +19,29 @@ An attribute (the "A" in EAV) defines a property that can be associated with an 
 ### 1.1 Automatic Attribute Creation
 By default, you don't need to "create a table" or "define a schema" to start using Datalevin. When you transact a new attribute name that the database hasn't seen before, Datalevin automatically adds it to the internal schema.
 
+<div class="multi-lang">
+
 ```clojure
 ;; This works even if :user/name was never defined
 (d/transact! conn [{:user/name "Alice"}])
 ```
+
+```java
+// This works even if user/name was never defined
+Datalevin.transact(conn, List.of(Map.of("user/name", "Alice")));
+```
+
+```python
+# This works even if user/name was never defined
+d.transact(conn, [{"user/name": "Alice"}])
+```
+
+```javascript
+// This works even if user/name was never defined
+d.transact(conn, [{"user/name": "Alice"}]);
+```
+
+</div>
 
 ### 1.2 The Default Type: EDN Binary
 If an attribute is added automatically, Datalevin treats its value as a generic **EDN blob**.
@@ -87,11 +106,34 @@ During a transaction, you often use **tempids** (temporary IDs) to express
 relationships between new entities before the database has assigned permanent
 IDs. Tempids can be a negative integer or a string.
 
+<div class="multi-lang">
+
 ```clojure
 (d/transact! conn
   [{:db/id -1 :user/name "Alice"}
    {:db/id -2 :user/name "Bob" :user/friend -1}]) ; Bob follows Alice using her tempid
 ```
+
+```java
+Datalevin.transact(conn, List.of(
+    Map.of("db/id", -1, "user/name", "Alice"),
+    Map.of("db/id", -2, "user/name", "Bob", "user/friend", -1))); // Bob follows Alice using her tempid
+```
+
+```python
+d.transact(conn, [
+    {"db/id": -1, "user/name": "Alice"},
+    {"db/id": -2, "user/name": "Bob", "user/friend": -1}])  # Bob follows Alice using her tempid
+```
+
+```javascript
+d.transact(conn, [
+  {"db/id": -1, "user/name": "Alice"},
+  {"db/id": -2, "user/name": "Bob", "user/friend": -1}  // Bob follows Alice using her tempid
+]);
+```
+
+</div>
 
 ---
 
