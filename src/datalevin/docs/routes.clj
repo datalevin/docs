@@ -1,5 +1,7 @@
 (ns datalevin.docs.routes
   (:require [biff.datalevin.middleware :as biff.mw]
+            [clojure.java.io :as io]
+            [clojure.string :as str]
             [datalevin.docs.handlers.pages :as pages]
             [datalevin.docs.handlers.search :as search]
             [datalevin.docs.handlers.auth :as auth]
@@ -9,8 +11,9 @@
             [datalevin.docs.views.layout :as layout]
             [reitit.ring :as ring]
             [ring.middleware.defaults :as defaults]
+            [ring.middleware.file-info :refer [wrap-file-info]]
+            [ring.middleware.not-modified :refer [wrap-not-modified]]
             [ring.middleware.resource :refer [wrap-resource]]
-            [ring.middleware.file :refer [wrap-file]]
             [ring.middleware.anti-forgery :as anti-forgery]
             [datalevin.docs.middleware.rate-limit :as rate-limit]
             [taoensso.timbre :as log]))
@@ -255,6 +258,56 @@
     (when-let [resp (handler req)]
       (update resp :headers merge security-headers))))
 
+(defn- static-asset-request?
+  [{:keys [request-method uri]}]
+  (and (contains? #{:get :head} request-method)
+       (some #(str/starts-with? uri %)
+             ["/css/" "/js/" "/images/"])))
+
+(defn- file-metadata [^java.io.File file]
+  {:last-modified (.lastModified file)
+   :length (.length file)})
+
+(defn- resource-metadata [uri]
+  (when-let [resource (io/resource (str "public" uri))]
+    (let [conn (.openConnection resource)]
+      (.setUseCaches conn false)
+      {:last-modified (.getLastModified conn)
+       :length (.getContentLengthLong conn)})))
+
+(defn- static-asset-metadata [req resp]
+  (cond
+    (instance? java.io.File (:body resp))
+    (file-metadata (:body resp))
+
+    (static-asset-request? req)
+    (resource-metadata (:uri req))
+
+    :else nil))
+
+(defn- static-asset-etag [{:keys [last-modified length]}]
+  (when (and (pos? last-modified)
+             (<= 0 length))
+    (format "W/\"%x-%x\"" last-modified length)))
+
+(defn wrap-static-asset-headers [handler]
+  (fn [req]
+    (let [resp (handler req)
+          env (get-in req [:biff/config :env])]
+      (if (and resp
+               (contains? #{200 304} (:status resp))
+               (static-asset-request? req))
+        (let [metadata (when-not (get-in resp [:headers "ETag"])
+                         (static-asset-metadata req resp))
+              etag (or (get-in resp [:headers "ETag"])
+                       (static-asset-etag metadata))]
+          (cond-> (assoc-in resp [:headers "Cache-Control"]
+                            (if (= env "prod")
+                              "public, max-age=3600"
+                              "no-cache"))
+            etag (assoc-in [:headers "ETag"] etag)))
+        resp))))
+
 (defn app [sys]
   (let [handler (ring/ring-handler
                   (ring/router
@@ -314,8 +367,11 @@
                                              :headers {"Content-Type" "text/html; charset=utf-8"}
                                              :body (layout/not-found-page)})}))]
     (-> handler
-        (wrap-file "resources/public")
         (wrap-resource "public")
+        wrap-file-info
+        wrap-static-asset-headers
+        wrap-not-modified
+        wrap-static-asset-headers
         (biff.mw/wrap-context sys)
         wrap-session-user
         wrap-content-type
@@ -324,4 +380,5 @@
         wrap-exceptions
         (defaults/wrap-defaults
           (-> defaults/site-defaults
+              (assoc :static false)
               (assoc-in [:session :cookie-attrs :max-age] 86400))))))
