@@ -1,6 +1,8 @@
 (ns datalevin.docs.handlers.pages-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [datalevin.docs.handlers.pages :as pages]))
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
+            [datalevin.docs.handlers.pages :as pages]
+            [ring.middleware.anti-forgery :as anti-forgery]))
 
 (deftest docs-index-html-is-cached-and-invalidated
   (pages/clear-all-caches!)
@@ -39,6 +41,23 @@
       (pages/warm-static-caches!)
       (is (= 1 @chapter-loads))
       (is (= 1 @index-loads)))))
+
+(deftest docs-index-renders-cached-html-inside-page-shell
+  (binding [anti-forgery/*anti-forgery-token* (delay "test-token")]
+    (with-redefs [pages/load-docs-index-html
+                  (fn []
+                    "<div id=\"toc-marker\">Table of contents</div>")]
+      (let [resp (pages/docs-index {:session {}})
+            body (:body resp)
+            marker "<div id=\"toc-marker\">Table of contents</div>"
+            marker-pos (.indexOf body marker)
+            body-close-pos (.indexOf body "</body>")
+            html-close-pos (.indexOf body "</html>")]
+        (is (= 200 (:status resp)))
+        (is (str/ends-with? body "</html>"))
+        (is (<= 0 marker-pos))
+        (is (< marker-pos body-close-pos))
+        (is (< marker-pos html-close-pos))))))
 
 (deftest doc-cache-uses-true-lru-eviction
   (pages/clear-all-caches!)

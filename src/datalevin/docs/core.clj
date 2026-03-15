@@ -1,4 +1,5 @@
 (ns datalevin.docs.core
+  (:gen-class)
   (:require [biff.datalevin.core :as biff]
             [biff.datalevin.session :as session]
             [datalevin.docs.config :as config]

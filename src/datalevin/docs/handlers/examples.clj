@@ -11,6 +11,27 @@
   [:example/id :example/code :example/doc-section :example/created-at
    {:example/author [:user/id :user/username :user/avatar-url]}])
 
+(def ^:private list-examples-query
+  '[:find [(pull ?e pull-spec) ...]
+    :in $ pull-spec
+    :where
+    [?e :example/id]
+    [?e :example/removed? false]])
+
+(def ^:private example-by-id-query
+  '[:find (pull ?e pull-spec) .
+    :in $ ?id pull-spec
+    :where
+    [?e :example/id ?id]
+    [?e :example/removed? false]])
+
+(def ^:private examples-by-author-query
+  '[:find [(pull ?e pull-spec) ...]
+    :in $ ?uid pull-spec
+    :where
+    [?e :example/author ?uid]
+    [?e :example/removed? false]])
+
 (defn- example-form-location
   [doc-section]
   (if (seq doc-section)
@@ -32,7 +53,7 @@
        :session (assoc session :flash {:error util/example-code-error-text})}
       :else
       (let [example-tx {:example/id (UUID/randomUUID)
-                        :example/code (util/escape-html code)
+                        :example/code code
                         :example/doc-section doc-section
                         :example/removed? false
                         :example/author [:user/id (:user/id user)]
@@ -45,11 +66,7 @@
 
 (defn list-examples-handler [{:keys [biff.datalevin/conn] :as req}]
   (let [db (d/db conn)
-        examples (d/q `[:find [(~'pull ~'?e ~example-pull-expr) ...]
-                        :where
-                        [~'?e :example/id]
-                        [~'?e :example/removed? false]]
-                      db)
+        examples (d/q list-examples-query db example-pull-expr)
         sorted (sort-by :example/created-at #(compare %2 %1) examples)]
     {:status 200
      :headers {"Content-Type" "text/html"}
@@ -79,12 +96,7 @@
       {:status 404 :headers {"Content-Type" "text/html"}
        :body (layout/base-with-req "Not Found" req [:div {:class "max-w-4xl mx-auto py-16 text-center text-gray-500"} "Example not found"])}
       (let [db (d/db conn)
-            example (d/q `[:find (~'pull ~'?e ~example-pull-expr) .
-                           :in ~'$ ~'?id
-                           :where
-                           [~'?e :example/id ~'?id]
-                           [~'?e :example/removed? false]]
-                         db example-id)]
+            example (d/q example-by-id-query db example-id example-pull-expr)]
         (if-not example
           {:status 404 :headers {"Content-Type" "text/html"}
            :body (layout/base-with-req "Not Found" req [:div {:class "max-w-4xl mx-auto py-16 text-center text-gray-500"} "Example not found"])}
@@ -116,12 +128,7 @@
       {:status 404 :headers {"Content-Type" "text/html"}
        :body (layout/base-with-req "Not Found" req
                                    [:div {:class "max-w-4xl mx-auto py-16 text-center text-gray-500"} "User not found"])}
-      (let [examples (d/q `[:find [(~'pull ~'?e ~example-pull-expr) ...]
-                            :in ~'$ ~'?uid
-                            :where
-                            [~'?e :example/author ~'?uid]
-                            [~'?e :example/removed? false]]
-                          db (:db/id user))
+      (let [examples (d/q examples-by-author-query db (:db/id user) example-pull-expr)
             sorted (sort-by :example/created-at #(compare %2 %1) examples)]
         {:status 200
          :headers {"Content-Type" "text/html"}

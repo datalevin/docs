@@ -1,0 +1,17 @@
+[Unit]
+Description=Datalevin documentation site
+After=network.target
+
+[Service]
+Type=simple
+User=datalevin
+Group=datalevin
+WorkingDirectory=/opt/datalevin-docs
+EnvironmentFile=-/etc/datalevin-docs/datalevin-docs.env
+ExecStart=/usr/bin/java -Xms256m -Xmx512m -jar /opt/datalevin-docs/datalevin-docs-standalone.jar
+Restart=on-failure
+RestartSec=5
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target

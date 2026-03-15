@@ -58,6 +58,23 @@ Other REPL commands:
 npm run css:build
 ```
 
+## Build uberjar
+
+Build a standalone jar for small VMs:
+
+```bash
+npm run css:build
+clojure -T:build uber
+```
+
+This produces:
+
+```bash
+target/datalevin-docs-standalone.jar
+```
+
+The uberjar avoids resolving the production classpath on every boot and is the preferred deployment target on a 1 GB VM.
+
 ## Production
 
 Start the docs site with explicit JVM heap limits:
@@ -78,4 +95,40 @@ On small VMs, setting `-Xms` and `-Xmx` avoids the JVM expanding until the host 
 
 ```bash
 JAVA_XMS=256m JAVA_XMX=768m scripts/start-prod.sh
+```
+
+For deployed hosts, prefer the uberjar instead of invoking Clojure directly:
+
+```bash
+ENV=prod SESSION_SECRET=replace-me \
+java -Xms256m -Xmx512m -jar target/datalevin-docs-standalone.jar
+```
+
+## systemd
+
+An example unit file is included at `deploy/systemd/datalevin-docs.service`.
+
+Typical install steps:
+
+```bash
+sudo install -d /opt/datalevin-docs /etc/datalevin-docs
+sudo install -m 0644 target/datalevin-docs-standalone.jar /opt/datalevin-docs/datalevin-docs-standalone.jar
+sudo install -m 0644 deploy/systemd/datalevin-docs.service /etc/systemd/system/datalevin-docs.service
+```
+
+Create `/etc/datalevin-docs/datalevin-docs.env` with at least:
+
+```bash
+ENV=prod
+PORT=3000
+BASE_URL=https://docs.example.com
+DB_PATH=/var/lib/datalevin-docs/data
+SESSION_SECRET=replace-with-a-real-secret
+```
+
+Then enable the service:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now datalevin-docs
 ```
