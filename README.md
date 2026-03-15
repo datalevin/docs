@@ -57,3 +57,23 @@ Other REPL commands:
 ```bash
 npm run css:build
 ```
+
+## Production
+
+Start the docs site with explicit JVM heap limits:
+
+```bash
+scripts/start-prod.sh
+```
+
+That wrapper runs:
+
+```bash
+clojure -J-Xms256m -J-Xmx512m -M:prod -m datalevin.docs.core
+```
+
+On small VMs, setting `-Xms` and `-Xmx` avoids the JVM expanding until the host OOM killer intervenes. You can override the defaults if needed:
+
+```bash
+JAVA_XMS=256m JAVA_XMX=768m scripts/start-prod.sh
+```

@@ -115,8 +115,7 @@
                          [:div {:style "text-align:center;padding:4rem 1rem 0"}
                           [:h1 {:style "font-size:3.5rem;font-weight:bold;margin-bottom:1.5rem;background:linear-gradient(135deg,#06b6d4,#3b82f6,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;"} "Datalevin"]
                           [:p {:style "font-size:1.25rem;color:#9ca3af;margin-bottom:2rem"}
-                           "SQLite for connected data: an open-source deploy-agnostic database"]
-                          [:div {:style "display:flex;justify-content:center;gap:1rem;margin-bottom:3rem"}
+                           "SQLite for connected data and reasoning"]                          [:div {:style "display:flex;justify-content:center;gap:1rem;margin-bottom:3rem"}
                            [:a {:href "/docs/02-getting-started" :class "dl-btn-primary"} "Get Started"]
                            [:a {:href "/docs" :class "dl-btn"} "Read the Book"]]]
     ;; Features
@@ -140,8 +139,7 @@
                             [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Reliable"]
                             [:p {:style "color:#9ca3af;font-size:0.875rem"} "Robust ACID compliance, WAL writes, transaction log access, read replica and high availability."]]
                            [:a {:href "/docs/31-agent-memory" :class card-style}
-                            [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "AI Friendly"]
-                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "CLI with full capability and built-in MCP server, ideal for agent memory and agentic application."]]]]    ;; Ecosystem
+                            [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "AI Native"]                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "CLI with full capability and built-in MCP server, ideal for agent memory and agentic application."]]]]    ;; Ecosystem
                          [:div {:style "max-width:64rem;margin:0 auto;padding:2rem 2rem"}
                           [:h2 {:class "section-title" :style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:0.75rem;color:#f9fafb"} "Ecosystem"]
                           [:p {:style "text-align:center;color:#9ca3af;font-size:1rem;margin-bottom:1.5rem"}

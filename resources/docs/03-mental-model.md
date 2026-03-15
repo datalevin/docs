@@ -38,6 +38,8 @@ entire company is cut out and pasted as an individual line. Each line tells
 you exactly which "row" it came from (Entity), what "column" it represents
 (Attribute), and what the "value" is.
 
+Another view, e and a are coordinates in a 2d table view of values.
+
 This "fact-first" approach is powerful because it is **additive**. To update
 Alice's age, you don't modify a row; you simply assert a new fact. To add a
 new piece of information—like her favorite color, you don't need to "alter a
