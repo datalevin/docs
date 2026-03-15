@@ -32,3 +32,16 @@
     (is (str/includes? body "<mark class=\"search-hit\">match</mark>"))
     (is (not (str/includes? body "onmouseover=")))
     (is (not (str/includes? body "onmouseout=")))))
+
+(deftest search-trims-before-truncating-query
+  (let [captured-query (atom nil)
+        over-limit (apply str (repeat 205 "x"))
+        raw-query (str "   " over-limit)]
+    (with-redefs [datalevin.core/db (fn [_] ::db)
+                  datalevin.core/q (fn [_ _ q]
+                                     (reset! captured-query q)
+                                     [])]
+      (search/search ::conn raw-query)
+      (is (= 200 (count @captured-query)))
+      (is (= (apply str (repeat 200 "x"))
+             @captured-query)))))

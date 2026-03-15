@@ -162,3 +162,19 @@
         (is (= "" (get-in resp [:cookies auth/auth-session-cookie-name :value])))
         (is (= 0 (get-in resp [:cookies auth/auth-session-cookie-name :max-age])))
         (is (true? (get-in resp [:cookies auth/auth-session-cookie-name :secure])))))))
+
+(deftest wrap-session-user-skips-db-session-lookup-for-static-assets
+  (let [lookups (atom 0)
+        handler (routes/wrap-session-user (fn [_] {:status 200
+                                                   :body :ok}))]
+    (with-redefs [session/get-session-user (fn [& _]
+                                             (swap! lookups inc)
+                                             nil)]
+      (let [resp (handler {:request-method :get
+                           :uri "/css/theme-shell.css"
+                           :session {:user {:user/id (UUID/fromString "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")}}
+                           :cookies {auth/auth-session-cookie-name {:value "ffffffff-ffff-ffff-ffff-ffffffffffff"}}
+                           :biff.datalevin/conn ::conn})]
+        (is (= 200 (:status resp)))
+        (is (= :ok (:body resp)))
+        (is (= 0 @lookups))))))

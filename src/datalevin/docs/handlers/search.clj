@@ -89,7 +89,8 @@
 
 (defn search [conn query]
   (when (and conn (seq query))
-    (let [q (-> (str/trim query) (subs 0 (min (count query) max-query-length)))
+    (let [trimmed-query (str/trim query)
+          q (subs trimmed-query 0 (min (count trimmed-query) max-query-length))
           db (d/db conn)]
       (when (seq q)
         (->> (d/q '[:find (pull ?e [:db/id :doc/title :doc/filename :doc/chapter

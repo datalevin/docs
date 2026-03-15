@@ -49,18 +49,22 @@
     (assoc-in resp [:cookies auth/auth-session-cookie-name] (auth/clear-session-cookie req))
     resp))
 
+(declare static-asset-request?)
+
 (defn wrap-session-user
   "Loads :user from the DB-backed auth session cookie, and clears one-shot/stale Ring session state."
   [handler]
   (fn [req]
-    (let [browser-session (:session req)
-          user (session-user req)
-          req (cond-> req
-                user (assoc :user user))]
-      (-> (handler req)
-          (clear-ring-session-user browser-session)
-          (clear-flash-message browser-session)
-          (clear-invalid-auth-cookie req user)))))
+    (if (static-asset-request? req)
+      (handler req)
+      (let [browser-session (:session req)
+            user (session-user req)
+            req (cond-> req
+                  user (assoc :user user))]
+        (-> (handler req)
+            (clear-ring-session-user browser-session)
+            (clear-flash-message browser-session)
+            (clear-invalid-auth-cookie req user))))))
 
 (defn wrap-auth [handler]
   (fn [req]
