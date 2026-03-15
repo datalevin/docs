@@ -1,7 +1,8 @@
 (ns datalevin.docs.views.layout
   (:require [hiccup2.core :as h]
             [jsonista.core :as j]
-            [ring.middleware.anti-forgery :as anti-forgery]))
+            [ring.middleware.anti-forgery :as anti-forgery]
+            [datalevin.docs.util :as util]))
 
 (def ^:private dark-body-style
   "html { scroll-behavior: smooth; }
@@ -46,7 +47,8 @@ body.light .auth-card .auth-divider span { color: #6b7280 !important; }
 body.light .search-hit { background: rgba(6,182,212,0.15); color: #0e7490; }")
 
 (defn header [& [req]]
-  (let [user (:user req)]
+  (let [user (:user req)
+        token (when user (force anti-forgery/*anti-forgery-token*))]
     [:header {:class "sticky top-0 z-50 border-b"
               :style "background:var(--bg-header, rgba(10,10,15,0.8)); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border-color:var(--border-header, rgba(255,255,255,0.1));"
               :data-theme "dark"}
@@ -87,7 +89,12 @@ body.light .search-hit { background: rgba(6,182,212,0.15); color: #0e7490; }")
             [:a {:href "/admin/examples" :class "text-sm hover:text-cyan-300" :style "color:var(--text-link, #22d3ee);"} "Admin"])
           [:a {:href "/pdf" :class "text-sm hover:text-cyan-300" :style "color:var(--text-link, #22d3ee);"} "PDF"]
           [:a {:href "/examples/new" :class "text-sm hover:text-cyan-300" :style "color:var(--text-link, #22d3ee);"} "Add Example"]
-          [:a {:href "/auth/logout" :class "text-sm hover:text-gray-300" :style "color:#6b7280;"} "Logout"]]
+          [:form {:method "post" :action "/auth/logout" :hx-boost "false" :class "inline"}
+           [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
+           [:button {:type "submit"
+                     :class "text-sm hover:text-gray-300"
+                     :style "color:#6b7280; background:none; border:none; padding:0; cursor:pointer;"}
+            "Logout"]]]
          [:a {:href "/auth/login" :class "text-sm hover:text-white transition"
               :title "Sign in to post examples and download the book" :style "color:var(--text-secondary, #9ca3af);"} "Log in"])]]]))
 
@@ -243,9 +250,13 @@ body.light .search-hit { background: rgba(6,182,212,0.15); color: #0e7490; }")
                                 [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
                                 [:input {:type "hidden" :name "doc-section" :value slug}]
                                 [:textarea {:name "code" :required true :rows 8
+                                            :maxlength util/max-example-code-length
                                             :placeholder "Paste your code example here\n;; Add comments to describe it"
                                             :class "w-full px-3 py-2 rounded-lg font-mono text-sm mb-3 outline-none"
                                             :style "background:var(--input-bg, rgba(255,255,255,0.05)); border:1px solid var(--input-border, rgba(255,255,255,0.1)); color:var(--text-primary, #e5e7eb);"}]
+                                [:p {:class "text-xs mb-3"
+                                     :style "color:var(--text-secondary, #9ca3af);"}
+                                 util/example-code-help-text]
                                 [:div {:class "flex gap-3"}
                                  [:button {:type "submit" :class "py-2 px-4 text-white rounded-lg font-medium"
                                            :style "background:linear-gradient(135deg,#06b6d4,#3b82f6);"} "Submit"]

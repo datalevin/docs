@@ -272,7 +272,7 @@
                                     :post {:handler (rate-limit/wrap-login-rate-limit auth/login-handler)}}]
                      ["/auth/register" {:get {:handler register-page}
                                         :post {:handler (rate-limit/wrap-register-rate-limit auth/register-handler)}}]
-                     ["/auth/logout" {:get {:handler auth/logout-handler}}]
+                     ["/auth/logout" {:post {:handler auth/logout-handler}}]
                      ["/auth/verify-email" {:get {:handler auth/verify-email-handler}}]
                      ["/auth/github" {:get {:handler auth/github-login-handler}}]
                      ["/auth/github/callback" {:get {:handler auth/github-callback-handler}}]
@@ -302,7 +302,8 @@
                      ["/admin/examples/:id/restore" {:post {:handler (-> admin/restore-example-handler
                                                                          admin/wrap-require-admin
                                                                          wrap-auth)}}]
-                     ["/admin/reindex" {:post {:handler admin/reindex-handler}}]
+                     ["/admin/reindex" {:post {:handler (-> admin/reindex-handler
+                                                             admin/wrap-require-admin-or-reindex-secret)}}]
 
                      ;; Health
                      ["/health" {:get {:handler (constantly {:status 200 :body "OK"})}}]]

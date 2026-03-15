@@ -13,6 +13,13 @@
    :example/description :example/doc-section :example/created-at :example/removed?
    {:example/author [:user/id :user/username]}])
 
+(defn- reindex-authorized?
+  [{:keys [headers reindex-secret user]}]
+  (let [secret-header (get headers "x-reindex-secret")]
+    (or (= (:user/role user) :admin)
+        (and (seq reindex-secret)
+             (= secret-header reindex-secret)))))
+
 ;; ---- Remove / Restore ----
 
 (defn remove-example-handler [{:keys [path-params session biff.datalevin/conn] :as req}]
@@ -123,11 +130,7 @@
                                        (render-admin-example ex token))])])}))
 
 (defn reindex-handler [{:keys [headers biff.datalevin/conn session] :as req}]
-  (let [reindex-secret (:reindex-secret req)
-        secret-header (get headers "x-reindex-secret")
-        user (:user req)
-        authorized? (or (= (:user/role user) :admin)
-                        (and (seq reindex-secret) (= secret-header reindex-secret)))]
+  (let [authorized? (reindex-authorized? req)]
     (if-not authorized?
       {:status 403 :headers {"Content-Type" "text/html; charset=utf-8"} :body (layout/forbidden-page)}
       (try
@@ -165,3 +168,11 @@
     (if (= :admin (get-in req [:user :user/role]))
       (handler req)
       {:status 403 :headers {"Content-Type" "text/html; charset=utf-8"} :body (layout/forbidden-page)})))
+
+(defn wrap-require-admin-or-reindex-secret [handler]
+  (fn [req]
+    (if (reindex-authorized? req)
+      (handler req)
+      {:status 403
+       :headers {"Content-Type" "text/html; charset=utf-8"}
+       :body (layout/forbidden-page)})))

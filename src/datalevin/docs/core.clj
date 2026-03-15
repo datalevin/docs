@@ -4,6 +4,7 @@
             [datalevin.docs.config :as config]
             [datalevin.docs.schema :as schema]
             [datalevin.docs.routes :as routes]
+            [datalevin.docs.util :as util]
             [datalevin.core :as d]
             [taoensso.timbre :as log]
             [ring.adapter.jetty :as jetty])
@@ -97,7 +98,15 @@
                                                               :join? false
                                                               :max-threads 20
                                                               :min-threads 4
-                                                              :max-idle-time 30000}))]
+                                                              :max-idle-time 30000
+                                                              :configurator
+                                                              (fn [server]
+                                                                (when-let [handler (.getHandler server)]
+                                                                  (when (instance? org.eclipse.jetty.servlet.ServletContextHandler handler)
+                                                                    ;; Reject oversized form posts before Ring parses params.
+                                                                    (.setMaxFormContentSize
+                                                                     ^org.eclipse.jetty.servlet.ServletContextHandler handler
+                                                                     util/max-form-content-size-bytes))))}))]
                    (-> sys
                        (assoc :jetty/server jetty-server)
                        (assoc :session-scheduler session-scheduler)

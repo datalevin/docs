@@ -11,6 +11,12 @@
   [:example/id :example/code :example/doc-section :example/created-at
    {:example/author [:user/id :user/username :user/avatar-url]}])
 
+(defn- example-form-location
+  [doc-section]
+  (if (seq doc-section)
+    (str "/docs/" doc-section)
+    "/examples/new"))
+
 (defn create-example-handler [{:keys [params session biff.datalevin/conn] :as req}]
   (let [user (:user session)
         code (str/trim (get params "code" ""))
@@ -19,8 +25,11 @@
       (not user)
       {:status 302 :headers {"Location" "/auth/login"} :session (assoc session :flash {:error "Please log in"})}
       (empty? code)
-      {:status 302 :headers {"Location" (if (seq doc-section) (str "/docs/" doc-section) "/examples/new")}
+      {:status 302 :headers {"Location" (example-form-location doc-section)}
        :session (assoc session :flash {:error "Code required"})}
+      (> (count code) util/max-example-code-length)
+      {:status 302 :headers {"Location" (example-form-location doc-section)}
+       :session (assoc session :flash {:error util/example-code-error-text})}
       :else
       (let [example-tx {:example/id (UUID/randomUUID)
                         :example/code (util/escape-html code)
@@ -155,9 +164,13 @@
                           [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
                           [:input {:type "hidden" :name "doc-section" :value doc-section}]
                           [:textarea {:name "code" :required true :rows 10
+                                      :maxlength util/max-example-code-length
                                       :placeholder "Paste your code example here\n;; Add comments to describe it"
                                       :class "w-full px-3 py-2 rounded-lg outline-none font-mono text-sm"
                                       :style "background:var(--input-bg, rgba(255,255,255,0.05)); border:1px solid var(--input-border, rgba(255,255,255,0.1)); color:var(--text-primary, #e5e7eb);"}]
+                          [:p {:class "text-xs"
+                               :style "color:var(--text-secondary, #9ca3af);"}
+                           util/example-code-help-text]
                           [:button {:type "submit"
                                     :class "w-full py-2.5 text-white rounded-lg font-medium transition"
                                     :style "background:linear-gradient(135deg,#06b6d4,#3b82f6);"} "Submit Example"]]])}))
@@ -172,12 +185,16 @@
              [:form {:method "post" :action "/examples"
                      :class "p-4 rounded-lg"
                      :style "background:var(--bg-card, rgba(255,255,255,0.05)); border:1px solid var(--border-card, rgba(255,255,255,0.1));"}
-              [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
+             [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
               [:input {:type "hidden" :name "doc-section" :value doc-section}]
               [:textarea {:name "code" :required true :rows 8
+                          :maxlength util/max-example-code-length
                           :placeholder "Paste your code example here\n;; Add comments to describe it"
                           :class "w-full px-3 py-2 rounded-lg outline-none font-mono text-sm mb-3"
                           :style "background:var(--input-bg, rgba(255,255,255,0.05)); border:1px solid var(--input-border, rgba(255,255,255,0.1)); color:var(--text-primary, #e5e7eb);"}]
+              [:p {:class "text-xs mb-3"
+                   :style "color:var(--text-secondary, #9ca3af);"}
+               util/example-code-help-text]
               [:div {:class "flex gap-3"}
                [:button {:type "submit"
                          :class "py-2 px-4 text-white rounded-lg font-medium"
