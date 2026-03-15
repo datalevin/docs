@@ -1,6 +1,5 @@
 (ns datalevin.docs.handlers.search
   (:require [datalevin.docs.views.layout :as layout]
-            [datalevin.docs.util :as util]
             [datalevin.core :as d]
             [clojure.string :as str]
             [hiccup2.core :as h]))
@@ -31,7 +30,7 @@
           [] spans))
 
 (defn- build-snippet
-  "Build a snippet with highlighted matches using search engine offsets.
+  "Build snippet content as Hiccup-safe strings and <mark> nodes.
    `text` is the source text; `offsets` is a seq of [term [pos ...]] from fulltext."
   [^String text offsets]
   (when (and (seq text) (seq offsets))
@@ -50,21 +49,21 @@
           visible (->> spans
                        (keep (fn [[s e]]
                                (when (and (< s window-end) (> e window-start))
-                                 [(max s window-start) (min e window-end)]))))
-          sb (StringBuilder.)]
-      (when (pos? window-start) (.append sb "…"))
+                                 [(max s window-start) (min e window-end)]))))]
       (loop [cursor window-start
-             rem    visible]
+             rem visible
+             parts (cond-> []
+                     (pos? window-start) (conj "…"))]
         (if (seq rem)
           (let [[s e] (first rem)]
-            (.append sb (util/escape-html (subs text cursor s)))
-            (.append sb "<mark class=\"search-hit\">")
-            (.append sb (util/escape-html (subs text s e)))
-            (.append sb "</mark>")
-            (recur e (rest rem)))
-          (.append sb (util/escape-html (subs text cursor window-end)))))
-      (when (< window-end (.length text)) (.append sb "…"))
-      (.toString sb))))
+            (recur e
+                   (rest rem)
+                   (cond-> parts
+                     (< cursor s) (conj (subs text cursor s))
+                     true (conj [:mark {:class "search-hit"} (subs text s e)]))))
+          (cond-> parts
+            (< cursor window-end) (conj (subs text cursor window-end))
+            (< window-end (.length text)) (conj "…")))))))
 
 (def ^:private max-query-length 200)
 
@@ -118,28 +117,42 @@
                        (result-for-example db entity attr offsets)))))))))
 
 (defn render-result [r]
-  (str "<a class=\"block p-4 rounded-lg transition\" style=\"background:var(--bg-card, rgba(255,255,255,0.05)); border:1px solid var(--border-card, rgba(255,255,255,0.1));\" onmouseover=\"this.style.borderColor='rgba(6,182,212,0.4)';this.style.boxShadow='0 0 16px rgba(6,182,212,0.12)'\" onmouseout=\"this.style.borderColor='var(--border-card, rgba(255,255,255,0.1))';this.style.boxShadow='none'\" href=\""
-       (util/escape-html (:url r))
-       "\">"
-       (case (:type r)
-         :doc (str "<h3 class=\"text-lg font-medium\" style=\"color:var(--text-link, #22d3ee)\">"
-                   (util/escape-html (:title r))
-                   "</h3>"
-                   (when (:snippet r)
-                     (str "<p class=\"text-sm mt-1\" style=\"color:var(--text-secondary, #9ca3af); line-height:1.5;\">"
-                          (:snippet r)
-                          "</p>"))
-                   "<p class=\"text-xs mt-1\" style=\"color:var(--text-secondary, #6b7280)\">"
-                   (util/escape-html (or (:filename r) ""))
-                   "</p>")
-         :example (str "<div class=\"flex items-center gap-2\">"
-                       "<span class=\"text-xs px-2 py-0.5 rounded-full\" style=\"background:rgba(34,197,94,0.15); color:#86efac;\">Example</span>"
-                       "</div>"
-                       (when (:snippet r)
-                         (str "<p class=\"text-sm mt-1 font-mono\" style=\"color:var(--text-secondary, #9ca3af); line-height:1.5;\">"
-                              (:snippet r)
-                              "</p>"))))
-       "</a>"))
+  (into
+   [:a {:href (:url r)
+        :class "search-result-card block p-4 rounded-lg transition"
+        :style "background:var(--bg-card, rgba(255,255,255,0.05)); border:1px solid var(--border-card, rgba(255,255,255,0.1));"}]
+   (case (:type r)
+     :doc
+     (concat
+      [[:h3 {:class "text-lg font-medium"
+             :style "color:var(--text-link, #22d3ee)"}
+        (:title r)]]
+      (when-let [snippet (:snippet r)]
+        [(into [:p {:class "text-sm mt-1"
+                    :style "color:var(--text-secondary, #9ca3af); line-height:1.5;"}]
+               snippet)])
+      [[:p {:class "text-xs mt-1"
+            :style "color:var(--text-secondary, #6b7280)"}
+        (or (:filename r) "")]])
+     :example
+     (concat
+      [[:div {:class "flex items-center gap-2"}
+        [:span {:class "text-xs px-2 py-0.5 rounded-full"
+                :style "background:rgba(34,197,94,0.15); color:#86efac;"}
+         "Example"]]]
+      (when-let [snippet (:snippet r)]
+        [(into [:p {:class "text-sm mt-1 font-mono"
+                    :style "color:var(--text-secondary, #9ca3af); line-height:1.5;"}]
+               snippet)])))))
+
+(defn- no-results-view
+  [query]
+  (when (seq query)
+    [:div {:class "text-center py-8 rounded-lg"
+           :style "color:var(--text-secondary, #9ca3af); background:var(--bg-card, rgba(255,255,255,0.03)); border:1px solid var(--border-card, rgba(255,255,255,0.08));"}
+     (if (seq (str query))
+       (str "No results found for \"" query "\"")
+       "No results found")]))
 
 (defn search-all [req query]
   (search (:biff.datalevin/conn req) query))
@@ -150,8 +163,10 @@
     {:status 200
      :headers {"Content-Type" "text/html"}
      :body (if (seq results)
-             (apply str (map render-result results))
-             (when (seq query) "<div class=\"text-center py-8\" style=\"color:var(--text-secondary, #9ca3af); background:var(--bg-card, rgba(255,255,255,0.03)); border:1px solid var(--border-card, rgba(255,255,255,0.08)); border-radius:0.5rem;\">No results found</div>"))}))
+             (str (h/html {:mode :html}
+                          (for [r results]
+                            (render-result r))))
+             (some-> query no-results-view h/html str))}))
 
 (defn search-page-handler [{:keys [params] :as req}]
   (let [query (or (:q params) "")
@@ -163,27 +178,23 @@
                 :canonical-path "/search"
                 :robots "noindex,nofollow"}
                [:div {:class "max-w-2xl mx-auto py-8 px-4"}
-                [:h1 {:class "text-3xl font-bold mb-6" :style "color:var(--text-primary, #e5e7eb)"} "Search Documentation"]
+                [:h1 {:class "text-3xl font-bold mb-6"
+                      :style "color:var(--text-primary, #e5e7eb)"}
+                 "Search Documentation"]
                 [:div {:class "mb-6"}
-                 [:input {:type "search" :name "q" :value query :placeholder "Search docs and examples..."
-                          :hx-get "/api/search" :hx-target "#results" :hx-trigger "keyup delay:300ms" :autocomplete "off"
+                 [:input {:type "search"
+                          :name "q"
+                          :value query
+                          :placeholder "Search docs and examples..."
+                          :hx-get "/api/search"
+                          :hx-target "#results"
+                          :hx-trigger "keyup delay:300ms"
+                          :autocomplete "off"
                           :class "w-full px-4 py-3 text-lg rounded-lg outline-none"
                           :style "background:var(--input-bg, rgba(255,255,255,0.05)); border:1px solid var(--input-border, rgba(255,255,255,0.1)); color:var(--text-primary, #e5e7eb);"}]]
                 [:div {:id "results" :class "space-y-4"}
                  (when (seq query)
                    (if (seq results)
                      (for [r results]
-                       [:a {:href (:url r)
-                            :class "block p-4 rounded-lg transition"
-                            :style "background:var(--bg-card, rgba(255,255,255,0.05)); border:1px solid var(--border-card, rgba(255,255,255,0.1));"}
-                        (when (= :example (:type r))
-                          [:span {:class "text-xs px-2 py-0.5 rounded-full mr-2"
-                                  :style "background:rgba(34,197,94,0.15); color:#86efac;"} "Example"])
-                        [:h3 {:class "text-lg font-medium inline" :style "color:var(--text-link, #22d3ee)"} (:title r)]
-                        (when (:snippet r)
-                          [:p {:class "text-sm mt-1" :style "color:var(--text-secondary, #9ca3af); line-height:1.5;"}
-                           (h/raw (:snippet r))])
-                        [:p {:class "text-xs mt-1" :style "color:var(--text-secondary, #6b7280)"} (or (:filename r) (:description r) "")]])
-                     [:div {:class "text-center py-8 rounded-lg"
-                            :style "color:var(--text-secondary, #9ca3af); background:var(--bg-card, rgba(255,255,255,0.03)); border:1px solid var(--border-card, rgba(255,255,255,0.08));"}
-                      "No results found for \"" query "\""]))]])}))
+                       (render-result r))
+                     (no-results-view query)))]])}))

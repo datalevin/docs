@@ -91,6 +91,11 @@ body {
   padding: 0 2px;
 }
 
+.search-result-card:hover {
+  border-color: rgba(6, 182, 212, 0.4) !important;
+  box-shadow: 0 0 16px rgba(6, 182, 212, 0.12);
+}
+
 body.light {
   background-color: #f8fafc;
   background-image:

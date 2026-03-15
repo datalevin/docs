@@ -57,3 +57,38 @@
     (is (= 302 (:status response)))
     (is (= code
            (get-in (first @txs) [0 :example/code])))))
+
+(deftest create-example-handler-rejects-invalid-doc-section
+  (let [transacted? (atom false)
+        response (with-redefs [datalevin.core/transact!
+                               (fn [& _]
+                                 (reset! transacted? true))]
+                   (examples/create-example-handler
+                    {:params {"code" "(println :ok)"
+                              "doc-section" "//evil.com"}
+                     :user {:user/id (java.util.UUID/randomUUID)}
+                     :session {}
+                     :biff.datalevin/conn ::conn}))]
+    (is (= 302 (:status response)))
+    (is (= "/examples/new"
+           (get-in response [:headers "Location"])))
+    (is (= "Invalid documentation section"
+           (get-in response [:session :flash :error])))
+    (is (false? @transacted?))))
+
+(deftest create-example-handler-redirects-to-examples-when-doc-section-is-blank
+  (let [txs (atom [])
+        response (with-redefs [datalevin.core/transact!
+                               (fn [_ tx]
+                                 (swap! txs conj tx))]
+                   (examples/create-example-handler
+                    {:params {"code" "(println :ok)"
+                              "doc-section" "   "}
+                     :user {:user/id (java.util.UUID/randomUUID)}
+                     :session {}
+                     :biff.datalevin/conn ::conn}))]
+    (is (= 302 (:status response)))
+    (is (= "/examples"
+           (get-in response [:headers "Location"])))
+    (is (= ""
+           (get-in (first @txs) [0 :example/doc-section])))))

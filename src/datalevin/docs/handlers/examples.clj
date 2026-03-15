@@ -32,19 +32,41 @@
     [?e :example/author ?uid]
     [?e :example/removed? false]])
 
+(def ^:private doc-section-pattern
+  #"^[a-zA-Z0-9_-]+$")
+
+(defn- parse-doc-section
+  [params]
+  (let [raw-value (some-> (get params "doc-section" "") str/trim)
+        valid? (or (str/blank? raw-value)
+                   (boolean (re-matches doc-section-pattern raw-value)))]
+    {:value (if valid? raw-value "")
+     :valid? valid?}))
+
 (defn- example-form-location
   [doc-section]
   (if (seq doc-section)
     (str "/docs/" doc-section)
     "/examples/new"))
 
+(defn- example-success-location
+  [doc-section]
+  (if (seq doc-section)
+    (str "/docs/" doc-section "#examples")
+    "/examples"))
+
 (defn create-example-handler [{:keys [params session biff.datalevin/conn] :as req}]
   (let [user (:user req)
         code (str/trim (get params "code" ""))
-        doc-section (get params "doc-section" "")]
+        {:keys [value valid?]} (parse-doc-section params)
+        doc-section value]
     (cond
       (not user)
       {:status 302 :headers {"Location" "/auth/login"} :session (assoc session :flash {:error "Please log in"})}
+      (not valid?)
+      {:status 302
+       :headers {"Location" "/examples/new"}
+       :session (assoc session :flash {:error "Invalid documentation section"})}
       (empty? code)
       {:status 302 :headers {"Location" (example-form-location doc-section)}
        :session (assoc session :flash {:error "Code required"})}
@@ -59,7 +81,7 @@
                         :example/author [:user/id (:user/id user)]
                         :example/created-at (Date.)}]
         (d/transact! conn [example-tx])
-        {:status 302 :headers {"Location" (str "/docs/" doc-section "#examples")}
+        {:status 302 :headers {"Location" (example-success-location doc-section)}
          :session (assoc session :flash {:success "Example submitted!"})}))))
 
 ;; ---- Browse all examples (GET /examples) ----
@@ -161,7 +183,7 @@
 
 (defn new-example-form [{:keys [params session] :as req}]
   (let [flash (:flash session)
-        doc-section (get params "doc-section" "")
+        doc-section (:value (parse-doc-section params))
         token (force anti-forgery/*anti-forgery-token*)
         error-msg (:error flash)
         success-msg (:success flash)]
@@ -192,7 +214,7 @@
                                     :style "background:linear-gradient(135deg,#06b6d4,#3b82f6);"} "Submit Example"]]])}))
 
 (defn new-example-form-fragment [{:keys [params session] :as req}]
-  (let [doc-section (get params "doc-section" "")
+  (let [doc-section (:value (parse-doc-section params))
         token (force anti-forgery/*anti-forgery-token*)]
     {:status 200
      :headers {"Content-Type" "text/html"}
