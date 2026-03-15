@@ -5,48 +5,6 @@
             [ring.middleware.anti-forgery :as anti-forgery]
             [datalevin.docs.util :as util]))
 
-(def ^:private dark-body-style
-  "html { scroll-behavior: smooth; }
-body { background-color: #0a0a0f; background-image: radial-gradient(ellipse 80% 50% at 50% 0%, rgba(6,182,212,0.25), transparent), radial-gradient(ellipse 60% 50% at 100% 50%, rgba(59,130,246,0.2), transparent), radial-gradient(ellipse 60% 50% at 0% 100%, rgba(139,92,246,0.2), transparent), radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px); background-size: 100%, 100%, 100%, 24px 24px; background-attachment: fixed; min-height: 100vh; color: #e5e7eb; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; --text-primary: #e5e7eb; --text-secondary: #9ca3af; --text-link: #22d3ee; --bg-card: rgba(255,255,255,0.05); --border-card: rgba(255,255,255,0.1); --bg-header: rgba(10,10,15,0.8); --border-header: rgba(255,255,255,0.1); }
-.dl-card { display:block; padding:1.5rem; border-radius:0.75rem; transition: all 0.2s; text-decoration:none; color:inherit; cursor:pointer; background: rgba(255,255,255,0.05); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 24px rgba(0,0,0,0.2); }
-.dl-card:hover { transform: translateY(-2px); border-color: rgba(6,182,212,0.4); box-shadow: 0 0 24px rgba(6,182,212,0.15), 0 4px 24px rgba(0,0,0,0.3); }
-.dl-btn { display:inline-block; padding:0.625rem 1.25rem; border-radius:0.5rem; font-weight:500; font-size:0.875rem; text-decoration:none; transition: all 0.15s; cursor:pointer; color:rgba(255,255,255,0.7); background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); }
-.dl-btn:hover { background:rgba(255,255,255,0.12); border-color:rgba(255,255,255,0.3); color:#fff; box-shadow: 0 2px 12px rgba(0,0,0,0.3); }
-.dl-btn-primary { display:inline-block; color:white; padding:0.75rem 1.5rem; border-radius:0.5rem; font-weight:500; text-decoration:none; transition: all 0.15s; cursor:pointer; background:linear-gradient(135deg, #06b6d4, #3b82f6); border:none; }
-.dl-btn-primary:hover { box-shadow: 0 0 24px rgba(6,182,212,0.4), 0 4px 12px rgba(59,130,246,0.3); }
-.search-hit { background: rgba(6,182,212,0.25); color: #22d3ee; border-radius: 2px; padding: 0 2px; }")
-
-(def ^:private light-body-style
-  "html { scroll-behavior: smooth; }
-body.light { background-color: #f8fafc; background-image: radial-gradient(ellipse 80% 50% at 50% 0%, rgba(6,182,212,0.15), transparent), radial-gradient(ellipse 60% 50% at 100% 50%, rgba(59,130,246,0.1), transparent), radial-gradient(ellipse 60% 50% at 0% 100%, rgba(139,92,246,0.1), transparent), radial-gradient(rgba(0,0,0,0.05) 1px, transparent 1px); background-size: 100%, 100%, 100%, 24px 24px; background-attachment: fixed; min-height: 100vh; color: #1f2937; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; --text-primary: #1f2937; --text-secondary: #475569; --text-link: #0891b2; --bg-card: rgba(255,255,255,0.8); --border-card: rgba(0,0,0,0.1); --bg-header: rgba(248,250,252,0.9); --border-header: rgba(0,0,0,0.1); --input-bg: #f1f5f9; --input-border: #94a3b8; }
-body.light .dl-card { background: rgba(255,255,255,0.8); border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 4px 24px rgba(0,0,0,0.08); color: #1f2937; }
-body.light .dl-card h2, body.light .dl-card h3, body.light .dl-card h4 { color: #1f2937 !important; }
-body.light .dl-card:hover { border-color: rgba(6,182,212,0.5); box-shadow: 0 0 24px rgba(6,182,212,0.15), 0 4px 24px rgba(0,0,0,0.12); }
-body.light .dl-btn { color:rgba(0,0,0,0.7); background:rgba(0,0,0,0.06); border:1px solid rgba(0,0,0,0.15); }
-body.light .dl-btn:hover { background:rgba(0,0,0,0.1); border-color:rgba(0,0,0,0.3); color:#000; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
-body.light header { background:var(--bg-header, rgba(248,250,252,0.9)) !important; border-color:var(--border-header, rgba(0,0,0,0.1)) !important; }
-body.light header a, body.light header span { color: var(--text-secondary, #475569) !important; }
-body.light header .text-white { color: var(--text-primary, #1f2937) !important; }
-body.light .prose h1, body.light .prose h2, body.light .prose h3, body.light .prose h4 { color: #1f2937 !important; }
-body.light .prose p, body.light .prose li, body.light .prose td { color: #374151 !important; }
-body.light .prose strong { color: #1f2937 !important; }
-body.light .prose blockquote { color: #374151 !important; border-left-color: #0891b2 !important; background-color: rgba(0,0,0,0.03) !important; }
-body.light .prose code { color: #1f2937 !important; background-color: rgba(0,0,0,0.08) !important; }
-body.light .prose pre { background-color: #1f2937 !important; }
-body.light .prose pre code { color: #e5e7eb !important; background-color: transparent !important; }
-body.light h2.section-title { color: #1f2937 !important; }
-body.light .auth-card { background: rgba(255,255,255,0.85) !important; border-color: rgba(0,0,0,0.1) !important; box-shadow: 0 8px 32px rgba(0,0,0,0.1) !important; }
-body.light .auth-card h2 { color: #1f2937 !important; }
-body.light .auth-card label { color: #374151 !important; }
-body.light .auth-card input[type='email'], body.light .auth-card input[type='password'], body.light .auth-card input[type='text'] { background: var(--input-bg) !important; border: 1px solid var(--input-border) !important; color: var(--text-primary) !important; }
-body.light .auth-card .auth-text { color: #4b5563 !important; }
-body.light .auth-card .auth-link { color: #0891b2 !important; }
-body.light .auth-card .auth-link:hover { color: #0e7490 !important; }
-body.light .auth-card .auth-github { background: rgba(0,0,0,0.06) !important; border-color: rgba(0,0,0,0.15) !important; color: #1f2937 !important; }
-body.light .auth-card .auth-divider { border-color: rgba(0,0,0,0.1) !important; }
-body.light .auth-card .auth-divider span { color: #6b7280 !important; }
-body.light .search-hit { background: rgba(6,182,212,0.15); color: #0e7490; }")
-
 (defn header [& [req]]
   (let [user (:user req)
         token (when user (force anti-forgery/*anti-forgery-token*))]
@@ -182,9 +140,8 @@ body.light .search-hit { background: rgba(6,182,212,0.15); color: #0e7490; }")
                                      [:script {:src "/js/htmx.min.js"}]
                                      [:link {:href "/css/output.css" :rel "stylesheet"}]]
                                     head-assets
-                                    [[:script {:src "/js/theme.js" :defer true}]
-                                     [:style dark-body-style]
-                                     [:style light-body-style]]))
+                                    [[:link {:href "/css/theme-shell.css" :rel "stylesheet"}]]
+                                    [[:script {:src "/js/theme.js" :defer true}]]))
         body-children (cond-> [(if req (header req) (header))]
                         (and req flash) (conj (flash-message flash)))
         body-children (into body-children body)]

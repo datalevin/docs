@@ -114,7 +114,7 @@ ENV=prod SESSION_SECRET=replace-me \
 ## systemd
 
 An example unit file is included at `deploy/systemd/datalevin-docs.service`.
-It sets `MemoryHigh=800M`, `MemoryMax=900M`, and `OOMPolicy=stop` so the service is constrained before it can pressure unrelated processes on the same VM.
+It keeps `MemoryHigh=800M` and `OOMPolicy=stop`, while relying on the JVM heap limits and Datalevin's own mapsize instead of a hard `MemoryMax` cap.
 
 Typical install steps:
 
