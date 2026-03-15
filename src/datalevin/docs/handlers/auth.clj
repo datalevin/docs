@@ -12,6 +12,19 @@
   [params k]
   (or (get params (keyword k)) (get params (str k)) ""))
 
+(defn sanitize-return-to
+  "Allow only local application paths for post-auth redirects."
+  [return-to]
+  (when (and (string? return-to)
+             (str/starts-with? return-to "/")
+             (not (str/starts-with? return-to "//")))
+    return-to))
+
+(defn- post-auth-location
+  [session]
+  (or (sanitize-return-to (:return-to session))
+      "/"))
+
 ;; =============================================================================
 ;; Registration (with email verification)
 ;; =============================================================================
@@ -49,7 +62,6 @@
 (defn login-handler [{:keys [params session biff.datalevin/conn admin-emails] :as req}]
   (let [email (str/trim (param params "email"))
         password (param params "password")
-        return-to (:return-to session)
         db (d/db conn)]
     (if-let [user (auth/authenticate-user db email password)]
       (let [role (if (contains? admin-emails (:user/email user)) :admin (:user/role user))
@@ -60,7 +72,7 @@
         (d/transact! conn [(:tx session-tx)])
         {:status 302
          :session (-> session (dissoc :return-to) (assoc :user (dissoc user :user/password-hash)))
-         :headers {"Location" (if (seq return-to) return-to "/")}
+         :headers {"Location" (post-auth-location session)}
          :cookies {"session" {:value (str (:session-id session-tx))}}})
       {:status 302
        :session (assoc session :flash {:error "Invalid credentials"})
@@ -151,12 +163,11 @@
               user (assoc user :user/role role)
               _ (when (and (not= role (:user/role user)) (:user/id user))
                   (d/transact! conn [{:db/id [:user/id (:user/id user)] :user/role role}]))
-              session-tx (session/create-session [:user/id (:user/id user)])
-              return-to (:return-to session)]
+              session-tx (session/create-session [:user/id (:user/id user)])]
           (d/transact! conn [(:tx session-tx)])
           {:status 302
            :session (-> session (dissoc :github-oauth-state :return-to) (assoc :user (dissoc user :user/password-hash)))
-           :headers {"Location" (if (seq return-to) return-to "/")}
+           :headers {"Location" (post-auth-location session)}
            :cookies {"session" {:value (str (:session-id session-tx))}}})
         (catch Exception e
           (log/error "GitHub OAuth error:" (.getMessage e) (pr-str (class e)))

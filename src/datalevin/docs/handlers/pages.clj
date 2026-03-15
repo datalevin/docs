@@ -2,6 +2,7 @@
   (:require [datalevin.docs.views.layout :as layout]
             [clojure.java.io :as jio]
             [clj-yaml.core :as yaml]
+            [hiccup2.core :as h]
             [datalevin.core :as d])
   (:import [org.commonmark.parser Parser]
            [org.commonmark.renderer.html HtmlRenderer]
@@ -21,8 +22,17 @@
 ;; Cache for parsed document HTML
 ;; Documents rarely change in production; cleared on reindex or dev file changes
 ;; Capped at 100 entries to prevent unbounded memory growth
-(defonce ^:private doc-cache (atom {}))
+(defn- empty-doc-cache []
+  {:docs {}
+   :last-access {}
+   :tick 0})
+
+(defonce ^:private doc-cache (atom (empty-doc-cache)))
 (def ^:private max-doc-cache-size 100)
+
+;; Cache for rendered docs index HTML
+;; Chapter structure changes rarely, so this is invalidated together with chapter metadata
+(defonce ^:private docs-index-cache (atom nil))
 
 (defn- clear-chapter-cache!
   "Clear the chapter metadata cache. Call when docs are updated."
@@ -32,13 +42,19 @@
 (defn- clear-doc-cache!
   "Clear the document cache. Call when docs are updated."
   []
-  (reset! doc-cache {}))
+  (reset! doc-cache (empty-doc-cache)))
+
+(defn- clear-docs-index-cache!
+  "Clear the docs index HTML cache. Call when docs are updated."
+  []
+  (reset! docs-index-cache nil))
 
 (defn clear-all-caches!
   "Clear all caches. Call when docs are updated."
   []
   (clear-chapter-cache!)
-  (clear-doc-cache!))
+  (clear-doc-cache!)
+  (clear-docs-index-cache!))
 
 (defn parse-frontmatter [content]
   (let [yaml-re #"^---\n([\s\S]*?)\n---\n([\s\S]*)$"
@@ -52,8 +68,48 @@
   (let [node (.parse parser* markdown)]
     (.render renderer* node)))
 
+(defn- mark-doc-access
+  [cache filename]
+  (let [tick (inc (:tick cache 0))]
+    (-> cache
+        (assoc :tick tick)
+        (assoc-in [:last-access filename] tick))))
+
+(defn- prune-doc-cache
+  [cache]
+  (if (> (count (:docs cache)) max-doc-cache-size)
+    (let [keep-count (max 1 (quot (* max-doc-cache-size 3) 4))
+          keep-keys (->> (:last-access cache)
+                         (sort-by val >)
+                         (take keep-count)
+                         (map key)
+                         set)]
+      {:docs (select-keys (:docs cache) keep-keys)
+       :last-access (select-keys (:last-access cache) keep-keys)
+       :tick (:tick cache)})
+    cache))
+
+(defn- get-cached-doc!
+  [filename]
+  (let [cache (swap! doc-cache
+                     (fn [cache]
+                       (if (contains? (:docs cache) filename)
+                         (mark-doc-access cache filename)
+                         cache)))]
+    (get-in cache [:docs filename])))
+
+(defn- cache-doc!
+  [filename doc]
+  (swap! doc-cache
+         (fn [cache]
+           (-> cache
+               (assoc-in [:docs filename] doc)
+               (mark-doc-access filename)
+               (prune-doc-cache))))
+  doc)
+
 (defn load-doc [filename]
-  (or (get @doc-cache filename)
+  (or (get-cached-doc! filename)
       (let [path (str docs-dir "/" filename ".md")
             file (jio/file path)]
         (when (.exists file)
@@ -64,13 +120,7 @@
                      :chapter (:chapter frontmatter)
                      :part (:part frontmatter)
                      :html html}]
-            (swap! doc-cache (fn [cache]
-                               (let [cache (assoc cache filename doc)]
-                                 (if (> (count cache) max-doc-cache-size)
-                                   ;; Evict down to 75% capacity
-                                   (into {} (take (quot (* max-doc-cache-size 3) 4) cache))
-                                   cache))))
-            doc)))))
+            (cache-doc! filename doc))))))
 
 (defn load-chapter-meta
   "Reads frontmatter from all chapter .md files in docs-dir.
@@ -105,6 +155,46 @@
   (str "https://clojurians.slack.com/join/shared_invite/"
        "zt-3mkyfmlaa-IHIYCGV0hEcZomaHnCHgdQ"
        \# "/shared-invite/email"))
+
+(defn- render-docs-index-html
+  [chapters]
+  (let [grouped (partition-by :part chapters)]
+    (apply str
+           "<div class=\"max-w-3xl mx-auto px-4 py-8\">"
+           "<h1 class=\"text-3xl font-bold mb-8\" style=\"color:var(--text-primary, #e5e7eb)\"><i>Datalevin: The Definitive Guide</i></h1>"
+           "<p class=\"mb-6\"><a href=\"/pdf\" class=\"dl-btn\">Download PDF</a></p>"
+           (concat
+            (for [group grouped
+                  :let [part (:part (first group))]]
+              (str "<div class=\"mb-8\">"
+                   (when part
+                     (str "<h2 class=\"text-lg font-semibold text-gray-500 uppercase tracking-wide mb-3\">Part "
+                          part "</h2>"))
+                   "<ol class=\"space-y-2 list-none pl-0\">"
+                   (apply str
+                          (for [{:keys [slug title chapter]} group]
+                            (str "<li>"
+                                 "<a href=\"/docs/" slug "\" class=\"hover:underline\" style=\"color:var(--text-link, #22d3ee);\">"
+                                 (when (pos? chapter)
+                                   (str "<span class=\"text-gray-500 mr-2\">" chapter ".</span>"))
+                                 title
+                                 "</a></li>")))
+                   "</ol></div>"))
+            ["</div>"]))))
+
+(defn- load-docs-index-html
+  []
+  (or @docs-index-cache
+      (let [html (render-docs-index-html (load-chapter-meta))]
+        (reset! docs-index-cache html)
+        html)))
+
+(defn warm-static-caches!
+  "Preload caches derived from the docs directory so the first request
+   after startup or reindex does not pay the full file I/O and parsing cost."
+  []
+  (load-chapter-meta)
+  (load-docs-index-html))
 
 (defn home [req]
   {:status 200
@@ -161,32 +251,10 @@
                             "GitHub Sponsors"]]])})
 
 (defn docs-index [req]
-  (let [chapters (load-chapter-meta)
-        grouped (partition-by :part chapters)
-        toc-html (apply str
-                        "<div class=\"max-w-3xl mx-auto px-4 py-8\">"
-                        "<h1 class=\"text-3xl font-bold mb-8\" style=\"color:var(--text-primary, #e5e7eb)\"><i>Datalevin: The Definitive Guide</i></h1>"
-                        "<p class=\"mb-6\"><a href=\"/pdf\" class=\"dl-btn\">Download PDF</a></p>"                        (concat
-                         (for [group grouped
-                               :let [part (:part (first group))]]
-                           (str "<div class=\"mb-8\">"
-                                (when part
-                                  (str "<h2 class=\"text-lg font-semibold text-gray-500 uppercase tracking-wide mb-3\">Part "
-                                       part "</h2>"))
-                                "<ol class=\"space-y-2 list-none pl-0\">"
-                                (apply str
-                                       (for [{:keys [slug title chapter]} group]
-                                         (str "<li>"
-                                              "<a href=\"/docs/" slug "\" class=\"hover:underline\" style=\"color:var(--text-link, #22d3ee);\">"
-                                              (when (pos? chapter)
-                                                (str "<span class=\"text-gray-500 mr-2\">" chapter ".</span>"))
-                                              title
-                                              "</a></li>")))
-                                "</ol></div>"))
-                         ["</div>"]))]
-    {:status 200
-     :headers {"Content-Type" "text/html"}
-     :body (str (layout/base-with-req "Table of Contents" req [:div]) toc-html)}))
+  {:status 200
+   :headers {"Content-Type" "text/html"}
+   :body (layout/base-with-req "Table of Contents" req
+                               (h/raw (load-docs-index-html)))})
 
 (defn load-examples [conn doc-section]
   (when conn

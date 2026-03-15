@@ -2,6 +2,7 @@
   (:require [biff.datalevin.core :as biff]
             [biff.datalevin.session :as session]
             [datalevin.docs.config :as config]
+            [datalevin.docs.handlers.pages :as pages]
             [datalevin.docs.schema :as schema]
             [datalevin.docs.routes :as routes]
             [datalevin.docs.util :as util]
@@ -70,6 +71,7 @@
          conn (d/get-conn db-path all-schema
                           {:search-domains {"datalevin" {:index-position? true}}})
 
+         _ (pages/warm-static-caches!)
          session-scheduler (start-session-cleanup conn)
 
          sys (biff/start-system
@@ -111,7 +113,7 @@
                        (assoc :jetty/server jetty-server)
                        (assoc :session-scheduler session-scheduler)
                        (update :biff/stop conj #(stop-session-cleanup session-scheduler)))))])]
-     (log/info "System started with auth, search, and session cleanup")
+     (log/info "System started with auth, search, session cleanup, and warmed docs caches")
      sys)))
 
 (defn -main [& args]

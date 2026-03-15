@@ -155,6 +155,7 @@
           (d/transact! conn txs)
           ;; Clear caches after reindex
           (pages/clear-all-caches!)
+          (pages/warm-static-caches!)
           (log/info "Reindex complete:" (count txs) "docs")
           {:status 302
            :session (assoc session :flash {:success (str "Reindexed " (count txs) " documents")})

@@ -6,14 +6,16 @@
    - Registration: 3 per hour per IP
    - Example submissions: 10 per hour per user
    - Search API: 60 per minute per IP
-   - Password reset: 3 per 15 minutes per IP")
+   - Forgot password email requests: 3 per 15 minutes per IP
+   - Reset password submissions: 3 per 15 minutes per IP")
 
 (def ^:private limits
   {:login {:max 5 :window-ms (* 15 60 1000)}
    :register {:max 3 :window-ms (* 60 60 1000)}
    :example {:max 10 :window-ms (* 60 60 1000)}
    :search {:max 60 :window-ms (* 60 1000)}
-   :reset {:max 3 :window-ms (* 15 60 1000)}})
+   :forgot-password {:max 3 :window-ms (* 15 60 1000)}
+   :reset-password {:max 3 :window-ms (* 15 60 1000)}})
 
 ;; {key {:timestamps [t1 t2 ...], :last-cleanup t}}
 (defonce ^:private state (atom {}))
@@ -86,7 +88,7 @@
   "Rate limiting middleware.
 
    Options:
-   - :action - Rate limit action type (:login, :register, :example, :search, :reset)
+   - :action - Rate limit action type
    - :identifier-fn - Function to extract identifier from request (default: client IP)"
   [handler {:keys [action identifier-fn]
             :or {identifier-fn get-client-ip}}]
@@ -112,5 +114,8 @@
 (defn wrap-search-rate-limit [handler]
   (wrap-rate-limit handler {:action :search}))
 
-(defn wrap-reset-rate-limit [handler]
-  (wrap-rate-limit handler {:action :reset}))
+(defn wrap-forgot-password-rate-limit [handler]
+  (wrap-rate-limit handler {:action :forgot-password}))
+
+(defn wrap-reset-password-rate-limit [handler]
+  (wrap-rate-limit handler {:action :reset-password}))

@@ -70,12 +70,13 @@
         flash (:flash (:session req))
         error-msg (:error flash)
         github-configured? (seq (:github-client-id req))
-        return-to (or (get-in req [:params :return-to])
-                      (get-in req [:params "return-to"]))]
+        return-to (auth/sanitize-return-to
+                   (or (get-in req [:params :return-to])
+                       (get-in req [:params "return-to"])))]
     {:status 200
      :headers {"Content-Type" "text/html"}
-     :session (cond-> (:session req)
-                (seq return-to) (assoc :return-to return-to))
+     :session (cond-> (dissoc (:session req) :return-to)
+                return-to (assoc :return-to return-to))
      :body (layout/base "Login"
               [:div {:class "max-w-md mx-auto py-16 px-4"}
                [:div {:class (str "auth-card " glass-card-style) :style glass-card-css}
@@ -277,9 +278,9 @@
                      ["/auth/github" {:get {:handler auth/github-login-handler}}]
                      ["/auth/github/callback" {:get {:handler auth/github-callback-handler}}]
                      ["/auth/forgot-password" {:get {:handler forgot-password-page}
-                                               :post {:handler (rate-limit/wrap-reset-rate-limit auth/forgot-password-handler)}}]
+                                               :post {:handler (rate-limit/wrap-forgot-password-rate-limit auth/forgot-password-handler)}}]
                      ["/auth/reset-password" {:get {:handler reset-password-page}
-                                              :post {:handler auth/reset-password-handler}}]
+                                              :post {:handler (rate-limit/wrap-reset-password-rate-limit auth/reset-password-handler)}}]
 
                      ;; Examples
                      ["/examples" {:get {:handler examples/list-examples-handler}

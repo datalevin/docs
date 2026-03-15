@@ -104,13 +104,15 @@ body.light .search-hit { background: rgba(6,182,212,0.15); color: #0e7490; }")
      (when-let [error (:error flash)]
        [:div {:class "px-4 py-3 rounded-lg shadow-lg text-sm"
               :style "background:rgba(220,38,38,0.15); border:1px solid rgba(220,38,38,0.4); color:#fca5a5; backdrop-filter:blur(12px);"
-              :hx-get "/_flash" :hx-vals {:json "null"} :hx-trigger "load delay:3s"}
+              :data-flash-auto-dismiss "true"}
         error])
      (when-let [success (:success flash)]
        [:div {:class "px-4 py-3 rounded-lg shadow-lg text-sm"
               :style "background:rgba(34,197,94,0.15); border:1px solid rgba(34,197,94,0.4); color:#86efac; backdrop-filter:blur(12px);"
-              :hx-get "/_flash" :hx-vals {:json "null"} :hx-trigger "load delay:3s"}
-        success])]))
+              :data-flash-auto-dismiss "true"}
+        success])
+     [:script
+      (h/raw "setTimeout(function(){document.querySelectorAll('[data-flash-auto-dismiss=\"true\"]').forEach(function(el){el.remove();});}, 3000);")]]))
 
 (defn base [title & body]
   (str (h/html {:mode :html :escape? false}
