@@ -77,7 +77,7 @@
                :biff.datalevin/conn conn
                :port (:port cfg)
                :base-url (:base-url cfg)
-               :session-secret (or (:session-secret cfg) "dev-secret-min-32-chars")
+               :session-secret (config/session-secret cfg)
                :github-client-id (:github-client-id cfg)
                :github-client-secret (:github-client-secret cfg)
                :admin-emails (:admin-emails cfg)

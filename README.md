@@ -66,6 +66,8 @@ Start the docs site with explicit JVM heap limits:
 scripts/start-prod.sh
 ```
 
+Set `ENV=prod` and a real `SESSION_SECRET` before starting. Startup now fails fast if `ENV=prod` and `SESSION_SECRET` is missing.
+
 That wrapper runs:
 
 ```bash

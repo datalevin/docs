@@ -1,6 +1,9 @@
 (ns datalevin.docs.config
   (:require [clojure.string :as str]))
 
+(def ^:const dev-session-secret
+  "dev-secret-min-32-chars")
+
 (defn env
   "Returns the value of an environment variable, falling back to system property."
   [name]
@@ -20,3 +23,14 @@
    :admin-emails (when-let [s (env "ADMIN_EMAILS")]
                    (into #{} (map str/trim) (str/split s #",")))
    :reindex-secret (env "REINDEX_SECRET")})
+
+(defn session-secret
+  "Returns the configured session secret.
+   In production, SESSION_SECRET must be set explicitly."
+  [{:keys [env session-secret]}]
+  (if (str/blank? session-secret)
+    (if (= env "prod")
+      (throw (ex-info "SESSION_SECRET must be set when ENV=prod"
+                      {:env env}))
+      dev-session-secret)
+    session-secret))
