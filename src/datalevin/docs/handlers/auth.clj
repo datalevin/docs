@@ -103,7 +103,7 @@
         base-url (:base-url req)]
     (if (or (empty? email) (empty? username) (empty? password))
       {:status 302 :session (assoc session :flash {:error "All fields required"}) :headers {"Location" "/auth/register"}}
-      (if (not (= password confirm-password))
+      (if (not= password confirm-password)
         {:status 302 :session (assoc session :flash {:error "Passwords mismatch"}) :headers {"Location" "/auth/register"}}
         (if (< (count password) 8)
           {:status 302 :session (assoc session :flash {:error "Password too short"}) :headers {"Location" "/auth/register"}}

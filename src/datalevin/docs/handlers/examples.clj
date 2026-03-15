@@ -71,6 +71,8 @@
     {:status 200
      :headers {"Content-Type" "text/html"}
      :body (layout/base-with-req "Examples" req
+                                 {:description "Browse community-submitted Datalevin examples and code snippets."
+                                  :canonical-path "/examples"}
                                  [:div {:class "max-w-4xl mx-auto py-8 px-4"}
                                   [:div {:class "flex items-center justify-between mb-6"}
                                    [:h1 {:class "text-3xl font-bold text-white"} "User Examples"]
@@ -104,6 +106,9 @@
             {:status 200
              :headers {"Content-Type" "text/html"}
              :body (layout/base-with-req "Example" req
+                                         {:description (or (util/summarize-text (:example/code example) 160)
+                                                           "Community Datalevin example.")
+                                          :canonical-path (str "/examples/" id-str)}
                                          [:div {:class "max-w-4xl mx-auto py-8 px-4"}
                                           [:nav {:class "text-sm mb-4"}
                                            [:a {:href "/" :class "text-cyan-400 hover:text-cyan-300"} "Home"]
@@ -133,6 +138,9 @@
         {:status 200
          :headers {"Content-Type" "text/html"}
          :body (layout/base-with-req (str username "'s Profile") req
+                                     {:description (str "Examples submitted by " username ".")
+                                      :canonical-path (str "/users/" username)
+                                      :robots "noindex,follow"}
                                      [:div {:class "max-w-4xl mx-auto py-8 px-4"}
                                       [:div {:class "flex items-center gap-4 mb-8"}
                                        (when (:user/avatar-url user)
@@ -160,6 +168,8 @@
     {:status 200
      :headers {"Content-Type" "text/html"}
      :body (layout/base "Submit Example"
+                        {:description "Submit a Datalevin example to the public docs site."
+                         :robots "noindex,nofollow"}
                         [:div {:class "max-w-2xl mx-auto py-8 px-4"}
                          [:h1 {:class "text-3xl font-bold mb-6" :style "color:var(--text-primary, #e5e7eb)"} "Submit Example"]
                          (when error-msg [:p {:class "p-3 rounded-lg mb-4 text-sm"

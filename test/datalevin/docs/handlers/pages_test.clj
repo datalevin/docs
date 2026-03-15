@@ -47,7 +47,9 @@
     (with-redefs [pages/load-docs-index-html
                   (fn []
                     "<div id=\"toc-marker\">Table of contents</div>")]
-      (let [resp (pages/docs-index {:session {}})
+      (let [resp (pages/docs-index {:session {}
+                                    :base-url "https://docs.example.com"
+                                    :uri "/docs"})
             body (:body resp)
             marker "<div id=\"toc-marker\">Table of contents</div>"
             marker-pos (.indexOf body marker)
@@ -55,9 +57,45 @@
             html-close-pos (.indexOf body "</html>")]
         (is (= 200 (:status resp)))
         (is (str/ends-with? body "</html>"))
+        (is (str/includes? body "<title>Table of Contents | Datalevin Docs</title>"))
+        (is (str/includes? body "name=\"description\""))
+        (is (str/includes? body "href=\"https://docs.example.com/docs\""))
         (is (<= 0 marker-pos))
         (is (< marker-pos body-close-pos))
         (is (< marker-pos html-close-pos))))))
+
+(deftest home-renders-seo-meta-tags
+  (binding [anti-forgery/*anti-forgery-token* (delay "test-token")]
+    (let [resp (pages/home {:session {}
+                            :base-url "https://docs.example.com"
+                            :uri "/"})
+          body (:body resp)]
+      (is (= 200 (:status resp)))
+      (is (str/includes? body "<title>Datalevin Docs</title>"))
+      (is (str/includes? body "property=\"og:title\""))
+      (is (str/includes? body "href=\"https://docs.example.com/\"")))))
+
+(deftest doc-page-prefers-canonical-docs-path
+  (binding [anti-forgery/*anti-forgery-token* (delay "test-token")]
+    (with-redefs [pages/load-doc (fn [_]
+                                   {:title "Getting Started"
+                                    :chapter 2
+                                    :part "I"
+                                    :description "Start here."
+                                    :html "<p>Intro</p>"})
+                  pages/find-prev-next (constantly nil)
+                  pages/load-examples (constantly nil)]
+      (let [resp (pages/doc-page {:path-params {:chapter "02-getting-started"}
+                                  :biff.datalevin/conn ::conn
+                                  :base-url "https://docs.example.com"
+                                  :uri "/chapters/02-getting-started"
+                                  :session {}})
+            body (:body resp)]
+        (is (= 200 (:status resp)))
+        (is (str/includes? body "<title>Getting Started | Datalevin Docs</title>"))
+        (is (str/includes? body "content=\"Start here.\""))
+        (is (str/includes? body "href=\"https://docs.example.com/docs/02-getting-started\""))
+        (is (not (str/includes? body "href=\"https://docs.example.com/chapters/02-getting-started\"")))))))
 
 (deftest doc-cache-uses-true-lru-eviction
   (pages/clear-all-caches!)

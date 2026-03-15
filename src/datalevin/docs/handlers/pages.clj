@@ -1,10 +1,14 @@
 (ns datalevin.docs.handlers.pages
   (:require [datalevin.docs.views.layout :as layout]
+            [datalevin.docs.util :as util]
             [clojure.java.io :as jio]
+            [clojure.string :as str]
             [clj-yaml.core :as yaml]
             [hiccup2.core :as h]
             [datalevin.core :as d])
-  (:import [org.commonmark.parser Parser]
+  (:import [java.time Instant]
+           [java.time.format DateTimeFormatter]
+           [org.commonmark.parser Parser]
            [org.commonmark.renderer.html HtmlRenderer]
            [org.commonmark.ext.footnotes FootnotesExtension]
            [org.commonmark.ext.gfm.tables TablesExtension]))
@@ -33,6 +37,14 @@
 ;; Cache for rendered docs index HTML
 ;; Chapter structure changes rarely, so this is invalidated together with chapter metadata
 (defonce ^:private docs-index-cache (atom nil))
+
+(def ^:private description-max-length 180)
+
+(def ^:private home-description
+  "Datalevin documentation, examples, and guides for Datalog, LMDB-backed storage, search, vectors, and production deployment.")
+
+(def ^:private docs-index-description
+  "Browse the Datalevin book by chapter, from getting started and storage fundamentals to search, AI, and operations.")
 
 (defn- clear-chapter-cache!
   "Clear the chapter metadata cache. Call when docs are updated."
@@ -67,6 +79,12 @@
 (defn parse-markdown [markdown]
   (let [node (.parse parser* markdown)]
     (.render renderer* node)))
+
+(defn- doc-description
+  [frontmatter html]
+  (or (some-> (:description frontmatter) str/trim not-empty)
+      (util/summarize-html html description-max-length)
+      util/site-description))
 
 (defn- mark-doc-access
   [cache filename]
@@ -119,6 +137,7 @@
                 doc {:title (:title frontmatter)
                      :chapter (:chapter frontmatter)
                      :part (:part frontmatter)
+                     :description (doc-description frontmatter html)
                      :html html}]
             (cache-doc! filename doc))))))
 
@@ -142,7 +161,9 @@
                        {:slug slug
                         :title (:title frontmatter)
                         :chapter (:chapter frontmatter)
-                        :part (:part frontmatter)})
+                        :part (:part frontmatter)
+                        :description (some-> (:description frontmatter) str/trim not-empty)
+                        :lastmod (.lastModified f)})
             sorted (sort-by :chapter chapters)]
         (reset! chapter-meta-cache sorted)
         sorted)))
@@ -196,12 +217,62 @@
   (load-chapter-meta)
   (load-docs-index-html))
 
+(defn- iso-instant
+  [millis]
+  (.format DateTimeFormatter/ISO_INSTANT
+           (Instant/ofEpochMilli millis)))
+
+(defn robots-txt [req]
+  {:status 200
+   :headers {"Content-Type" "text/plain; charset=utf-8"}
+   :body (str "User-agent: *\n"
+              "Allow: /\n"
+              "Disallow: /admin/\n"
+              "Disallow: /auth/\n"
+              "Disallow: /api/\n"
+              "Disallow: /examples/form\n"
+              "Disallow: /search\n"
+              "Sitemap: " (or (util/absolute-url req "/sitemap.xml")
+                              "/sitemap.xml")
+              "\n")})
+
+(defn- sitemap-entry
+  [req {:keys [path lastmod priority]}]
+  (when-let [loc (util/absolute-url req path)]
+    (str "<url>"
+         "<loc>" (util/escape-html loc) "</loc>"
+         (when lastmod
+           (str "<lastmod>" (iso-instant lastmod) "</lastmod>"))
+         (when priority
+           (str "<priority>" priority "</priority>"))
+         "</url>")))
+
+(defn sitemap-xml [req]
+  (let [static-urls [{:path "/" :priority "1.0"}
+                     {:path "/docs" :priority "0.9"}
+                     {:path "/examples" :priority "0.8"}]
+        doc-urls (for [{:keys [slug lastmod]} (load-chapter-meta)]
+                   {:path (str "/docs/" slug)
+                    :lastmod lastmod
+                    :priority "0.7"})
+        xml (apply str
+                   (concat ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                            "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">"]
+                           (keep (partial sitemap-entry req)
+                                 (concat static-urls doc-urls))
+                           ["</urlset>"]))]
+    {:status 200
+     :headers {"Content-Type" "application/xml; charset=utf-8"}
+     :body xml}))
+
 (defn home [req]
   {:status 200
    :headers {"Content-Type" "text/html"}
    :body
    (layout/base-with-req "Datalevin Docs" req
-    ;; Hero
+                         {:description home-description
+                          :canonical-path "/"}
+	    ;; Hero
                          [:div {:style "text-align:center;padding:4rem 1rem 0"}
                           [:h1 {:style "font-size:3.5rem;font-weight:bold;margin-bottom:1.5rem;background:linear-gradient(135deg,#06b6d4,#3b82f6,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;"} "Datalevin"]
                           [:p {:style "font-size:1.25rem;color:#9ca3af;margin-bottom:2rem"}
@@ -254,6 +325,8 @@
   {:status 200
    :headers {"Content-Type" "text/html"}
    :body (layout/base-with-req "Table of Contents" req
+                               {:description docs-index-description
+                                :canonical-path "/docs"}
                                (h/raw (load-docs-index-html)))})
 
 (defn load-examples [conn doc-section]

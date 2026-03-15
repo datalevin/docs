@@ -103,6 +103,8 @@
     {:status 200
      :headers {"Content-Type" "text/html"}
      :body (layout/base-with-req "Admin — Examples" req
+                                 {:description "Administrative tools for moderating Datalevin examples."
+                                  :robots "noindex,nofollow"}
                                  [:div {:class "max-w-5xl mx-auto py-8 px-4"}
                                   [:div {:class "flex items-center justify-between mb-2"}
                                    [:h1 {:class "text-3xl font-bold" :style "color:var(--text-primary, #e5e7eb)"} "Manage Examples"]

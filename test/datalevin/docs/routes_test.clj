@@ -1,7 +1,9 @@
 (ns datalevin.docs.routes-test
   (:require [biff.datalevin.session :as session]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [datalevin.docs.handlers.auth :as auth]
+            [datalevin.docs.handlers.pages :as pages]
             [datalevin.docs.routes :as routes]
             [ring.middleware.anti-forgery :as anti-forgery])
   (:import [java.util UUID]))
@@ -78,6 +80,33 @@
     (is (= "no-cache"
            (get-in (handler (request :get "/js/theme.js"))
                    [:headers "Cache-Control"])))))
+
+(deftest robots-txt-is-served
+  (let [handler (routes/app {:base-url "https://docs.example.com"
+                             :biff/config {:env "prod"}})
+        resp (handler (request :get "/robots.txt"))]
+    (is (= 200 (:status resp)))
+    (is (= "text/plain; charset=utf-8"
+           (get-in resp [:headers "Content-Type"])))
+    (is (str/includes? (:body resp) "User-agent: *"))
+    (is (str/includes? (:body resp) "Sitemap: https://docs.example.com/sitemap.xml"))))
+
+(deftest sitemap-xml-is-served
+  (with-redefs [pages/load-chapter-meta (fn []
+                                          [{:slug "01-why-datalevin"
+                                            :title "Why Datalevin"
+                                            :chapter 1
+                                            :part "I"
+                                            :lastmod 1700000000000}])]
+    (let [handler (routes/app {:base-url "https://docs.example.com"
+                               :biff/config {:env "prod"}})
+          resp (handler (request :get "/sitemap.xml"))]
+      (is (= 200 (:status resp)))
+      (is (= "application/xml; charset=utf-8"
+             (get-in resp [:headers "Content-Type"])))
+      (is (str/includes? (:body resp) "<urlset"))
+      (is (str/includes? (:body resp) "<loc>https://docs.example.com/docs/01-why-datalevin</loc>"))
+      (is (str/includes? (:body resp) "<loc>https://docs.example.com/examples</loc>")))))
 
 (deftest wrap-session-user-loads-auth-from-db-session-cookie
   (let [session-id (UUID/fromString "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")

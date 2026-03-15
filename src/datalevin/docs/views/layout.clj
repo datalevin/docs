@@ -1,5 +1,6 @@
 (ns datalevin.docs.views.layout
-  (:require [hiccup2.core :as h]
+  (:require [clojure.string :as str]
+            [hiccup2.core :as h]
             [jsonista.core :as j]
             [ring.middleware.anti-forgery :as anti-forgery]
             [datalevin.docs.util :as util]))
@@ -111,55 +112,92 @@ body.light .search-hit { background: rgba(6,182,212,0.15); color: #0e7490; }")
               :style "background:rgba(34,197,94,0.15); border:1px solid rgba(34,197,94,0.4); color:#86efac; backdrop-filter:blur(12px);"
               :data-flash-auto-dismiss "true"}
         success])
-     [:script
-      (h/raw "setTimeout(function(){document.querySelectorAll('[data-flash-auto-dismiss=\"true\"]').forEach(function(el){el.remove();});}, 3000);")]]))
+	     [:script
+	      (h/raw "setTimeout(function(){document.querySelectorAll('[data-flash-auto-dismiss=\"true\"]').forEach(function(el){el.remove();});}, 3000);")]]))
+
+(def ^:private default-image-path
+  "/images/unified.jpg")
+
+(defn- split-page-opts
+  [body]
+  (if (map? (first body))
+    [(first body) (rest body)]
+    [{} body]))
+
+(defn- meta-tags
+  [title req {:keys [description canonical-path canonical-url robots image-path image-url og-type]}]
+  (let [page-title (util/page-title title)
+        description (or (some-> description str/trim not-empty)
+                        util/site-description)
+        robots (or robots "index,follow")
+        canonical-url (or canonical-url
+                          (when-let [path (or canonical-path (some-> req :uri))]
+                            (util/absolute-url req path)))
+        page-url (or canonical-url
+                     (when-let [uri (some-> req :uri)]
+                       (util/absolute-url req uri)))
+        image-url (or image-url
+                      (when-let [path (or image-path default-image-path)]
+                        (util/absolute-url req path)))
+        og-type (or og-type "website")]
+    (cond-> [[:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
+             [:title page-title]
+             [:meta {:name "description" :content description}]
+             [:meta {:name "robots" :content robots}]
+             [:meta {:name "theme-color" :content "#0a0a0f"}]
+             [:meta {:property "og:site_name" :content util/site-name}]
+             [:meta {:property "og:type" :content og-type}]
+             [:meta {:property "og:title" :content page-title}]
+             [:meta {:property "og:description" :content description}]
+             [:meta {:name "twitter:card" :content "summary_large_image"}]
+             [:meta {:name "twitter:title" :content page-title}]
+             [:meta {:name "twitter:description" :content description}]]
+      canonical-url (conj [:link {:rel "canonical" :href canonical-url}])
+      page-url (conj [:meta {:property "og:url" :content page-url}])
+      image-url (conj [:meta {:property "og:image" :content image-url}]
+                      [:meta {:name "twitter:image" :content image-url}]))))
+
+(defn- render-page
+  [title req body]
+  (let [[opts body] (split-page-opts body)
+        session (:session req)
+        flash (:flash session)
+        token (when req (force anti-forgery/*anti-forgery-token*))
+        html-attrs (cond-> {:hx-boost "true" :lang "en"}
+                     token (assoc :hx-headers (j/write-value-as-string {"X-CSRF-Token" token})))
+        head-assets (if req
+                      [[:link {:href "/css/hljs-atom-one-dark.min.css" :rel "stylesheet"}]
+                       [:link {:href "/css/multi-lang.css" :rel "stylesheet"}]
+                       [:script {:src "/js/highlight.min.js"}]
+                       [:script {:src "/js/hljs-clojure.min.js"}]
+                       [:script {:src "/js/hljs-java.min.js"}]
+                       [:script {:src "/js/hljs-python.min.js"}]
+                       [:script {:src "/js/hljs-javascript.min.js"}]
+                       [:script {:src "/js/code-highlight.js" :defer true}]
+                       [:script {:src "/js/gh-stars.js" :defer true}]]
+                      [])
+        head-children (into [[:meta {:charset "utf-8"}]]
+                            (concat (meta-tags title req opts)
+                                    [[:link {:rel "icon" :type "image/png" :href "/images/logo.png"}]
+                                     [:script {:src "/js/htmx.min.js"}]
+                                     [:link {:href "/css/output.css" :rel "stylesheet"}]]
+                                    head-assets
+                                    [[:script {:src "/js/theme.js" :defer true}]
+                                     [:style dark-body-style]
+                                     [:style light-body-style]]))
+        body-children (cond-> [(if req (header req) (header))]
+                        (and req flash) (conj (flash-message flash)))
+        body-children (into body-children body)]
+    (str (h/html {:mode :html :escape? false}
+                 [:html html-attrs
+                  (into [:head] head-children)
+                  (into [:body {:class "dark"}] body-children)]))))
 
 (defn base [title & body]
-  (str (h/html {:mode :html :escape? false}
-    [:html {:hx-boost "true" :lang "en"}
-     [:head
-      [:meta {:charset "utf-8"}]
-      [:meta {:content "width=device-width, initial-scale=1" :name "viewport"}]
-      [:title title]
-      [:link {:rel "icon" :type "image/png" :href "/images/logo.png"}]
-      [:script {:src "/js/htmx.min.js"}]
-      [:link {:href "/css/output.css" :rel "stylesheet"}]
-      [:script {:src "/js/theme.js" :defer true}]
-      [:style dark-body-style]
-      [:style light-body-style]]
-     [:body {:class "dark"}
-      (header)
-      body]])))
+  (render-page title nil body))
 
 (defn base-with-req [title req & body]
-  (let [session (:session req)
-        flash (:flash session)
-        token (force anti-forgery/*anti-forgery-token*)]
-    (str (h/html {:mode :html :escape? false}
-      [:html {:hx-boost "true" :hx-headers (j/write-value-as-string {"X-CSRF-Token" token}) :lang "en"}
-       [:head
-        [:meta {:charset "utf-8"}]
-        [:meta {:content "width=device-width, initial-scale=1" :name "viewport"}]
-        [:title title]
-        [:link {:rel "icon" :type "image/png" :href "/images/logo.png"}]
-        [:script {:src "/js/htmx.min.js"}]
-        [:link {:href "/css/output.css" :rel "stylesheet"}]
-        [:link {:href "/css/hljs-atom-one-dark.min.css" :rel "stylesheet"}]
-        [:link {:href "/css/multi-lang.css" :rel "stylesheet"}]
-        [:script {:src "/js/highlight.min.js"}]
-        [:script {:src "/js/hljs-clojure.min.js"}]
-        [:script {:src "/js/hljs-java.min.js"}]
-        [:script {:src "/js/hljs-python.min.js"}]
-        [:script {:src "/js/hljs-javascript.min.js"}]
-        [:script {:src "/js/code-highlight.js" :defer true}]
-        [:script {:src "/js/gh-stars.js" :defer true}]
-        [:script {:src "/js/theme.js" :defer true}]
-        [:style dark-body-style]
-        [:style light-body-style]]
-       [:body {:class "dark"}
-        (header req)
-        (flash-message flash)
-        body]]))))
+  (render-page title req body))
 
 (defn render-example [example & [req]]
   (let [{:keys [example/id example/code example/author]} example
@@ -188,6 +226,8 @@ body.light .search-hit { background: rgba(6,182,212,0.15); color: #0e7490; }")
   "Renders a styled error page. Uses `base` (no req) so it works outside of session middleware."
   [status title message]
   (base (str status " — " title)
+    {:description message
+     :robots "noindex,nofollow"}
     [:div {:class "max-w-xl mx-auto py-24 px-4 text-center"}
      [:p {:class "text-6xl font-bold mb-4" :style "color:rgba(255,255,255,0.15)"} (str status)]
      [:h1 {:class "text-2xl font-bold text-white mb-3"} title]
@@ -225,6 +265,8 @@ body.light .search-hit { background: rgba(6,182,212,0.15); color: #0e7490; }")
 (defn doc-page [{:keys [title chapter part html examples slug nav] :as doc} & [req]]
   (let [user (:user req)
         token (when user (force anti-forgery/*anti-forgery-token*))
+        description (or (:description doc)
+                        util/site-description)
         examples-list (when (seq examples)
                         (mapv first examples))
         examples-html (str (h/html {:mode :html :escape? false}
@@ -275,6 +317,9 @@ body.light .search-hit { background: rgba(6,182,212,0.15); color: #0e7490; }")
                                 [:script (h/raw (str "if(location.hash==='#examples'){document.getElementById('example-form-" slug "').classList.remove('hidden')}"))])]))
         nav-html (str (h/html {:mode :html :escape? false} (chapter-nav doc)))]
     (base-with-req title req
+      {:description description
+       :canonical-path (str "/docs/" slug)
+       :og-type "article"}
       [:div {:class "max-w-5xl mx-auto px-6 py-10"}
        ;; Breadcrumb
        [:nav {:class "text-sm mb-6 text-gray-500"}

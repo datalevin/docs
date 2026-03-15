@@ -159,6 +159,9 @@
     {:status 200
      :headers {"Content-Type" "text/html"}
      :body (layout/base-with-req "Search" req
+               {:description "Search across Datalevin documentation and community examples."
+                :canonical-path "/search"
+                :robots "noindex,nofollow"}
                [:div {:class "max-w-2xl mx-auto py-8 px-4"}
                 [:h1 {:class "text-3xl font-bold mb-6" :style "color:var(--text-primary, #e5e7eb)"} "Search Documentation"]
                 [:div {:class "mb-6"}

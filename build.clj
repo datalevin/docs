@@ -3,7 +3,8 @@
 
 (def class-dir "target/classes")
 (def uber-file "target/datalevin-docs-standalone.jar")
-(def basis (delay (b/create-basis {:project "deps.edn"})))
+(def basis (delay (b/create-basis {:project "deps.edn"
+                                   :aliases [:prod]})))
 
 (defn clean [_]
   (b/delete {:path "target"}))
