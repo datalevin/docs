@@ -39,7 +39,7 @@
     "/examples/new"))
 
 (defn create-example-handler [{:keys [params session biff.datalevin/conn] :as req}]
-  (let [user (:user session)
+  (let [user (:user req)
         code (str/trim (get params "code" ""))
         doc-section (get params "doc-section" "")]
     (cond
@@ -152,8 +152,7 @@
 ;; ---- New example form ----
 
 (defn new-example-form [{:keys [params session] :as req}]
-  (let [user (:user session)
-        flash (:flash session)
+  (let [flash (:flash session)
         doc-section (get params "doc-section" "")
         token (force anti-forgery/*anti-forgery-token*)
         error-msg (:error flash)

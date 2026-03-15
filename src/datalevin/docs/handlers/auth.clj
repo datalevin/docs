@@ -25,6 +25,37 @@
   (or (sanitize-return-to (:return-to session))
       "/"))
 
+(def auth-session-cookie-name "session")
+
+(def ^:private auth-session-max-age-seconds
+  (* 7 24 60 60))
+
+(defn session-cookie
+  [{:keys [biff/config] :as _req} session-id]
+  {:value (str session-id)
+   :path "/"
+   :http-only true
+   :same-site :lax
+   :max-age auth-session-max-age-seconds
+   :secure (= "prod" (:env config))})
+
+(defn clear-session-cookie
+  [{:keys [biff/config] :as _req}]
+  {:value ""
+   :path "/"
+   :http-only true
+   :same-site :lax
+   :max-age 0
+   :secure (= "prod" (:env config))})
+
+(defn request-session-id
+  [req]
+  (try
+    (some-> (get-in req [:cookies auth-session-cookie-name :value])
+            UUID/fromString)
+    (catch Exception _
+      nil)))
+
 (defn- effective-user-role
   [admin-emails user]
   (if (contains? admin-emails (:user/email user))
@@ -67,9 +98,11 @@
             (d/transact! conn [user-tx (:tx session-tx) (:tx vtoken)])
             (log/info "=== Email verification link ===" (str base-url "/auth/verify-email?token=" (:token vtoken)))
             {:status 302
-             :session (assoc session :user (dissoc user-tx :user/password-hash) :flash {:success "Welcome! Check your email to verify your account."})
+             :session (-> session
+                          (dissoc :user)
+                          (assoc :flash {:success "Welcome! Check your email to verify your account."}))
              :headers {"Location" "/"}
-             :cookies {"session" {:value (str (:session-id session-tx))}}}))))))
+             :cookies {auth-session-cookie-name (session-cookie req (:session-id session-tx))}}))))))
 
 ;; =============================================================================
 ;; Login / Logout
@@ -84,18 +117,21 @@
             session-tx (session/create-session [:user/id (:user/id user)])]
         (d/transact! conn [(:tx session-tx)])
         {:status 302
-         :session (-> session (dissoc :return-to) (assoc :user (dissoc user :user/password-hash)))
+         :session (dissoc session :return-to :user)
          :headers {"Location" (post-auth-location session)}
-         :cookies {"session" {:value (str (:session-id session-tx))}}})
+         :cookies {auth-session-cookie-name (session-cookie req (:session-id session-tx))}})
       {:status 302
        :session (assoc session :flash {:error "Invalid credentials"})
        :headers {"Location" "/auth/login"}})))
 
 (defn logout-handler [{:keys [session biff.datalevin/conn] :as req}]
-  (let [session-id (get-in req [:cookies "session" :value])]
+  (let [session-id (request-session-id req)]
     (when session-id
-      (d/transact! conn [[:db.fn/retractEntity [:session/id (UUID/fromString session-id)]]]))
-    {:status 302 :session (dissoc session :user) :headers {"Location" "/"}}))
+      (d/transact! conn [[:db.fn/retractEntity [:session/id session-id]]]))
+    {:status 302
+     :session (dissoc session :user)
+     :headers {"Location" "/"}
+     :cookies {auth-session-cookie-name (clear-session-cookie req)}}))
 
 (defn require-auth [handler]
   (fn [req]
@@ -166,18 +202,16 @@
                      (let [tx (auth/github-find-or-create-user-tx gh-user)
                            ;; Remove nil values — GitHub may not return email for private profiles
                            tx (into {} (remove (fn [[_ v]] (nil? v))) tx)
-                           tx (assoc tx :user/role :user :user/email-verified? true)
-                           ;; Use GitHub username as fallback if no email
-                           tx (if (:user/email tx) tx (assoc tx :user/email (str (:login gh-user) "@github")))]
+                           tx (assoc tx :user/role :user :user/email-verified? true)]
                        (d/transact! conn [tx])
                        tx))
               user (ensure-user-role! conn admin-emails user)
               session-tx (session/create-session [:user/id (:user/id user)])]
           (d/transact! conn [(:tx session-tx)])
           {:status 302
-           :session (-> session (dissoc :github-oauth-state :return-to) (assoc :user (dissoc user :user/password-hash)))
+           :session (dissoc session :github-oauth-state :return-to :user)
            :headers {"Location" (post-auth-location session)}
-           :cookies {"session" {:value (str (:session-id session-tx))}}})
+           :cookies {auth-session-cookie-name (session-cookie req (:session-id session-tx))}})
         (catch Exception e
           (log/error "GitHub OAuth error:" (.getMessage e) (pr-str (class e)))
           {:status 302

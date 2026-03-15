@@ -1,7 +1,10 @@
 (ns datalevin.docs.routes-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [biff.datalevin.session :as session]
+            [clojure.test :refer [deftest is testing]]
+            [datalevin.docs.handlers.auth :as auth]
             [datalevin.docs.routes :as routes]
-            [ring.middleware.anti-forgery :as anti-forgery]))
+            [ring.middleware.anti-forgery :as anti-forgery])
+  (:import [java.util UUID]))
 
 (defn- request
   [request-method uri]
@@ -75,3 +78,36 @@
     (is (= "no-cache"
            (get-in (handler (request :get "/js/theme.js"))
                    [:headers "Cache-Control"])))))
+
+(deftest wrap-session-user-loads-auth-from-db-session-cookie
+  (let [session-id (UUID/fromString "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+        stale-user {:user/id (UUID/fromString "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+                    :user/role :user}
+        fresh-user {:user/id (UUID/fromString "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+                    :user/role :admin}
+        handler (routes/wrap-session-user (fn [req] {:status 200
+                                                     :body (:user req)}))]
+    (with-redefs [session/get-session-user (fn [_ sid]
+                                             (when (= sid session-id)
+                                               fresh-user))]
+      (let [resp (handler {:session {:user stale-user}
+                           :cookies {auth/auth-session-cookie-name {:value (str session-id)}}
+                           :biff.datalevin/conn ::conn})]
+        (is (= fresh-user (:body resp)))
+        (is (= {} (:session resp)))
+        (is (nil? (get-in resp [:cookies auth/auth-session-cookie-name])))))))
+
+(deftest wrap-session-user-clears-invalid-auth-cookies
+  (let [session-id (UUID/fromString "cccccccc-cccc-cccc-cccc-cccccccccccc")
+        handler (routes/wrap-session-user (fn [req] {:status 200
+                                                     :body (:user req)}))]
+    (with-redefs [session/get-session-user (fn [_ _] nil)]
+      (let [resp (handler {:session {:user {:user/id (UUID/fromString "dddddddd-dddd-dddd-dddd-dddddddddddd")}}
+                           :cookies {auth/auth-session-cookie-name {:value (str session-id)}}
+                           :biff.datalevin/conn ::conn
+                           :biff/config {:env "prod"}})]
+        (is (nil? (:body resp)))
+        (is (= {} (:session resp)))
+        (is (= "" (get-in resp [:cookies auth/auth-session-cookie-name :value])))
+        (is (= 0 (get-in resp [:cookies auth/auth-session-cookie-name :max-age])))
+        (is (true? (get-in resp [:cookies auth/auth-session-cookie-name :secure])))))))

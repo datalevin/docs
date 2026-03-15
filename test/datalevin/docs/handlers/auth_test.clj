@@ -39,10 +39,14 @@
       (let [resp (auth/login-handler {:params {"email" "admin@example.com"
                                                "password" "secret"}
                                       :session {:return-to "/docs"}
+                                      :biff/config {:env "prod"}
                                       :admin-emails #{"admin@example.com"}
                                       :biff.datalevin/conn :conn})]
         (is (= 302 (:status resp)))
-        (is (= :admin (get-in resp [:session :user :user/role])))
+        (is (nil? (get-in resp [:session :user])))
+        (is (= (str session-id)
+               (get-in resp [:cookies auth/auth-session-cookie-name :value])))
+        (is (true? (get-in resp [:cookies auth/auth-session-cookie-name :secure])))
         (is (some #(= [{:db/id [:user/id user-id]
                         :user/role :admin}]
                       %)
@@ -72,13 +76,17 @@
                                                          "state" "expected"}
                                                :session {:github-oauth-state "expected"
                                                          :return-to "/docs"}
+                                               :biff/config {:env "prod"}
                                                :admin-emails #{"admin@example.com"}
                                                :github-client-id "client"
                                                :github-client-secret "secret"
                                                :base-url "https://docs.example.com"
                                                :biff.datalevin/conn :conn})]
         (is (= 302 (:status resp)))
-        (is (= :admin (get-in resp [:session :user :user/role])))
+        (is (nil? (get-in resp [:session :user])))
+        (is (= (str session-id)
+               (get-in resp [:cookies auth/auth-session-cookie-name :value])))
+        (is (true? (get-in resp [:cookies auth/auth-session-cookie-name :secure])))
         (is (some #(= [{:db/id [:user/id user-id]
                         :user/role :admin}]
                       %)

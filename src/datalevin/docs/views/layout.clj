@@ -162,7 +162,7 @@ body.light .search-hit { background: rgba(6,182,212,0.15); color: #0e7490; }")
         body]]))))
 
 (defn render-example [example & [req]]
-  (let [{:keys [example/id example/code author]} example
+  (let [{:keys [example/id example/code example/author]} example
         username (or (some-> author :user/username) "Anonymous")
         user (:user req)
         admin? (= :admin (:user/role user))

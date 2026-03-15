@@ -1,17 +1,17 @@
 (ns datalevin.docs.seed
   "Seed test data for development"
   (:require [datalevin.core :as d]
+            [datalevin.docs.config :as config]
             [datalevin.docs.schema :as schema]
-            [biff.datalevin.auth :as auth]
-            [biff.datalevin.session :as session])
+            [biff.datalevin.auth :as auth])
   (:import [java.util Date UUID]))
 
-(def db-path "data/app-db")
+(def db-path (:db-path (config/resolve-env {})))
 
 (defn seed []
   (println "Seeding database...")
   
-  (let [conn (d/get-conn db-path schema/user-schema)
+  (let [conn (d/get-conn db-path schema/schema)
         db (d/db conn)
         
         test-user-id (UUID/randomUUID)

@@ -32,7 +32,8 @@
                      (examples/create-example-handler
                       {:params {"code" (apply str (repeat (inc util/max-example-code-length) "x"))
                                 "doc-section" "01-why-datalevin"}
-                       :session {:user {:user/id (java.util.UUID/randomUUID)}}
+                       :user {:user/id (java.util.UUID/randomUUID)}
+                       :session {}
                        :biff.datalevin/conn ::conn}))]
       (is (= 302 (:status response)))
       (is (= "/docs/01-why-datalevin"
@@ -50,7 +51,8 @@
                    (examples/create-example-handler
                     {:params {"code" code
                               "doc-section" "01-why-datalevin"}
-                     :session {:user {:user/id (java.util.UUID/randomUUID)}}
+                     :user {:user/id (java.util.UUID/randomUUID)}
+                     :session {}
                      :biff.datalevin/conn ::conn}))]
     (is (= 302 (:status response)))
     (is (= code

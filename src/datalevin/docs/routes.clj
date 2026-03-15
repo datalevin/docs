@@ -1,5 +1,6 @@
 (ns datalevin.docs.routes
   (:require [biff.datalevin.middleware :as biff.mw]
+            [biff.datalevin.session :as session]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [datalevin.docs.handlers.pages :as pages]
@@ -20,18 +21,46 @@
 
 (def router-opts {:conflicts nil})
 
+(defn- session-user
+  [req]
+  (when-let [session-id (auth/request-session-id req)]
+    (when-let [conn (:biff.datalevin/conn req)]
+      (session/get-session-user conn session-id))))
+
+(defn- clear-ring-session-user
+  [resp browser-session]
+  (if (or (contains? (or browser-session {}) :user)
+          (get-in resp [:session :user]))
+    (update resp :session (fn [s] (dissoc (or s browser-session) :user)))
+    resp))
+
+(defn- clear-flash-message
+  [resp browser-session]
+  (if (and (:flash browser-session)
+           (not (get-in resp [:session :flash])))
+    (update resp :session (fn [s] (dissoc (or s browser-session) :flash)))
+    resp))
+
+(defn- clear-invalid-auth-cookie
+  [resp req user]
+  (if (and (get-in req [:cookies auth/auth-session-cookie-name :value])
+           (nil? user)
+           (nil? (get-in resp [:cookies auth/auth-session-cookie-name])))
+    (assoc-in resp [:cookies auth/auth-session-cookie-name] (auth/clear-session-cookie req))
+    resp))
+
 (defn wrap-session-user
-  "Copies :user from Ring session into the request, and clears flash after reading."
+  "Loads :user from the DB-backed auth session cookie, and clears one-shot/stale Ring session state."
   [handler]
   (fn [req]
-    (let [user (get-in req [:session :user])
-          flash (get-in req [:session :flash])
-          req (cond-> req user (assoc :user user))]
-      (let [resp (handler req)]
-        ;; Clear flash from session after it's been read (one-time display)
-        (if (and flash (not (get-in resp [:session :flash])))
-          (update resp :session (fn [s] (dissoc (or s (:session req)) :flash)))
-          resp)))))
+    (let [browser-session (:session req)
+          user (session-user req)
+          req (cond-> req
+                user (assoc :user user))]
+      (-> (handler req)
+          (clear-ring-session-user browser-session)
+          (clear-flash-message browser-session)
+          (clear-invalid-auth-cookie req user)))))
 
 (defn wrap-auth [handler]
   (fn [req]
@@ -268,12 +297,22 @@
   {:last-modified (.lastModified file)
    :length (.length file)})
 
+(defn- close-resource-connection! [^java.net.URLConnection conn]
+  (when (instance? java.net.HttpURLConnection conn)
+    (.disconnect ^java.net.HttpURLConnection conn))
+  (when (instance? java.net.JarURLConnection conn)
+    (let [jar-conn ^java.net.JarURLConnection conn]
+      (some-> (.getJarFile jar-conn) .close))))
+
 (defn- resource-metadata [uri]
   (when-let [resource (io/resource (str "public" uri))]
     (let [conn (.openConnection resource)]
-      (.setUseCaches conn false)
-      {:last-modified (.getLastModified conn)
-       :length (.getContentLengthLong conn)})))
+      (try
+        (.setUseCaches conn false)
+        {:last-modified (.getLastModified conn)
+         :length (.getContentLengthLong conn)}
+        (finally
+          (close-resource-connection! conn))))))
 
 (defn- static-asset-metadata [req resp]
   (cond
@@ -309,7 +348,8 @@
         resp))))
 
 (defn app [sys]
-  (let [handler (ring/ring-handler
+  (let [env (get-in sys [:biff/config :env])
+        handler (ring/ring-handler
                   (ring/router
                     [;; Public routes
                      ["/" {:get {:handler pages/home}}]
@@ -369,7 +409,6 @@
     (-> handler
         (wrap-resource "public")
         wrap-file-info
-        wrap-static-asset-headers
         wrap-not-modified
         wrap-static-asset-headers
         (biff.mw/wrap-context sys)
@@ -381,4 +420,5 @@
         (defaults/wrap-defaults
           (-> defaults/site-defaults
               (assoc :static false)
-              (assoc-in [:session :cookie-attrs :max-age] 86400))))))
+              (assoc-in [:session :cookie-attrs :max-age] 86400)
+              (assoc-in [:session :cookie-attrs :secure] (= env "prod")))))))

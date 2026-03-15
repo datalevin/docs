@@ -2,7 +2,7 @@
   (:require [clojure.string :as str]))
 
 (def ^:const dev-session-secret
-  "dev-secret-min-32-chars")
+  "dev-session-secret-fallback-1234")
 
 (defn env
   "Returns the value of an environment variable, falling back to system property."
