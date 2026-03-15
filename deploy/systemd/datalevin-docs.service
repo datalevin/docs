@@ -8,7 +8,10 @@ User=datalevin
 Group=datalevin
 WorkingDirectory=/opt/datalevin-docs
 EnvironmentFile=-/etc/datalevin-docs/datalevin-docs.env
-ExecStart=/usr/bin/java -Xms256m -Xmx512m -jar /opt/datalevin-docs/datalevin-docs-standalone.jar
+ExecStart=/usr/bin/java -Xms256m -Xmx384m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+UseStringDeduplication -XX:MaxMetaspaceSize=128m -jar /opt/datalevin-docs/datalevin-docs-standalone.jar
+MemoryHigh=800M
+MemoryMax=900M
+OOMPolicy=stop
 Restart=on-failure
 RestartSec=5
 SuccessExitStatus=143

@@ -19,6 +19,7 @@ Embedded mode is the primary way to use Datalevin. You include it as a standard 
 - **Architecture**: Your application and Datalevin share the same process and address space.
 - **Performance**: This is the fastest possible deployment. Because Datalevin uses memory-mapping (mmap), your application reads data directly from the OS Page Cache with **zero-copy overhead**.
 - **Operational Simplicity**: No separate database process to manage, monitor, or secure. The database file is just another part of your application's state.
+- **Ops Note**: On small single-node VMs, leave RAM headroom for the OS page cache and provision at least **1 GB of swap** so brief memory spikes do not immediately kill the process.
 
 **Best for**:
 - High-performance, single-node services.

@@ -4,6 +4,7 @@
             [biff.datalevin.db :as db]
             [datalevin.core :as d]
             [clojure.string :as str]
+            [datalevin.docs.mail :as mail]
             [taoensso.timbre :as log])
   (:import [java.util Date UUID]))
 
@@ -56,6 +57,24 @@
     (catch Exception _
       nil)))
 
+(defn- verification-url
+  [base-url token]
+  (str base-url "/auth/verify-email?token=" token))
+
+(defn- reset-password-url
+  [base-url token]
+  (str base-url "/auth/reset-password?token=" token))
+
+(defn- retract-lookup-refs!
+  [conn lookup-refs]
+  (when (seq lookup-refs)
+    (try
+      (d/transact! conn (mapv (fn [lookup-ref]
+                                [:db.fn/retractEntity lookup-ref])
+                              lookup-refs))
+      (catch Exception e
+        (log/error e "Compensation transaction failed" {:lookup-refs lookup-refs})))))
+
 (defn- effective-user-role
   [admin-emails user]
   (if (contains? admin-emails (:user/email user))
@@ -94,15 +113,27 @@
                          :user/role :user :user/email-verified? false :user/created-at (Date.)}
                 session-tx (session/create-session [:user/id user-id])
                 ;; Create email verification token
-                vtoken (auth/create-verification-token user-id)]
+                vtoken (auth/create-verification-token user-id)
+                verify-url (verification-url base-url (:token vtoken))]
             (d/transact! conn [user-tx (:tx session-tx) (:tx vtoken)])
-            (log/info "=== Email verification link ===" (str base-url "/auth/verify-email?token=" (:token vtoken)))
-            {:status 302
-             :session (-> session
-                          (dissoc :user)
-                          (assoc :flash {:success "Welcome! Check your email to verify your account."}))
-             :headers {"Location" "/"}
-             :cookies {auth-session-cookie-name (session-cookie req (:session-id session-tx))}}))))))
+            (try
+              (mail/send-verification-email! req {:to email
+                                                  :username username
+                                                  :verify-url verify-url})
+              {:status 302
+               :session (-> session
+                            (dissoc :user)
+                            (assoc :flash {:success "Welcome! Check your email to verify your account."}))
+               :headers {"Location" "/"}
+               :cookies {auth-session-cookie-name (session-cookie req (:session-id session-tx))}}
+              (catch Exception e
+                (log/error e "Failed to send verification email" {:email email})
+                (retract-lookup-refs! conn [[:session/id (:session-id session-tx)]
+                                            [:verification-token/token (:token vtoken)]
+                                            [:user/id user-id]])
+                {:status 302
+                 :session (assoc session :flash {:error "Could not send verification email. Please try again."})
+                 :headers {"Location" "/auth/register"}}))))))))
 
 ;; =============================================================================
 ;; Login / Logout
@@ -236,9 +267,15 @@
             expires-at (Date. (+ (System/currentTimeMillis) (* 1 60 60 1000))) ;; 1 hour
             reset-tx {:password-reset/token token
                       :password-reset/user [:user/id (:user/id user)]
-                      :password-reset/expires-at expires-at}]
+                      :password-reset/expires-at expires-at}
+            reset-url (reset-password-url base-url token)]
         (d/transact! conn [reset-tx])
-        (log/info "=== Password reset link ===" (str base-url "/auth/reset-password?token=" token))))
+        (try
+          (mail/send-password-reset-email! req {:to email
+                                                :reset-url reset-url})
+          (catch Exception e
+            (log/error e "Failed to send password reset email" {:email email})
+            (retract-lookup-refs! conn [[:password-reset/token token]])))))
     {:status 302
      :session (assoc session :flash {:success success-msg})
      :headers {"Location" "/auth/forgot-password"}}))

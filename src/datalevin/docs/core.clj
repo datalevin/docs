@@ -81,6 +81,8 @@
   ([{:keys [wrap-handler dev?]}]
    (let [cfg (config/resolve-env {})
          _ (configure-logging! (:env cfg))
+         session-secret (config/session-secret cfg)
+         mail-config (config/mail-config cfg)
          db-path (:db-path cfg)
 
          ;; Single DB with canonical schema
@@ -97,7 +99,8 @@
                :biff.datalevin/conn conn
                :port (:port cfg)
                :base-url (:base-url cfg)
-               :session-secret (config/session-secret cfg)
+               :session-secret session-secret
+               :mail-config mail-config
                :github-client-id (:github-client-id cfg)
                :github-client-secret (:github-client-secret cfg)
                :admin-emails (:admin-emails cfg)

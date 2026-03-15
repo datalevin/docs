@@ -1,9 +1,10 @@
 (ns datalevin.docs.handlers.auth-test
   (:require [biff.datalevin.auth :as biff-auth]
-            [biff.datalevin.session :as session]
-            [clojure.test :refer [deftest is testing]]
-            [datalevin.core :as d]
-            [datalevin.docs.handlers.auth :as auth])
+    [biff.datalevin.session :as session]
+    [clojure.test :refer [deftest is testing]]
+    [datalevin.core :as d]
+    [datalevin.docs.mail :as mail]
+    [datalevin.docs.handlers.auth :as auth])
   (:import [java.util UUID]))
 
 (deftest sanitize-return-to-behavior
@@ -95,3 +96,103 @@
                         :session/user [:user/id user-id]}]
                       %)
                   @txs))))))
+
+(deftest register-handler-sends-verification-email
+  (let [txs (atom [])
+        deliveries (atom [])
+        user-id (UUID/fromString "55555555-5555-5555-5555-555555555555")
+        session-id (UUID/fromString "66666666-6666-6666-6666-666666666666")]
+    (with-redefs [biff-auth/hash-password (constantly "hashed")
+                  biff-auth/create-verification-token (fn [uid]
+                                                        {:token "verify-token"
+                                                         :tx {:verification-token/token "verify-token"
+                                                              :verification-token/user [:user/id uid]}})
+                  session/create-session (fn [lookup]
+                                           {:tx {:session/id session-id
+                                                 :session/user lookup}
+                                            :session-id session-id})
+                  d/transact! (fn [_ tx]
+                                (swap! txs conj tx))
+                  mail/send-verification-email! (fn [_ payload]
+                                                  (swap! deliveries conj payload)
+                                                  {:code 0})]
+      (let [resp (auth/register-handler {:params {"email" "new@example.com"
+                                                  "username" "newuser"
+                                                  "password" "password123"
+                                                  "confirm-password" "password123"}
+                                         :session {}
+                                         :base-url "https://docs.example.com"
+                                         :biff/config {:env "prod"}
+                                         :biff.datalevin/conn :conn})]
+        (is (= 302 (:status resp)))
+        (is (= [{:to "new@example.com"
+                 :username "newuser"
+                 :verify-url "https://docs.example.com/auth/verify-email?token=verify-token"}]
+               @deliveries))
+        (is (= "Welcome! Check your email to verify your account."
+               (get-in resp [:session :flash :success])))
+        (is (= (str session-id)
+               (get-in resp [:cookies auth/auth-session-cookie-name :value])))
+        (is (= 1 (count @txs)))
+        (is (= "hashed"
+               (get-in (first @txs) [0 :user/password-hash])))))))
+
+(deftest register-handler-rolls-back-when-email-delivery-fails
+  (let [txs (atom [])
+        session-id (UUID/fromString "77777777-7777-7777-7777-777777777777")]
+    (with-redefs [biff-auth/hash-password (constantly "hashed")
+                  biff-auth/create-verification-token (fn [uid]
+                                                        {:token "verify-token"
+                                                         :tx {:verification-token/token "verify-token"
+                                                              :verification-token/user [:user/id uid]}})
+                  session/create-session (fn [lookup]
+                                           {:tx {:session/id session-id
+                                                 :session/user lookup}
+                                            :session-id session-id})
+                  d/transact! (fn [_ tx]
+                                (swap! txs conj tx))
+                  mail/send-verification-email! (fn [& _]
+                                                  (throw (ex-info "smtp down" {})))]
+      (let [resp (auth/register-handler {:params {"email" "new@example.com"
+                                                  "username" "newuser"
+                                                  "password" "password123"
+                                                  "confirm-password" "password123"}
+                                         :session {}
+                                         :base-url "https://docs.example.com"
+                                         :biff/config {:env "prod"}
+                                         :biff.datalevin/conn :conn})
+            user-id (get-in (first @txs) [0 :user/id])]
+        (is (= 302 (:status resp)))
+        (is (= "/auth/register" (get-in resp [:headers "Location"])))
+        (is (= "Could not send verification email. Please try again."
+               (get-in resp [:session :flash :error])))
+        (is (= [[:db.fn/retractEntity [:session/id session-id]]
+                [:db.fn/retractEntity [:verification-token/token "verify-token"]]
+                [:db.fn/retractEntity [:user/id user-id]]]
+               (second @txs)))))))
+
+(deftest forgot-password-handler-sends-reset-email
+  (let [txs (atom [])
+        deliveries (atom [])
+        user-id (UUID/fromString "88888888-8888-8888-8888-888888888888")]
+    (with-redefs [d/db (fn [_] :db)
+                  biff-auth/find-user-by-email (fn [_ email]
+                                                 (when (= email "user@example.com")
+                                                   {:user/id user-id}))
+                  d/transact! (fn [_ tx]
+                                (swap! txs conj tx))
+                  mail/send-password-reset-email! (fn [_ payload]
+                                                    (swap! deliveries conj payload)
+                                                    {:code 0})]
+      (let [resp (auth/forgot-password-handler {:params {"email" "user@example.com"}
+                                                :session {}
+                                                :base-url "https://docs.example.com"
+                                                :biff/config {:env "prod"}
+                                                :biff.datalevin/conn :conn})
+            token (get-in (first @txs) [0 :password-reset/token])]
+        (is (= 302 (:status resp)))
+        (is (= [{:to "user@example.com"
+                 :reset-url (str "https://docs.example.com/auth/reset-password?token=" token)}]
+               @deliveries))
+        (is (= "If an account with that email exists, a reset link has been sent."
+               (get-in resp [:session :flash :success])))))))
