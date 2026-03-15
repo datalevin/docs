@@ -5,6 +5,7 @@
             [datalevin.docs.handlers.auth :as auth]
             [datalevin.docs.handlers.pages :as pages]
             [datalevin.docs.routes :as routes]
+            [datalevin.docs.tasks.pdf :as pdf]
             [ring.middleware.anti-forgery :as anti-forgery])
   (:import [java.util UUID]))
 
@@ -80,6 +81,19 @@
     (is (= "no-cache"
            (get-in (handler (request :get "/js/theme.js"))
                    [:headers "Cache-Control"])))))
+
+(deftest pdf-route-is-public
+  (with-redefs [pdf/pdf-handler (fn [_]
+                                  {:status 200
+                                   :headers {"Content-Type" "application/pdf"}
+                                   :body "pdf"})]
+    (let [handler (routes/app {:biff/config {:env "prod"}})
+          resp (handler (request :get "/pdf"))]
+      (is (= 200 (:status resp)))
+      (is (= "application/pdf"
+             (get-in resp [:headers "Content-Type"])))
+      (is (nil? (get-in resp [:headers "Location"])))
+      (is (nil? (get-in resp [:session :flash]))))))
 
 (deftest security-headers-disallow-inline-scripts
   (let [handler (routes/app {:biff/config {:env "prod"}})

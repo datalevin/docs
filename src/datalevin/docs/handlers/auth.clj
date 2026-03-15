@@ -274,7 +274,11 @@
           (mail/send-password-reset-email! req {:to email
                                                 :reset-url reset-url})
           (catch Exception e
-            (log/error e "Failed to send password reset email" {:email email})
+            (log/error e
+                       "Password reset email delivery failed; retracting reset token and preserving generic anti-enumeration response"
+                       {:email email
+                        :user-id (:user/id user)
+                        :token-retracted? true})
             (retract-lookup-refs! conn [[:password-reset/token token]])))))
     {:status 302
      :session (assoc session :flash {:success success-msg})

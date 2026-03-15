@@ -19,6 +19,13 @@
     (is (str/includes? html "/js/ui-interactions.js"))
     (is (not (str/includes? html "onclick=")))))
 
+(deftest anonymous-header-keeps-pdf-public-and-removes-gated-copy
+  (let [html (str (h/html {:mode :html :escape? false}
+                          (layout/header nil)))]
+    (is (str/includes? html "href=\"/pdf\""))
+    (is (str/includes? html "title=\"Sign in to post examples\""))
+    (is (not (str/includes? html "download the book")))))
+
 (deftest render-example-escapes-code-at-render-time
   (let [html (str (h/html {:mode :html :escape? false}
                           (layout/render-example {:example/id (java.util.UUID/randomUUID)

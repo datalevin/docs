@@ -196,3 +196,27 @@
                @deliveries))
         (is (= "If an account with that email exists, a reset link has been sent."
                (get-in resp [:session :flash :success])))))))
+
+(deftest forgot-password-handler-retracts-reset-token-when-email-delivery-fails
+  (let [txs (atom [])
+        user-id (UUID/fromString "99999999-9999-9999-9999-999999999999")]
+    (with-redefs [d/db (fn [_] :db)
+                  biff-auth/find-user-by-email (fn [_ email]
+                                                 (when (= email "user@example.com")
+                                                   {:user/id user-id}))
+                  d/transact! (fn [_ tx]
+                                (swap! txs conj tx))
+                  mail/send-password-reset-email! (fn [& _]
+                                                    (throw (ex-info "smtp down" {})))]
+      (let [resp (auth/forgot-password-handler {:params {"email" "user@example.com"}
+                                                :session {}
+                                                :base-url "https://docs.example.com"
+                                                :biff/config {:env "prod"}
+                                                :biff.datalevin/conn :conn})
+            token (get-in (first @txs) [0 :password-reset/token])]
+        (is (= 302 (:status resp)))
+        (is (= "/auth/forgot-password" (get-in resp [:headers "Location"])))
+        (is (= "If an account with that email exists, a reset link has been sent."
+               (get-in resp [:session :flash :success])))
+        (is (= [[:db.fn/retractEntity [:password-reset/token token]]]
+               (second @txs)))))))
