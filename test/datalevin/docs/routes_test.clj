@@ -81,6 +81,14 @@
            (get-in (handler (request :get "/js/theme.js"))
                    [:headers "Cache-Control"])))))
 
+(deftest security-headers-disallow-inline-scripts
+  (let [handler (routes/app {:biff/config {:env "prod"}})
+        resp (handler (request :get "/robots.txt"))
+        csp (get-in resp [:headers "Content-Security-Policy"])]
+    (is (string? csp))
+    (is (str/includes? csp "script-src 'self';"))
+    (is (not (str/includes? csp "script-src 'self' 'unsafe-inline'")))))
+
 (deftest robots-txt-is-served
   (let [handler (routes/app {:base-url "https://docs.example.com"
                              :biff/config {:env "prod"}})

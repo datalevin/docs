@@ -217,7 +217,7 @@
                          :style "background:linear-gradient(135deg,#06b6d4,#3b82f6);"}
                 "Submit"]
                [:button {:type "button"
+                         :data-remove-closest "form"
                          :class "py-2 px-4 rounded-lg text-gray-300"
-                         :style "border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05);"
-                         :onclick "this.closest('form').remove()"}
+                         :style "border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05);"}
                 "Cancel"]]]))}))

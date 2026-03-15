@@ -143,7 +143,7 @@
    "Referrer-Policy" "strict-origin-when-cross-origin"
    "Permissions-Policy" "camera=(), microphone=(), geolocation=()"
    "Content-Security-Policy" (str "default-src 'self'; "
-                                  "script-src 'self' 'unsafe-inline'; "
+                                  "script-src 'self'; "
                                   "style-src 'self' 'unsafe-inline'; "
                                   "img-src 'self' https://avatars.githubusercontent.com data:; "
                                   "font-src 'self'; "

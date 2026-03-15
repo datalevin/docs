@@ -50,11 +50,14 @@
     setTheme(theme);
   }
 
-  window.toggleTheme = function() {
-    const current = localStorage.getItem(STORAGE_KEY);
-    const newTheme = current === LIGHT ? DARK : LIGHT;
-    setTheme(newTheme);
-  };
+  document.addEventListener('click', function(event) {
+    const toggle = event.target.closest('[data-theme-toggle]');
+    if (!toggle) return;
+
+    event.preventDefault();
+    const current = document.body.classList.contains(LIGHT) ? LIGHT : DARK;
+    setTheme(current === LIGHT ? DARK : LIGHT);
+  });
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initTheme);

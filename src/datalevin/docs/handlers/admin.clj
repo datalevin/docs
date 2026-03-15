@@ -76,7 +76,7 @@
          [:form {:method "post" :action (str "/admin/examples/" id "/remove")}
           [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
           [:button {:type "submit" :class "text-sm px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
-                    :onclick "return confirm('Remove this example?')"}
+                    :data-confirm-message "Remove this example?"}
            "Remove"]])]]]))
 
 (defn admin-examples-handler [{:keys [biff.datalevin/conn params] :as req}]

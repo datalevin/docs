@@ -4,14 +4,20 @@
             [datalevin.docs.views.layout :as layout]
             [hiccup2.core :as h]))
 
-(deftest flash-message-uses-client-side-dismissal
+(deftest flash-message-uses-data-attributes-for-dismissal
   (let [html (str (h/html {:mode :html :escape? false}
                           (layout/flash-message {:error "boom"})))]
     (testing "flash dismissal does not issue a network request"
       (is (not (str/includes? html "/_flash"))))
-    (testing "flash dismissal uses local script instead"
-      (is (str/includes? html "setTimeout"))
+    (testing "flash dismissal leaves timing to external javascript"
+      (is (not (str/includes? html "<script")))
       (is (str/includes? html "data-flash-auto-dismiss")))))
+
+(deftest base-loads-external-ui-scripts
+  (let [html (layout/base "Test Page" [:div "Hello"])]
+    (is (str/includes? html "/js/theme.js"))
+    (is (str/includes? html "/js/ui-interactions.js"))
+    (is (not (str/includes? html "onclick=")))))
 
 (deftest render-example-escapes-code-at-render-time
   (let [html (str (h/html {:mode :html :escape? false}
