@@ -27,6 +27,22 @@
 
 (def system nil)
 
+(defn- shutdown-hook-thread
+  [sys]
+  (Thread.
+   ^Runnable
+   (fn []
+     (try
+       (log/info "Shutdown hook triggered, stopping system")
+       (biff/stop-system sys)
+       (catch Exception e
+         (log/error e "Shutdown hook failed"))))))
+
+(defn install-shutdown-hook!
+  [sys]
+  (.addShutdownHook (Runtime/getRuntime)
+                    (shutdown-hook-thread sys)))
+
 (defn start-session-cleanup
   "Starts a scheduled job that purges expired sessions every hour.
    Returns the ScheduledExecutorService (call .shutdown to stop)."
@@ -118,7 +134,8 @@
      sys)))
 
 (defn -main [& args]
-  (start))
+  (let [sys (start)]
+    (install-shutdown-hook! sys)))
 
 (comment
   (def sys (start))
