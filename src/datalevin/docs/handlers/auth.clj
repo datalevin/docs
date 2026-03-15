@@ -25,6 +25,22 @@
   (or (sanitize-return-to (:return-to session))
       "/"))
 
+(defn- effective-user-role
+  [admin-emails user]
+  (if (contains? admin-emails (:user/email user))
+    :admin
+    (:user/role user)))
+
+(defn- ensure-user-role!
+  [conn admin-emails user]
+  (let [current-role (:user/role user)
+        role (effective-user-role admin-emails user)]
+    (when (and (:user/id user)
+               (not= role current-role))
+      (d/transact! conn [{:db/id [:user/id (:user/id user)]
+                          :user/role role}]))
+    (assoc user :user/role role)))
+
 ;; =============================================================================
 ;; Registration (with email verification)
 ;; =============================================================================
@@ -64,11 +80,8 @@
         password (param params "password")
         db (d/db conn)]
     (if-let [user (auth/authenticate-user db email password)]
-      (let [role (if (contains? admin-emails (:user/email user)) :admin (:user/role user))
-            user (assoc user :user/role role)
+      (let [user (ensure-user-role! conn admin-emails user)
             session-tx (session/create-session [:user/id (:user/id user)])]
-        (when (not= role (:user/role user))
-          (d/transact! conn [{:db/id [:user/id (:user/id user)] :user/role role}]))
         (d/transact! conn [(:tx session-tx)])
         {:status 302
          :session (-> session (dissoc :return-to) (assoc :user (dissoc user :user/password-hash)))
@@ -158,11 +171,7 @@
                            tx (if (:user/email tx) tx (assoc tx :user/email (str (:login gh-user) "@github")))]
                        (d/transact! conn [tx])
                        tx))
-              email (:user/email user)
-              role (if (contains? admin-emails email) :admin (:user/role user))
-              user (assoc user :user/role role)
-              _ (when (and (not= role (:user/role user)) (:user/id user))
-                  (d/transact! conn [{:db/id [:user/id (:user/id user)] :user/role role}]))
+              user (ensure-user-role! conn admin-emails user)
               session-tx (session/create-session [:user/id (:user/id user)])]
           (d/transact! conn [(:tx session-tx)])
           {:status 302
