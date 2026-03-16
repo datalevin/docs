@@ -181,37 +181,31 @@
 
 ;; ---- New example form ----
 
-(defn new-example-form [{:keys [params session] :as req}]
-  (let [flash (:flash session)
-        doc-section (:value (parse-doc-section params))
-        token (force anti-forgery/*anti-forgery-token*)
-        error-msg (:error flash)
-        success-msg (:success flash)]
+(defn new-example-form [{:keys [params] :as req}]
+  (let [doc-section (:value (parse-doc-section params))
+        token (force anti-forgery/*anti-forgery-token*)]
     {:status 200
      :headers {"Content-Type" "text/html"}
-     :body (layout/base "Submit Example"
-                        {:description "Submit a Datalevin example to the public docs site."
-                         :robots "noindex,nofollow"}
-                        [:div {:class "max-w-2xl mx-auto py-8 px-4"}
-                         [:h1 {:class "text-3xl font-bold mb-6" :style "color:var(--text-primary, #e5e7eb)"} "Submit Example"]
-                         (when error-msg [:p {:class "p-3 rounded-lg mb-4 text-sm"
-                                              :style "background:rgba(220,38,38,0.15); border:1px solid rgba(220,38,38,0.3); color:#fca5a5;"} error-msg])
-                         (when success-msg [:p {:class "p-3 rounded-lg mb-4 text-sm"
-                                                :style "background:rgba(34,197,94,0.15); border:1px solid rgba(34,197,94,0.3); color:#86efac;"} success-msg])
-                         [:form {:method "post" :action "/examples" :class "space-y-4"}
-                          [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
-                          [:input {:type "hidden" :name "doc-section" :value doc-section}]
-                          [:textarea {:name "code" :required true :rows 10
-                                      :maxlength util/max-example-code-length
-                                      :placeholder "Paste your code example here\n;; Add comments to describe it"
-                                      :class "w-full px-3 py-2 rounded-lg outline-none font-mono text-sm"
-                                      :style "background:var(--input-bg, rgba(255,255,255,0.05)); border:1px solid var(--input-border, rgba(255,255,255,0.1)); color:var(--text-primary, #e5e7eb);"}]
-                          [:p {:class "text-xs"
-                               :style "color:var(--text-secondary, #9ca3af);"}
-                           util/example-code-help-text]
-                          [:button {:type "submit"
-                                    :class "w-full py-2.5 text-white rounded-lg font-medium transition"
-                                    :style "background:linear-gradient(135deg,#06b6d4,#3b82f6);"} "Submit Example"]]])}))
+     :body (layout/base-with-req "Submit Example" req
+                                 {:description "Submit a Datalevin example to the public docs site."
+                                  :robots "noindex,nofollow"}
+                                 [:div {:class "max-w-2xl mx-auto py-8 px-4"}
+                                  [:h1 {:class "text-3xl font-bold mb-6" :style "color:var(--text-primary, #e5e7eb)"} "Submit Example"]
+                                  [:form {:method "post" :action "/examples" :class "space-y-4"}
+                                   [:input {:type "hidden" :name "__anti-forgery-token" :value token}]
+                                   [:input {:type "hidden" :name "doc-section" :value doc-section}]
+                                   [:textarea {:name "code" :required true :rows 10
+                                               :maxlength util/max-example-code-length
+                                               :placeholder "Paste your code example here\n;; Add comments to describe it"
+                                               :class "w-full px-3 py-2 rounded-lg outline-none font-mono text-sm"
+                                               :style "background:var(--input-bg, rgba(255,255,255,0.05)); border:1px solid var(--input-border, rgba(255,255,255,0.1)); color:var(--text-primary, #e5e7eb);"}]
+                                   [:p {:class "text-xs"
+                                        :style "color:var(--text-secondary, #9ca3af);"}
+                                    util/example-code-help-text]
+                                   [:button {:type "submit"
+                                             :class "w-full py-2.5 text-white rounded-lg font-medium transition"
+                                             :style "background:linear-gradient(135deg,#06b6d4,#3b82f6);"}
+                                     "Submit Example"]]])}))
 
 (defn new-example-form-fragment [{:keys [params session] :as req}]
   (let [doc-section (:value (parse-doc-section params))

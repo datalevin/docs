@@ -42,6 +42,39 @@
       (is (= 1 @chapter-loads))
       (is (= 1 @index-loads)))))
 
+(deftest load-chapter-meta-reads-frontmatter-without-slurping-full-files
+  (pages/clear-all-caches!)
+  (let [dir (doto (java.io.File/createTempFile "pages-metadata" "")
+              (.delete)
+              (.mkdir))
+        chapter-file (java.io.File. dir "01-sample.md")
+        ignored-file (java.io.File. dir "toc.md")]
+    (try
+      (spit chapter-file
+            (str "---\n"
+                 "title: Sample Chapter\n"
+                 "chapter: 1\n"
+                 "part: I\n"
+                 "description: Frontmatter only\n"
+                 "---\n"
+                 (apply str (repeat 2000 "body text "))))
+      (spit ignored-file "# Table of contents")
+      (with-redefs [pages/docs-dir (.getAbsolutePath dir)
+                    clojure.core/slurp (fn [& _]
+                                         (throw (ex-info "load-chapter-meta should not slurp chapter files" {})))]
+        (let [chapters (pages/load-chapter-meta)]
+          (is (= 1 (count chapters)))
+          (is (= "01-sample" (:slug (first chapters))))
+          (is (= "Sample Chapter" (:title (first chapters))))
+          (is (= 1 (:chapter (first chapters))))
+          (is (= "I" (:part (first chapters))))
+          (is (= "Frontmatter only" (:description (first chapters))))))
+      (finally
+        (pages/clear-all-caches!)
+        (doseq [file (.listFiles dir)]
+          (.delete file))
+        (.delete dir)))))
+
 (deftest docs-index-renders-cached-html-inside-page-shell
   (binding [anti-forgery/*anti-forgery-token* (delay "test-token")]
     (with-redefs [pages/load-docs-index-html

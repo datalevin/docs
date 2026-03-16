@@ -68,17 +68,50 @@
   (clear-doc-cache!)
   (clear-docs-index-cache!))
 
+(def ^:private frontmatter-delimiter
+  "---")
+
+(def ^:private max-frontmatter-chars
+  8192)
+
+(defn- parse-frontmatter-yaml
+  [yaml-text]
+  (or (some-> yaml-text not-empty yaml/parse-string)
+      {}))
+
 (defn parse-frontmatter [content]
   (let [yaml-re #"^---\n([\s\S]*?)\n---\n([\s\S]*)$"
         matches (re-find yaml-re content)]
     (if matches
-      {:frontmatter (yaml/parse-string (nth matches 1))
+      {:frontmatter (parse-frontmatter-yaml (nth matches 1))
        :markdown (nth matches 2)}
       {:frontmatter {} :markdown content})))
 
 (defn parse-markdown [markdown]
   (let [node (.parse parser* markdown)]
     (.render renderer* node)))
+
+(defn- read-frontmatter
+  [file]
+  (with-open [reader (java.io.BufferedReader. (jio/reader file))]
+    (let [first-line (some-> (.readLine reader)
+                             (str/replace-first #"^\uFEFF" ""))]
+      (if (= frontmatter-delimiter first-line)
+        (loop [lines []
+               total-chars 0]
+          (if-let [line (.readLine reader)]
+            (cond
+              (= frontmatter-delimiter line)
+              (parse-frontmatter-yaml (str/join "\n" lines))
+
+              (> (+ total-chars (count line) 1) max-frontmatter-chars)
+              {}
+
+              :else
+              (recur (conj lines line)
+                     (+ total-chars (count line) 1)))
+            {}))
+        {}))))
 
 (defn- doc-description
   [frontmatter html]
@@ -155,8 +188,7 @@
                            :when (and (.endsWith name ".md")
                                       (not= name "toc.md"))
                            :let [slug (subs name 0 (- (count name) 3))
-                                 content (slurp f)
-                                 {:keys [frontmatter]} (parse-frontmatter content)]
+                                 frontmatter (read-frontmatter f)]
                            :when (:chapter frontmatter)]
                        {:slug slug
                         :title (:title frontmatter)

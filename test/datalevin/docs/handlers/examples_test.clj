@@ -1,7 +1,9 @@
 (ns datalevin.docs.handlers.examples-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
             [datalevin.docs.handlers.examples :as examples]
-            [datalevin.docs.util :as util]))
+            [datalevin.docs.util :as util]
+            [ring.middleware.anti-forgery :as anti-forgery]))
 
 (deftest example-queries-use-plain-pull-spec-inputs
   (is (= '[:find [(pull ?e pull-spec) ...]
@@ -92,3 +94,14 @@
            (get-in response [:headers "Location"])))
     (is (= ""
            (get-in (first @txs) [0 :example/doc-section])))))
+
+(deftest new-example-form-renders-request-aware-layout
+  (binding [anti-forgery/*anti-forgery-token* (delay "test-token")]
+    (let [resp (examples/new-example-form
+                {:params {}
+                 :session {:flash {:success "Saved"}}
+                 :user {:user/username "alice"}})
+          body (:body resp)]
+      (is (= 200 (:status resp)))
+      (is (str/includes? body "alice"))
+      (is (= 1 (count (re-seq #"Saved" body)))))))

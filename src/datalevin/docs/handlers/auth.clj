@@ -253,9 +253,6 @@
 ;; Password Reset
 ;; =============================================================================
 
-(defn forgot-password-page [req]
-  nil) ;; Rendered inline in routes.clj
-
 (defn forgot-password-handler [{:keys [params session biff.datalevin/conn] :as req}]
   (let [email (str/trim (param params "email"))
         db (d/db conn)
@@ -293,9 +290,6 @@
         (let [expires-at (:password-reset/expires-at entity)]
           (when (.before (Date.) expires-at)
             (get-in entity [:password-reset/user :user/id])))))))
-
-(defn reset-password-page [req]
-  nil) ;; Rendered inline in routes.clj
 
 (defn reset-password-handler [{:keys [params session biff.datalevin/conn] :as req}]
   (let [token (param params "token")
