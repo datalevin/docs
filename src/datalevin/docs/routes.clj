@@ -201,6 +201,9 @@
              (<= 0 length))
     (format "W/\"%x-%x\"" last-modified length)))
 
+(def ^:private static-asset-max-age-seconds
+  86400)
+
 (defn wrap-static-asset-headers [handler]
   (fn [req]
     (let [resp (handler req)
@@ -214,7 +217,7 @@
                        (static-asset-etag metadata))]
           (cond-> (assoc-in resp [:headers "Cache-Control"]
                             (if (= env "prod")
-                              "public, max-age=3600"
+                              (str "public, max-age=" static-asset-max-age-seconds)
                               "no-cache"))
             etag (assoc-in [:headers "ETag"] etag)))
         resp))))

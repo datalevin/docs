@@ -15,8 +15,9 @@
 
 (deftest base-loads-external-ui-scripts
   (let [html (layout/base "Test Page" [:div "Hello"])]
-    (is (str/includes? html "/js/theme.js"))
-    (is (str/includes? html "/js/ui-interactions.js"))
+    (is (re-find #"/js/theme\.js\?v=[0-9a-f]{12}" html))
+    (is (re-find #"/js/ui-interactions\.js\?v=[0-9a-f]{12}" html))
+    (is (re-find #"/css/output\.css\?v=[0-9a-f]{12}" html))
     (is (not (str/includes? html "onclick=")))))
 
 (deftest anonymous-header-keeps-pdf-public-and-removes-gated-copy

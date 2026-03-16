@@ -9,11 +9,11 @@
   (let [user (:user req)
         token (when user (force anti-forgery/*anti-forgery-token*))]
     [:header {:class "sticky top-0 z-50 border-b"
-              :style "background:var(--bg-header, rgba(10,10,15,0.8)); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border-color:var(--border-header, rgba(255,255,255,0.1));"
+      :style "background:var(--bg-header, rgba(10,10,15,0.8)); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border-color:var(--border-header, rgba(255,255,255,0.1));"
               :data-theme "dark"}
      [:div {:class "max-w-5xl mx-auto px-4 py-3 flex items-center justify-between"}
       [:a {:href "/" :class "flex items-center gap-2"}
-       [:img {:src "/images/logo.png" :alt "Datalevin" :class "h-8 w-8"}]
+       [:img {:src (util/asset-url "/images/logo.png") :alt "Datalevin" :class "h-8 w-8"}]
        [:span {:class "font-bold text-lg" :style "color:var(--text-primary, #e5e7eb)"} "Datalevin"]]
       [:nav {:class "hidden md:flex items-center gap-6"
              :style "color:var(--text-secondary, #9ca3af);"}
@@ -97,7 +97,8 @@
                      (when-let [uri (some-> req :uri)]
                        (util/absolute-url req uri)))
         image-url (or image-url
-                      (when-let [path (or image-path default-image-path)]
+                      (when-let [path (some-> (or image-path default-image-path)
+                                              util/asset-url)]
                         (util/absolute-url req path)))
         og-type (or og-type "website")]
     (cond-> [[:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
@@ -126,25 +127,25 @@
         html-attrs (cond-> {:hx-boost "true" :lang "en"}
                      token (assoc :hx-headers (j/write-value-as-string {"X-CSRF-Token" token})))
         head-assets (if req
-                      [[:link {:href "/css/hljs-atom-one-dark.min.css" :rel "stylesheet"}]
-                       [:link {:href "/css/multi-lang.css" :rel "stylesheet"}]
-                       [:script {:src "/js/highlight.min.js"}]
-                       [:script {:src "/js/hljs-clojure.min.js"}]
-                       [:script {:src "/js/hljs-java.min.js"}]
-                       [:script {:src "/js/hljs-python.min.js"}]
-                       [:script {:src "/js/hljs-javascript.min.js"}]
-                       [:script {:src "/js/code-highlight.js" :defer true}]
-                       [:script {:src "/js/gh-stars.js" :defer true}]]
+                      [[:link {:href (util/asset-url "/css/hljs-atom-one-dark.min.css") :rel "stylesheet"}]
+                       [:link {:href (util/asset-url "/css/multi-lang.css") :rel "stylesheet"}]
+                       [:script {:src (util/asset-url "/js/highlight.min.js")}]
+                       [:script {:src (util/asset-url "/js/hljs-clojure.min.js")}]
+                       [:script {:src (util/asset-url "/js/hljs-java.min.js")}]
+                       [:script {:src (util/asset-url "/js/hljs-python.min.js")}]
+                       [:script {:src (util/asset-url "/js/hljs-javascript.min.js")}]
+                       [:script {:src (util/asset-url "/js/code-highlight.js") :defer true}]
+                       [:script {:src (util/asset-url "/js/gh-stars.js") :defer true}]]
                       [])
         head-children (into [[:meta {:charset "utf-8"}]]
                             (concat (meta-tags title req opts)
-                                    [[:link {:rel "icon" :type "image/png" :href "/images/logo.png"}]
-                                     [:script {:src "/js/htmx.min.js"}]
-                                     [:link {:href "/css/output.css" :rel "stylesheet"}]]
+                                    [[:link {:rel "icon" :type "image/png" :href (util/asset-url "/images/logo.png")}]
+                                     [:script {:src (util/asset-url "/js/htmx.min.js")}]
+                                     [:link {:href (util/asset-url "/css/output.css") :rel "stylesheet"}]]
                                     head-assets
-                                    [[:link {:href "/css/theme-shell.css" :rel "stylesheet"}]]
-                                    [[:script {:src "/js/theme.js" :defer true}]
-                                     [:script {:src "/js/ui-interactions.js" :defer true}]]))
+                                    [[:link {:href (util/asset-url "/css/theme-shell.css") :rel "stylesheet"}]]
+                                    [[:script {:src (util/asset-url "/js/theme.js") :defer true}]
+                                     [:script {:src (util/asset-url "/js/ui-interactions.js") :defer true}]]))
         body-children (cond-> [(if req (header req) (header))]
                         (and req flash) (conj (flash-message flash)))
         body-children (into body-children body)]

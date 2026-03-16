@@ -3,6 +3,29 @@
             [clojure.test :refer [deftest is]]
             [datalevin.docs.core :as core]))
 
+(deftest start-configures-jetty-graceful-stop-timeout
+  (let [jetty-server (atom nil)]
+    (with-redefs [core/configure-logging! (fn [_])
+                  core/start-session-cleanup (fn [_] ::scheduler)
+                  biff/start-system (fn [initial-system components]
+                                      ((second components) (assoc initial-system :biff/stop [])))
+                  core/stop-session-cleanup (fn [_] nil)
+                  ring.adapter.jetty/run-jetty (fn [_ opts]
+                                                 (let [server (org.eclipse.jetty.server.Server.)]
+                                                   ((:configurator opts) server)
+                                                   (reset! jetty-server server)
+                                                   server))
+                  datalevin.docs.config/resolve-env (fn [_]
+                                                      {:env "test"
+                                                       :port 8080
+                                                       :db-path "data/test-db"})
+                  datalevin.docs.config/session-secret (fn [_] "test-secret")
+                  datalevin.docs.config/mail-config (fn [_] nil)
+                  datalevin.docs.handlers.pages/warm-static-caches! (fn [] nil)
+                  datalevin.core/get-conn (fn [& _] ::conn)]
+      (core/start)
+      (is (= 30000 (.getStopTimeout ^org.eclipse.jetty.server.Server @jetty-server))))))
+
 (deftest shutdown-hook-stops-system
   (let [stopped (atom nil)
         sys {:name :docs}]

@@ -27,6 +27,8 @@
 
 (def system nil)
 
+(def ^:private jetty-stop-timeout-ms 30000)
+
 (defn- shutdown-hook-thread
   [sys]
   (Thread.
@@ -123,6 +125,9 @@
                                                               :max-idle-time 30000
                                                               :configurator
                                                               (fn [server]
+                                                                (.setStopTimeout ^org.eclipse.jetty.server.Server
+                                                                                 server
+                                                                                 jetty-stop-timeout-ms)
                                                                 (when-let [handler (.getHandler server)]
                                                                   (when (instance? org.eclipse.jetty.servlet.ServletContextHandler handler)
                                                                     ;; Reject oversized form posts before Ring parses params.

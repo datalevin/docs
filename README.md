@@ -77,19 +77,20 @@ The uberjar avoids resolving the production classpath on every boot and is the p
 
 ## Production
 
-Start the docs site with explicit JVM heap limits:
+Start the docs site from the built uberjar with explicit JVM heap limits:
 
 ```bash
+clojure -T:build uber
 scripts/start-prod.sh
 ```
 
 Set `ENV=prod` and a real `SESSION_SECRET` before starting. Startup now fails fast if `ENV=prod` and `SESSION_SECRET` is missing.
 In production, startup also fails fast unless outbound email is configured with `MAIL_FROM` and `SMTP_HOST`.
 
-That wrapper runs:
+That wrapper runs the same jar-based startup pattern as the `systemd` unit:
 
 ```bash
-clojure -J-Xms256m -J-Xmx384m -J-XX:+UseG1GC -J-XX:MaxGCPauseMillis=200 -J-XX:+UseStringDeduplication -J-XX:MaxMetaspaceSize=128m -M:prod -m datalevin.docs.core
+java -Xms256m -Xmx384m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+UseStringDeduplication -XX:MaxMetaspaceSize=128m -jar target/datalevin-docs-standalone.jar
 ```
 
 On small VMs, setting `-Xms` and a conservative `-Xmx` avoids the JVM expanding until the host OOM killer intervenes while still leaving more room for Datalevin's mmap usage. Provision at least `1 GB` of swap on these hosts so short bursts of heap or page-cache pressure do not immediately turn into an OOM kill. The prod wrapper also defaults to G1 with string deduplication and a 128 MB metaspace cap. You can override the defaults if needed:
@@ -104,11 +105,10 @@ If you want a lower-overhead collector on a very small VM, switch the wrapper to
 JAVA_GC=serial scripts/start-prod.sh
 ```
 
-For deployed hosts, prefer the uberjar instead of invoking Clojure directly:
+Override `APP_JAR` if the jar lives outside the repo checkout:
 
 ```bash
-ENV=prod SESSION_SECRET=replace-me \
-	java -Xms256m -Xmx384m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+UseStringDeduplication -XX:MaxMetaspaceSize=128m -jar target/datalevin-docs-standalone.jar
+APP_JAR=/opt/datalevin-docs/datalevin-docs-standalone.jar scripts/start-prod.sh
 ```
 
 ## systemd

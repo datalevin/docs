@@ -1,5 +1,7 @@
 (ns datalevin.docs.util
-  (:require [clojure.string :as str]))
+  (:require [clojure.java.io :as io]
+            [clojure.string :as str])
+  (:import [java.security MessageDigest]))
 
 (def ^:const site-name
   "Datalevin Docs")
@@ -17,6 +19,33 @@
 
 (def example-code-error-text
   (str "Code must be " max-example-code-length " characters or fewer."))
+
+(defonce ^:private asset-version-cache
+  (atom {}))
+
+(defn- compute-asset-version
+  [path]
+  (when-let [resource (io/resource (str "public" path))]
+    (let [digest (MessageDigest/getInstance "SHA-1")
+          buffer (byte-array 8192)]
+      (with-open [in (io/input-stream resource)]
+        (loop []
+          (let [read (.read in buffer)]
+            (when (pos? read)
+              (.update digest buffer 0 read)
+              (recur)))))
+      (let [bytes (.digest digest)]
+        (apply str (map #(format "%02x" (bit-and % 0xff)) bytes))))))
+
+(defn asset-url
+  [path]
+  (if (str/includes? (or path "") "?")
+    path
+    (if-let [version (or (get @asset-version-cache path)
+                         (when-let [computed (compute-asset-version path)]
+                           (get (swap! asset-version-cache assoc path computed) path)))]
+      (str path "?v=" (subs version 0 12))
+      path)))
 
 (defn escape-html
   "Escapes HTML special characters to prevent XSS.

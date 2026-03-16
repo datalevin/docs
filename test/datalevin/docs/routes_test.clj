@@ -49,7 +49,7 @@
   (let [handler (routes/app {:biff/config {:env "prod"}})
         resp (handler (request :get "/css/output.css"))]
     (is (= 200 (:status resp)))
-    (is (= "public, max-age=3600"
+    (is (= "public, max-age=86400"
            (get-in resp [:headers "Cache-Control"])))
     (is (string? (get-in resp [:headers "ETag"])))
     (is (string? (get-in resp [:headers "Last-Modified"])))))
@@ -64,12 +64,12 @@
         last-modified-resp (handler (request-with-headers :get "/css/output.css"
                                                           {"if-modified-since" last-modified}))]
     (is (= 304 (:status etag-resp)))
-    (is (= "public, max-age=3600"
+    (is (= "public, max-age=86400"
            (get-in etag-resp [:headers "Cache-Control"])))
     (is (= etag
            (get-in etag-resp [:headers "ETag"])))
     (is (= 304 (:status last-modified-resp)))
-    (is (= "public, max-age=3600"
+    (is (= "public, max-age=86400"
            (get-in last-modified-resp [:headers "Cache-Control"])))
     (is (= etag
            (get-in last-modified-resp [:headers "ETag"])))
