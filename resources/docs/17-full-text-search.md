@@ -6,7 +6,7 @@ part: "IV — Indexes as Capabilities"
 
 # Chapter 17: Full-Text Search: Analyzers, Vector Space Model and Boolean Search Expression
 
-Most databases require a separate engine like Elasticsearch or Solr for full-text search. Datalevin includes a high-performance, integrated search engine built directly on top of its KV substrate. Your search index is always transactionally consistent with your data, stored in the same LMDB data file.
+Most databases require a separate engine like Elasticsearch or Solr for full-text search. Datalevin includes a high-performance, integrated search engine built directly on top of its KV substrate. In the default synchronous indexing mode, your search index is transactionally consistent with your data and stored in the same LMDB data file. For heavier ingestion workloads, full-text domains can opt into asynchronous indexing.
 
 This chapter explains how to enable full-text search, craft powerful search queries using boolean logic, and understand the underlying ranking algorithm.
 
@@ -188,9 +188,20 @@ d.q('[:find ?e ?a ?v ' +
 
 Available options:
 - `:top` — number of results (default 10)
-- `:display` — `:refs` (default), `:texts`, `:offsets`, or `:texts+offsets`
+- `:display` — `:refs` (default), `:refs+scores`, `:texts`, `:offsets`, or `:texts+offsets`
 - `:domains` — list of search domains to query
 - `:doc-filter` — predicate function to filter results
+
+When `:display` is not `:refs`, destructure the extra values in the returned tuple. For example, relevance scores use `[e a v score]`:
+
+```clojure
+(d/q '[:find ?e ?score
+       :in $ ?q
+       :where [(fulltext $ ?q {:top 5 :display :refs+scores})
+               [[?e _ _ ?score]]]]
+     db
+     "database")
+```
 
 ---
 
@@ -342,6 +353,33 @@ Pre-computed norms load into memory on initialization. Term information loads pe
 
 ---
 
+## 8. Asynchronous Indexing
+
+Full-text indexing is synchronous by default: a transaction updates source datoms and the full-text index before returning. This preserves read-your-writes behavior for `fulltext`.
+
+For high-ingestion workloads, a search domain can opt into async indexing:
+
+```clojure
+(def conn
+  (d/create-conn
+    "/tmp/search-db"
+    {:post/content {:db/valueType :db.type/string
+                    :db/fulltext  true}}
+    {:search-opts {:indexing-mode :async}}))
+```
+
+or per domain:
+
+```clojure
+{:search-domains
+ {"content" {:index-position? true
+             :indexing-mode   :async}}}
+```
+
+In async mode, Datalevin commits the source datoms and a durable secondary-index job atomically. An in-process worker applies the search index update after commit and after DB-open recovery. Queries over that index are eventually consistent until the worker catches up. Use `secondary-index-status` or `wait-for-secondary-index` when an application needs to observe lag or wait for a specific transaction's index work.
+
+---
+
 ## Summary
 
-Full-text search in Datalevin is a first-class capability: transactionally consistent, tightly integrated, and high-performance. Enable `:db/fulltext`, use the `fulltext` function with Clojure-style boolean expressions, and leverage search domains for organized indexing—all without operating a separate search cluster.
+Full-text search in Datalevin is a first-class capability: tightly integrated, high-performance, and synchronous by default. Enable `:db/fulltext`, use the `fulltext` function with Clojure-style boolean expressions, and leverage search domains for organized indexing, without operating a separate search cluster.

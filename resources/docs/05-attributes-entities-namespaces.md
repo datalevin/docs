@@ -70,6 +70,8 @@ While attributes are created automatically, you can provide a schema map to `d/c
 | `:db/cardinality` | `:db.cardinality/one` (default) or `:db.cardinality/many` (set of values). |
 | `:db/unique` | `:db.unique/identity` (unique and lookupable) or `:db.unique/value` (just unique). |
 | `:db/fulltext` | Set to `true` to enable full-text search on string values. |
+| `:db/embedding` | Set to `true` on string attributes to maintain an embedding similarity index. |
+| `:db/idocFormat` | Format for `:db.type/idoc` attributes: `:edn`, `:json`, or `:markdown`. |
 
 > **Note on Indexing**: Unlike some other Datalog databases, Datalevin indexes **every attribute** by default in the AVE (Attribute-Value-Entity) index. You do not need to specify a `:db/index` property to enable fast lookups.
 
@@ -79,7 +81,10 @@ While attributes are created automatically, you can provide a schema map to `d/c
   {:user/email {:db/valueType :db.type/string
                 :db/unique    :db.unique/identity}
    :user/age   {:db/valueType :db.type/long}
-   :user/tags  {:db/cardinality :db.cardinality/many}})
+   :user/tags  {:db/cardinality :db.cardinality/many}
+   :user/bio   {:db/valueType :db.type/string
+                :db/fulltext  true
+                :db/embedding true}})
 ```
 ---
 

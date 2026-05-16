@@ -4,7 +4,7 @@ Part I — Foundations: A Multi-Paradigm Database
 
 1. Why Datalevin: Logic, Graphs, and Key–Value in One Engine
 
-2. Getting Started: Embedded, Server, and Babashka Pod Modes
+2. Getting Started: Embedded, Server, Native Language Libraries, and Babashka Pod Modes
 
 3. The Datalevin Mental Model: Values, Facts, and Relationships
 
@@ -64,11 +64,11 @@ Part VI — Systems and Operations
 
 26. Durability, Snapshots, and Backup Strategies
 
-27. Client-Server Architecture: Protocols and Security
+27. Client-Server Architecture: Protocols, HA, and Security
 
 28. Encryption at Rest and Security Models
 
-29. Deployment Patterns: Embedded vs Client/Server vs Pods
+29. Deployment Patterns: Embedded, Server, HA, MCP, and Pods
 
 30. Monitoring, Debugging, and Production Checklist
 
@@ -90,7 +90,7 @@ Part VIII — Internals and Extensions
 
 37. Datalog Evaluation Strategies
 
-38. Extending Datalevin: Custom Indexes and Predicates
+38. Extending Datalevin: Custom Indexes, Predicates, and UDFs
 
 39. Embedding Datalevin in Applications
 

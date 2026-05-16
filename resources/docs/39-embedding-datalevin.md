@@ -18,8 +18,19 @@ To use Datalevin, add the dependency to your project:
 
 ```clojure
 ;; deps.edn
-{datalevin/datalevin {:mvn/version "0.9.22"}}
+{:deps {datalevin/datalevin {:mvn/version "0.10.15"}}}
+
+;; Embedded-only JVM artifact
+{:deps {org.datalevin/datalevin-embedded {:mvn/version "0.10.15"}}}
 ```
+
+For non-Clojure embedded applications, use the published host-language artifacts:
+
+- Java: `org.datalevin:datalevin-java:0.10.15` from Maven Central.
+- Python: `datalevin` from PyPI.
+- Node.js: `datalevin-node` from npm.
+
+All current embedded packages require Java 21+.
 
 ### 1.1 Managing the Connection
 Datalevin requires a clean shutdown to ensure the LMDB environment is closed correctly. In Clojure, it is best practice to manage this via a state management library like **Integrant** or **Mount**, or a simple `with-open` block.
@@ -32,33 +43,38 @@ Datalevin requires a clean shutdown to ensure the LMDB environment is closed cor
     {:conn conn}))
 
 (defn stop-app [system]
-  (d/close-conn (:conn system)))
+  (d/close (:conn system)))
 ```
 
 ```java
-import datalevin.core.*;
+import datalevin.Connection;
+import datalevin.Datalevin;
 
 // Start: open a connection
-Connection conn = Datalevin.getConn(config.getDbPath(), schema);
+Connection conn = Datalevin.createConn(config.getDbPath(), schema);
 
 // Stop: close the connection
-Datalevin.closeConn(conn);
+conn.close();
 ```
 
 ```python
+from datalevin import connect
+
 # Start: open a connection
-conn = d.get_conn(config["db_path"], schema)
+conn = connect(config["db_path"], schema=schema)
 
 # Stop: close the connection
-d.close_conn(conn)
+conn.close()
 ```
 
 ```javascript
+import { connect } from "datalevin-node";
+
 // Start: open a connection
-const conn = d.getConn(config.dbPath, schema);
+const conn = await connect(config.dbPath, { schema });
 
 // Stop: close the connection
-d.closeConn(conn);
+await conn.close();
 ```
 
 </div>
@@ -79,12 +95,15 @@ Since Datalevin is schema-on-write, your application code is the "source of trut
 Datalevin makes testing incredibly fast and simple.
 
 ### 3.1 Fast In-Memory Tests
-Use the `:temp? true` option when creating a connection for your tests. This creates a temporary database in a ramdisk or temporary directory that is automatically deleted when the JVM exits.
+Use `:temp? true` for throwaway on-disk test databases, or an in-memory KV option when a test does not need file persistence. A fresh directory per test remains the most predictable isolation strategy.
 
 <div class="multi-lang">
 
 ```clojure
 (def test-conn (d/get-conn "/tmp/test-db" schema {:temp? true}))
+
+;; Fully in-memory Datalog store through KV options
+(def mem-conn (d/create-conn nil schema {:kv-opts {:inmemory? true}}))
 ```
 
 ```java

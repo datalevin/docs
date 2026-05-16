@@ -14,19 +14,19 @@ For the best balance of safety and speed during ingestion, enable **WAL mode** w
 - **Benefit**: Sequential WAL appends are much faster than random B+Tree flushes.
 - **Tuning**: Adjust `:wal-group-commit` and `:wal-group-commit-ms` to optimize batching for your hardware.
 
-### 1.2 Asynchronous Transactions: `d/transact-async!`
-The `d/transact-async!` function automatically batches multiple transactions together. When combined with WAL mode, this provides the highest possible OLTP throughput.
+### 1.2 Asynchronous Transactions: `d/transact-async`
+The `d/transact-async` function automatically batches multiple transactions together. When combined with WAL mode, this provides the highest possible OLTP throughput.
 
 <div class="multi-lang">
 
 ```clojure
 ;; Fire multiple async transactions
-(d/transact-async! conn batch-1)
-(d/transact-async! conn batch-2)
-(d/transact-async! conn batch-3)
+(d/transact-async conn batch-1)
+(d/transact-async conn batch-2)
+(d/transact-async conn batch-3)
 
 ;; Block on the last one to ensure all are committed
-(deref (d/transact-async! conn batch-4))
+(deref (d/transact-async conn batch-4))
 ```
 
 ```java
@@ -71,9 +71,9 @@ For applications that need both good throughput and deterministic commit points,
 
 ```clojure
 ;; Async writes for throughput
-(d/transact-async! conn batch-1)
-(d/transact-async! conn batch-2)
-(d/transact-async! conn batch-3)
+(d/transact-async conn batch-1)
+(d/transact-async conn batch-2)
+(d/transact-async conn batch-3)
 
 ;; Sync commit to ensure all are persisted
 (d/transact! conn [])
@@ -113,7 +113,7 @@ d.transact(conn, []);
 
 Since async transactions are still committed in order, the last realized future indicates all prior calls are already committed.
 
-> **Note**: Datalevin supports only a single write thread at a time. Parallel transactions actually slow writes down due to mutex contention and thread switching overhead. Stick to sequential async calls.
+> **Note**: In the default direct LMDB commit path, writes are still coordinated by the single-writer B+Tree transaction model. WAL mode changes the throughput profile: concurrent writer callers can benefit from sequential WAL append and group commit, though scaling is still sub-linear. For most ingestion jobs, combine manual batches with `transact-async` and measure before adding writer threads.
 
 ---
 
@@ -235,7 +235,7 @@ const db = d.initDb(preparedDatoms, schema);
 When you need to ingest data at scale, follow this checklist:
 
 1.  **Use WAL mode with `:relaxed` durability**: This provides the underlying storage performance needed for massive ingestion.
-2.  **Use async transactions**: `d/transact-async!` provides adaptive batching for orders-of-magnitude throughput improvement.
+2.  **Use async transactions**: `d/transact-async` provides adaptive batching for orders-of-magnitude throughput improvement.
 3.  **Combine with manual batching**: The effects of auto-batching and manual batching compound.
 4.  **Sort your data**: Sort by Entity ID before transacting to minimize B+Tree fragmentation.
 5.  **Use `init-db`/`fill-db`** for the fastest possible initial load into an empty database.

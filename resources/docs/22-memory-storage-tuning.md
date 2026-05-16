@@ -66,8 +66,10 @@ Because Datalevin uses **memory-mapped files (`mmap`)**, it does not manage its 
 
 LMDB uses a "lock-free" reader model, but it still needs to track active readers to prevent writers from overwriting pages that are still being read.
 
-- **`:max-readers`**: This parameter (default: 126) defines how many concurrent reader threads can access the database.
-- **When to Increase**: If your application uses highly concurrent web servers or background workers, you may need to increase this to 512 or 1024.
+- **`:max-readers`**: This parameter (default: 1024) defines how many concurrent reader slots can access the database.
+- **When to Increase**: If your application uses highly concurrent web servers or bounded worker pools above the default reader count, increase this before deployment.
+
+Datalevin also tracks cached reader transactions and the owning thread so reader slots can be released when threads disappear. This reduces the common LMDB failure mode where abandoned thread pools exhaust reader slots. Virtual-thread handling is hardened by disabling thread-local read reuse for short-lived virtual threads.
 
 <div class="multi-lang">
 
@@ -107,8 +109,8 @@ In a Datalog AVE index, many keys share the same Attribute and Value (e.g., thou
 When WAL mode is enabled, several additional parameters can be tuned to balance performance and safety:
 
 - **`:wal-durability-profile`**: `:strict` (standard `fsync`), `:relaxed` (batched syncs), or `:extra` (e.g., `F_FULLSYNC` on macOS).
-- **`:wal-group-commit`**: Max writes per durability batch in `:relaxed` mode (default: 100).
-- **`:wal-group-commit-ms`**: Max milliseconds between batches in `:relaxed` mode (default: 100ms).
+- **`:wal-group-commit`**: Max writes per durability batch in `:relaxed` mode (default: 128).
+- **`:wal-group-commit-ms`**: Max milliseconds between batches in `:relaxed` mode (default: 10ms).
 - **Retention**: Control disk space with `:wal-retention-bytes` (default: 8GiB) and `:wal-retention-ms` (default: 7 days).
 
 ---

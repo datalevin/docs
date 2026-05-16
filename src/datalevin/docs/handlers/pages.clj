@@ -1,17 +1,4 @@
-(ns datalevin.docs.handlers.pages
-  (:require [datalevin.docs.views.layout :as layout]
-            [datalevin.docs.util :as util]
-            [clojure.java.io :as jio]
-            [clojure.string :as str]
-            [clj-yaml.core :as yaml]
-            [hiccup2.core :as h]
-            [datalevin.core :as d])
-  (:import [java.time Instant]
-           [java.time.format DateTimeFormatter]
-           [org.commonmark.parser Parser]
-           [org.commonmark.renderer.html HtmlRenderer]
-           [org.commonmark.ext.footnotes FootnotesExtension]
-           [org.commonmark.ext.gfm.tables TablesExtension]))
+Q
 
 (def docs-dir "resources/docs")
 (def extensions [(FootnotesExtension/create) (TablesExtension/create)])
@@ -298,41 +285,43 @@
      :body xml}))
 
 (defn home [req]
-  {:status 200
+  {:status  200
    :headers {"Content-Type" "text/html"}
    :body
    (layout/base-with-req "Datalevin Docs" req
-                         {:description home-description
+                         {:description    home-description
                           :canonical-path "/"}
-	    ;; Hero
+	                       ;; Hero
                          [:div {:style "text-align:center;padding:4rem 1rem 0"}
                           [:h1 {:style "font-size:3.5rem;font-weight:bold;margin-bottom:1.5rem;background:linear-gradient(135deg,#06b6d4,#3b82f6,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;"} "Datalevin"]
                           [:p {:style "font-size:1.25rem;color:#9ca3af;margin-bottom:2rem"}
-                           "SQLite for connected data and reasoning"]                          [:div {:style "display:flex;justify-content:center;gap:1rem;margin-bottom:3rem"}
-                           [:a {:href "/docs/02-getting-started" :class "dl-btn-primary"} "Get Started"]
-                           [:a {:href "/docs" :class "dl-btn"} "Read the Book"]]]
-    ;; Features
+                           "The database that thinks"]                          [:div {:style "display:flex;justify-content:center;gap:1rem;margin-bottom:3rem"}
+                                                                                 [:a {:href "/docs/02-getting-started" :class "dl-btn-primary"} "Get Started"]
+                                                                                 [:a {:href "/docs" :class "dl-btn"} "Read the Book"]]]
+                         ;; Features
                          [:div {:style "max-width:64rem;margin:0 auto;padding:2rem 2rem"}
                           [:h2 {:class "section-title" :style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:2rem;color:#f9fafb"} "Why Datalevin?"]
                           [:div {:style "display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.5rem"}
                            [:a {:href "/docs/03-mental-model" :class card-style}
                             [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Simple"]
-                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "Declarative Datalog query language and triple data model."]]
+                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "One Datalog query language, every data model."]]
                            [:a {:href "/docs/04-storage-fundamentals" :class card-style}
                             [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Fast"]
-                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "Built on LMDB, one of the fastest key-value stores."]]
+                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "Built on LMDB, the fastest key-value ACID store."]]
                            [:a {:href "/docs/01-why-datalevin" :class card-style}
                             [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Versatile"]
-                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "Relational, graph, document, vector, full-text search in a unified data store."]]]
+                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "Relational, graph, document, logical, vector, full-text in one unified DB."]]]
                           [:div {:style "display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.5rem;margin-top:1.5rem"}
                            [:a {:href "/docs/02-getting-started" :class card-style}
-                            [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Flexible"]
-                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "Seamless deployment: embedded in applications, client/server, and fast starting command line scripting."]]
+                            [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Deploy Agnostic"]
+                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "Start embedded, move to cluster, never migrate data."]]
                            [:a {:href "/docs/26-durability-backups" :class card-style}
-                            [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Reliable"]
-                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "Robust ACID compliance, WAL writes, transaction log access, read replica and high availability."]]
+                            [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Transaction+Query Optimized"]
+                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "WAL and asynchronous transactions + state of the art query optimizer and rule engine."]]
                            [:a {:href "/docs/31-agent-memory" :class card-style}
-                            [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "AI Native"]                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "CLI with full capability and built-in MCP server, ideal for agent memory and agentic application."]]]]    ;; Ecosystem
+                            [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "AI Native"]
+                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "Built-in MCP server + model inference for embedding, generation and OCR."]]]]
+                         ;; Ecosystem
                          [:div {:style "max-width:64rem;margin:0 auto;padding:2rem 2rem"}
                           [:h2 {:class "section-title" :style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:0.75rem;color:#f9fafb"} "Ecosystem"]
                           [:p {:style "text-align:center;color:#9ca3af;font-size:1rem;margin-bottom:1.5rem"}
@@ -341,10 +330,10 @@
                            [:a {:href "/examples" :class btn-style} "User Examples"]
                            [:a {:href slack-url :target "_blank" :rel "noopener noreferrer" :class btn-style}
                             (str \# "datalevin Clojurians Slack")]
-                           [:a {:href "https://github.com/datalevin/datalevin/discussions"
+                           [:a {:href   "https://github.com/datalevin/datalevin/discussions"
                                 :target "_blank" :rel "noopener noreferrer" :class btn-style}
                             "GitHub Discussions"]]]
-    ;; Support
+                         ;; Support
                          [:div {:style "max-width:64rem;margin:0 auto;padding:2rem 2rem 3rem"}
                           [:h2 {:class "section-title" :style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:0.75rem;color:#f9fafb"} "Support the Project"]
                           [:p {:style "text-align:center;color:#9ca3af;font-size:1rem;margin-bottom:1.5rem"}
@@ -354,12 +343,12 @@
                             "GitHub Sponsors"]]])})
 
 (defn docs-index [req]
-  {:status 200
+  {:status  200
    :headers {"Content-Type" "text/html"}
-   :body (layout/base-with-req "Table of Contents" req
-                               {:description docs-index-description
-                                :canonical-path "/docs"}
-                               (h/raw (load-docs-index-html)))})
+   :body    (layout/base-with-req "Table of Contents" req
+                                  {:description    docs-index-description
+                                   :canonical-path "/docs"}
+                                  (h/raw (load-docs-index-html)))})
 
 (defn load-examples [conn doc-section]
   (when conn

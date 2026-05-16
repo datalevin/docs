@@ -1,14 +1,14 @@
 ---
-title: "Extending Datalevin: Custom Indexes and Predicates"
+title: "Extending Datalevin: Custom Indexes, Predicates, and UDFs"
 chapter: 38
 part: "VIII — Internals and Extensions"
 ---
 
-# Chapter 38: Extending Datalevin: Custom Indexes and Predicates
+# Chapter 38: Extending Datalevin: Custom Indexes, Predicates, and UDFs
 
 Datalevin is designed to be a flexible platform. While the built-in Datalog and search capabilities cover most use cases, you may occasionally need to extend the database with custom logic or specialized data structures.
 
-This chapter explores the different ways you can extend Datalevin, from simple custom functions to building entirely new indexes.
+This chapter explores the different ways you can extend Datalevin, from simple custom functions and runtime UDFs to building application-specific indexes.
 
 ---
 
@@ -52,11 +52,29 @@ Consult the `datalevin.search` namespace for the API to register custom analyzer
 
 ---
 
-## 3. Building Custom Indexes via KV
+## 3. Runtime UDF Descriptors
+
+For logic that should be resolved by the host runtime rather than stored as Clojure code, Datalevin supports descriptor-backed `:db/udf` functions. A UDF descriptor is data in the database; the actual function implementation is registered in the runtime environment.
+
+That makes UDFs language-agnostic. The implementation can live in Clojure, Java, Python, or JavaScript, depending on the embedding runtime:
+
+```clojure
+{:udf/lang :java
+ :udf/kind :tx-fn
+ :udf/id   :user/bootstrap}
+```
+
+The descriptor is persisted; the function object is not. Embedded applications pass a runtime registry when opening the database. In server mode, the registry must be installed in the server process because remote transactions execute there. Client-local registries are not consulted for server-side writes.
+
+Use UDFs when you need host-managed business logic, foreign-language integration, or a controlled runtime function catalog. Use ordinary fully-qualified Clojure functions for simple local query predicates when Clojure is the only runtime involved.
+
+---
+
+## 4. Building Custom Indexes via KV
 
 One of Datalevin's unique strengths is that the Datalog engine and the raw Key-Value store live in the same transactional environment. This allows you to build **Custom Indexes** that are perfectly tuned for your application.
 
-### 3.1 The Pattern: Listen and Index
+### 4.1 The Pattern: Listen and Index
 1.  **Storage**: Create a named DBI in the KV store (Chapter 6).
 2.  **Listening**: Use **`d/listen!`** to subscribe to every Datalog transaction.
 3.  **Update**: In the listener callback, extract the relevant datoms and update your custom KV index.
@@ -65,12 +83,12 @@ This ensures that your custom index is always in sync with your relational facts
 
 ---
 
-## 4. Summary: The Extensible Database
+## 5. Summary: The Extensible Database
 
 Datalevin does not force you to stay within the boundaries of a pre-defined engine.
 
 - **Datalog** provides the high-level logic.
-- **Clojure Functions** provide the custom rules.
+- **Clojure functions and UDF descriptors** provide custom rules and host-runtime behavior.
 - **KV Store** provides the substrate for specialized indexes.
 
 By combining these three layers, you can build a database that is uniquely optimized for your specific domain and performance requirements.

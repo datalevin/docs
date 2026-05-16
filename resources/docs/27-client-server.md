@@ -1,10 +1,10 @@
 ---
-title: "Client-Server Architecture: Protocols and Security"
+title: "Client-Server Architecture: Protocols, HA, and Security"
 chapter: 27
 part: "VI — Systems and Operations"
 ---
 
-# Chapter 27: Client-Server Architecture: Protocols and Security
+# Chapter 27: Client-Server Architecture: Protocols, HA, and Security
 
 While Datalevin is often used in embedded mode for maximum performance, its **Client-Server mode** is essential for multi-user environments, microservices architectures, and cross-language integration.
 
@@ -21,17 +21,18 @@ You can start the server using the native `dtlv` CLI or via the JVM uberjar.
 
 ```console
 # Using the native CLI tool
-$ dtlv serv -r /data/datalevin -p 8898
+$ DATALEVIN_DEFAULT_PASSWORD=secret dtlv serv -r /data/datalevin -p 8898
 
 # Using JVM uberjar (recommended for production)
-$ java --add-opens=java.base/java.nio=ALL-UNNAMED \
+$ DATALEVIN_DEFAULT_PASSWORD=secret \
+  java --add-opens=java.base/java.nio=ALL-UNNAMED \
        --add-opens=java.base/sun.nio.ch=ALL-UNNAMED \
-       -jar datalevin-standalone.jar serv -r /data/datalevin
+       -jar datalevin-0.10.15-standalone.jar serv --host 0.0.0.0 -r /data/datalevin
 ```
 
 - **`-r <path>`**: The root directory for data storage (Default Posix: `/var/lib/datalevin`, Windows: `C:\ProgramData\Datalevin`).
 - **`-p <port>`**: The port to listen on (default: `8898`).
-- **`-b <host>`**: The address to bind to (default: `localhost`).
+- **`--host <host>`**: The address to bind to (default: `127.0.0.1`). Binding to a non-loopback address requires `DATALEVIN_DEFAULT_PASSWORD`.
 - **`-v`**: Enable verbose server debug logs.
 - **`--idle-timeout <ms>`**: Disconnect inactive sessions to reclaim resources (default: `172800000` ms, or 48 hours).
 
@@ -40,6 +41,7 @@ Datalevin uses a custom wire protocol designed for efficiency:
 - **Asynchronous**: The server uses an event-driven architecture to handle thousands of concurrent connections.
 - **Message Format**: A TLV (Type-Length-Value) format inspired by PostgreSQL.
 - **Serialization**: The default serialization is **Nippy**, which is extremely fast for Clojure-to-Clojure communication. For other languages, **Transit+JSON** is used.
+- **JSON API**: Datalevin also has a language-neutral JSON command API with handle-based sessions, Datalog/KV operations, admin operations, search, and vector support. The Python and Node bindings use JVM interop today, but the JSON API is the stable shape exposed to MCP and other adapters that need machine-readable request and response payloads.
 
 ---
 
@@ -64,7 +66,8 @@ The URI format follows this pattern:
 ```
 
 ```java
-import datalevin.core.*;
+import datalevin.Connection;
+import datalevin.Datalevin;
 
 // Connect to a remote Datalog database
 Connection conn = Datalevin.getConn("dtlv://admin:pass@localhost:8898/mydb");
@@ -74,24 +77,23 @@ conn.transact(List.of(Map.of("name", "Alice")));
 ```
 
 ```python
-import datalevin as d
+from datalevin import connect
 
 # Connect to a remote Datalog database
-conn = d.get_conn("dtlv://admin:pass@localhost:8898/mydb")
+conn = connect("dtlv://admin:pass@localhost:8898/mydb")
 
 # Use it just like a local connection
-d.transact(conn, [{"name": "Alice"}])
+conn.transact([{"name": "Alice"}])
 ```
 
 ```javascript
-import { Datalevin } from 'datalevin';
-const d = new Datalevin();
+import { connect } from "datalevin-node";
 
 // Connect to a remote Datalog database
-const conn = d.getConn('dtlv://admin:pass@localhost:8898/mydb');
+const conn = await connect("dtlv://admin:pass@localhost:8898/mydb");
 
 // Use it just like a local connection
-d.transact(conn, [{ name: 'Alice' }]);
+await conn.transact([{ name: "Alice" }]);
 ```
 
 </div>
@@ -112,24 +114,25 @@ For administrative tasks (managing users, roles, and databases), use the `datale
 ```
 
 ```java
-import datalevin.client.*;
+import datalevin.Client;
+import datalevin.Datalevin;
 
 // Create an administrative client
-Client client = DatalevinClient.newClient("dtlv://admin:pass@localhost:8898");
+Client client = Datalevin.newClient("dtlv://admin:pass@localhost:8898");
 ```
 
 ```python
-from datalevin import Client
+from datalevin import new_client
 
 # Create an administrative client
-client = Client("dtlv://admin:pass@localhost:8898")
+client = new_client("dtlv://admin:pass@localhost:8898")
 ```
 
 ```javascript
-import { Client } from 'datalevin';
+import { newClient } from "datalevin-node";
 
 // Create an administrative client
-const client = new Client('dtlv://admin:pass@localhost:8898');
+const client = await newClient("dtlv://admin:pass@localhost:8898");
 ```
 
 </div>
@@ -216,6 +219,7 @@ The server initializes with a default admin:
 - **Password**: `datalevin` (or set via `DATALEVIN_DEFAULT_PASSWORD` env var).
 
 **Security Warning**: Always change the default password immediately after installation.
+When the server binds to a non-loopback address, `DATALEVIN_DEFAULT_PASSWORD` is required at startup.
 
 ---
 
@@ -232,6 +236,8 @@ These parameters control how the client interacts with the server and can be tun
 Passed as a map to `datalevin.client/new-client`:
 - **`:pool-size`**: Maximum pooled connections per client instance (default: `3`).
 - **`:time-out`**: Timeout in milliseconds for obtaining a connection and retrying requests (default: `60000`).
+- **`:ha-write-retry-timeout-ms`**: Extra bounded retry budget for retryable HA write failover.
+- **`:ha-write-retry-delay-ms`**: Delay between HA write retry rounds.
 
 ### 4.3 Wire Compression (zstd)
 These affect the protocol payload size and CPU usage:
@@ -240,14 +246,45 @@ These affect the protocol payload size and CPU usage:
 
 ---
 
-## 5. Performance Considerations
+## 5. High Availability and Replica Reads
 
-### 5.1 Latency and Batching
+Datalevin server supports consensus-lease HA. Each HA database has exactly one write leader at a time. Followers replicate from the leader using WAL records and snapshots, and can serve reads.
+
+The HA design has three layers:
+
+- **Data plane**: Leader writes append to WAL; followers copy and replay records in order. If a follower falls too far behind retained WAL, it bootstraps from a snapshot and resumes replay.
+- **Control plane**: A Raft-backed consensus group stores the current lease owner, term, leader endpoint, membership hash, and leader LSN.
+- **Local runtime state**: Each database on each node is a `:follower`, `:candidate`, `:leader`, or `:demoting`.
+
+Writes are admitted only when the local node has fresh proof that it is the current leader and not demoting. Promotion is conservative: candidates check membership, lag, lease state, and fencing before accepting writes. HA forces `:wal? true` and defaults to `:wal-durability-profile :strict`.
+
+Clients do not need a separate replica API. Connect to a follower endpoint for follower reads:
+
+```clojure
+(def replica
+  (d/get-conn "dtlv://user:pass@replica-host:8898/app"))
+```
+
+Use RBAC for enforced read-only access: grant only `:datalevin.server/view`. Ordinary one-shot writes can retry across known HA endpoints when a node responds with retryable states such as `:not-leader`. Explicit remote write transactions can retry while opening, but once opened they remain pinned to the server session that accepted them.
+
+---
+
+## 6. Runtime UDFs in Server Mode
+
+Descriptor-backed `:db/udf` functions resolve in the runtime where the query or transaction executes. For embedded databases, pass a runtime registry in store options. For remote transactions, the UDF registry must be installed in the server process; client-local registries are not consulted.
+
+This distinction matters in HA deployments. If `:ha-require-udf-ready? true` is set, a leader rejects writes until all installed `:db/udf` transaction descriptors can be resolved by the server runtime.
+
+---
+
+## 7. Performance Considerations
+
+### 7.1 Latency and Batching
 Every network call introduces latency. While `d/q` and `d/transact!` are optimized, frequent small operations can be slow over a network.
 - **Batching**: Use `d/transact!` with multiple datoms or `d/transact-async` to reduce the number of round trips.
 - **Pull**: Use the `d/pull` API to fetch large entity trees in a single request rather than performing multiple lookups.
 
-### 5.2 Serialization Overheads
+### 7.2 Serialization Overheads
 While Nippy is fast, serializing large result sets can still take time. Ensure your queries are specific (`:find` only what you need) to minimize the amount of data sent over the wire.
 
 ---

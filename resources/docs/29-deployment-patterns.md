@@ -1,14 +1,14 @@
 ---
-title: "Deployment Patterns: Embedded, Server, and Pods"
+title: "Deployment Patterns: Embedded, Server, HA, MCP, and Pods"
 chapter: 29
 part: "VI — Systems and Operations"
 ---
 
-# Chapter 29: Deployment Patterns: Embedded, Server, and Pods
+# Chapter 29: Deployment Patterns: Embedded, Server, HA, MCP, and Pods
 
 Datalevin is designed to be highly portable. Whether you are building a small CLI tool or a massive distributed system, you can deploy Datalevin in the mode that best fits your operational requirements.
 
-This chapter explores the architectural trade-offs of the three primary deployment modes: **Embedded**, **Server**, and **Babashka Pods**.
+This chapter explores the architectural trade-offs of the primary deployment modes: **Embedded**, **Server**, **HA Server**, **MCP**, and **Babashka Pods**.
 
 ---
 
@@ -30,7 +30,7 @@ Embedded mode is the primary way to use Datalevin. You include it as a standard 
 
 ## 2. Server Mode: Centralized Management
 
-Server mode (detailed in **Chapter 27**) is used when you need multiple services to share a single Datalevin instance, or when you require cross-language access (e.g., Python/Go clients).
+Server mode (detailed in **Chapter 27**) is used when you need multiple services to share a single Datalevin instance, centralized RBAC, or remote access over `dtlv://` URIs.
 
 - **Architecture**: A standalone `dtlv` server process manages the storage and provides a network API.
 - **Benefits**: Centralized backup management, fine-grained RBAC, and the ability to share a single database across microservices.
@@ -43,7 +43,37 @@ Server mode (detailed in **Chapter 27**) is used when you need multiple services
 
 ---
 
-## 3. Babashka Pods: Rapid Scripting
+## 3. HA Server Mode: Leader, Followers, and Failover
+
+Consensus-lease HA is the operational mode for services that need automatic write-leader promotion and read-capable followers.
+
+- **Architecture**: One write leader per database, follower replicas that replay WAL records, and a Raft-backed control plane for leases, terms, membership, and promotion decisions.
+- **Benefits**: Automatic leader promotion, read-only replica capacity, WAL/snapshot-based rejoin, and explicit fail-closed behavior when membership, clock skew, lag, or fencing is unsafe.
+- **Trade-offs**: Static membership, required fencing hooks, quorum operational discipline, and no multi-leader writes.
+
+**Best for**:
+- Production services that need automatic failover.
+- Read-heavy systems that benefit from follower reads.
+- Operator-managed clusters where safety is more important than accepting writes during uncertainty.
+
+---
+
+## 4. MCP Mode: Tool Surface for AI Applications
+
+`dtlv mcp` runs a local MCP server over `stdio`. It is a process adapter over Datalevin APIs and can open local databases or remote `dtlv://` targets.
+
+- **Architecture**: A local MCP client launches `dtlv mcp`; Datalevin handles database operations behind the MCP tool calls.
+- **Safety**: Read-only tools are the default. Write tools require `dtlv --allow-writes mcp`.
+- **Scope**: MCP handle ids are session-scoped, and responses include structured payloads suitable for machine use.
+
+**Best for**:
+- AI applications that need controlled read access to Datalevin.
+- Local tooling that wants a stable JSON-shaped tool surface.
+- Workflows that should use the same database APIs without embedding application-specific client code.
+
+---
+
+## 5. Babashka Pods: Rapid Scripting
 
 Babashka is a fast-starting Clojure interpreter for scripting. Datalevin provides a **Pod** that allows you to use its Datalog and KV capabilities within a script without the overhead of the full JVM startup.
 
@@ -58,20 +88,33 @@ Babashka is a fast-starting Clojure interpreter for scripting. Datalevin provide
 
 ---
 
-## 4. Architectural Comparison Table
+## 6. Native Language Libraries
 
-| Feature | Embedded | Server | Babashka Pod |
-| :--- | :--- | :--- | :--- |
-| **Communication** | Direct (Function calls) | Network (TCP) | IPC (Stdio/Sockets) |
-| **Overhead** | None (Zero-copy) | High (Serialization + TCP) | Medium (Serialization + IPC) |
-| **Security** | OS-level (File permissions) | Full RBAC (Users/Roles) | OS-level |
+Datalevin also publishes embedded libraries for several host languages:
+
+- **Clojure**: `datalevin/datalevin` on Clojars, plus `org.datalevin/datalevin-embedded` for embedded-only JVM use.
+- **Java**: `org.datalevin:datalevin-java` on Maven Central.
+- **Python**: `datalevin` on PyPI.
+- **Node.js**: `datalevin-node` on npm.
+
+These packages are still embedded runtimes. They are excellent when a Java, Python, or Node application owns a local database path, or when the language wrapper is used as a remote Datalevin client.
+
 ---
-| **Concurrency** | Single-Writer (process) | Multi-client (server-side) | Single-Writer (process) |
-| **Tech Stack** | JVM (Clojure/Java) | Language Independent | Babashka |
+
+## 7. Architectural Comparison Table
+
+| Feature | Embedded | Server | HA Server | MCP | Babashka Pod |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Communication** | Direct calls | TCP | TCP + replication/control plane | stdio | IPC |
+| **Overhead** | Lowest | Network serialization | Network + HA coordination | Tool-call serialization | IPC |
+| **Security** | OS/file permissions | RBAC | RBAC + HA fencing | Read-only by default | OS-level |
+| **Writes** | Local single-writer storage path; WAL can improve concurrent caller throughput | Multi-client, server-coordinated | One leader per database | Disabled unless allowed | Local process path |
+| **Reads** | Local zero-copy | Remote client reads | Leader or follower reads | Local or remote target | Pod process |
+| **Tech Stack** | Clojure, Java, Python, Node | Datalevin clients | Datalevin clients | MCP clients | Babashka |
 
 ---
 
-## 5. Case Study: High-Density Multi-Tenancy
+## 8. Case Study: High-Density Multi-Tenancy
 
 A powerful but less common deployment pattern is **high-density multi-tenancy**. Instead of a single massive database for all users, you create a separate Datalevin database for every user or workspace.
 
@@ -94,6 +137,8 @@ Datalevin's deployment flexibility allows your application to evolve.
 
 1.  **Prototype with Pods**: Use the Babashka Pod for quick scripts and local experiments.
 2.  **Scale with Embedded**: When building your production application, use Embedded mode for maximum performance.
-3.  **Expand with Server**: If you need to share data across microservices or teams, "promote" to Server mode.
+3.  **Expose with MCP**: For AI tools, expose a read-only local tool surface before adding write tools.
+4.  **Expand with Server**: If you need to share data across microservices or teams, "promote" to Server mode.
+5.  **Harden with HA**: If the server becomes critical infrastructure, move selected databases to consensus-lease HA.
 
 Because the underlying data format is identical in all modes, you can move between patterns without data migration.

@@ -100,7 +100,9 @@ The bytes are also prefix-compressed on the page level.
 Beyond the primary triple indexes, Datalevin supports specialized secondary indexes such as **Full-Text Search (FTS)**, **Vector Search**, and **Document (idoc) Indexes**. These are not external plugins; they are integrated directly into the same LMDB environment.
 
 ### 5.1 Leveraging the KV Substrate
-Secondary indexes are implemented as additional named sub-databases (DBIs) within the same storage file. This allows Datalevin to maintain transactional atomicity across both Datalog datoms and secondary index updates.
+Secondary indexes are implemented as additional named sub-databases (DBIs) within the same storage file. By default, Datalevin updates these indexes synchronously in the same transaction as the source datoms, preserving read-your-writes behavior for `fulltext`, `vec-neighbors`, `embedding-neighbors`, and `idoc-match`.
+
+Full-text, vector, and embedding indexes can also opt into `:indexing-mode :async`. In async mode, the source datoms and a durable secondary-index job are committed atomically, then an in-process worker applies the index update after the transaction returns. Queries over that index become eventually consistent until the worker catches up. This is useful when indexing is expensive, especially for embedding providers that may call a local model or remote API.
 
 ### 5.2 Blob Storage Capabilities
 While a Datalog triple is often a small piece of data, secondary indexes often need to
@@ -127,19 +129,20 @@ The details of the KV API and its practical usage are covered in **Chapter 6**.
 
 ## 7. Persistence and Durability: WAL Mode
 
-By default, LMDB is extremely safe but can be limited by disk I/O because every write transaction requires a synchronous flush of the memory-mapped pages to disk (`msync`) to ensure durability. Datalevin's **WAL (Write-Ahead Log) Mode** overcomes this.
+By default, local embedded Datalevin stores use LMDB's direct commit path. This is safe and fast for many workloads, but write throughput can still be limited by disk sync behavior and the single-writer B+Tree commit path. Datalevin's **WAL (Write-Ahead Log) Mode** is an explicit opt-in for workloads that need WAL write concurrency, crash recovery, replication, or HA behavior.
 
 ### 7.1 How WAL Mode Works
 When WAL mode is enabled:
-- **Datalog**: Enabled by default for all new databases.
-- **Key-Value**: Disabled by default; must be explicitly enabled with `{:wal? true}`.
+- **Datalog**: Disabled by default for local embedded databases; enable with `{:wal? true}` in `create-conn` or `get-conn` options.
+- **Key-Value**: Disabled by default; enable with `{:wal? true}` in `open-kv` options.
+- **HA**: Consensus-lease HA forces WAL on and defaults to the `:strict` durability profile.
 
 1.  **Transaction**: A write request arrives.
 2.  **WAL Append**: The change is encoded and appended to a sequential log segment file.
 3.  **LSN Tracking**: Every transaction is assigned a strictly increasing, contiguous **Log Sequence Number (LSN)**, which serves as the canonical commit position for replay and lag tracking.
 4.  **No-Sync LMDB**: The change is applied to the LMDB B+tree in `:nosync` mode (extremely fast).
 5.  **Durability Sync**: The WAL record is synced to disk based on the chosen **durability profile**.
-6.  **Acknowledgment**: The application receives a "Success" response once the WAL is durable.
+6.  **Acknowledgment**: The application receives a "Success" response according to the profile. In `:strict` and `:extra`, this waits for the relevant sync; in `:relaxed`, recent commits can be acknowledged before every individual transaction is forced to disk.
 7.  **Recovery**: On restart, Datalevin scans the WAL segments and replays any committed transactions that weren't yet fully persisted in the LMDB file.
 
 **Note**: Bulk load operations (like `init-db` and `fill-db`) bypass the WAL for maximum performance and will not appear in the transaction log.
@@ -147,9 +150,11 @@ When WAL mode is enabled:
 
 ### 7.2 Durability Profiles
 Datalevin offers three profiles to balance performance and safety:
-- **`:strict`** (Default): Waits for a standard `fsync`. This is the safest mode for most systems.
-- **`:relaxed`**: Batches multiple transactions before syncing. This provides the highest throughput but carries a small risk of losing recent transactions in a system crash.
-- **`:extra`**: Uses even stricter durability guarantees (e.g., `fcntl(F_FULLSYNC)` on macOS) to protect against hardware write-cache failures.
+- **`:strict`**: Waits for a standard `fsync`. This is the default for consensus-lease HA.
+- **`:relaxed`**: Batches multiple transactions before syncing. This is the default when local embedded Datalog or KV stores explicitly opt into WAL without specifying a profile.
+- **`:extra`**: Uses stricter durability guarantees where available, such as `fcntl(F_FULLSYNC)` on macOS.
+
+In `:relaxed`, the possible crash-loss window is bounded by `:wal-group-commit` and `:wal-group-commit-ms`. Use `:strict` or `:extra` when the main reason for enabling WAL is crash durability rather than throughput.
 
 ### 7.3 Operational Lifecycle
 For long-running services, WAL mode introduces a few simple operational tasks:

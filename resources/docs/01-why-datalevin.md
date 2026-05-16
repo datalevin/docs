@@ -83,12 +83,12 @@ Markdown-oriented workflows. You can query nested structures with
 `idoc-match`, including logical combinators and path predicates, while keeping
 the documents in the same transactional store.
 
-### Integrated Full-Text and Vector Search
+### Integrated Full-Text, Vector, and Embedding Search
 
-Datalevin includes built-in full-text search and vector similarity search.
-Because these indexes live in the same database system, you can combine
-retrieval and logic filtering in one Datalog query instead of synchronizing
-external search services.
+Datalevin includes built-in full-text search, user-supplied vector similarity
+search, and text embedding search over string datoms. Because these indexes
+live in the same database system, you can combine retrieval and logic filtering
+in one Datalog query instead of synchronizing external search services.
 
 ## 3. Developer Ergonomics and Deployment Modes
 
@@ -96,7 +96,10 @@ Datalevin is designed to run where your application runs:
 
 - Embedded mode for local, process-level access.
 - Client/server mode for shared deployment and centralized operations.
+- Consensus-lease HA for one-leader, read-replica deployments.
+- Java, Python, and Node.js embedded libraries for host-language applications.
 - Babashka pod mode for scriptable workflows.
+- MCP server mode for local AI tool integration.
 
 This flexibility lets teams start small and evolve deployment architecture
 without changing core data and query concepts.

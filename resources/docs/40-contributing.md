@@ -30,6 +30,9 @@ The Datalevin source code is hosted on GitHub. We welcome pull requests for:
 - Performance optimizations in the query engine or storage layer.
 - Bug fixes and improved error messages.
 - New built-in Datalog predicates.
+- HA, WAL, JSON API, MCP, and language-binding improvements.
+
+Current development assumes Java 21+ and includes native-library packaging, Java/Python/Node bindings, server/HA code, and Babashka pod support. Run the relevant test layer for the area you touch; HA changes should progress from unit/integration tests to the Jepsen workloads in the sibling `../datalevin/jepsen` project.
 
 ### 2.2 Documentation and Education
 A database is only as good as its documentation. You can contribute by:
@@ -40,7 +43,8 @@ A database is only as good as its documentation. You can contribute by:
 ### 2.3 The Ecosystem
 Building tools *around* Datalevin is just as important as building the database itself.
 - **`biff-datalevin`**: Help integrate Datalevin into the Biff web framework.
-- **Language Bindings**: While Datalevin is JVM-first, we are always interested in making it accessible to other languages via the Server protocol or specialized pods.
+- **Language Bindings**: Datalevin now publishes Java, Python, and Node.js embedded packages. Contributions can improve those APIs, examples, packaging, or compatibility tests.
+- **AI Tooling**: MCP and embedding-provider support are active integration surfaces for agent and retrieval systems.
 
 ---
 

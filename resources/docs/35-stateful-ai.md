@@ -110,7 +110,20 @@ A documentation site (like this one!) that "learns" from user feedback.
 
 ---
 
-## 5. Summary: The Path to Machine Intelligence
+## 5. Example 4: MCP-Backed Agent Tools
+
+For AI applications that use MCP, `dtlv mcp` provides a local `stdio` tool server over Datalevin databases.
+
+- **Read-first safety**: `dtlv mcp` starts with write tools disabled.
+- **Explicit writes**: `dtlv --allow-writes mcp` is required before tools can mutate a database.
+- **Structured payloads**: Tool calls return machine-readable `structuredContent`, with response limits and truncation metadata for large results.
+- **Local and remote targets**: The MCP server can open local database paths or remote `dtlv://` URIs behind the same local process.
+
+This makes Datalevin useful as a durable tool substrate for agents: memory stays in a real database, while the tool boundary remains explicit.
+
+---
+
+## 6. Summary: The Path to Machine Intelligence
 
 Building stateful AI is about building systems that **accrue value over time**.
 
@@ -118,5 +131,6 @@ Building stateful AI is about building systems that **accrue value over time**.
 - **Apperception** (Ch 32) provides the coherence.
 - **Hybrid Retrieval** (Ch 34) provides the context.
 - **Datalog** (Ch 9) provides the logic.
+- **MCP** (Ch 29) provides a controlled tool surface for AI clients.
 
 By choosing Datalevin, you are not just choosing a place to store data; you are choosing a substrate that supports the full spectrum of machine intelligence—from exact logical reasoning to fuzzy semantic understanding.

@@ -124,7 +124,8 @@ You can transact an entire document at once, or use the **`:db.fn/patchIdoc`** f
 (d/transact! conn [{:db/id 101 :user/metadata {:theme "dark" :font-size 14}}])
 
 ;; Patch a single field deep in the document
-(d/transact! conn [[:db.fn/patchIdoc 101 :user/metadata [:theme] :set "light"]])
+(d/transact! conn [[:db.fn/patchIdoc 101 :user/metadata
+                    [[:set [:theme] "light"]]]])
 ```
 
 ```java
@@ -137,7 +138,7 @@ Datalevin.transact(conn, List.of(
 // Patch a single field deep in the document
 Datalevin.transact(conn, List.of(
     List.of("db.fn/patchIdoc", 101, "user/metadata",
-            List.of("theme"), "set", "light")
+            List.of(List.of("set", List.of("theme"), "light")))
 ));
 ```
 
@@ -146,7 +147,8 @@ Datalevin.transact(conn, List.of(
 d.transact(conn, [{"db/id": 101, "user/metadata": {"theme": "dark", "font-size": 14}}])
 
 # Patch a single field deep in the document
-d.transact(conn, [["db.fn/patchIdoc", 101, "user/metadata", ["theme"], "set", "light"]])
+d.transact(conn, [["db.fn/patchIdoc", 101, "user/metadata",
+                   [["set", ["theme"], "light"]]]])
 ```
 
 ```javascript
@@ -157,7 +159,7 @@ d.transact(conn, [
 
 // Patch a single field deep in the document
 d.transact(conn, [
-  ['db.fn/patchIdoc', 101, 'user/metadata', ['theme'], 'set', 'light']
+  ['db.fn/patchIdoc', 101, 'user/metadata', [['set', ['theme'], 'light']]]
 ]);
 ```
 
@@ -196,28 +198,28 @@ For native documents, use the **`idoc-match`** function in Datalog to find entit
 ```clojure
 ;; Find users with "dark" theme in their metadata idoc
 (d/q '[:find ?e
-       :where [(idoc-match $ :user/metadata {:theme "dark"}) [[?e]]]]
+       :where [(idoc-match $ :user/metadata {:theme "dark"}) [[?e _ _]]]]
      db)
 ```
 
 ```java
 // Find users with "dark" theme in their metadata idoc
 Datalevin.q("[:find ?e " +
-            " :where [(idoc-match $ :user/metadata {:theme \"dark\"}) [[?e]]]]",
+            " :where [(idoc-match $ :user/metadata {:theme \"dark\"}) [[?e _ _]]]]",
             db);
 ```
 
 ```python
 # Find users with "dark" theme in their metadata idoc
 d.q('[:find ?e '
-     ' :where [(idoc-match $ :user/metadata {:theme "dark"}) [[?e]]]]',
+     ' :where [(idoc-match $ :user/metadata {:theme "dark"}) [[?e _ _]]]]',
      db)
 ```
 
 ```javascript
 // Find users with "dark" theme in their metadata idoc
 d.q('[:find ?e ' +
-     ' :where [(idoc-match $ :user/metadata {:theme "dark"}) [[?e]]]]',
+     ' :where [(idoc-match $ :user/metadata {:theme "dark"}) [[?e _ _]]]]',
      db);
 ```
 

@@ -50,6 +50,7 @@ For regular (non-virtual) threads, Datalevin **reuses read-only transactions and
 
 - **Read Reuse**: The same read-only transaction is reused across multiple read operations within the same thread.
 - **Virtual Threads**: This reuse is **disabled for virtual threads** because virtual threads are short-lived. Each virtual thread creates fresh transactions to avoid pinning carrier threads.
+- **Reader Slot Cleanup**: Datalevin tracks cached reader transactions and their owning threads so reader slots can be released when a thread is gone, reducing reader-slot exhaustion in high-concurrency applications.
 
 ### 3.3 The Single-Writer Model vs. Concurrent WAL
 While there can be thousands of concurrent readers, Datalevin follows a **Single-Writer Model** per database environment by default.
@@ -63,6 +64,8 @@ While there can be thousands of concurrent readers, Datalevin follows a **Single
 
 The WAL engine is designed to bridge the gap between B+Tree read performance and LSM-Tree write throughput.
 
+For local embedded Datalog and KV stores, WAL is off by default and enabled with `:wal? true`. Consensus-lease HA forces WAL on.
+
 ### 4.1 LSN Architecture
 Every transaction in WAL mode is assigned a contiguous **Log Sequence Number (LSN)**. The LSN is the canonical position of a commit in the database's history.
 - **Watermarks**: Datalevin tracks `:last-committed-lsn` (application view) and `:last-durable-lsn` (disk view).
@@ -70,8 +73,8 @@ Every transaction in WAL mode is assigned a contiguous **Log Sequence Number (LS
 
 ### 4.2 Durability Profiles
 Datalevin offers three WAL durability profiles:
-- **`:strict`**: Standard `fsync` on every commit.
-- **`:relaxed`**: Batched `fsync` for higher throughput.
+- **`:strict`**: Standard `fsync` on every commit; default for consensus-lease HA.
+- **`:relaxed`**: Batched `fsync` for higher throughput; default for local embedded WAL opt-in.
 - **`:extra`**: Stricter durability (e.g., `F_FULLSYNC` on macOS).
 
 ### 4.3 Recovery and Replay

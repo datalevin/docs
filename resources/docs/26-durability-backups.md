@@ -122,7 +122,7 @@ d.setEnvFlags(kvDb, ['nosync'], false);
 
 ## 4. WAL-Based Durability: Performance + Safety
 
-While standard LMDB is extremely safe, it can be limited by disk I/O. Datalevin's **Write-Ahead Log (WAL) mode** (the default for new Datalog databases) is the recommended way to achieve high performance without sacrificing durability.
+While standard LMDB is extremely safe, it can be limited by disk I/O. Datalevin's **Write-Ahead Log (WAL) mode** is an explicit opt-in for local embedded Datalog and KV stores, and is forced on for consensus-lease HA. Use WAL when you need higher write throughput from concurrent callers, WAL replay, replication, or HA behavior.
 
 ### 4.1 The LSN Lifecycle
 In WAL mode, every transaction is assigned a **Log Sequence Number (LSN)**. This number is the canonical source of truth for the database's progress.
@@ -133,8 +133,8 @@ In WAL mode, every transaction is assigned a **Log Sequence Number (LSN)**. This
 By monitoring these watermarks with `txlog-watermarks`, you can precisely track the "lag" between application commits and physical disk durability.
 
 ### 4.2 Durability Profiles
-- **`:strict`** (Default): The database waits for the WAL to be synced to disk for *every* transaction using a standard `fsync`.
-- **`:relaxed`**: Transactions are batched before syncing. This is significantly faster but risks losing the last few milliseconds of work in a crash.
+- **`:strict`**: The database waits for the WAL to be synced to disk for *every* transaction using a standard `fsync`. This is the default for consensus-lease HA.
+- **`:relaxed`**: Transactions are batched before syncing. This is significantly faster but risks losing the last few milliseconds of work in a crash. This is the default for local embedded WAL opt-in when no profile is specified.
 - **`:extra`**: Uses even stricter durability guarantees (e.g., `fcntl(F_FULLSYNC)` on macOS) to protect against hardware write-cache failures.
 
 ---
@@ -152,23 +152,23 @@ Call **`create-snapshot!`** periodically. This function performs several vital t
 <div class="multi-lang">
 
 ```clojure
-;; In a background loop
-(d/create-snapshot! conn)
+;; In a background loop for a WAL-enabled KV handle
+(d/create-snapshot! kv)
 ```
 
 ```java
-// In a background loop
-Datalevin.createSnapshot(conn);
+// In a background loop for a WAL-enabled KV handle
+Datalevin.createSnapshot(kv);
 ```
 
 ```python
-# In a background loop
-d.create_snapshot(conn)
+# In a background loop for a WAL-enabled KV handle
+d.create_snapshot(kv)
 ```
 
 ```javascript
-// In a background loop
-d.createSnapshot(conn);
+// In a background loop for a WAL-enabled KV handle
+d.createSnapshot(kv);
 ```
 
 </div>
@@ -180,22 +180,22 @@ Use **`gc-txlog-segments!`** to reclaim disk space by deleting old WAL segments.
 
 ```clojure
 ;; Reclaim disk space
-(d/gc-txlog-segments! conn)
+(d/gc-txlog-segments! kv)
 ```
 
 ```java
 // Reclaim disk space
-Datalevin.gcTxlogSegments(conn);
+Datalevin.gcTxlogSegments(kv);
 ```
 
 ```python
 # Reclaim disk space
-d.gc_txlog_segments(conn)
+d.gc_txlog_segments(kv)
 ```
 
 ```javascript
 // Reclaim disk space
-d.gcTxlogSegments(conn);
+d.gcTxlogSegments(kv);
 ```
 
 </div>
@@ -238,11 +238,11 @@ d.copy(conn, '/path/to/backup-db');
 
 ---
 
-## 5. Database Maintenance: Copy, Dump, and Load
+## 7. Database Maintenance: Copy, Dump, and Load
 
 Datalevin provides comprehensive command-line and API tools for database maintenance, backup, and migration.
 
-### 5.1 Compacting with `d/copy`
+### 7.1 Compacting with `d/copy`
 
 LMDB's copy functionality creates a compacted copy of the database. This reclaims all free space from deleted data and optimizes the B+Tree for maximum read speed.
 
@@ -272,7 +272,7 @@ d.copy(conn, '/path/to/backup-db', { compact: true });
 
 The copy operation can run **regardless of whether the database is currently in use**—readers can continue accessing the source while the copy is being made.
 
-### 5.2 The `dtlv` Command Line Tool
+### 7.2 The `dtlv` Command Line Tool
 
 The `dtlv` CLI tool provides interactive and batch database operations:
 
@@ -301,7 +301,7 @@ Key options:
 - `-g, --datalog`: Dump/load as Datalog database
 - `-n, --nippy`: Use Nippy binary format for faster serialization
 
-### 5.3 Dump and Load Formats
+### 7.3 Dump and Load Formats
 
 Datalevin supports multiple dump/load formats:
 
@@ -316,7 +316,7 @@ $ dtlv -d /data/newdb -n -f ~/backup.nippy load
 
 ---
 
-## 6. Re-Indexing
+## 8. Re-Indexing
 
 Datalevin provides a `re-index` function that rebuilds the in-memory index structures from the on-disk data. This can be useful in recovery scenarios or when index structures become stale.
 
@@ -346,14 +346,14 @@ const reindexedDb = d.reIndex(db);
 
 ---
 
-## 7. Database Upgrades
+## 9. Database Upgrades
 
 When upgrading Datalevin to a new minor version, you may need to migrate your database. Datalevin provides automatic migration for databases newer than version 0.9.27.
 
-### 7.1 Automatic Migration
+### 9.1 Automatic Migration
 For databases created with Datalevin 0.9.27 or later, opening with a newer version triggers automatic migration. This process downloads the old version's uberjar to dump the data, then loads it with the new version.
 
-### 7.2 Manual Migration
+### 9.2 Manual Migration
 For older databases, use the command line tool:
 
 ```console
@@ -369,11 +369,11 @@ $ dtlv -d /dest/dir -f dump.edn -g load
 
 ---
 
-## 8. Summary: The Operations Checklist
+## 10. Summary: The Operations Checklist
 
 To ensure your data is safe and recoverable, follow this checklist:
 
-1.  **Enable WAL mode**: It's the best balance of safety and performance.
+1.  **Choose the right write mode**: Use default LMDB commits for simple local durability; enable WAL when you need WAL throughput, replay, replication, or HA.
 2.  **Automate `create-snapshot!`**: Set up a background task to flush the DB and rotate logs.
 3.  **Run `gc-txlog-segments!`**: Reclaim disk space regularly.
 4.  **Monitor disk space**: LMDB and WAL need enough free space to perform their operations.
@@ -381,6 +381,6 @@ To ensure your data is safe and recoverable, follow this checklist:
 6.  **Test your restores**: Regularly practice restoring from a snapshot or WAL log to a fresh server.
 7.  **Use NVMe for speed**: The durability of your database is directly tied to the IOPS and latency of your disk.
 8.  **Compact periodically**: Use `d/copy` with `{:compact? true}` to reclaim disk space after large deletions.
-7.  **Plan upgrades**: When upgrading Datalevin versions, use dump/load for databases older than 0.9.27.
+9.  **Plan upgrades**: When upgrading Datalevin versions, use dump/load for databases older than 0.9.27.
 
 By leveraging Datalevin's rock-solid CoW architecture, you can sleep soundly knowing your data is safe from crashes and easy to recover from disasters.

@@ -31,17 +31,19 @@ Many agent architectures attempt to combine a Vector DB (for similarity) with a 
 - **Complexity**: The agent must manage two different APIs and data models.
 - **Latency**: Multiple network hops to different services slow down the "think-act" loop.
 
-**The Datalevin Advantage**: In Datalevin, the vector embedding, the text description, and the logical facts about an experience all live in the **same transactionally consistent triple**.
+**The Datalevin Advantage**: In Datalevin, the text description, optional user-supplied vector, automatic embedding index, and logical facts about an experience all live under the same transaction boundary.
 
 ```clojure
 ;; An "Experience" entity in Datalevin
 {:experience/id      #uuid "..."
  :experience/text    "I helped the user debug a Clojure macro today."
- :experience/vector  [...] ; Vector embedding of the text
+ :experience/vector  [...] ; Optional user-supplied vector
  :experience/user    [:user/id "alice"]
  :experience/success true
  :experience/topics  [:clojure :macros]}
 ```
+
+For many text-memory workloads, mark the text attribute with `:db/embedding true` instead of storing a separate vector datom. Datalevin keeps the original text as the source of truth and maintains the embedding index as a secondary index.
 
 ---
 

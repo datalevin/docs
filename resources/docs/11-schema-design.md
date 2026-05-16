@@ -8,7 +8,7 @@ part: "III — Modeling Across Paradigms"
 
 While Chapter 5 introduced the mechanics of attributes and namespaces, this chapter dives into the *art* of schema design. In a multi-paradigm database like Datalevin, your schema isn't just a set of constraints; it's the blueprint for how the query engine, search indexes, and storage layer interact.
 
-A well-designed schema in Datalevin enables efficient joins, powerful graph traversals, and lightning-fast full-text searches.
+A well-designed schema in Datalevin enables efficient joins, powerful graph traversals, full-text search, embedding search, vector search, and path-indexed documents.
 
 ---
 
@@ -169,7 +169,16 @@ Datalevin allows you to attach additional semantic meaning to your attributes, w
 ### 3.1 Full-Text Search (`:db/fulltext`)
 Setting `:db/fulltext true` on a `:db.type/string` attribute tells Datalevin to maintain a specialized full-text index. This enables the `(fulltext ...)` predicate in Datalog (see Chapter 17).
 
-### 3.2 Component Attributes (`:db/isComponent`)
+### 3.2 Embedding Search (`:db/embedding`)
+Setting `:db/embedding true` on a `:db.type/string` attribute tells Datalevin to compute text embeddings and maintain an embedding similarity index. Query it with `embedding-neighbors` using query text, not a vector (see Chapter 18). Embedding indexing is synchronous by default, but embedding domains can opt into `:indexing-mode :async` when provider calls are expensive.
+
+### 3.3 Vector Values (`:db.type/vec`)
+Use `:db.type/vec` when your application supplies vectors directly. Query these attributes with `vec-neighbors`. Vector dimensions and metric settings belong in store options such as `:vector-opts` or `:vector-domains`, not in each individual datom.
+
+### 3.4 Indexed Documents (`:db.type/idoc`)
+Use `:db.type/idoc` for nested maps that should be stored as one value but queried by path with `idoc-match`. This is useful for flexible metadata, JSON import, and Markdown-derived structures.
+
+### 3.5 Component Attributes (`:db/isComponent`)
 When a reference attribute is marked as `:db/isComponent true`, it signals a "parent-child" relationship. 
 - **Recursive Pull**: A wildcard `d/pull` on the parent will automatically include all attributes of the child component.
 - **Cascading Deletes**: When the parent entity is deleted (via the **`:db/retractEntity`** transaction function), the child component entities are also automatically deleted.
@@ -249,7 +258,10 @@ When adding a new attribute to your Datalevin database, ask yourself:
 3.  **Is it a unique identity?** Use `:db.unique/identity` for natural keys (like emails) that you will use to lookup or upsert entities.
 4.  **Is it a system-wide constant?** Use **`:db/ident`** to give a unique, globally namespaced keyword to an entity, perfect for enums and static system data.
 5.  **Is it many-valued?** Use `:db.cardinality/many` for sets of values.
-6.  **Does it need search?** Use `:db/fulltext` for string attributes you want to search.
-7.  **Is it a component?** Use `:db/isComponent` for nested, "owned" entities.
+6.  **Does it need keyword search?** Use `:db/fulltext` for string attributes you want to search.
+7.  **Does it need semantic text search?** Use `:db/embedding` for string attributes Datalevin should embed.
+8.  **Do you already have vectors?** Use `:db.type/vec` and configure vector domains.
+9.  **Is it flexible nested data?** Use `:db.type/idoc` for path-indexed documents.
+10. **Is it a component?** Use `:db/isComponent` for nested, "owned" entities.
 
 By thoughtfully applying these properties, you create a schema that is both flexible enough for rapid development and robust enough for complex, high-performance applications.

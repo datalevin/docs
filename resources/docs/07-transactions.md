@@ -412,7 +412,7 @@ As discussed in Chapter 4, **WAL (Write-Ahead Log) mode** dramatically increases
 - **Durability Profiles**: Choose `:strict` for standard safety (sync on every commit), `:relaxed` for maximum throughput (batched syncs), or `:extra` for even stronger durability guarantees (e.g., `F_FULLSYNC` on macOS).
 - **Bulk Loading**: Note that bulk load operations like `init-db` and `fill-db` bypass the WAL for maximum performance and will not appear in the transaction log.
 - **Concurrent Throughput**: WAL allows multiple writer threads to achieve significantly higher aggregate throughput than a single thread.
-- **Enabled by Default**: For new Datalog databases, WAL is enabled by default to provide the best balance of safety and performance.
+- **Explicit Opt-In**: Local embedded Datalog stores now default to `:wal? false`. Enable WAL with `{:wal? true}` when the workload needs WAL throughput, replay, or replication behavior. Local WAL opt-in defaults to `:wal-durability-profile :relaxed`; consensus-lease HA forces WAL and defaults to `:strict`.
 
 ### 5.2 Asynchronous Transactions (`transact-async`)
 For the absolute highest throughput, Datalevin offers `d/transact-async`. Instead of waiting for the transaction to be confirmed, this function returns a `Future` immediately.

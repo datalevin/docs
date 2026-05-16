@@ -85,6 +85,7 @@ Datalevin considers five join methods and picks the best based on cost estimatio
 | **Value equality** `:val-eq` | When variables unify via attribute values |
 | **Hash join** `:hash-join` | Large non-selective joins, chooses build/probe side adaptively |
 | **Or-join** `:or-join` | Handles `or-join` clauses with sideway information passing (SIP) |
+| **Not-join** `:not-join` | Optimizes conservative anti-join shapes instead of always deferring negative filters |
 
 ### 5.1 Recency-Based Link Choice
 When multiple paths exist to reach the same node, Datalevin prefers the link from the **most recently resolved** node, since recent data distribution is more accurate.
@@ -108,7 +109,7 @@ The optimizer handles complex clauses in stages:
 2.  **Heuristics and variable dependencies** reorder remaining complex clauses (`and`, `or`, `not`, `not-join`, predicates, function bindings)
 3.  **Rules** are executed last (see Chapter 25)
 
-Currently, `or-join` is optimized; other complex clauses use heuristics.
+`or-join` participates in link planning, and common `not-join` shapes can become anti-join steps when their join variables are bound in a single plan component. More complex negative clauses still fall back to late resolution.
 
 ---
 

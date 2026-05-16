@@ -39,7 +39,7 @@ When running in Server mode (Chapter 2), Datalevin provides a comprehensive **Ro
 
 ### 2.1 Users and Roles
 - **Users**: Access is secured by a username and a salted/hashed password.
-- **Default User**: Every server has a default administrative user named `datalevin`. You should change its default password immediately using the `DATALEVIN_DEFAULT_PASSWORD` environment variable.
+- **Default User**: Every server has a default administrative user named `datalevin`. Set `DATALEVIN_DEFAULT_PASSWORD` when starting the server; it is required when binding to a non-loopback address and should be treated as mandatory in production.
 - **Roles**: Permissions are granted to roles, which are then assigned to users. Every user also has a built-in private role named `:datalevin.role/<username>`.
 
 ### 2.2 The Permission Triple: Act, Obj, Tgt

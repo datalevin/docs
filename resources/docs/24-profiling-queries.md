@@ -112,6 +112,7 @@ The output shows:
 - **Join methods**: Which method (forward ref, reverse ref, hash join, etc.) is used for each join
 - **Index scans**: What indexes are used for each clause
 - **Estimated cardinalities**: The optimizer's predicted result sizes
+- **Planning breakdown**: Recent explain output includes parsing and query-graph building time, which helps distinguish query compilation overhead from execution cost.
 
 Use `explain` to verify that your query is using the expected indexes and join strategies before running it with real data.
 

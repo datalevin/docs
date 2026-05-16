@@ -15,7 +15,7 @@ True intelligent retrieval requires a **Hybrid Approach**. This chapter demonstr
 ## 1. Why Vectors Aren't Enough
 
 Vector embeddings are great at capturing "vibes" and semantic meaning, but they are "fuzzy."
-- **Vector weakness**: A search for "Datalevin 0.9.22" might return results for "Datomic 0.9" because they are semantically similar, even though the version is wrong.
+- **Vector weakness**: A search for "Datalevin 0.10.15" might return results for "Datomic 0.10" because they are semantically similar, even though the version is wrong.
 - **The Solution**: Use **Full-Text Search** for exact keyword matching and **Datalog** for hard constraints.
 
 ---
@@ -38,12 +38,16 @@ In Datalevin, these three lenses are combined in a single `:where` block.
 
 ```clojure
 (d/q '[:find ?content ?combined-score
-       :in $ ?q-text ?q-vec ?user-id ?k
+       :in $ ?q-text ?q-vec ?user-id
        :where ;; 1. Keyword search (FTS)
-              [(fulltext $ :doc/content ?q-text) [[?e _ ?fts-score]]]
+              [(fulltext $ :doc/content ?q-text {:top 50
+                                                  :display :refs+scores})
+               [[?e _ _ ?fts-score]]]
 
               ;; 2. Semantic search (Vector)
-              [(vsearch $ :doc/vec ?q-vec ?k) [[?e _ ?vec-score]]]
+              [(vec-neighbors $ :doc/vec ?q-vec {:top 50
+                                                  :display :refs+dists})
+               [[?e _ _ ?vec-dist]]]
 
               ;; 3. Logical constraints (Datalog)
               [?e :doc/content ?content]
@@ -51,8 +55,9 @@ In Datalevin, these three lenses are combined in a single `:where` block.
               [?user-id :user/permissions ?e] ; Security join
 
               ;; 4. Combined Ranking
-              [(+ ?fts-score ?vec-score) ?combined-score]]
-     db "performance tuning" query-embedding user-id 10)
+              ;; Smaller vector distance is better.
+              [(- ?fts-score ?vec-dist) ?combined-score]]
+     db "performance tuning" query-embedding user-id)
 ```
 
 ```java
@@ -60,54 +65,74 @@ import datalevin.core.*;
 
 var results = Datalevin.q(
     "[:find ?content ?combined-score " +
-    " :in $ ?q-text ?q-vec ?user-id ?k " +
-    " :where [(fulltext $ :doc/content ?q-text) [[?e _ ?fts-score]]]" +
-    "        [(vsearch $ :doc/vec ?q-vec ?k) [[?e _ ?vec-score]]]" +
+    " :in $ ?q-text ?q-vec ?user-id " +
+    " :where [(fulltext $ :doc/content ?q-text {:top 50 :display :refs+scores}) [[?e _ _ ?fts-score]]]" +
+    "        [(vec-neighbors $ :doc/vec ?q-vec {:top 50 :display :refs+dists}) [[?e _ _ ?vec-dist]]]" +
     "        [?e :doc/content ?content]" +
     "        [?e :doc/status :published]" +
     "        [?user-id :user/permissions ?e]" +
-    "        [(+ ?fts-score ?vec-score) ?combined-score]]",
-    db, "performance tuning", queryEmbedding, userId, 10);
+    "        [(- ?fts-score ?vec-dist) ?combined-score]]",
+    db, "performance tuning", queryEmbedding, userId);
 ```
 
 ```python
 results = d.q(
     """[:find ?content ?combined-score
-        :in $ ?q-text ?q-vec ?user-id ?k
-        :where [(fulltext $ :doc/content ?q-text) [[?e _ ?fts-score]]]
-               [(vsearch $ :doc/vec ?q-vec ?k) [[?e _ ?vec-score]]]
+        :in $ ?q-text ?q-vec ?user-id
+        :where [(fulltext $ :doc/content ?q-text {:top 50 :display :refs+scores})
+                [[?e _ _ ?fts-score]]]
+               [(vec-neighbors $ :doc/vec ?q-vec {:top 50 :display :refs+dists})
+                [[?e _ _ ?vec-dist]]]
                [?e :doc/content ?content]
                [?e :doc/status :published]
                [?user-id :user/permissions ?e]
-               [(+ ?fts-score ?vec-score) ?combined-score]]""",
-    db, "performance tuning", query_embedding, user_id, 10)
+               [(- ?fts-score ?vec-dist) ?combined-score]]""",
+    db, "performance tuning", query_embedding, user_id)
 ```
 
 ```javascript
 const results = d.q(
     `[:find ?content ?combined-score
-      :in $ ?q-text ?q-vec ?user-id ?k
-      :where [(fulltext $ :doc/content ?q-text) [[?e _ ?fts-score]]]
-             [(vsearch $ :doc/vec ?q-vec ?k) [[?e _ ?vec-score]]]
+      :in $ ?q-text ?q-vec ?user-id
+      :where [(fulltext $ :doc/content ?q-text {:top 50 :display :refs+scores})
+              [[?e _ _ ?fts-score]]]
+             [(vec-neighbors $ :doc/vec ?q-vec {:top 50 :display :refs+dists})
+              [[?e _ _ ?vec-dist]]]
              [?e :doc/content ?content]
              [?e :doc/status :published]
              [?user-id :user/permissions ?e]
-             [(+ ?fts-score ?vec-score) ?combined-score]]`,
-    db, 'performance tuning', queryEmbedding, userId, 10);
+             [(- ?fts-score ?vec-dist) ?combined-score]]`,
+    db, 'performance tuning', queryEmbedding, userId);
 ```
 
 </div>
 
-### 3.1 Reciprocal Rank Fusion (RRF)
+### 3.1 Text-to-Embedding Search
+
+When Datalevin owns the text embedding index with `:db/embedding true`, replace `vec-neighbors` with `embedding-neighbors`. The query input is text, not a vector:
+
+```clojure
+(d/q '[:find ?content ?dist
+       :in $ ?q
+       :where
+       [(embedding-neighbors $ :doc/content ?q {:top 20
+                                                :display :refs+dists})
+        [[?e _ ?content ?dist]]]
+       [?e :doc/status :published]]
+     db
+     "performance tuning")
+```
+
+### 3.2 Reciprocal Rank Fusion (RRF)
 While the example above uses simple addition for scoring, many advanced systems use **Reciprocal Rank Fusion (RRF)** to combine results from different indexes. You can implement RRF logic directly in your Datalog query using custom functions.
 
 ---
 
-## 4. Performance: Filtering Before Searching
+## 4. Performance: Candidate Control
 
-Vector similarity search is computationally expensive. One of Datalevin's biggest advantages is the ability to **filter before the vector search**.
+Vector similarity search is computationally expensive. Keep retrieval candidates controlled by using domains, `:top`, and application-specific `:vec-filter` or `:doc-filter` functions when those filters can be expressed against the index reference itself.
 
-If your Datalog constraints (e.g., `:doc/status :published`) reduce the candidate set from 1,000,000 to 1,000, Datalevin's optimizer will apply those filters first. The HNSW vector engine then only has to calculate distances for those 1,000 entities, resulting in a **100x to 1000x speedup** compared to a post-filtering approach.
+General Datalog constraints such as `:doc/status :published` are still valuable, but they are joins over the candidates returned by the search function. If a hard constraint is very selective, consider using separate search/vector/embedding domains for that slice, or overfetch with a larger `:top` and let Datalog remove unauthorized or stale candidates.
 
 ---
 

@@ -6,9 +6,12 @@ part: "IV — Indexes as Capabilities"
 
 # Chapter 18: Vector Search: Embeddings and Similarity Queries
 
-In the era of Large Language Models (LLMs), a database is not just a place to store structured facts; it is a repository for semantic meaning. Datalevin provides first-class support for **Vector Similarity Search**, allowing you to store and query high-dimensional embeddings directly alongside your Datalog triples.
+In the era of Large Language Models (LLMs), a database is not just a place to store structured facts; it is a repository for semantic meaning. Datalevin provides two related similarity-search features:
 
-This chapter explains how to configure vector attributes, perform nearest neighbor searches, and understand the underlying HNSW engine.
+- `:db.type/vec` stores user-supplied dense vectors and indexes them for nearest-neighbor search.
+- `:db/embedding true` indexes string datoms by embedding similarity. Datalevin computes the vectors during transaction processing and returns the original source datoms in queries.
+
+This chapter explains how to configure both paths, perform nearest-neighbor searches, and understand the underlying HNSW engine.
 
 ---
 
@@ -155,7 +158,74 @@ Search across multiple domains:
 
 ---
 
-## 3. Standalone Vector Database
+## 3. Text Embedding Indexes
+
+Use `:db/embedding true` when the source data is text and you want Datalevin to maintain the embedding vector index for you. Unlike `:db.type/vec`, the stored datom remains the original string. The embedding vector is a secondary index detail.
+
+```clojure
+(def schema
+  {:doc/id   {:db/valueType :db.type/string
+              :db/unique    :db.unique/identity}
+   :doc/text {:db/valueType            :db.type/string
+              :db/embedding            true
+              :db.embedding/domains    ["docs"]
+              :db.embedding/autoDomain true}})
+
+(def conn
+  (d/create-conn
+    "/tmp/embedding-db"
+    schema
+    {:embedding-opts {:provider    :default
+                      :metric-type :cosine}}))
+```
+
+The built-in default provider uses a bundled CPU-only llama.cpp embedder. If no model path is supplied, Datalevin uses `multilingual-e5-small-Q8_0.gguf`; the model is downloaded under the database root on first use when missing. For larger models or hosted embedding APIs, use an OpenAI-compatible provider:
+
+```clojure
+{:embedding-opts
+ {:provider           :openai-compatible
+  :model              "text-embedding-3-small"
+  :base-url           "https://api.openai.com/v1"
+  :api-key-env        "OPENAI_API_KEY"
+  :request-dimensions 1536
+  :metric-type        :cosine}}
+```
+
+Query with `embedding-neighbors`. The query input is text, not a vector:
+
+```clojure
+(d/q '[:find ?id ?text
+       :in $ ?q
+       :where
+       [(embedding-neighbors $ ?q {:domains ["docs"] :top 5})
+        [[?e _ ?text]]]
+       [?e :doc/id ?id]]
+     (d/db conn)
+     "vector search docs")
+```
+
+Attribute-specific embedding search requires `:db.embedding/autoDomain true`:
+
+```clojure
+(d/q '[:find ?id ?dist
+       :in $ ?q
+       :where
+       [(embedding-neighbors $ :doc/text ?q {:top 5 :display :refs+dists})
+        [[?e _ _ ?dist]]]
+       [?e :doc/id ?id]]
+     (d/db conn)
+     "semantic database")
+```
+
+Important rules:
+- `:db/embedding` applies to string attributes.
+- If no embedding domain is specified, the attribute participates in the default `"datalevin"` embedding domain.
+- `:db/embedding` may coexist with `:db/fulltext` on the same attribute.
+- Changing embedding-related schema on populated attributes requires an explicit rebuild workflow.
+
+---
+
+## 4. Standalone Vector Database
 
 Datalevin can be used as a standalone vector database:
 
@@ -214,11 +284,11 @@ Multiple vectors can share the same `vec-ref`. For example, different image embe
 
 ---
 
-## 4. The Core Engine: HNSW
+## 5. The Core Engine: HNSW
 
 Datalevin's vector search uses **Hierarchical Navigable Small World (HNSW)** graphs, implemented via the [usearch](https://github.com/unum-cloud/usearch) library with SIMD optimizations.
 
-### 4.1 How HNSW Works
+### 5.1 How HNSW Works
 
 HNSW builds a multi-layer graph where each node is a vector:
 - **Higher layers** have long-range connections for fast "skipping"
@@ -226,7 +296,7 @@ HNSW builds a multi-layer graph where each node is a vector:
 
 Search starts at the top layer and "zooms in" through descending layers to find nearest neighbors.
 
-### 4.2 Performance Trade-offs
+### 5.2 Performance Trade-offs
 
 - **`:connectivity`** (M) — Higher = better recall, more memory
 - **`:expansion-add`** (efConstruction) — Higher = better index quality, slower writes
@@ -234,7 +304,7 @@ Search starts at the top layer and "zooms in" through descending layers to find 
 
 ---
 
-## 5. Hybrid Retrieval: Combining Logic and Similarity
+## 6. Hybrid Retrieval: Combining Logic and Similarity
 
 Vector search integrates with Datalog, enabling hybrid queries that combine semantic similarity with structured filters:
 
@@ -294,6 +364,33 @@ This is essential for **Retrieval-Augmented Generation (RAG)**: find semanticall
 
 ---
 
+## 7. Asynchronous Vector and Embedding Indexing
+
+Vector and embedding indexing are synchronous by default. A transaction updates the source datoms and the secondary index before returning.
+
+For ingestion-heavy workloads, configure async indexing:
+
+```clojure
+{:vector-opts {:dimensions    300
+               :metric-type   :cosine
+               :indexing-mode :async}}
+```
+
+or for embedding providers:
+
+```clojure
+{:embedding-opts
+ {:provider      :openai-compatible
+  :model         "text-embedding-3-small"
+  :api-key-env   "OPENAI_API_KEY"
+  :metric-type   :cosine
+  :indexing-mode :async}}
+```
+
+In async mode, transactions commit the source datoms plus durable index jobs, and an in-process worker updates the secondary index after commit. Failed jobs retry with bounded backoff and worker leases, so a later worker can reclaim stalled work. Use `secondary-index-status` and `wait-for-secondary-index` to inspect lag or wait for a transaction's index work.
+
+---
+
 ## Summary
 
-Vector search transforms Datalevin into a semantic database. With `:db.type/vec` attributes and the `vec-neighbors` function, you can build recommendation engines, semantic search, and AI-powered applications—without a separate vector database service.
+Vector search transforms Datalevin into a semantic database. Use `:db.type/vec` and `vec-neighbors` when your application owns vectors directly; use `:db/embedding` and `embedding-neighbors` when Datalevin should embed string datoms and maintain the vector index for you.

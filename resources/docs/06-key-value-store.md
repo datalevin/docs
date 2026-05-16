@@ -77,12 +77,14 @@ The last parameter of `open-kv` can be an option map. There are many options.
 Some common options for `open-kv` include:
 - `:mapsize`: The maximum size the database can grow to (in MiB).
 - `:max-dbs`: The maximum number of named sub-databases (DBIs).
-- `:max-readers`: The maximum number of concurrent reader threads.
+- `:max-readers`: The maximum number of concurrent reader threads. The current default is 1024.
 - `:wal?`: Set to `true` to enable high-throughput WAL mode that benefits from
-  concurrent writers. Note that for new Datalog databases, WAL is enabled by
-  default, but for KV stores it is **disabled by default**.
+  concurrent writers. WAL is **disabled by default** for both local KV stores
+  and local embedded Datalog stores. Consensus-lease HA enables WAL
+  automatically.
 - `:wal-durability-profile`: Choose between `:strict` (standard `fsync`),
   `:relaxed` (batched syncs), and `:extra` (e.g., `F_FULLSYNC` on macOS).
+  Local WAL opt-in defaults to `:relaxed`; HA defaults to `:strict`.
 - `:wal-retention-bytes` and `:wal-retention-ms`: Set policies for how long to keep
   old WAL segments.
 - `:temp?`: Set to `true` to create a temporary store that is deleted on JVM exit. It automatically enables `:nosync`, bypassing the `msync` overhead.

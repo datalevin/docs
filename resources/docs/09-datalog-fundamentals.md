@@ -122,6 +122,11 @@ const cityCounts = d.q('[:find ?city (count ?e) ' +
 </div>
 Common aggregates include `sum`, `avg`, `count`, `min`, `max`, and `median`.
 
+Aggregate expressions can also appear in `:find`. For example, `(+ (sum ?x)
+(sum ?y))` returns a value derived from two aggregate results. This is useful
+when a query needs a computed metric rather than several separate aggregate
+columns.
+
 ### 2.3 Pull Expressions in `:find`
 Perhaps the most powerful feature of `:find` is that you can include a **Pull expression** (see Chapter 8). This allows you to run a query to *find* a set of entities and then immediately *pull* their data in a nested shape, all in one operation.
 
@@ -348,7 +353,7 @@ Similar to SQL's `HAVING` clause, `:having` allows you to filter results that ha
 (d/q '[:find ?city (count ?e)
        :where [?e :user/city ?city]
               [?e :user/active? true]
-       :having (> (count ?e) 10)]
+       :having [(> (count ?e) 10)]]
      db)
 ```
 
@@ -357,7 +362,7 @@ Similar to SQL's `HAVING` clause, `:having` allows you to filter results that ha
 Set result = Datalevin.q("[:find ?city (count ?e) " +
     ":where [?e :user/city ?city] " +
     "       [?e :user/active? true] " +
-    ":having (> (count ?e) 10)]",
+    ":having [(> (count ?e) 10)]]",
     db);
 ```
 
@@ -366,7 +371,7 @@ Set result = Datalevin.q("[:find ?city (count ?e) " +
 result = d.q('[:find ?city (count ?e) '
     ':where [?e :user/city ?city] '
     '       [?e :user/active? true] '
-    ':having (> (count ?e) 10)]',
+    ':having [(> (count ?e) 10)]]',
     db)
 ```
 
@@ -375,14 +380,14 @@ result = d.q('[:find ?city (count ?e) '
 const result = d.q('[:find ?city (count ?e) ' +
     ':where [?e :user/city ?city] ' +
     '       [?e :user/active? true] ' +
-    ':having (> (count ?e) 10)]',
+    ':having [(> (count ?e) 10)]]',
     db);
 ```
 
 </div>
 
 ### 5.3 `:order-by`: Sorting Results
-The `:order-by` clause sorts your results based on specified variables. You can specify ascending or descending order.
+The `:order-by` clause sorts your results based on specified variables. You can specify ascending or descending order. When sorting by aggregate output, `:order-by` can also use zero-based result column indices, such as `:order-by [1 :desc 0 :asc]`.
 
 <div class="multi-lang">
 

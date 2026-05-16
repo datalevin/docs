@@ -21,10 +21,15 @@ An "Episode" should be a lightweight entity that captures the *who, what, when, 
 {:episode/timestamp #inst "2024-02-19T10:00:00Z"
  :episode/type      :event.type/chat
  :episode/summary   "User Alice asked about vector search."
- :episode/vector    [...] ; Embedding of the summary or full log
+ :episode/vector    [...] ; Optional user-supplied vector
  :episode/content   "..." ; The raw log (Full-text indexed)
  :episode/context   [:session/id "session-123"]}
 ```
+
+If Datalevin should compute embeddings for you, define `:episode/summary` or
+`:episode/content` as a string attribute with `:db/embedding true`. Query it
+with `embedding-neighbors` using text input. Use `:db.type/vec` and
+`vec-neighbors` only when your application supplies vectors directly.
 
 ### 1.2 Temporal Retrieval
 The primary way to query episodic memory is by time. Because Datalevin indexes every attribute in AVE, range queries on `:episode/timestamp` are extremely fast.

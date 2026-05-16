@@ -68,7 +68,7 @@ LMDB reuses deleted pages rather than shrinking the file. `db-stats` will show y
 When queries are slow or the system feels sluggish, use these tools to find the bottleneck.
 
 - **Query Analysis**: Use `d/explain` (Chapter 24) to inspect query plans and understand execution strategy.
-- **Writer Contention**: If `d/transact!` calls are slow but the disk is idle, check if multiple threads are competing for the single Writer Lock.
+- **Writer Contention**: If `d/transact!` calls are slow but the disk is idle, check whether multiple threads are competing for the direct LMDB writer path, or whether WAL group-commit settings are mismatched to the workload.
 - **Logging**: Use a library like Timbre to log transaction times and query latencies.
 
 ---
@@ -79,8 +79,8 @@ Before you "go live," ensure your configuration matches these best practices.
 
 ### 4.1 Memory and Storage
 - [ ] **`:mapsize`**: Set to at least 2x your expected data size.
-- [ ] **`:max-readers`**: Increase to 512 or 1024 for high-concurrency web apps.
-- [ ] **WAL Mode**: Enable `:wal? true` for high write throughput.
+- [ ] **`:max-readers`**: Keep the default 1024 unless your bounded worker pool can exceed it.
+- [ ] **WAL Mode**: Enable `:wal? true` when you need WAL throughput, replay, replication, or HA behavior.
 - [ ] **Durability Profile**: Choose `:strict`, `:relaxed`, or `:extra` based on your safety requirements.
 - [ ] **`:nosync`**: Ensure this is **FALSE** (default) for production data safety.
 
