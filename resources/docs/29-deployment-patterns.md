@@ -64,7 +64,7 @@ Consensus-lease HA is the operational mode for services that need automatic writ
 
 - **Architecture**: One write leader per database, follower replicas that replay WAL records, and a Raft-backed control plane for leases, terms, membership, and promotion decisions.
 - **Benefits**: Automatic leader promotion, follower read capacity, WAL/snapshot-based rejoin, and explicit fail-closed behavior when membership, clock skew, lag, or fencing is unsafe.
-- **Trade-offs**: Static membership, required fencing hooks, quorum operational discipline, and no multi-leader writes.
+- **Trade-offs**: Explicit operator-managed membership updates, required fencing hooks, quorum operational discipline, and no multi-leader writes.
 
 **Best for**:
 - Production services that need automatic failover.

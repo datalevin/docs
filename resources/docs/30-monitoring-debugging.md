@@ -93,6 +93,7 @@ Before you "go live," ensure your configuration matches these best practices.
 - [ ] **Automated Backups**: Use `d/copy` to create transactionally consistent backups without downtime.
 - [ ] **Monitoring Hooks**: Use `d/listen!` to track transaction volume and data growth.
 - [ ] **Replica Lag**: For non-HA async read replicas, monitor `datalevin.client/replica-status`, especially `:replica-lag-lsn`, `:replica-degraded-reason`, and `:replica-last-error`.
+- [ ] **HA Membership Drift**: In consensus HA, keep each node's `:ha-members` and promotable control-plane voter mapping aligned with the authoritative membership hash. Use `datalevin.client/ha-update-membership!` for operator-driven membership changes.
 - [ ] **Health Checks**: Implement a `/health` endpoint that performs a simple `(d/q '[:find ?e :limit 1] db)` to verify end-to-end connectivity.
 
 ---

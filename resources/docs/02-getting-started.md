@@ -231,7 +231,7 @@ Datalevin has two distinct server-side replication modes.
 
 For simple read scaling without automatic failover, configure a non-HA async read-only replica with `:replica/read-only? true` and `:replica/source`. The primary database must have WAL enabled. The replica bootstraps from the primary copy interface, tails durable WAL records, serves normal reads, and rejects user writes.
 
-For failover, use consensus-lease HA. In this mode, each database has one write leader at a time; followers replicate WAL records and can serve reads. Promotion is conservative and uses a Raft-backed control plane, bounded leases, replica lag checks, and fencing hooks before a new leader accepts writes. HA databases force `:wal? true` and default to the `:strict` WAL durability profile.
+For failover, use consensus-lease HA. In this mode, each database has one write leader at a time; followers replicate WAL records and can serve reads. Promotion is conservative and uses a Raft-backed control plane, bounded leases, replica lag checks, and fencing hooks before a new leader accepts writes. HA databases force `:wal? true` and default to the `:strict` WAL durability profile. Membership changes are explicit operator actions through `datalevin.client/ha-update-membership!`.
 
 Chapter 27 covers server behavior, client tuning, async read replicas, and HA details.
 

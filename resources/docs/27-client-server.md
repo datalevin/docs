@@ -324,6 +324,42 @@ Clients do not need a separate replica API. Connect to a follower endpoint for f
 
 Use RBAC for enforced read-only access: grant only `:datalevin.server/view`. Ordinary one-shot writes can retry across known HA endpoints when a node responds with retryable states such as `:not-leader`. Explicit remote write transactions can retry while opening, but once opened they remain pinned to the server session that accepted them.
 
+### 5.3 Operator-Driven HA Membership Updates
+
+Consensus HA membership is operator managed. Datalevin does not discover data nodes automatically, but an administrator can update the authoritative membership for an open HA database with `datalevin.client/ha-update-membership!`.
+
+```clojure
+(require '[datalevin.client :as cl])
+
+(def client
+  (cl/new-client "dtlv://admin:pass@node-a:8898"))
+
+(cl/ha-update-membership!
+  client
+  "app"
+  {:ha-members
+   [{:node-id 1 :endpoint "node-a:8898"}
+    {:node-id 2 :endpoint "node-b:8898"}
+    {:node-id 3 :endpoint "node-c-new:8898"}]
+   :ha-control-plane
+   {:voters [{:peer-id "node-a:9098" :promotable? true :ha-node-id 1}
+             {:peer-id "node-b:9098" :promotable? true :ha-node-id 2}
+             {:peer-id "node-c-new:9098" :promotable? true :ha-node-id 3}]}})
+```
+
+The request validates the proposed `:ha-members` and control-plane voters, persists the new HA options on the target server, optionally replaces the Raft voter set, CAS-updates the authoritative membership hash, clears existing leases by default, and restarts that server's local HA runtime. The caller needs database alter permission plus server control permission, and the request must be issued outside `with-transaction`.
+
+Useful request keys are:
+
+- **`:ha-members`**: Replacement data-node member list.
+- **`:ha-control-plane {:voters [...]}`** or **`:ha-control-plane-voters`**: Replacement control-plane voters. This live API only changes the voter list, not other control-plane settings.
+- **`:expected-membership-hash`**: Optional CAS guard. If omitted, the server reads the current authoritative hash before applying the update.
+- **`:replace-voters?`**: Defaults to `true`; set to `false` only when the control-plane voter set was changed separately.
+- **`:clear-leases?`**: Defaults to `true`; this forces write leadership to be reacquired under the new membership.
+- **`:timeout-ms`**: Optional control-plane operation timeout.
+
+Run the same update on each surviving or newly staged server, or otherwise open those servers with the same new HA options, so local persisted options match the authoritative hash. A node whose local membership hash does not match the authoritative hash fails closed and will not promote or admit writes until the mismatch is resolved. Repeating the same desired update is idempotent and can be used to persist local options on nodes staged before the first cluster-wide hash update.
+
 ---
 
 ## 6. Runtime UDFs in Server Mode
