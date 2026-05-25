@@ -1,14 +1,14 @@
 ---
-title: "Deployment Patterns: Embedded, Server, HA, MCP, and Pods"
+title: "Deployment Patterns: Embedded, Server, Replicas, HA, MCP, and Pods"
 chapter: 29
 part: "VI — Systems and Operations"
 ---
 
-# Chapter 29: Deployment Patterns: Embedded, Server, HA, MCP, and Pods
+# Chapter 29: Deployment Patterns: Embedded, Server, Replicas, HA, MCP, and Pods
 
 Datalevin is designed to be highly portable. Whether you are building a small CLI tool or a massive distributed system, you can deploy Datalevin in the mode that best fits your operational requirements.
 
-This chapter explores the architectural trade-offs of the primary deployment modes: **Embedded**, **Server**, **HA Server**, **MCP**, and **Babashka Pods**.
+This chapter explores the architectural trade-offs of the primary deployment modes: **Embedded**, **Server**, **Async Read Replica**, **HA Server**, **MCP**, and **Babashka Pods**.
 
 ---
 
@@ -43,12 +43,27 @@ Server mode (detailed in **Chapter 27**) is used when you need multiple services
 
 ---
 
-## 3. HA Server Mode: Leader, Followers, and Failover
+## 3. Non-HA Async Read Replicas
+
+Async read replicas are server databases opened with `:replica/read-only? true` and a `:replica/source` pointing at a primary `dtlv://` database. They are separate from consensus HA.
+
+- **Architecture**: One primary writer database with WAL enabled, plus one or more read-only replica databases that bootstrap from primary copy and then tail durable WAL records.
+- **Benefits**: Read scaling, geographic or workload isolation for queries, and simpler operations than a consensus cluster.
+- **Trade-offs**: Eventually consistent reads, no automatic promotion, no fencing, no quorum, and no write failover.
+
+**Best for**:
+- Read-heavy services where stale-by-lag reads are acceptable.
+- Reporting, analytics, or search-serving nodes that should not accept writes.
+- Teams that want read capacity without operating consensus HA.
+
+---
+
+## 4. HA Server Mode: Leader, Followers, and Failover
 
 Consensus-lease HA is the operational mode for services that need automatic write-leader promotion and read-capable followers.
 
 - **Architecture**: One write leader per database, follower replicas that replay WAL records, and a Raft-backed control plane for leases, terms, membership, and promotion decisions.
-- **Benefits**: Automatic leader promotion, read-only replica capacity, WAL/snapshot-based rejoin, and explicit fail-closed behavior when membership, clock skew, lag, or fencing is unsafe.
+- **Benefits**: Automatic leader promotion, follower read capacity, WAL/snapshot-based rejoin, and explicit fail-closed behavior when membership, clock skew, lag, or fencing is unsafe.
 - **Trade-offs**: Static membership, required fencing hooks, quorum operational discipline, and no multi-leader writes.
 
 **Best for**:
@@ -58,7 +73,7 @@ Consensus-lease HA is the operational mode for services that need automatic writ
 
 ---
 
-## 4. MCP Mode: Tool Surface for AI Applications
+## 5. MCP Mode: Tool Surface for AI Applications
 
 `dtlv mcp` runs a local MCP server over `stdio`. It is a process adapter over Datalevin APIs and can open local databases or remote `dtlv://` targets.
 
@@ -73,7 +88,7 @@ Consensus-lease HA is the operational mode for services that need automatic writ
 
 ---
 
-## 5. Babashka Pods: Rapid Scripting
+## 6. Babashka Pods: Rapid Scripting
 
 Babashka is a fast-starting Clojure interpreter for scripting. Datalevin provides a **Pod** that allows you to use its Datalog and KV capabilities within a script without the overhead of the full JVM startup.
 
@@ -88,7 +103,7 @@ Babashka is a fast-starting Clojure interpreter for scripting. Datalevin provide
 
 ---
 
-## 6. Native Language Libraries
+## 7. Native Language Libraries
 
 Datalevin also publishes embedded libraries for several host languages:
 
@@ -101,20 +116,20 @@ These packages are still embedded runtimes. They are excellent when a Java, Pyth
 
 ---
 
-## 7. Architectural Comparison Table
+## 8. Architectural Comparison Table
 
-| Feature | Embedded | Server | HA Server | MCP | Babashka Pod |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Communication** | Direct calls | TCP | TCP + replication/control plane | stdio | IPC |
-| **Overhead** | Lowest | Network serialization | Network + HA coordination | Tool-call serialization | IPC |
-| **Security** | OS/file permissions | RBAC | RBAC + HA fencing | Read-only by default | OS-level |
-| **Writes** | Local single-writer storage path; WAL can improve concurrent caller throughput | Multi-client, server-coordinated | One leader per database | Disabled unless allowed | Local process path |
-| **Reads** | Local zero-copy | Remote client reads | Leader or follower reads | Local or remote target | Pod process |
-| **Tech Stack** | Clojure, Java, Python, Node | Datalevin clients | Datalevin clients | MCP clients | Babashka |
+| Feature | Embedded | Server | Async Read Replica | HA Server | MCP | Babashka Pod |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Communication** | Direct calls | TCP | TCP + WAL tailing | TCP + replication/control plane | stdio | IPC |
+| **Overhead** | Lowest | Network serialization | Network + replica lag | Network + HA coordination | Tool-call serialization | IPC |
+| **Security** | OS/file permissions | RBAC | RBAC + server-side write rejection | RBAC + HA fencing | Read-only by default | OS-level |
+| **Writes** | Local single-writer storage path; WAL can improve concurrent caller throughput | Multi-client, server-coordinated | Primary only; rejected on replica | One leader per database | Disabled unless allowed | Local process path |
+| **Reads** | Local zero-copy | Remote client reads | Replica reads, eventually consistent | Leader or follower reads | Local or remote target | Pod process |
+| **Tech Stack** | Clojure, Java, Python, Node | Datalevin clients | Datalevin clients | Datalevin clients | MCP clients | Babashka |
 
 ---
 
-## 8. Case Study: High-Density Multi-Tenancy
+## 9. Case Study: High-Density Multi-Tenancy
 
 A powerful but less common deployment pattern is **high-density multi-tenancy**. Instead of a single massive database for all users, you create a separate Datalevin database for every user or workspace.
 
@@ -139,6 +154,7 @@ Datalevin's deployment flexibility allows your application to evolve.
 2.  **Scale with Embedded**: When building your production application, use Embedded mode for maximum performance.
 3.  **Expose with MCP**: For AI tools, expose a read-only local tool surface before adding write tools.
 4.  **Expand with Server**: If you need to share data across microservices or teams, "promote" to Server mode.
-5.  **Harden with HA**: If the server becomes critical infrastructure, move selected databases to consensus-lease HA.
+5.  **Add read replicas**: If reads need isolation or capacity but writes can stay on one primary, add non-HA async read-only replicas.
+6.  **Harden with HA**: If the server becomes critical infrastructure and needs automatic failover, move selected databases to consensus-lease HA.
 
 Because the underlying data format is identical in all modes, you can move between patterns without data migration.

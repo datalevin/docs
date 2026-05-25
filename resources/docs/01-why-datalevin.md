@@ -96,7 +96,8 @@ Datalevin is designed to run where your application runs:
 
 - Embedded mode for local, process-level access.
 - Client/server mode for shared deployment and centralized operations.
-- Consensus-lease HA for one-leader, read-replica deployments.
+- Non-HA async read-only replicas for simple read scaling.
+- Consensus-lease HA for automatic promotion and follower reads.
 - Java, Python, and Node.js embedded libraries for host-language applications.
 - Babashka pod mode for scriptable workflows.
 - MCP server mode for local AI tool integration.

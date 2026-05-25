@@ -122,7 +122,7 @@ d.setEnvFlags(kvDb, ['nosync'], false);
 
 ## 4. WAL-Based Durability: Performance + Safety
 
-While standard LMDB is extremely safe, it can be limited by disk I/O. Datalevin's **Write-Ahead Log (WAL) mode** is an explicit opt-in for local embedded Datalog and KV stores, and is forced on for consensus-lease HA. Use WAL when you need higher write throughput from concurrent callers, WAL replay, replication, or HA behavior.
+While standard LMDB is extremely safe, it can be limited by disk I/O. Datalevin's **Write-Ahead Log (WAL) mode** is an explicit opt-in for local embedded Datalog and KV stores, is required on the primary for non-HA async read replicas, and is forced on for consensus-lease HA. Use WAL when you need higher write throughput from concurrent callers, WAL replay, replication, or HA behavior.
 
 ### 4.1 The LSN Lifecycle
 In WAL mode, every transaction is assigned a **Log Sequence Number (LSN)**. This number is the canonical source of truth for the database's progress.

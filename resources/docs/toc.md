@@ -68,7 +68,7 @@ Part VI — Systems and Operations
 
 28. Encryption at Rest and Security Models
 
-29. Deployment Patterns: Embedded, Server, HA, MCP, and Pods
+29. Deployment Patterns: Embedded, Server, Replicas, HA, MCP, and Pods
 
 30. Monitoring, Debugging, and Production Checklist
 
@@ -95,3 +95,7 @@ Part VIII — Internals and Extensions
 39. Embedding Datalevin in Applications
 
 40. Contributing to Datalevin and the Ecosystem
+
+Part IX — Appendices
+
+41. Datalog Schema Reference

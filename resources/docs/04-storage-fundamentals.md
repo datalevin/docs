@@ -135,6 +135,7 @@ By default, local embedded Datalevin stores use LMDB's direct commit path. This 
 When WAL mode is enabled:
 - **Datalog**: Disabled by default for local embedded databases; enable with `{:wal? true}` in `create-conn` or `get-conn` options.
 - **Key-Value**: Disabled by default; enable with `{:wal? true}` in `open-kv` options.
+- **Async read replicas**: A non-HA replica requires the primary to have WAL enabled so it can bootstrap from a copy and then tail durable records.
 - **HA**: Consensus-lease HA forces WAL on and defaults to the `:strict` durability profile.
 
 1.  **Transaction**: A write request arrives.

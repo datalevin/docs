@@ -80,8 +80,8 @@ Some common options for `open-kv` include:
 - `:max-readers`: The maximum number of concurrent reader threads. The current default is 1024.
 - `:wal?`: Set to `true` to enable high-throughput WAL mode that benefits from
   concurrent writers. WAL is **disabled by default** for both local KV stores
-  and local embedded Datalog stores. Consensus-lease HA enables WAL
-  automatically.
+  and local embedded Datalog stores. Non-HA async read replicas require WAL on
+  the primary; consensus-lease HA enables WAL automatically.
 - `:wal-durability-profile`: Choose between `:strict` (standard `fsync`),
   `:relaxed` (batched syncs), and `:extra` (e.g., `F_FULLSYNC` on macOS).
   Local WAL opt-in defaults to `:relaxed`; HA defaults to `:strict`.

@@ -246,7 +246,64 @@ These affect the protocol payload size and CPU usage:
 
 ---
 
-## 5. High Availability and Replica Reads
+## 5. Replication and High Availability
+
+Datalevin server has two different replication paths: non-HA async read replicas for read scaling, and consensus-lease HA for automatic leader promotion and follower reads.
+
+### 5.1 Non-HA Async Read Replicas
+
+Use a non-HA async read replica when you want one primary writer server and one or more read-only servers, but do not need leader election, quorum, fencing, automatic promotion, or write failover.
+
+The primary database must have WAL enabled. `:wal-durability-profile :strict` is recommended because the replica sync loop tails records up to the source durable LSN.
+
+Configure the replica when opening the database on the replica server:
+
+```clojure
+(require '[datalevin.core :as d]
+         '[datalevin.client :as cl])
+
+(def schema
+  {:name {:db/valueType :db.type/string
+          :db/cardinality :db.cardinality/one}})
+
+(def replica-conn
+  (d/create-conn
+    "dtlv://replica-admin:pass@replica-host:8898/app"
+    schema
+    {:replica/read-only? true
+     :replica/source "dtlv://replicator:pass@primary-host:8898/app"
+     :replica/id "app-replica-us-west"
+     :replica/poll-ms 250
+     :replica/report-ms 5000
+     :wal? true
+     :wal-durability-profile :strict}))
+```
+
+On first open, if the local replica database does not exist, Datalevin bootstraps it from the primary copy interface. After that, the replica tails source WAL records in LSN order and periodically reports its applied LSN back to the primary so WAL garbage collection preserves needed segments. If the local replica database already exists, it is reused; remove that local database directory to force a fresh bootstrap.
+
+Replica reads use the normal APIs against the replica URI. User writes are rejected by the replica server, even if the authenticated user otherwise has write permission:
+
+```clojure
+(d/q '[:find [?name ...] :where [?e :name ?name]] @replica-conn)
+
+;; Throws: replica is read-only
+(d/transact! replica-conn [{:db/id -1 :name "blocked"}])
+```
+
+The source user in `:replica/source` must be allowed to copy/open the primary database, read the transaction log, and update the replica floor on the primary. In practice, grant that replicator user database `:datalevin.server/alter` permission. The user opening the local replica needs permission to create or open the database on the replica server.
+
+Replica status is available through `datalevin.client`:
+
+```clojure
+(def client
+  (cl/new-client "dtlv://replica-admin:pass@replica-host:8898"))
+
+(cl/replica-status client "app")
+```
+
+The returned map includes `:replica/read-only?`, `:replica/source`, `:replica/id`, `:replica-applied-lsn`, `:replica-source-durable-lsn`, `:replica-source-committed-lsn`, `:replica-lag-lsn`, `:replica-last-sync-ms`, `:replica-degraded-reason`, and `:replica-last-error`.
+
+### 5.2 Consensus-Lease HA and Follower Reads
 
 Datalevin server supports consensus-lease HA. Each HA database has exactly one write leader at a time. Followers replicate from the leader using WAL records and snapshots, and can serve reads.
 

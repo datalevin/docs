@@ -225,13 +225,15 @@ The `store` parameter defaults to `datalog`; use `store=kv` for the direct key-v
 
 ---
 
-## 4. High Availability and Replicas
+## 4. Replication and High Availability
 
-Datalevin server now supports read-only replicas and a consensus-lease HA cluster. In this mode, each database has one write leader at a time; followers replicate WAL records and can serve reads. Promotion is conservative and uses a Raft-backed control plane, bounded leases, replica lag checks, and fencing hooks before a new leader accepts writes.
+Datalevin has two distinct server-side replication modes.
 
-HA databases force `:wal? true` and default to the `:strict` WAL durability profile. Client writes have bounded retry behavior during failover; follower reads use the normal client APIs by connecting to a follower endpoint. Use RBAC to enforce read-only access for users.
+For simple read scaling without automatic failover, configure a non-HA async read-only replica with `:replica/read-only? true` and `:replica/source`. The primary database must have WAL enabled. The replica bootstraps from the primary copy interface, tails durable WAL records, serves normal reads, and rejects user writes.
 
-Chapter 27 covers server behavior, client tuning, and HA details.
+For failover, use consensus-lease HA. In this mode, each database has one write leader at a time; followers replicate WAL records and can serve reads. Promotion is conservative and uses a Raft-backed control plane, bounded leases, replica lag checks, and fencing hooks before a new leader accepts writes. HA databases force `:wal? true` and default to the `:strict` WAL durability profile.
+
+Chapter 27 covers server behavior, client tuning, async read replicas, and HA details.
 
 ---
 

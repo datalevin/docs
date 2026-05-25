@@ -92,6 +92,7 @@ Before you "go live," ensure your configuration matches these best practices.
 ### 4.3 Operations
 - [ ] **Automated Backups**: Use `d/copy` to create transactionally consistent backups without downtime.
 - [ ] **Monitoring Hooks**: Use `d/listen!` to track transaction volume and data growth.
+- [ ] **Replica Lag**: For non-HA async read replicas, monitor `datalevin.client/replica-status`, especially `:replica-lag-lsn`, `:replica-degraded-reason`, and `:replica-last-error`.
 - [ ] **Health Checks**: Implement a `/health` endpoint that performs a simple `(d/q '[:find ?e :limit 1] db)` to verify end-to-end connectivity.
 
 ---

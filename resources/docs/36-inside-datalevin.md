@@ -64,7 +64,7 @@ While there can be thousands of concurrent readers, Datalevin follows a **Single
 
 The WAL engine is designed to bridge the gap between B+Tree read performance and LSM-Tree write throughput.
 
-For local embedded Datalog and KV stores, WAL is off by default and enabled with `:wal? true`. Consensus-lease HA forces WAL on.
+For local embedded Datalog and KV stores, WAL is off by default and enabled with `:wal? true`. Non-HA async read replicas require WAL on the primary, and consensus-lease HA forces WAL on.
 
 ### 4.1 LSN Architecture
 Every transaction in WAL mode is assigned a contiguous **Log Sequence Number (LSN)**. The LSN is the canonical position of a commit in the database's history.
