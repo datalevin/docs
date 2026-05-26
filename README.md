@@ -52,6 +52,37 @@ Other REPL commands:
 (dev/reload!)   ; manually trigger a browser refresh
 ```
 
+## Multi-Language Code Examples
+
+For Datalevin API examples that apply across supported host languages, wrap the
+parallel code fences in a `multi-lang` block and keep this order: Clojure, Java,
+Python, JavaScript.
+
+````markdown
+<div class="multi-lang">
+
+```clojure
+(d/q '[:find ?e :where [?e :user/name "Alice"]] db)
+```
+
+```java
+Datalevin.q("[:find ?e :where [?e :user/name \"Alice\"]]", db);
+```
+
+```python
+d.q('[:find ?e :where [?e :user/name "Alice"]]', db)
+```
+
+```javascript
+d.q(`[:find ?e :where [?e :user/name "Alice"]]`, db);
+```
+
+</div>
+````
+
+Use ordinary single-language fences for shell commands, SQL, EDN/Datalog
+reference snippets, Babashka pods, server REPL tasks, and Clojure-specific APIs.
+
 ## Build CSS (production)
 
 ```bash

@@ -2,7 +2,8 @@
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [datalevin.docs.views.layout :as layout]
-            [hiccup2.core :as h]))
+            [hiccup2.core :as h]
+            [ring.middleware.anti-forgery :as anti-forgery]))
 
 (deftest flash-message-uses-data-attributes-for-dismissal
   (let [html (str (h/html {:mode :html :escape? false}
@@ -19,6 +20,18 @@
     (is (re-find #"/js/ui-interactions\.js\?v=[0-9a-f]{12}" html))
     (is (re-find #"/css/output\.css\?v=[0-9a-f]{12}" html))
     (is (not (str/includes? html "onclick=")))))
+
+(deftest base-with-req-loads-multi-language-code-assets
+  (binding [anti-forgery/*anti-forgery-token* (delay "test-token")]
+    (let [html (layout/base-with-req "Docs" {:session {} :uri "/docs/sample"}
+                                     [:main "Docs"])]
+      (is (str/includes? html "/css/multi-lang.css?v="))
+      (is (str/includes? html "/js/highlight.min.js?v="))
+      (is (str/includes? html "/js/hljs-clojure.min.js?v="))
+      (is (str/includes? html "/js/hljs-java.min.js?v="))
+      (is (str/includes? html "/js/hljs-python.min.js?v="))
+      (is (str/includes? html "/js/hljs-javascript.min.js?v="))
+      (is (str/includes? html "/js/code-highlight.js?v=")))))
 
 (deftest anonymous-header-keeps-pdf-public-and-removes-gated-copy
   (let [html (str (h/html {:mode :html :escape? false}

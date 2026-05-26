@@ -75,6 +75,29 @@
           (.delete file))
         (.delete dir)))))
 
+(deftest parse-markdown-preserves-multi-language-code-groups
+  (let [html (pages/parse-markdown
+              (str "<div class=\"multi-lang\">\n\n"
+                   "```clojure\n"
+                   "(+ 1 2)\n"
+                   "```\n\n"
+                   "```java\n"
+                   "Math.addExact(1, 2);\n"
+                   "```\n\n"
+                   "```python\n"
+                   "1 + 2\n"
+                   "```\n\n"
+                   "```javascript\n"
+                   "1 + 2;\n"
+                   "```\n\n"
+                   "</div>\n"))]
+    (is (str/includes? html "<div class=\"multi-lang\">"))
+    (is (= 4 (count (re-seq #"<pre>" html))))
+    (is (str/includes? html "language-clojure"))
+    (is (str/includes? html "language-java"))
+    (is (str/includes? html "language-python"))
+    (is (str/includes? html "language-javascript"))))
+
 (deftest docs-index-renders-cached-html-inside-page-shell
   (binding [anti-forgery/*anti-forgery-token* (delay "test-token")]
     (with-redefs [pages/load-docs-index-html

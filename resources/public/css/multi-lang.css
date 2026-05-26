@@ -36,6 +36,11 @@
   color: #d1d5db;
 }
 
+.multi-lang .lang-tab:focus-visible {
+  outline: 2px solid rgba(34,211,238,0.65);
+  outline-offset: -2px;
+}
+
 .multi-lang .lang-tab.active {
   color: #22d3ee;
   border-bottom-color: #22d3ee;
