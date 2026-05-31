@@ -6,7 +6,9 @@ part: "IX — Appendices"
 
 # Appendix A: Datalog Schema Reference
 
-This appendix is a compact reference for Datalevin Datalog schema maps. For design guidance, see Chapter 5 and Chapter 11. For specialized index behavior, see the full-text, vector, embedding, and idoc chapters.
+This appendix is a compact reference for Datalevin Datalog schema maps. For
+design guidance, see Chapter 5 and Chapter 11. For specialized index behavior,
+see the full-text, vector, embedding, and idoc chapters.
 
 ---
 
@@ -32,7 +34,7 @@ Pass the schema when opening or creating a connection:
 (def conn (d/get-conn "/data/app" schema))
 ```
 
-Datalevin schemas are not transacted as Datomic-style schema entities. Use:
+Use `update-schema` to change schema:
 
 ```clojure
 (d/schema conn)
@@ -45,16 +47,21 @@ Datalevin schemas are not transacted as Datomic-style schema entities. Use:
 
 ## 2. Defaults and Built-Ins
 
-- Schema is optional. Undefined attributes are created on write and store values as generic EDN data.
+- Schema is optional. Undefined attributes are created on write and store values
+  as generic EDN data.
 - `:db/cardinality` defaults to `:db.cardinality/one`.
-- Every attribute is indexed in AVE. There is no `:db/index` opt-in property.
 - Attribute names must be keywords.
-- Built-in schema includes `:db/ident`, which is unique and keyword-valued. It also includes internal/system attributes such as `:db/created-at`, `:db/updated-at`, `:db/fn`, and `:db/udf`.
-- Use the store option `{:closed-schema? true}` to reject transactions that mention attributes not already defined in the schema.
+- Built-in schema includes `:db/ident`, which is unique and keyword-valued. It
+  also includes internal/system attributes such as `:db/created-at`,
+  `:db/updated-at`, `:db/fn`, and `:db/udf`.
+- Use the store option `{:closed-schema? true}` to reject transactions that
+  mention attributes not already defined in the schema.
 
 ---
 
 ## 3. Attribute Properties
+
+All the acceptable attributes properties are the following:
 
 | Property | Values | Meaning |
 | :--- | :--- | :--- |
@@ -98,15 +105,19 @@ Datalevin schemas are not transacted as Datomic-style schema entities. Use:
 | `:db.type/vec` | numeric vectors | Maintains vector similarity indexes. Configure dimensions and metric in store options. |
 | `:db.type/idoc` | nested maps/vectors or supported document payloads | Stored as one datom and indexed by path. |
 
-If `:db/valueType` is omitted, the value is stored as generic EDN data. That is flexible, but not ideal for range scans because Datalevin does not have a typed sort order for the value.
+There is no `:db.type/uri`; store URI values as strings.
+
+If `:db/valueType` is omitted, Datalevin stores values as serialized EDN data,
+which is flexible but not as useful for ordered range access.
 
 ---
 
 ## 5. Identity and Uniqueness
 
-`:db.unique/value` means no two entities may have the same value for that attribute.
+`:db.unique/value` means no two entities may have the same value for that
+attribute. Duplicates will be rejected with a transaction error.
 
-`:db.unique/identity` additionally enables lookup refs and upsert:
+`:db.unique/identity` enables lookup refs and upsert:
 
 ```clojure
 {:user/email {:db/valueType :db.type/string
@@ -119,7 +130,8 @@ If `:db/valueType` is omitted, the value is stored as generic EDN data. That is 
     :user/name  "Ada"}])
 ```
 
-If an entity with that email already exists, the map transaction updates that entity instead of creating a duplicate.
+If an entity with that email already exists, the map transaction updates that
+entity instead of creating a duplicate.
 
 `:db/ident` is the built-in identity attribute for globally named entities:
 

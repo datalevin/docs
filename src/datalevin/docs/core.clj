@@ -10,7 +10,9 @@
             [datalevin.core :as d]
             [taoensso.timbre :as log]
             [ring.adapter.jetty :as jetty])
-  (:import [java.util.concurrent Executors ScheduledExecutorService TimeUnit]))
+  (:import [java.util.concurrent Executors ScheduledExecutorService TimeUnit]
+           [org.eclipse.jetty.ee9.servlet ServletContextHandler]
+           [org.eclipse.jetty.server Server]))
 
 (defn configure-logging!
   "Configures Timbre logging based on environment."
@@ -125,14 +127,12 @@
                                                               :max-idle-time 30000
                                                               :configurator
                                                               (fn [server]
-                                                                (.setStopTimeout ^org.eclipse.jetty.server.Server
-                                                                                 server
-                                                                                 jetty-stop-timeout-ms)
+                                                                (.setStopTimeout ^Server server jetty-stop-timeout-ms)
                                                                 (when-let [handler (.getHandler server)]
-                                                                  (when (instance? org.eclipse.jetty.servlet.ServletContextHandler handler)
+                                                                  (when (instance? ServletContextHandler handler)
                                                                     ;; Reject oversized form posts before Ring parses params.
                                                                     (.setMaxFormContentSize
-                                                                     ^org.eclipse.jetty.servlet.ServletContextHandler handler
+                                                                     ^ServletContextHandler handler
                                                                      util/max-form-content-size-bytes))))}))]
                    (-> sys
                        (assoc :jetty/server jetty-server)

@@ -20,30 +20,34 @@ shift.
 
 ## 1. Think in Datoms, Not Containers
 
-In traditional databases, if you want to record that "Alice is 30 years old,"
-you must first decide which "box" that fact belongs in. You might create a
-`Users` table and add a row for Alice. The fact of her age is then trapped
-within the context of that row and those other columns.
+In traditional databases, if you want to record that Alice's email address is
+`alice@example.com`, you must first decide which "box" that fact belongs in.
+You might create a `Users` table and add a row for Alice. The fact of her email
+address is then trapped within the context of that row and those other columns.
 
 At the conceptual level, Datalevin discards these rigid boxes. Instead, it
 stores data as a stream of atomic facts called **datoms**. Each datom is a
 simple statement of truth represented as a triple: `[entity attribute value]`.
 
-- **Entity (E):** The "who" or "what" (a unique ID).
-- **Attribute (A):** The "property" (a name like `:user/name`).
-- **Value (V):** The "data" (like `"Alice"` or `30`).
+- **Entity (E):** The "who" or "what" (a unique 64 bit integer ID in Datalevin).
+- **Attribute (A):** The "property" (a keyword like `:user/email`).
+- **Value (V):** The "data" (like `"alice@example.com"`).
 
-Imagine a giant ledger where every single cell of every spreadsheet in your
-entire company is cut out and pasted as an individual line. Each line tells
-you exactly which "row" it came from (Entity), what "column" it represents
-(Attribute), and what the "value" is.
 
-Another view, e and a are coordinates in a 2d table view of values.
+From a traditional perspective, `e `and `a` are coordinates in a two dimensional
+table view of values, and the value `v` is contained in the cell identified by
+the coordinates.
 
-This "fact-first" approach is powerful because it is **additive**. To update
-Alice's age, you don't modify a row; you simply assert a new fact. To add a
-new piece of information—like her favorite color, you don't need to "alter a
-table." You just add another datom: `[AliceID :user/favorite-color "Blue"]`.
+However, a better view is to imagine a giant ledger where every single cell of
+every spreadsheet in your entire company is cut out and pasted as an individual
+line. Each line tells you exactly which "row" it came from (Entity), what
+"column" it represents (Attribute), and what the "value" is.
+
+This "fact-first" approach is powerful because it is **additive**.
+To add a new piece of information, like her preferred language, you
+don't need to "alter a table." You just add another datom:
+`[AliceID :user/preferred-language "en"]`.
+
 
 ## 2. Attributes Over Tables: The Fluid Entity
 
@@ -51,8 +55,8 @@ Because facts are stored individually, the concept of a "Table" disappears.
 In its place is **Attribute-Centric Modeling**.
 
 In SQL, the schema belongs to the table. In Datalevin, the schema belongs to
-the **attribute**. You define what a `:person/email` is, e.g. a string, unique,
-full-text indexed, but you don't define what a "Person" is in a rigid sense.
+the **attribute**. You define what a `:user/email` is, e.g. a string or a
+unique identity, but you don't define what a "User" is in a rigid sense.
 
 An "Entity" in Datalevin is just a collection of datoms that happen to share
 the same Entity ID. This makes entities **fluid**. A single ID could have
@@ -60,66 +64,81 @@ attributes associated with a `:user`, a `:customer`, and an `:employee`
 simultaneously. You don't "join" these tables; you simply query for an ID
 that possesses all those attributes.
 
+To update a value, e.g. Alice's email address, you don't modify a row; you
+assert a new fact about the same attribute of the same entity, if the schema
+requires the attribute to be unique, the new fact will replace the old fact,
+otherwise, the new fact is simply added, e.g. a person may have multiple emails.
+
+In the example below of a schema and a transaction to add some data in the form
+of two related entities, a person and a school, we use negative integers
+(strings can also be used) as temporary entity IDs `:db/id` to indicate their
+relationship, If no such relationships exist in the transaction data,
+`:db/id` attribute can be omitted. No matter which shape your transaction
+data is in, Datalevin will always automatically assign real entity IDs during
+the transaction process.
+
+
 <div class="multi-lang">
 
 ```clojure
-;; The schema defines the behavior of properties, not the shape of rows.
+;; The schema defines the behavior of attributes, not the shape of rows.
 (def schema
   {:person/name   {:db/valueType :db.type/string}
-   :person/age    {:db/valueType :db.type/long}
-   :person/school {:db/valueType :db.type/ref} ; A reference to another entity
+   :person/email  {:db/valueType :db.type/string}
+   :person/school {:db/valueType :db.type/ref} ; A reference to ID of another entity
    :school/name   {:db/valueType :db.type/string}})
 
-;; Data is asserted as a collection of facts.
+;; Data is asserted as a collection of entities here.
 ;; Notice how 'Alice' and 'MIT' are just sets of attributes.
+;; :db/id is a system attribute for entity ID, temporary IDs are used here
 (d/transact! conn
-  [{:db/id -1 :person/name "Alice" :person/age 30 :person/school -10}
+  [{:db/id -1 :person/name "Alice" :person/email "alice@example.com" :person/school -10}
    {:db/id -10 :school/name "MIT" :school/country "USA"}])
 ```
 
 ```java
-// The schema defines the behavior of properties, not the shape of rows.
+// The schema defines the behavior of attributes, not the shape of rows.
 Map<String, Object> schema = Map.of(
     "person/name",   Map.of("db/valueType", "db.type/string"),
-    "person/age",    Map.of("db/valueType", "db.type/long"),
-    "person/school", Map.of("db/valueType", "db.type/ref"),  // A reference to another entity
+    "person/email",  Map.of("db/valueType", "db.type/string"),
+    "person/school", Map.of("db/valueType", "db.type/ref"),  // A reference to ID of another entity
     "school/name",   Map.of("db/valueType", "db.type/string"));
 
-// Data is asserted as a collection of facts.
+// Data is asserted as a collection of entities.
 // Notice how 'Alice' and 'MIT' are just sets of attributes.
 Datalevin.transact(conn, List.of(
-    Map.of("db/id", -1, "person/name", "Alice", "person/age", 30, "person/school", -10),
+    Map.of("db/id", -1, "person/name", "Alice", "person/email", "alice@example.com", "person/school", -10),
     Map.of("db/id", -10, "school/name", "MIT", "school/country", "USA")));
 ```
 
 ```python
-# The schema defines the behavior of properties, not the shape of rows.
+# The schema defines the behavior of attributes, not the shape of rows.
 schema = {
     "person/name":   {"db/valueType": "db.type/string"},
-    "person/age":    {"db/valueType": "db.type/long"},
-    "person/school": {"db/valueType": "db.type/ref"},  # A reference to another entity
+    "person/email":  {"db/valueType": "db.type/string"},
+    "person/school": {"db/valueType": "db.type/ref"},  # A reference to ID of another entity
     "school/name":   {"db/valueType": "db.type/string"}}
 
-# Data is asserted as a collection of facts.
+# Data is asserted as a collection of entities.
 # Notice how 'Alice' and 'MIT' are just sets of attributes.
 d.transact(conn, [
-    {"db/id": -1, "person/name": "Alice", "person/age": 30, "person/school": -10},
+    {"db/id": -1, "person/name": "Alice", "person/email": "alice@example.com", "person/school": -10},
     {"db/id": -10, "school/name": "MIT", "school/country": "USA"}])
 ```
 
 ```javascript
-// The schema defines the behavior of properties, not the shape of rows.
+// The schema defines the behavior of attributes, not the shape of rows.
 const schema = {
   "person/name":   {"db/valueType": "db.type/string"},
-  "person/age":    {"db/valueType": "db.type/long"},
-  "person/school": {"db/valueType": "db.type/ref"},  // A reference to another entity
+  "person/email":  {"db/valueType": "db.type/string"},
+  "person/school": {"db/valueType": "db.type/ref"},  // A reference to ID of another entity
   "school/name":   {"db/valueType": "db.type/string"}
 };
 
-// Data is asserted as a collection of facts.
+// Data is asserted as a collection of entities.
 // Notice how 'Alice' and 'MIT' are just sets of attributes.
 d.transact(conn, [
-  {"db/id": -1, "person/name": "Alice", "person/age": 30, "person/school": -10},
+  {"db/id": -1, "person/name": "Alice", "person/email": "alice@example.com", "person/school": -10},
   {"db/id": -10, "school/name": "MIT", "school/country": "USA"}
 ]);
 ```
@@ -152,9 +171,9 @@ just a matter of looking up datoms that share a value.
     you allow the engine to use its core EAV (Entity-Attribute-Value) and AVE
     (Attribute-Value-Entity) indexes to jump directly to the relevant facts.
 3.  **The Optimizer's Secret Sauce:** Datalevin uses a cost-based optimizer.
-    It samples the data to understand the "cardinality" of your query clauses.
-    By keeping data normalized, you give the optimizer a clearer picture of
-    how to order joins for maximum speed.
+    It counts or samples the data to understand the "cardinality" of your query
+    clauses. By keeping data normalized, you give the optimizer a clearer
+    picture of how to order joins for maximum speed.
 
 For a deeper dive into how this approach often beats traditional relational
 engines in query performance, see the discussion on the [Join Order
@@ -187,13 +206,14 @@ filtering so you don't have to.
 ```text
 +-----------------------------------------------------------+
 | Layer 1: CONCEPTUAL (Datoms: E-A-V)                        |
-| "Alice is 30" -> [101 :user/age 30]                       |
+| "Alice's email is alice@example.com"                       |
+|   -> [101 :user/email "alice@example.com"]                 |
 +---------------------------+-------------------------------+
                             |
                             v
 +-----------------------------------------------------------+
 | Layer 3: EXECUTION (Datalog / Optimizer / Rules)          |
-| "Find all users over 25" -> Plan: Scan AVE index for age  |
+| "Find Alice's email" -> Plan: match name and email datoms |
 +---------------------------+-------------------------------+
                             |
                             v
@@ -207,57 +227,59 @@ filtering so you don't have to.
 
 If SQL is like giving the database a set of instructions on how to assemble a
 table, Datalog is like giving the database a **description** of the answer you
-want.
+want. That declarative style comes from logic programming[^logic-programming]:
+programs are expressed as logical clauses, and evaluation searches for values
+that make those clauses true.
 
 In Datalevin, a query is a set of logical "clauses." You aren't telling the
 engine to "JOIN table A with table B." You are stating: "I am looking for an
 Entity `?e` that has Attribute `:user/name` with Value `'Alice'`, and that same
-Entity `?e` must also have an Attribute `:user/age` which is `?age`."
+Entity `?e` must also have an Attribute `:user/email` which is `?email`."
 
 <div class="multi-lang">
 
 ```clojure
-(d/q '[:find ?age
+(d/q '[:find ?email
        :where
        [?e :user/name "Alice"]
-       [?e :user/age ?age]]
+       [?e :user/email ?email]]
      db)
 ```
 
 ```java
 Set<List<Object>> results = Datalevin.q(
-    "[:find ?age " +
+    "[:find ?email " +
     " :where " +
     " [?e :user/name \"Alice\"] " +
-    " [?e :user/age ?age]]",
+    " [?e :user/email ?email]]",
     db);
 ```
 
 ```python
 results = d.q("""
-    [:find ?age
+    [:find ?email
      :where
      [?e :user/name "Alice"]
-     [?e :user/age ?age]]""",
+     [?e :user/email ?email]]""",
     db)
 ```
 
 ```javascript
 const results = d.q(
-  `[:find ?age
+  `[:find ?email
     :where
     [?e :user/name "Alice"]
-    [?e :user/age ?age]]`,
+    [?e :user/email ?email]]`,
   db);
 ```
 
 </div>
 
-The engine takes these statements and finds the set of values that makes all
-of them true simultaneously. This is **Logic Programming**. Because joins are
-implicit (represented by the shared variable `?e`), the complexity of your
-query doesn't grow with the number of joins; it only grows with the logic you
-want to express.
+The engine takes these statements and finds the set of values that makes all of
+them true simultaneously. As mentioned, this is what called **Logic
+Programming** in the literature. Because joins are implicit (represented by the
+shared variable `?e`), the complexity of your query doesn't grow with the number
+of joins; it only grows with the logic you want to express.
 
 ## 6. Unified Retrieval: Plugging into the Datom Flow
 
@@ -390,3 +412,7 @@ The Datalevin mental model is about moving from "data-in-boxes" to "data-as-fact
 
 By embracing this model, you unlock a level of flexibility and power that
 traditional databases struggle to match.
+
+[^logic-programming]: Robert A. Kowalski, ["Predicate Logic as Programming
+    Language"](https://www.doc.ic.ac.uk/~rak/papers/IFIP74.pdf), IFIP Congress,
+    1974, pp. 569-574.

@@ -51,8 +51,8 @@ stack. Facts and indexes are persisted in a high-performance key-value engine,
 while the same key-value layer is exposed directly when low-level access is
 useful.
 
-The triple model supports a powerful query language called **Datalog**. It can
-declaratively express complex relational queries. In addition, query
+The triple model supports a powerful query language called **Datalog**.[^datalog]
+It can declaratively express complex relational queries. In addition, query
 clauses in Datalog can be grouped into named reusable components called
 **rules**, which allow logical derivation of new facts and navigation in graphs.
 
@@ -233,3 +233,8 @@ intelligent foundations for modern software.
 [^name-origin]: Datalevin builds on LMDB, an abbreviation of Lightning Memory-Mapped
     Database, a battle-tested key-value storage with exceptional read
     performance. "levin" is an old English word for lightning.
+
+[^datalog]: Stefano Ceri, Georg Gottlob, and Letizia Tanca, ["What You Always
+    Wanted to Know About Datalog (And Never Dared to Ask)"](https://hdl.handle.net/11311/665510),
+    IEEE Transactions on Knowledge and Data Engineering 1, no. 1, 1989,
+    pp. 146-166.

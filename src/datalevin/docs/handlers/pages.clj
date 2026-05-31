@@ -328,8 +328,8 @@
                            [:a {:href "/docs/02-getting-started" :class card-style}
                             [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Deploy Agnostic"]
                             [:p {:style "color:#9ca3af;font-size:0.875rem"} "Start embedded, move to cluster, never migrate data."]]
-                           [:a {:href "/docs/26-durability-backups" :class card-style}
-                            [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Transaction+Query Optimized"]
+                           [:a {:href "/docs/36-inside-datalevin" :class card-style}
+                            [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Performance Optimized"]
                             [:p {:style "color:#9ca3af;font-size:0.875rem"} "WAL and asynchronous transactions + state of the art query optimizer and rule engine."]]
                            [:a {:href "/docs/31-agent-memory" :class card-style}
                             [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "AI Native"]

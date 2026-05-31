@@ -6,32 +6,62 @@ part: "I — Foundations: A Multi-Paradigm Database"
 
 # Chapter 4: Storage Fundamentals: LMDB, Key–Value Layout, and Persistence
 
-Datalevin's query model is fact-centric, but its performance and reliability are grounded in its storage architecture. Unlike many databases that build custom buffer managers and page caches, Datalevin leverages the operating system's existing strengths by building on **LMDB** (Lightning Memory-Mapped Database).
+Datalevin's query model is fact-centric, but its performance and reliability are
+grounded in its storage architecture. Unlike many databases that build custom
+buffer managers and page caches, Datalevin leverages the operating system's
+existing strengths by building on **LMDB** (Lightning Memory-Mapped Database).
 
-This chapter explores why Datalevin chose this foundation, how it extends LMDB into **DLMDB**, and how the physical layout of data supports efficient Datalog queries, secondary indexes, and high-throughput writes.
+This chapter explores why Datalevin chose this foundation, how it extends LMDB
+into **DLMDB**, and how the physical layout of data supports efficient Datalog
+queries, secondary indexes, and high-throughput writes.
 
 ---
 
 ## 1. The Foundation: Why LMDB?
 
-LMDB is a "tiny" but incredibly powerful key-value store. Its design philosophy is to do as little as possible in user space, offloading complex tasks like memory management to the operating system kernel.
+LMDB is a "tiny" but incredibly powerful key-value store. Its design philosophy
+is to do as little as possible in user space, offloading complex tasks like
+memory management to the operating system kernel.
 
 ### 1.1 The Power of Memory-Mapping (mmap)
-Traditional databases often manage their own "buffer pool", a chunk of RAM where they keep data pages. This often conflicts with the OS's own file system cache, leading to "double buffering" and inefficient memory use.
 
-LMDB uses **memory-mapping (`mmap`)**. It treats the database file as if it were a large array in the application's address space. When Datalevin reads data, the OS handles fetching the required pages from disk into the **Page Cache**.
+Traditional databases often manage their own "buffer pool", a chunk of RAM where
+they keep data pages. This often conflicts with the OS's own file system cache,
+leading to "double buffering" and inefficient memory use.
 
-- **Zero-Copy Reads**: On the read hot-path, Datalevin doesn't copy data from a kernel buffer to a user-space buffer. Instead, it returns a `DirectByteBuffer` that points directly to the OS Page Cache. This bypasses JVM heap allocation and minimizes Garbage Collection (GC) overhead. By default, this memory map is **read-only**, allowing the OS to manage the pages with minimal overhead and perfect safety, as it knows the application cannot directly modify the underlying file through the map.
-- **Immediate Recovery**: LMDB uses a Copy-on-Write (CoW) B+tree. It never overwrites data in place. When a transaction commits, it simply updates a pointer to the new root of the tree. If the system crashes, the database is always by default in a consistent state: no expensive "recovery" or log-replay process is needed. For write-intensive workloads, a **Write-Ahead Log (WAL) mode** is also available in Datalevin, which provides explicit recovery and higher write throughput.
+LMDB uses **memory-mapping (`mmap`)**. It treats the database file as if it were
+a large array in the application's address space. When Datalevin reads data, the
+OS handles fetching the required pages from disk into the **Page Cache**.
+
+- **Zero-Copy Reads**: On the read hot-path, Datalevin doesn't copy data from a
+  kernel buffer to a user-space buffer. Instead, it returns a `DirectByteBuffer`
+  that points directly to the OS Page Cache. This bypasses JVM heap allocation
+  and minimizes Garbage Collection (GC) overhead. By default, this memory map is
+  **read-only**, allowing the OS to manage the pages with minimal overhead and
+  perfect safety, as it knows the application cannot directly modify the
+  underlying file through the map.
+
+- **Immediate Recovery**: LMDB uses a Copy-on-Write (CoW) B+tree. It never
+  overwrites data in place. When a transaction commits, it simply updates a
+  pointer to the new root of the tree. If the system crashes, the database is
+  always by default in a consistent state: no expensive "recovery" or log-replay
+  process is needed.
 
 ### 1.2 Read-Heavy Concurrency
-LMDB provides **MVCC (Multi-Version Concurrency Control)**. Readers never block writers, and writers never block readers. Because readers are zero-copy and lockless, Datalevin can scale to thousands of concurrent readers with near-linear performance.
+
+LMDB provides **MVCC (Multi-Version Concurrency Control)**. Readers never block
+writers, and writers never block readers. Because readers are zero-copy and
+lockless, Datalevin can scale to hundreds of concurrent readers with
+near-linear throughput increases.
 
 ---
 
 ## 2. B+Trees vs. LSM-Trees
 
-Database storage engines generally fall into two camps: B+Trees (used by Postgres, Oracle, and LMDB) and Log-Structured Merge-Trees (LSM) (used by Cassandra, RocksDB, and LevelDB).
+Database storage engines generally fall into two camps: B+Trees (used by
+Postgres, Oracle, and LMDB) and Log-Structured Merge-Trees (LSM) (used by
+Cassandra, RocksDB, and LevelDB). Table below summarize the performance
+characteristics of these two types of storage.
 
 | Feature | B+Tree (Datalevin/LMDB) | LSM-Tree (RocksDB) |
 | :--- | :--- | :--- |
@@ -43,38 +73,58 @@ Database storage engines generally fall into two camps: B+Trees (used by Postgre
 | **Consistency** | Strong and immediate | Often eventual or complex to tune |
 
 **Why Datalevin chose B+Trees:**
-Datalog queries rely heavily on **range scans** and **index joins**. A B+Tree
-keeps data perfectly sorted and provides predictable read latency. By using
-LMDB, Datalevin avoids the "write stalls" and CPU spikes associated with LSM
-background compaction, making it a better fit for predictable, real-time
+
+Datalog query engine relies heavily on **range scans** and **index joins**. A
+B+Tree keeps data perfectly sorted and provides predictable read latency. By
+using LMDB, Datalevin avoids the "write stalls" and CPU spikes associated with
+LSM background compaction, making it a better fit for predictable, real-time
 applications. In addition, the multi-paradigm nature of Datalevin demands the
-building of secondary indices (Section 5), which often require storing **large values**.
+building of secondary indices (Section 5), which often require storing **large
+values**, which is not suitable for a LSM store.
 
 ---
 
 ## 3. From LMDB to DLMDB
 
-Standard LMDB is a general-purpose tool, but Datalevin uses a specialized fork called **DLMDB** to support advanced Datalog features.
+Standard LMDB is a general-purpose tool, but Datalevin uses a specialized fork
+called **DLMDB** to support advanced Datalog features. DLMDB improves LMDB
+mainly on two aspects:
 
 ### 3.1 Order Statistics (`:counted`)
-A standard B+Tree doesn't know how many items are in a range without scanning them. DLMDB adds **counted B+Trees**, where each node in the tree stores the count of items in its sub-tree.
 
-- **Instant Counts**: All count/sample operations are O(log n) or O(1). For example, `(d/count-datoms db nil :person/age nil)` is an O(log n) operation, while `(d/count-datoms db nil :person/age 30)` is O(1).
+A standard B+Tree doesn't know how many items are in a range without scanning
+them. DLMDB adds **counted B+Trees**, where each node in the tree stores the
+count of items in its sub-tree. The counted B+Tree gives Datalevin these
+advantages:
+
+- **Instant Counts**: All count/sample operations are O(log n) or O(1). For
+  example, `(d/count-datoms db nil :person/age nil)` is an O(log n) operation,
+  while `(d/count-datoms db nil :person/age 30)` is O(1).
 - **Fast Pagination**: You can skip the first 1,000,000 items in a sorted range
   and start reading the 1,000,001st item instantly using "rank-based" lookups.
-- **Efficient Query Planning**: The Datalog engine uses these counts and samples to decide the most efficient join order (e.g., "should I filter by age first, or by city?").
+- **Efficient Query Planning**: The Datalog engine uses these counts and samples
+  to decide the most efficient join order (e.g., "should I filter by age first,
+  or by city?").
 
 ### 3.2 Prefix Compression
-Datalog indexes often contain many keys that start with the same prefix (e.g., many datoms for the same attribute). DLMDB compresses these prefixes, significantly reducing the on-disk footprint and improving CPU cache locality.
+
+Datalog indexes often contain many keys that start with the same prefix (e.g.,
+many datoms for the same attribute). DLMDB compresses data by sharing these
+prefixes, significantly reducing the on-disk footprint and improving CPU cache
+locality. Prefix compression happens on the page level.
 
 ---
 
 ## 4. Physical Layout: The Nested Triple Index
 
-Datalevin doesn't just store "triples" (E, A, V). It stores them in multiple sorted orders to make queries fast. The primary indexes are **EAV** (Entity-Attribute-Value) and **AVE** (Attribute-Value-Entity).
+Datalevin doesn't just store "triples" (E, A, V). It stores them in two sorted
+orders to make queries fast. The primary indexes are **EAV**
+(Entity-Attribute-Value) and **AVE** (Attribute-Value-Entity).
 
 ### 4.1 Leveraging DUPSORT
-Instead of storing a flat list of triples, Datalevin uses LMDB's `DUPSORT` feature to "nest" values. This is effectively a "B+Tree of B+Trees."
+
+Instead of storing a flat list of triples, Datalevin uses LMDB's `DUPSORT`
+feature to "nest" values. This is effectively a "B+Tree of B+Trees."
 
 **Conceptual AVE Layout:**
 ```text
@@ -84,44 +134,74 @@ Key: (:person/age, 31) -> Values: [103, 104, 201, ...]
 
 In this layout, the Attribute and Value form the **Key**, and all the Entities
 that share that value are stored in a sorted **Duplicate List**. This makes
-finding "all people aged 30" extremely fast: it is a single key lookup followed by a sequential read of entity IDs.
+finding "all people aged 30" extremely fast: it is a single key lookup followed
+by a sequential read of entity IDs.
 
 ### 4.2 Storing Raw Bytes
 
 All triples are encoded into raw bytes, using header byte for different data types.
 Datalevin binary encoding ensures that the binary sort order always matches the
 inherent data sort order, so that queries can efficiently pinpoint data items.
-The bytes are also prefix-compressed on the page level.
 
 ---
 
 ## 5. Secondary Indexes and Blob Storage
 
-Beyond the primary triple indexes, Datalevin supports specialized secondary indexes such as **Full-Text Search (FTS)**, **Vector Search**, and **Document (idoc) Indexes**. These are not external plugins; they are integrated directly into the same LMDB environment.
+Beyond the primary triple indexes, Datalevin supports specialized secondary
+indexes such as **Full-Text Search (FTS)**, **Vector Search**, and **Document
+(idoc) Indexes**. These are not external plugins; they are integrated directly
+into the same LMDB environment.
 
 ### 5.1 Leveraging the KV Substrate
-Secondary indexes are implemented as additional named sub-databases (DBIs) within the same storage file. By default, Datalevin updates these indexes synchronously in the same transaction as the source datoms, preserving read-your-writes behavior for `fulltext`, `vec-neighbors`, `embedding-neighbors`, and `idoc-match`.
 
-Full-text, vector, and embedding indexes can also opt into `:indexing-mode :async`. In async mode, the source datoms and a durable secondary-index job are committed atomically, then an in-process worker applies the index update after the transaction returns. Queries over that index become eventually consistent until the worker catches up. This is useful when indexing is expensive, especially for embedding providers that may call a local model or remote API.
+Secondary indexes are implemented as additional named sub-databases (DBIs)
+within the same storage file. By default, Datalevin updates these indexes
+synchronously in the same transaction as the source datoms, preserving
+read-your-writes behavior for `fulltext`, `vec-neighbors`,
+`embedding-neighbors`, and `idoc-match`, i.e. the secondary indices are
+immediately available for query upon commit by default.
+
+For high throughput data ingestion though, full-text, vector, and embedding
+indexes can also opt into `:indexing-mode :async`. In async mode, the source
+datoms and a durable secondary-index job are committed atomically, then an
+in-process worker applies the index update after the transaction returns.
+Queries over that index become eventually consistent until the worker catches
+up. This is useful when indexing is expensive, especially for embedding
+providers that may call a local model or remote API.
 
 ### 5.2 Blob Storage Capabilities
+
 While a Datalog triple is often a small piece of data, secondary indexes often need to
-store larger, more complex structures, such as search term postings lists, vector embeddings, or serialized JSON documents.
-- **Large Value Support**: Datalevin leverages LMDB's ability to store values up to 2GB in size (blobs).
+store larger, more complex structures, such as search term postings lists,
+vector embeddings, or serialized JSON documents. Datalevin supports these large
+values very well.
+
+- **Large Value Support**: Datalevin leverages LMDB's ability to store values up
+  to 2GB in size (blobs).
 - **Efficiency**: By storing these as blobs in specialized DBIs, Datalevin can
   perform high-speed searches without cluttering the main triple indexes. For
-  example, a search index might store a large bitmap of compressed postings list as a single KV value, which is then retrieved and processed with the same zero-copy efficiency as a simple triple.
+  example, a search index might store a large bitmap of compressed postings list
+  as a single KV value, which is then retrieved and processed with the same
+  zero-copy efficiency as a simple triple.
 
-This capability is what makes Datalevin a "multi-paradigm" database: it uses the same robust KV foundation to power everything from relational Datalog queries to modern vector searches.
+This capability is what makes Datalevin a "multi-paradigm" database: it uses the
+same robust KV foundation to power everything from relational Datalog queries to
+modern vector searches.
 
 ---
 
 ## 6. The Key-Value API: Direct Access
 
-While Datalog is the primary interface, Datalevin exposes the underlying KV store as a first-class citizen. This is a deliberate design choice: the Datalog engine is built *on top* of this KV layer, rather than as a separate opaque engine.
+While Datalog is the primary interface, Datalevin exposes the underlying KV
+store as a first-class citizen. This is a deliberate design choice: the Datalog
+engine is built *on top* of this KV layer, rather than as a separate opaque
+engine.
 
 Exposing the KV layer allows developers to bypass the triple-model when it isn't
-the best fit. For example, when building custom indexes, high-frequency counters, or storing large binary blobs. This "multi-paradigm" approach ensures that you aren't forced to fit every data shape into a Datalog triple if a simple key-pair is more efficient.
+the best fit. For example, when building custom indexes, high-frequency
+counters, or storing large binary blobs. This "multi-paradigm" approach ensures
+that you aren't forced to fit every data shape into a Datalog triple if a simple
+key-pair is more efficient.
 
 The details of the KV API and its practical usage are covered in **Chapter 6**.
 
@@ -129,56 +209,105 @@ The details of the KV API and its practical usage are covered in **Chapter 6**.
 
 ## 7. Persistence and Durability: WAL Mode
 
-By default, local embedded Datalevin stores use LMDB's direct commit path. This is safe and fast for many workloads, but write throughput can still be limited by disk sync behavior and the single-writer B+Tree commit path. Datalevin's **WAL (Write-Ahead Log) Mode** is an explicit opt-in for workloads that need WAL write concurrency, crash recovery, replication, or HA behavior.
+By default, local embedded Datalevin stores use LMDB's direct commit path. This
+is safe and fast for many workloads, but write throughput can still be limited
+by disk sync behavior and the single-writer B+Tree commit path. For
+write-intensive workloads, a **Write-Ahead Log (WAL) mode** is also available in
+Datalevin, which provides multi-thread write concurrency, explicit crash
+recovery, and lays the foundation for data replication and high availability (HA)
+server behavior. WAL mode can be enabled in these ways:
+
+- **Datalog**: Disabled by default for local embedded databases; enable with
+  `{:wal? true}` in `create-conn` or `get-conn` options.
+- **Key-Value**: Disabled by default; enable with `{:wal? true}` in `open-kv`
+  options.
+- **Async read replicas**: A non-HA replica requires the primary to have WAL
+  enabled so it can bootstrap from a copy and then tail durable records.
+- **HA**: Consensus-lease HA forces WAL on and defaults to the `:strict`
+  durability profile.
 
 ### 7.1 How WAL Mode Works
-When WAL mode is enabled:
-- **Datalog**: Disabled by default for local embedded databases; enable with `{:wal? true}` in `create-conn` or `get-conn` options.
-- **Key-Value**: Disabled by default; enable with `{:wal? true}` in `open-kv` options.
-- **Async read replicas**: A non-HA replica requires the primary to have WAL enabled so it can bootstrap from a copy and then tail durable records.
-- **HA**: Consensus-lease HA forces WAL on and defaults to the `:strict` durability profile.
+
+When WAL mode is enabled, the following sequence happens:
 
 1.  **Transaction**: A write request arrives.
-2.  **WAL Append**: The change is encoded and appended to a sequential log segment file.
-3.  **LSN Tracking**: Every transaction is assigned a strictly increasing, contiguous **Log Sequence Number (LSN)**, which serves as the canonical commit position for replay and lag tracking.
-4.  **No-Sync LMDB**: The change is applied to the LMDB B+tree in `:nosync` mode (extremely fast).
-5.  **Durability Sync**: The WAL record is synced to disk based on the chosen **durability profile**.
-6.  **Acknowledgment**: The application receives a "Success" response according to the profile. In `:strict` and `:extra`, this waits for the relevant sync; in `:relaxed`, recent commits can be acknowledged before every individual transaction is forced to disk.
-7.  **Recovery**: On restart, Datalevin scans the WAL segments and replays any committed transactions that weren't yet fully persisted in the LMDB file.
+2.  **WAL Append**: The change is encoded and appended to a sequential log
+    segment file.
+3.  **LSN Tracking**: Every transaction is assigned a strictly increasing,
+    contiguous **Log Sequence Number (LSN)**, which serves as the canonical
+    commit position for replay and lag tracking.
+4.  **No-Sync LMDB**: The change is applied to the LMDB B+tree in `:nosync` mode
+    (extremely fast).
+5.  **Durability Sync**: The WAL record is synced to disk based on the chosen
+    **durability profile**.
+6.  **Acknowledgment**: The application receives a "Success" response according
+    to the profile. In `:strict` and `:extra`, this waits for the relevant sync;
+    in `:relaxed`, recent commits can be acknowledged before every individual
+    transaction is forced to disk.
+7.  **Recovery**: On restart, Datalevin scans the WAL segments and replays any
+    committed transactions that weren't yet fully persisted in the LMDB file.
 
-**Note**: Bulk load operations (like `init-db` and `fill-db`) bypass the WAL for maximum performance and will not appear in the transaction log.
-
+**Note**: Bulk load operations (like `init-db` and `fill-db`) bypass the WAL for
+maximum performance and will not appear in the transaction log.
 
 ### 7.2 Durability Profiles
-Datalevin offers three profiles to balance performance and safety:
-- **`:strict`**: Waits for a standard `fsync`. This is the default for consensus-lease HA.
-- **`:relaxed`**: Batches multiple transactions before syncing. This is the default when local embedded Datalog or KV stores explicitly opt into WAL without specifying a profile.
-- **`:extra`**: Uses stricter durability guarantees where available, such as `fcntl(F_FULLSYNC)` on macOS.
 
-In `:relaxed`, the possible crash-loss window is bounded by `:wal-group-commit` and `:wal-group-commit-ms`. Use `:strict` or `:extra` when the main reason for enabling WAL is crash durability rather than throughput.
+Datalevin offers three profiles in WAL mode to balance performance and safety:
+
+- **`:strict`**: Waits for a standard `fsync`. This is the default for
+  consensus-lease HA.
+- **`:relaxed`**: Batches multiple transactions before syncing. This is the
+  default when local embedded Datalog or KV stores explicitly opt into WAL
+  without specifying a profile.
+- **`:extra`**: Uses stricter durability guarantees where available, such as
+  `fcntl(F_FULLSYNC)` on macOS.
+
+In `:relaxed`, the possible crash-loss window is bounded by `:wal-group-commit`
+and `:wal-group-commit-ms`. Use `:strict` or `:extra` when the main reason for
+enabling WAL is crash durability rather than throughput.
 
 ### 7.3 Operational Lifecycle
-For long-running services, WAL mode introduces a few simple operational tasks:
-- **`create-snapshot!`**: Periodically flushes the LMDB B+tree to disk and rotates the WAL log. This ensures the main database file is up-to-date and advances the "floor" for log retention.
-- **`gc-txlog-segments!`**: Deletes old WAL segments that are no longer needed, reclaiming disk space based on your retention policy (default: 8 GiB or 7 days).
-- **`txlog-watermarks`**: Check the current state of the log, including `:last-committed-lsn` (latest transaction) and `:last-durable-lsn` (latest transaction safely on disk).
+
+For long-running services, WAL mode introduces a few simple operational tasks,
+exposed as function calls:
+
+- **`create-snapshot!`**: Periodically flushes the LMDB B+tree to disk and
+  rotates the WAL log. This ensures the main database file is up-to-date and
+  advances the "floor" for log retention.
+- **`gc-txlog-segments!`**: Deletes old WAL segments that are no longer needed,
+  reclaiming disk space based on your retention policy (default: 8 GiB or 7
+  days).
+- **`txlog-watermarks`**: Check the current state of the log, including
+  `:last-committed-lsn` (latest transaction) and `:last-durable-lsn` (latest
+  transaction safely on disk).
 
 ### 7.4 Programmable WAL API and Datalog CDC
-The WAL is not just an internal implementation detail; it is exposed as a first-class API at the **Key-Value (KV) level**.
 
-- **KV-Level (WAL)**: Using `open-tx-log` and `txlog-watermarks`, you can access the raw, physical transaction log. This is ideal for system-level tasks like **replication** or building low-level Change Data Capture (CDC).
-- **Datalog-Level (Listeners)**: For most application-level needs, `d/listen!` remains the preferred way to subscribe to logical transaction events.
+The WAL is not just an internal implementation detail; it is exposed as a
+first-class API at the **Key-Value (KV) level**.
 
-By providing these mechanisms, Datalevin gives you the choice between physical stream processing at the storage layer and logical event processing at the database layer.
+- **KV-Level (WAL)**: Using `open-tx-log` and `txlog-watermarks`, you can access
+  the raw, physical transaction log. This is ideal for system-level tasks like
+  **replication** or building low-level Change Data Capture (CDC).
+- **Datalog-Level (Listeners)**: For most application-level needs, `d/listen!`
+  remains the preferred way to subscribe to logical transaction events.
+
+By providing these mechanisms, Datalevin gives you the choice between physical
+stream processing at the storage layer and logical event processing at the
+database layer.
 
 ---
 
 ## Summary
 
-Datalevin's storage layer is a masterclass in pragmatic engineering:
-- It uses **LMDB** for its rock-solid stability and zero-copy performance.
-- It uses **B+Trees** to ensure predictable read performance for complex Datalog queries.
-- It adds **DLMDB** extensions like order statistics to power the query planner.
-- It provides a **Hybrid WAL** mode to scale write performance without sacrificing the B+Tree model.
+Datalevin's storage layer focuses on pragmatic engineering:
 
-By understanding these fundamentals, you can better tune your schema and queries for maximum performance.
+- It uses **LMDB** for its rock-solid stability and zero-copy performance.
+- It uses **B+Trees** to ensure predictable read performance for complex Datalog
+  queries.
+- It adds **DLMDB** extensions like order statistics to power the query planner.
+- It provides a **Hybrid WAL** mode to scale write performance without
+  sacrificing the B+Tree model.
+
+By understanding these fundamentals, you can better tune your schema and queries
+for maximum performance.
