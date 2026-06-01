@@ -99,3 +99,5 @@ Part VIII — Internals and Extensions
 Part IX — Appendices
 
 41. Datalog Schema Reference
+
+42. Key-Value API Reference

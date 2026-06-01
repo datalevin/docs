@@ -6,9 +6,19 @@ part: "II — Core APIs: From KV to Datalog"
 
 # Chapter 6: Using Datalevin as a Key–Value Store
 
-As explored in Chapter 4, Datalevin is built on a high-performance Key-Value (KV) foundation. While Datalog is powerful for complex queries, sometimes a direct KV interface is faster, simpler, or more appropriate for specific data shapes.
+As explored in Chapter 4, Datalevin is built on a high-performance Key-Value
+(KV) foundation. While Datalog is powerful for complex queries, sometimes a
+direct KV interface is faster, simpler, or more appropriate for specific data
+shapes.
 
-This chapter covers the practical usage of the Datalevin KV API, including public data types, sub-database management, transactions, and range scans.
+This chapter covers the practical usage of the Datalevin KV API, including
+public data types, sub-database management, transactions, and range scans.
+
+If your immediate goal is ordinary Datalevin application development with
+Datalog, you can skim this chapter and continue to Chapters 7-10. The KV API is
+useful when you need direct sorted-key access, custom indexes, list DBIs,
+scripting primitives, or performance-critical storage structures. For a compact
+list of all public KV functions, see Appendix B.
 
 ---
 
@@ -75,10 +85,11 @@ d.closeKv(kv);
 
 The last parameter of `open-kv` can be an option map. There are many options.
 Some common options for `open-kv` include:
+
 - `:mapsize`: The maximum size the database can grow to (in MiB).
 - `:max-dbs`: The maximum number of named sub-databases (DBIs).
 - `:max-readers`: The maximum number of concurrent reader threads. The current default is 1024.
-- `:wal?`: Set to `true` to enable high-throughput WAL mode that benefits from
+- `:wal?`: Set to `true` to enable WAL mode that benefits from
   concurrent writers. WAL is **disabled by default** for both local KV stores
   and local embedded Datalog stores. Non-HA async read replicas require WAL on
   the primary; consensus-lease HA enables WAL automatically.
@@ -87,33 +98,34 @@ Some common options for `open-kv` include:
   Local WAL opt-in defaults to `:relaxed`; HA defaults to `:strict`.
 - `:wal-retention-bytes` and `:wal-retention-ms`: Set policies for how long to keep
   old WAL segments.
-- `:temp?`: Set to `true` to create a temporary store that is deleted on JVM exit. It automatically enables `:nosync`, bypassing the `msync` overhead.
-- `:inmemory`: Set to `true` to create a KV store in memory. There is no file persistence
+- `:temp?`: Set to `true` to create a temporary store that is deleted on JVM
+  exit. It automatically enables `:nosync`, bypassing the `msync` overhead.
+- `:inmemory?`: Set to `true` to create a KV store in memory. There is no file persistence
   and data is lost on close. This is even faster than a `:temp?` store.
 
-`:temp?` or `:inmemory` stores are ideal for ephemeral data like session caches,
+`:temp?` or `:inmemory?` stores are ideal for ephemeral data like session caches,
 intermediate computation results, or high-speed buffers.
 
 <div class="multi-lang">
 
 ```clojure
 ;; Open an in-memory KV store (no file persistence), directory can be nil
-(def mem-kv (d/open-kv nil {:inmemory true}))
+(def mem-kv (d/open-kv nil {:inmemory? true}))
 ```
 
 ```java
 // Open an in-memory KV store (no file persistence), directory can be null
-KVStore memKv = Datalevin.openKv(null, Map.of("inmemory", true));
+KVStore memKv = Datalevin.openKv(null, Map.of("inmemory?", true));
 ```
 
 ```python
 # Open an in-memory KV store (no file persistence), directory can be None
-mem_kv = d.open_kv(None, {"inmemory": True})
+mem_kv = d.open_kv(None, {"inmemory?": True})
 ```
 
 ```javascript
 // Open an in-memory KV store (no file persistence), directory can be null
-const memKv = d.openKv(null, { inmemory: true });
+const memKv = d.openKv(null, { "inmemory?": true });
 ```
 
 </div>
@@ -234,8 +246,9 @@ be `:put` or `:del`.
 
 ### 3.2 Point query
 
-The value of a key can be retrieved with `get-value`. If the DBI is a list DBI, the list of a
-key can be retrieved with `get-list`. These are single key point queries.
+The value of a key can be retrieved with `get-value`. If the DBI is a list DBI,
+the list of a key can be retrieved with `get-list`. These are single key point
+queries.
 
 <div class="multi-lang">
 
@@ -267,7 +280,9 @@ const values = d.getList(kv, 'tags', 'clojure');
 
 ### 3.3 Range query
 
-Because Datalevin keeps keys (and DUPSORT values) sorted, you can perform highly efficient range scans. Datalevin provides a rich set of range keywords that specify how the scan should start, end, and in which direction it should move.
+Because Datalevin keeps keys (and DUPSORT values) sorted, you can perform highly
+efficient range scans. Datalevin provides a rich set of range keywords that
+specify how the scan should start, end, and in which direction it should move.
 
 A **range** is specified as a vector: `[range-type start-value end-value]`.
 
@@ -295,7 +310,8 @@ There are many range query functions:
 
 ### 3.4 Other Data Access Functions
 
-Beyond point and range queries, Datalevin provides several specialized functions for the KV layer:
+Beyond point and range queries, Datalevin provides several specialized functions
+for the KV layer:
 
 | Function | Purpose |
 | :--- | :--- |
@@ -309,7 +325,9 @@ Beyond point and range queries, Datalevin provides several specialized functions
 
 ## 4 Data Types
 
-While LMDB deals with raw bytes, Datalevin adds a layer of encoded data types to ensure correct sorting and efficient storage. These types can be specified as `key-type` or `val-type` in KV operations.
+While LMDB deals with raw bytes, Datalevin adds a layer of encoded data types to
+ensure correct sorting and efficient storage. These types can be specified as
+`key-type` or `val-type` in KV operations.
 
 ### 4.1 Scalar types
 
@@ -329,19 +347,99 @@ While LMDB deals with raw bytes, Datalevin adds a layer of encoded data types to
 
 ### 4.2 Tuple types
 
+Tuple types are composite KV type descriptors. They are used when a key or
+DUPSORT value needs to sort by more than one field, such as
+`[customer-id created-at]` or `[tenant-id order-total order-id]`.
+
+This is different from Datalog schema `:db.type/tuple`. In the KV API, a tuple
+type is written as a vector of scalar KV types:
+
+| Type Descriptor | Meaning |
+| :--- | :--- |
+| `[:string :instant]` | Heterogeneous tuple: exactly two elements, first a string, second an instant. |
+| `[:keyword :long :string]` | Heterogeneous tuple: exactly three elements with the listed types. |
+| `[:long]` | Homogeneous tuple: any number of elements, all encoded as longs. |
+
+Tuple values are ordinary vectors whose shape must match the type descriptor.
+Heterogeneous tuple descriptors are fixed arity: `[:string :instant]` matches
+`["acct-42" #inst "2026-05-31T00:00:00.000-00:00"]`. Homogeneous descriptors
+have one element type and can encode vectors such as `[2026 5 31]`.
+
+Supported tuple element types are the sortable scalar encodings used by
+`put-buffer`: `:string`, `:long`, `:float`, `:double`, `:bigint`, `:bigdec`,
+`:bytes`, `:keyword`, `:symbol`, `:boolean`, `:instant`, and `:uuid`. Do not use
+`:data` inside a tuple; arbitrary EDN data is not a sortable tuple component.
+For numeric IDs inside tuples, use `:long`.
+
+Tuples sort lexicographically by their encoded elements: first element first,
+then the second element to break ties, and so on. Put the field you most often
+range over or group by at the front of the tuple.
+
+```clojure
+(def event-key-type [:string :instant])
+
+(d/open-dbi kv "events")
+
+(d/transact-kv kv
+  [[:put "events"
+    ["acct-42" #inst "2026-05-31T10:00:00.000-00:00"]
+    {:event/type :login}
+    event-key-type
+    :data]
+   [:put "events"
+    ["acct-42" #inst "2026-05-31T12:00:00.000-00:00"]
+    {:event/type :purchase}
+    event-key-type
+    :data]])
+
+;; Scan one account for a time window.
+(d/get-range kv
+  "events"
+  [:closed
+   ["acct-42" #inst "2026-05-31T00:00:00.000-00:00"]
+   ["acct-42" #inst "2026-06-01T00:00:00.000-00:00"]]
+  event-key-type)
+```
+
+In list DBIs, tuple values are useful for sorted secondary lists:
+
+```clojure
+(def score-type [:double :string])
+
+(d/open-list-dbi kv "scores-by-board")
+
+(d/transact-kv kv
+  [[:put "scores-by-board" "daily" [98.5 "alice"] :string score-type]
+   [:put "scores-by-board" "daily" [87.0 "bob"] :string score-type]])
+
+(d/get-list kv "scores-by-board" "daily" :string score-type)
+;; => ([87.0 "bob"] [98.5 "alice"])
+```
+
+Each tuple element can encode to at most 255 bytes. If the tuple is used as an
+LMDB key, the whole encoded key must still fit within Datalevin's 511-byte key
+limit.
 
 ### 4.3 Important Constraints: Key Size Limit
 
-LMDB (and thus Datalevin) has a hard limit on the size of a key. In Datalevin, the maximum key size is **511 bytes**.
-- **Impact on Tuples**: When using composite keys (tuples), the sum of the encoded parts must stay within this 511-byte limit.
-- **Impact on List-DBIs (DUPSORT)**: In a `list-dbi`, the values are stored in a secondary B+Tree where they essentially act as keys. Therefore, **each value in a list-dbi is also subject to the 511-byte limit**.
-- **Large Values**: Standard (non-list) DBI values are not subject to this limit and can grow up to 2GB.
+LMDB (and thus Datalevin) has a hard limit on the size of a key. In Datalevin,
+the maximum key size is **511 bytes**.
+
+- **Impact on Tuples**: When using composite keys (tuples), the sum of the
+  encoded parts must stay within this 511-byte limit.
+- **Impact on List-DBIs (DUPSORT)**: In a `list-dbi`, the values are stored in a
+  secondary B+Tree where they essentially act as keys. Therefore, **each value
+  in a list-dbi is also subject to the 511-byte limit**.
+- **Large Values**: Standard (non-list) DBI values are not subject to this limit
+  and can grow up to 2GB.
 
 ---
 
 ## 5. Explicit Transaction `with-transaction-kv`
 
-`transact-kv` is the standard way to write data. However, for complex logic involving reads and writes that must be atomic, use the `with-transaction-kv` macro.
+`transact-kv` is the standard way to write data. However, for complex logic
+involving reads and writes that must be atomic, use the `with-transaction-kv`
+macro.
 
 <div class="multi-lang">
 
@@ -388,4 +486,7 @@ This macro ensures that:
 
 ## Summary
 
-The Datalevin KV API is a robust, typed, and highly performant alternative to the Datalog API. By leveraging **typed keys**, **DUPSORT (list-DBIs)**, and **order statistics (rank functions)**, you can build specialized data structures that operate with the same ACID guarantees as the rest of the database.
+The Datalevin KV API is a robust, typed, and highly performant alternative to
+the Datalog API. By leveraging **typed keys**, **DUPSORT (list-DBIs)**, and
+**order statistics (rank functions)**, you can build specialized data structures
+that operate with the same ACID guarantees as the rest of the database.
