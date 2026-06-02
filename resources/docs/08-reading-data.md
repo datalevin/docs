@@ -6,15 +6,20 @@ part: "II — Core APIs: From KV to Datalog"
 
 # Chapter 8: Reading Data: Queries and the Pull API
 
-Once data is in your database, you need a way to retrieve it. Datalevin provides two powerful, complementary mechanisms for reading data: `d/q` for Datalog queries, and `d/pull` for retrieving document-like data structures.
+Once data is in your database, you need a way to retrieve it. Datalevin provides
+two powerful, complementary mechanisms for reading data: `d/q` for Datalog
+queries, and `d/pull` for navigating and retrieving nested data structures.
 
-This chapter focuses on the **Pull API**, a convenient way to fetch the data for a specific entity, especially when it involves nested relationships.
+This chapter focuses on the **Pull API**, a convenient way to fetch the data for
+a specific entity, especially when it involves nested relationships.
 
 ---
 
 ## 1. Introducing the Pull API
 
-While `d/q` is designed to find a *set* of entities that match a complex query, `d/pull` is designed to retrieve a rich, hierarchical document for a *single* entity whose ID you already know.
+While `d/q` is designed to find a *set* of entities that match a complex query,
+`d/pull` is designed to retrieve a rich, hierarchical document for a *single*
+entity whose ID you already know.
 
 The basic syntax is:
 
@@ -38,7 +43,7 @@ const result = d.pull(db, pattern, eid);
 
 </div>
 
-- **`db`**: The database value.
+- **`db`**: The database.
 - **`pattern`**: A vector describing which attributes to retrieve.
 - **`eid`**: The entity ID to pull data for.
 
@@ -46,7 +51,8 @@ const result = d.pull(db, pattern, eid);
 
 ## 2. Basic Pull and the Wildcard Pattern
 
-The simplest way to use `d/pull` is with the wildcard `[*]` pattern, which retrieves all attributes for a given entity.
+The simplest way to use `d/pull` is with the wildcard `[*]` pattern, which
+retrieves all attributes for a given entity.
 
 <div class="multi-lang">
 
@@ -78,13 +84,15 @@ const result = d.pull(d.db(conn), ['*'], 101);
  :user/name "Alice",
  :user/email "alice@example.com"}
 ```
-The result is a map, which is often much more convenient to work with in application code than the set of tuples returned by `d/q`.
+The result is a map, which is often much more convenient to work with in
+application code than the set of tuples returned by `d/q`.
 
 ---
 
 ## 3. The Power of Pull: Nested Data
 
-The true strength of the Pull API is its ability to traverse relationships and create nested data structures automatically. This is something that is difficult to achieve with a single Datalog query.
+The true strength of the Pull API is its ability to traverse relationships and
+create nested data structures automatically.
 
 Imagine you have an order that refers to a customer:
 
@@ -141,58 +149,75 @@ const result = d.pull(d.db(conn),
 {:order/id "o123",
  :order/customer {:user/name "Alice"}}
 ```
-The Pull API automatically followed the `:order/customer` reference and pulled the specified attributes for that entity, nesting the result. This is a level of convenience `d/q` does not provide.
+The Pull API automatically followed the `:order/customer` reference and pulled
+the specified attributes for that entity, nesting the result.
 
 ---
 
 ## 4. Performance: Pull vs. Query in Datalevin
 
-In some Datalog databases (like Datomic or Datascript), the Pull API can be significantly faster than `d/q` for certain access patterns because it can use direct index lookups, bypassing the query engine.
+In some Datalog databases (e.g. Datomic or Datascript), the Pull API can be
+significantly faster than `d/q` for certain access patterns because it can use
+direct index lookups, bypassing the query engine.
 
-In Datalevin, this is **not necessarily the case**. 
-- Datalevin's query engine is highly optimized, and many `d/pull` operations can be expressed as an equally fast (or even faster) `d/q` query.
-- A `d/pull` on a complex, nested pattern might internally perform several lookups.
+In Datalevin, this is **not necessarily the case**.
 
-Therefore, in Datalevin, you should think of the Pull API primarily as a **tool for convenience and shaping data**, not as a performance optimization.
+- Datalevin's query engine is highly optimized, and many `d/pull` operations can
+  be expressed as an equally fast (or even faster) `d/q` query.
+- A `d/pull` on a complex, nested pattern might internally perform several
+  lookups.
+
+Therefore, in Datalevin, you should think of the Pull API primarily as a **tool
+for convenience and shaping data**, not as a performance optimization.
+
 - **Use `d/q`** when you need to find entities that match complex criteria.
-- **Use `d/pull`** when you have an entity ID and need to retrieve its data in a specific, possibly nested, shape.
+- **Use `d/pull`** when you have an entity ID and need to retrieve its data in a
+  specific, possibly nested, shape.
+
+`d/q` can use pull syntax in its `:find` specification, so you get the benefits
+of both approaches.
 
 ---
 
 ## 5. Advanced Pull Patterns
 
-The Pull API supports several advanced patterns for fine-grained control over the data shape.
+The Pull API supports several advanced patterns for fine-grained control over
+the data shape.
 
 ### 5.1 Reverse Lookups
-You can find all entities that *refer to* the current entity. The syntax is `_attribute`.
+
+You can find all entities that *refer to* the current entity. For a namespaced
+reference attribute such as `:order/customer`, the reverse pull attribute is
+`:order/_customer`. For an unqualified attribute such as `:child`, it is
+`:_child`.
 
 <div class="multi-lang">
 
 ```clojure
 ;; Find all orders placed by Alice (entity 1)
 (d/pull (d/db conn)
-        '[:user/name :_order/customer] ; a "reverse" lookup
+        '[:user/name :order/_customer] ; a "reverse" lookup
         1)
 ```
 
 ```java
 // Find all orders placed by Alice (entity 1)
 Map result = Datalevin.pull(Datalevin.db(conn),
-    List.of("user/name", "_order/customer"), // a "reverse" lookup
+    List.of("user/name", "order/_customer"), // a "reverse" lookup
     1);
 ```
 
 ```python
 # Find all orders placed by Alice (entity 1)
 result = d.pull(d.db(conn),
-    ["user/name", "_order/customer"],  # a "reverse" lookup
+    ["user/name", "order/_customer"],  # a "reverse" lookup
     1)
 ```
 
 ```javascript
 // Find all orders placed by Alice (entity 1)
 const result = d.pull(d.db(conn),
-    ['user/name', '_order/customer'], // a "reverse" lookup
+    ['user/name', 'order/_customer'], // a "reverse" lookup
     1);
 ```
 
@@ -201,59 +226,65 @@ const result = d.pull(d.db(conn),
 **Result:**
 ```clojure
 {:user/name "Alice",
- :_order/customer [{:order/id "o123"}]}
+ :order/_customer [{:order/id "o123"}]}
 ```
 
 ### 5.2 Limiting `:cardinality/many` Attributes
-You can limit the number of results for a multi-valued attribute:
+
+You can limit the number of results for a multi-valued attribute. Pull returns
+at most 1000 values for a cardinality-many attribute by default; use `:limit` to
+change that limit, or `nil` for no limit. The option is written as an attribute
+expression, not as a map of options.
 
 <div class="multi-lang">
 
 ```clojure
 ;; Pull the first 5 tags for an entity
-(pull db '[(:user/tags :limit 5)] eid)
+(d/pull db '[[:user/tags :limit 5]] eid)
 ```
 
 ```java
 // Pull the first 5 tags for an entity
-Map result = Datalevin.pull(db, List.of(List.of("user/tags", "limit", 5)), eid);
+Map result = Datalevin.pull(db, "[[:user/tags :limit 5]]", eid);
 ```
 
 ```python
 # Pull the first 5 tags for an entity
-result = d.pull(db, [("user/tags", {"limit": 5})], eid)
+result = d.pull(db, [[":user/tags", ":limit", 5]], eid)
 ```
 
 ```javascript
 // Pull the first 5 tags for an entity
-const result = d.pull(db, [['user/tags', {limit: 5}]], eid);
+const result = d.pull(db, [[":user/tags", ":limit", 5]], eid);
 ```
 
 </div>
 
 ### 5.3 Default Values
-You can provide a default value if an attribute is not present:
+
+You can provide a default value if an attribute is not present. Like `:limit`,
+`:default` is written as an attribute expression option.
 
 <div class="multi-lang">
 
 ```clojure
 ;; If :user/active? is missing, return true
-(pull db '[:user/name (:user/active? :default true)] eid)
+(d/pull db '[:user/name [:user/active? :default true]] eid)
 ```
 
 ```java
 // If :user/active? is missing, return true
-Map result = Datalevin.pull(db, List.of("user/name", List.of("user/active?", "default", true)), eid);
+Map result = Datalevin.pull(db, "[:user/name [:user/active? :default true]]", eid);
 ```
 
 ```python
 # If :user/active? is missing, return true
-result = d.pull(db, ["user/name", ("user/active?", {"default": True})], eid)
+result = d.pull(db, [":user/name", [":user/active?", ":default", True]], eid)
 ```
 
 ```javascript
 // If :user/active? is missing, return true
-const result = d.pull(db, ['user/name', ['user/active?', {default: true}]], eid);
+const result = d.pull(db, [":user/name", [":user/active?", ":default", true]], eid);
 ```
 
 </div>
@@ -262,4 +293,7 @@ const result = d.pull(db, ['user/name', ['user/active?', {default: true}]], eid)
 
 ## Summary
 
-The Pull API is an essential tool for reading data from Datalevin. While `d/q` is your tool for discovery, `d/pull` is your tool for retrieval. Its unique ability to fetch nested hierarchical data makes it an invaluable convenience for building applications, even if it doesn't offer the same performance guarantees over `d/q` as in other Datalog systems.
+The Pull API is an essential tool for reading data from Datalevin. While `d/q`
+is your tool for discovery, `d/pull` is your tool for shaping the retrieval. Its
+unique ability to fetch nested hierarchical data makes it an invaluable
+convenience for building applications.
