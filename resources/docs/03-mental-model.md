@@ -185,11 +185,13 @@ To master Datalevin, you must keep three layers distinct in your mind. They
 work together, but they serve different purposes.
 
 ### Layer 1: The Conceptual Model (The "What")
+
 This is the world of **Datoms**. It is the logical view where everything is a
 triple. This is where you design your schema and think about relationships. It
 is designed for humans to reason about data clearly.
 
 ### Layer 2: The Physical Storage (The "How")
+
 Underneath the logic is a high-performance **Key-Value Store** (DLMDB). While
 Layer 1 sees "facts," Layer 2 sees sorted byte arrays of keys. Datalevin
 efficiently maps those triples into specific key patterns that allow for
@@ -198,6 +200,7 @@ API for cases where you need raw speed or simple state management without the
 overhead of a query engine.
 
 ### Layer 3: The Execution Model (The "Action")
+
 This is the **Datalog Engine**. It sits on top of the storage layer, using a
 cost-based optimizer to decide the most efficient way to retrieve the facts
 requested in Layer 1. It handles the complexity of joins, recursion, and

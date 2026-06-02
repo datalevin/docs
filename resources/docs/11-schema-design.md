@@ -6,18 +6,37 @@ part: "III — Modeling Across Paradigms"
 
 # Chapter 11: Schema Design and Attribute Semantics
 
-While Chapter 5 introduced the mechanics of attributes and namespaces, this chapter dives into the *art* of schema design. In a multi-paradigm database like Datalevin, your schema isn't just a set of constraints; it's the blueprint for how the query engine, search indexes, and storage layer interact.
+While Chapter 5 introduced the mechanics of attributes and namespaces, this
+chapter dives into the *art* of schema design. In a multi-paradigm database like
+Datalevin, your schema is the blueprint for how the query engine, search
+indexes, and storage layer interact.
 
-A well-designed schema in Datalevin enables efficient joins, powerful graph traversals, full-text search, embedding search, vector search, and path-indexed documents.
+A well-designed schema in Datalevin enables efficient joins, powerful graph
+traversals, full-text search, embedding search, vector search, and path-indexed
+documents.
+
+The Java, Python, and JavaScript snippets in this chapter assume an open
+connection named `conn`. Schema snippets show the shape to pass when opening a
+connection or updating a schema.
+
+For a compact reference of every Datalog schema property and its accepted
+values, see Appendix A, "Datalog Schema Reference."
 
 ---
 
 ## 1. The Power of Identity: `:db.unique/identity`
 
-One of the most important decisions in schema design is how you identify your entities. While Datalevin provides internal 64-bit integer IDs, you often need to refer to entities using natural keys from your domain (like an email, a SKU, or a URL slug).
+One of the most important decisions in schema design is how you identify your
+entities. While Datalevin provides internal 64-bit integer IDs, you often need
+to refer to entities using natural keys from your domain (like an email, a SKU,
+or a URL slug).
 
 ### 1.1 Lookup Refs
-When an attribute is marked as `:db.unique/identity`, it becomes a **Lookup Ref**. This allows you to refer to an entity by its natural key in any part of the API—transactions, queries, or `d/pull`—without knowing its internal integer ID.
+
+When an attribute is marked as `:db.unique/identity`, it becomes a **Lookup
+Ref**. This allows you to refer to an entity by its natural key in any part of
+the API, transactions, queries, or `d/pull`, without knowing its internal integer
+ID.
 
 <div class="multi-lang">
 
@@ -35,55 +54,70 @@ When an attribute is marked as `:db.unique/identity`, it becomes a **Lookup Ref*
 
 ```java
 // Schema definition
-Map schema = Map.of("user/email", Map.of(
-    "db/valueType", "db.type/string",
-    "db/unique", "db.unique/identity"));
+Schema schema = Datalevin.schema()
+    .attr("user/email", Schema.attribute()
+        .valueType(Schema.ValueType.STRING)
+        .unique(Schema.Unique.IDENTITY));
 
 // Use the email as a handle to pull data
-Map result = Datalevin.pull(db, List.of("*"), List.of("user/email", "alice@example.com"));
+Map<?, ?> result = conn.pull("[*]", List.of("user/email", "alice@example.com"));
 
 // Update a user by their email
-Datalevin.transact(conn, List.of(
-    List.of("db/add", List.of("user/email", "alice@example.com"), "user/active?", true)));
+conn.transact(Datalevin.tx()
+    .add(List.of("user/email", "alice@example.com"), "user/active?", true));
 ```
 
 ```python
 # Schema definition
-schema = {"user/email": {"db/valueType": "db.type/string",
-                         "db/unique": "db.unique/identity"}}
+schema = {":user/email": {":db/valueType": ":db.type/string",
+                          ":db/unique": ":db.unique/identity"}}
 
 # Use the email as a handle to pull data
-result = d.pull(db, ["*"], ["user/email", "alice@example.com"])
+result = conn.pull("[*]", [":user/email", "alice@example.com"])
 
 # Update a user by their email
-d.transact(conn, [["db/add", ["user/email", "alice@example.com"], "user/active?", True]])
+conn.transact([[":db/add", [":user/email", "alice@example.com"], ":user/active?", True]])
 ```
 
 ```javascript
 // Schema definition
-const schema = {'user/email': {'db/valueType': 'db.type/string',
-                               'db/unique': 'db.unique/identity'}};
+const schema = {":user/email": {":db/valueType": ":db.type/string",
+                                ":db/unique": ":db.unique/identity"}};
 
 // Use the email as a handle to pull data
-const result = d.pull(db, ['*'], ['user/email', 'alice@example.com']);
+const result = await conn.pull("[*]", [":user/email", "alice@example.com"]);
 
 // Update a user by their email
-d.transact(conn, [['db/add', ['user/email', 'alice@example.com'], 'user/active?', true]]);
+await conn.transact([[":db/add", [":user/email", "alice@example.com"], ":user/active?", true]]);
 ```
 
 </div>
 
 ### 1.2 Upsert Behavior
-Attributes with `:db.unique/identity` enable **upsert** behavior. If you transact a map with a unique identity that already exists in the database, Datalevin will merge the new attributes into the existing entity instead of creating a duplicate.
+
+Attributes with `:db.unique/identity` enable **upsert** behavior. If you
+transact a map with a unique identity that already exists in the database,
+Datalevin will merge the new attributes into the existing entity instead of
+creating a duplicate.
 
 ### 1.3 System-Wide Identifiers: `:db/ident`
-While `:db.unique/identity` is used for attributes that uniquely identify a domain entity (like a user's email), **`:db/ident`** is a built-in attribute used to assign a globally unique keyword to an entity.
 
-This is the standard way to represent **enums** or system-wide constants. Once an entity has a `:db/ident`, you can use that keyword anywhere you would use an entity ID or a lookup ref.
+While `:db.unique/identity` is used for attributes that uniquely identify a
+domain entity (like a user's email), **`:db/ident`** is a built-in attribute
+used to assign a globally unique keyword to an entity.
+
+This is the standard way to represent **enums** or system-wide constants. Once
+an entity has a `:db/ident`, you can use that keyword anywhere you would use an
+entity ID or a lookup ref.
 
 <div class="multi-lang">
 
 ```clojure
+;; Schema includes a ref attribute for the enum-valued field
+(def schema {:order/id     {:db/valueType :db.type/string
+                            :db/unique    :db.unique/identity}
+             :order/status {:db/valueType :db.type/ref}})
+
 ;; Define an "enum" entity for order status
 (d/transact! conn [{:db/ident :order.status/shipped}])
 
@@ -92,117 +126,227 @@ This is the standard way to represent **enums** or system-wide constants. Once a
 ```
 
 ```java
+// Schema includes a ref attribute for the enum-valued field
+Schema schema = Datalevin.schema()
+    .attr("order/id", Schema.attribute()
+        .valueType(Schema.ValueType.STRING)
+        .unique(Schema.Unique.IDENTITY))
+    .attr("order/status", Schema.attribute()
+        .valueType(Schema.ValueType.REF));
+
 // Define an "enum" entity for order status
-Datalevin.transact(conn, List.of(Map.of("db/ident", "order.status/shipped")));
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity()
+        .put("db/ident", Datalevin.kw("order.status/shipped"))));
 
 // Use the keyword directly in another transaction
-Datalevin.transact(conn, List.of(
-    Map.of("order/id", "123", "order/status", "order.status/shipped")));
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity()
+        .put("order/id", "123")
+        .put("order/status", Datalevin.kw("order.status/shipped"))));
 ```
 
 ```python
+from datalevin import interop
+
+kw = interop().keyword
+
+# Schema includes a ref attribute for the enum-valued field
+schema = {":order/id": {":db/valueType": ":db.type/string",
+                        ":db/unique": ":db.unique/identity"},
+          ":order/status": {":db/valueType": ":db.type/ref"}}
+
 # Define an "enum" entity for order status
-d.transact(conn, [{"db/ident": "order.status/shipped"}])
+conn.transact([{":db/ident": kw(":order.status/shipped")}])
 
 # Use the keyword directly in another transaction
-d.transact(conn, [{"order/id": "123", "order/status": "order.status/shipped"}])
+conn.transact([{":order/id": "123",
+                ":order/status": kw(":order.status/shipped")}])
 ```
 
 ```javascript
+import { interop } from "datalevin-node";
+
+const raw = interop();
+const shipped = await raw.keyword(":order.status/shipped");
+
+// Schema includes a ref attribute for the enum-valued field
+const schema = {
+  ":order/id": {":db/valueType": ":db.type/string",
+                ":db/unique": ":db.unique/identity"},
+  ":order/status": {":db/valueType": ":db.type/ref"}
+};
+
 // Define an "enum" entity for order status
-d.transact(conn, [{'db/ident': 'order.status/shipped'}]);
+await conn.transact([{":db/ident": shipped}]);
 
 // Use the keyword directly in another transaction
-d.transact(conn, [{'order/id': '123', 'order/status': 'order.status/shipped'}]);
+await conn.transact([{":order/id": "123", ":order/status": shipped}]);
 ```
 
 </div>
 
-The advantage of using `:db/ident` over raw strings or keywords is that the enum itself is a full-fledged entity. You can attach additional metadata to it (like `:order.status/label "Shipped"`) without changing your data.
+The advantage of using `:db/ident` over raw strings or keywords is that the enum
+itself is a full-fledged entity. You can attach additional metadata to it (like
+`:order.status/label "Shipped"`) without changing your data.
 
 ---
 
 ## 2. Modeling Relationships: References and Cardinality
 
-In Datalevin, relationships are first-class citizens. They are defined using the `:db.type/ref` value type and the `:db/cardinality` property. **Crucially, the value of a reference attribute is always the entity ID (a 64-bit integer) of the target entity.**
+In Datalevin, relationships are first-class citizens. They are defined using the
+`:db.type/ref` value type and the `:db/cardinality` property. **Crucially, the
+value of a reference attribute is always the entity ID (a 64-bit integer) of the
+target entity.** In transaction data, you can still use tempids, lookup refs, or
+`:db/ident` keywords as convenient inputs; Datalevin resolves them to entity IDs
+when it writes the datoms.
 
 ### 2.1 One-to-One and One-to-Many
+
 - **One-to-One**: Use `:db.type/ref` with `:db.cardinality/one`.
   - Example: A `User` has one `Profile`.
 - **One-to-Many**: Use `:db.type/ref` with `:db.cardinality/many`.
-  - Example: A `Post` has many `Comments`.
+  - Example: A `Post` has many `Comment`.
+
+While `:db.cardinality/many` is convenient in many use cases, using
+cardinality-one attributes in reverse, i.e. putting the reference on the many
+side of the relationship, is often a better modeling approach. For the
+one-to-many example above, adding a `:comment/post` reference to each `Comment`
+can be more flexible than storing all comments on the `Post`. More importantly,
+`:db.cardinality/one` attributes have better performance in Datalevin.
 
 ### 2.2 Many-to-Many: Cardinality vs. Join Entities
-Datalevin handles many-to-many relationships naturally, but you have two main choices for how to model them.
 
-1.  **`:db.cardinality/many`**: You can add an attribute with `:db.cardinality/many` to one or both entities. This is highly convenient and results in a "cleaner" data structure when using `d/pull`.
-2.  **Join Entities**: You can create a third entity that "joins" the other two, similar to a join table in SQL.
+For many-to-many relationships, you naturally have two main choices to model
+them.
 
-**Performance Tip: Prefer Join Entities.** 
-While `:db.cardinality/many` is convenient, Datalevin is highly optimized for **normalized data**. In a query, a "join entity" often performs better because it allows the query optimizer to make more granular decisions. If you expect a single entity to have thousands of references (e.g., a "Public" group with millions of members), a join entity is the superior choice for performance.
+1.  **`:db.cardinality/many`**: You can add an attribute with
+    `:db.cardinality/many` to one or both entities. This is highly convenient
+    and results in a "cleaner" data structure when using `d/pull`.
+2.  **Join Entities**: You can create a third entity that "joins" the other two,
+    similar to a join table in SQL.
+
+**Performance Tip: Prefer Join Entities.**
+
+While `:db.cardinality/many` is convenient, Datalevin is highly optimized for
+**normalized data**. In a query, a "join entity" often performs better because
+it allows the query optimizer to make more granular decisions. If you expect a
+single entity to have thousands of references (e.g., a "Public" group with
+millions of members), a join entity is the superior choice for performance.
 
 ```clojure
 ;; Instead of many references in one entity:
-;; {:user/id 1 :user/roles [:role/admin :role/editor ...]}
+{:user/id "u-1" :user/roles [:role/admin :role/editor]}
 
 ;; Use a join entity for better performance:
-;; {:role-assignment/user 1 :role-assignment/role :role/admin}
-;; {:role-assignment/user 1 :role-assignment/role :role/editor}
+{:role-assignment/user [:user/id "u-1"] :role-assignment/role :role/admin}
+{:role-assignment/user [:user/id "u-1"] :role-assignment/role :role/editor}
 ```
 
 ### 2.3 Reference Integrity
-Because Datalevin is "schema-on-write" and flexible, it does not enforce traditional "foreign key" constraints by default. If you delete an entity that is referred to by others, the references to its ID will remain (pointing to a non-existent entity).
 
-To ensure a clean removal of an entity and its associated facts, it is highly recommended to use the **`[:db/retractEntity <eid>]`** transaction function. This operation will:
+Because Datalevin is "schema-on-write" and flexible, it does not enforce
+traditional "foreign key" constraints by default. If you delete an entity that
+is referred to by others, the references to its ID will remain (pointing to a
+non-existent entity).
+
+To ensure a clean removal of an entity and its associated facts, it is highly
+recommended to use the **`[:db/retractEntity <eid>]`** transaction function.
+This operation will:
+
 1.  Retract all facts where the entity is the **subject** (E).
-2.  Retract all facts where the entity is the **value** (V) for any `:db.type/ref` attribute.
-3.  Recursively retract any entities marked as **components** of the retracted entity.
+2.  Retract all facts where the entity is the **value** (V) for any
+    `:db.type/ref` attribute.
+3.  Recursively retract any entities marked as **components** of the retracted
+    entity.
 
-By using `:db/retractEntity`, you ensure that no "dangling" references point to a non-existent entity ID, effectively maintaining reference integrity.
+By using `:db/retractEntity`, you ensure that no dangling `:db.type/ref`
+references point to a non-existent entity ID, effectively maintaining reference
+integrity for declared references.
 
 ---
 
 ## 3. Attribute Semantics: Beyond Simple Types
 
-Datalevin allows you to attach additional semantic meaning to your attributes, which changes how the database processes them.
+Datalevin allows you to attach additional semantic meaning to your attributes,
+which changes how the database processes them.
 
 ### 3.1 Full-Text Search (`:db/fulltext`)
-Setting `:db/fulltext true` on a `:db.type/string` attribute tells Datalevin to maintain a specialized full-text index. This enables the `(fulltext ...)` predicate in Datalog (see Chapter 17).
+
+Setting `:db/fulltext true` tells Datalevin to maintain a specialized full-text
+index for that attribute, indexing values as text. This enables the
+`(fulltext ...)` predicate in Datalog (see Chapter 17).
 
 ### 3.2 Embedding Search (`:db/embedding`)
-Setting `:db/embedding true` on a `:db.type/string` attribute tells Datalevin to compute text embeddings and maintain an embedding similarity index. Query it with `embedding-neighbors` using query text, not a vector (see Chapter 18). Embedding indexing is synchronous by default, but embedding domains can opt into `:indexing-mode :async` when provider calls are expensive.
+
+Setting `:db/embedding true` on a `:db.type/string` attribute tells Datalevin to
+compute text embeddings and maintain an embedding similarity index. Query it
+with `embedding-neighbors` using query text, not a vector (see Chapter 18).
+Embedding indexing is synchronous by default, but embedding domains can opt into
+`:indexing-mode :async` when provider calls are expensive.
 
 ### 3.3 Vector Values (`:db.type/vec`)
-Use `:db.type/vec` when your application supplies vectors directly. Query these attributes with `vec-neighbors`. Vector dimensions and metric settings belong in store options such as `:vector-opts` or `:vector-domains`, not in each individual datom.
+
+Use `:db.type/vec` when your application supplies vectors directly. Query these
+attributes with `vec-neighbors`. Vector dimensions and metric settings belong in
+store options such as `:vector-opts` or `:vector-domains`, not in each
+individual datom.
 
 ### 3.4 Indexed Documents (`:db.type/idoc`)
-Use `:db.type/idoc` for nested maps that should be stored as one value but queried by path with `idoc-match`. This is useful for flexible metadata, JSON import, and Markdown-derived structures.
+
+Use `:db.type/idoc` for nested maps that should be stored as one value but
+queried by path with `idoc-match`. This is useful for flexible metadata, JSON
+import, and Markdown-derived structures.
 
 ### 3.5 Component Attributes (`:db/isComponent`)
-When a reference attribute is marked as `:db/isComponent true`, it signals a "parent-child" relationship. 
-- **Recursive Pull**: A wildcard `d/pull` on the parent will automatically include all attributes of the child component.
-- **Cascading Deletes**: When the parent entity is deleted (via the **`:db/retractEntity`** transaction function), the child component entities are also automatically deleted.
 
-This is ideal for modeling "owned" data, like line items in an invoice or segments of a document.
+When a reference attribute is marked as `:db/isComponent true`, it signals a
+"parent-child" relationship.
+
+- **Recursive Pull**: A wildcard `d/pull` on the parent will automatically
+  include all attributes of the child component.
+- **Cascading Deletes**: When the parent entity is deleted (via the
+  **`:db/retractEntity`** transaction function), the child component entities
+  are also automatically deleted.
+
+This is ideal for modeling "owned" data, like line items in an invoice or
+segments of a document.
 
 ---
 
 ## 4. Best Practices: Designing for Evolution
 
-Datalevin's flexibility is a double-edged sword. Here are best practices to keep your schema maintainable.
+Datalevin's flexibility requires some care in schema maintenance. Here are best
+practices to keep your schema maintainable.
 
 ### 4.1 Namespace Everything
-Always use namespaces for your attributes. A common pattern is `[domain]/[property]`, such as `:account/balance` or `:sensor/reading`. This prevents collisions if you later integrate third-party data or modularize your application.
+
+Always use namespaces for your attributes. A common pattern is
+`[domain]/[property]`, such as `:account/balance` or `:sensor/reading`. This
+prevents collisions if you later integrate third-party data or modularize your
+application.
 
 ### 4.2 Prefer Flat Entities
-While `:db/isComponent` is useful for true ownership, don't over-nest your data. Datalevin excels at flat, normalized facts. The query engine is designed to join flat facts efficiently, so you don't need to "pre-join" data into complex documents as you might in a document store like MongoDB.
+
+While `:db/isComponent` is useful for true ownership, don't over-nest your data.
+Datalevin excels at flat, normalized facts. The query engine is designed to join
+flat facts efficiently, so you don't need to "pre-join" data into complex
+documents as you might in a document store like MongoDB.
 
 ### 4.3 Modeling Enums with `:db/ident`
-For attributes that have a fixed set of values (like status or type), you can use raw Clojure keywords as values, but it is often better to model them as **enum entities** using `:db/ident`.
+
+For attributes that have a fixed set of values (like status or type), you can
+use raw Clojure keywords as values, but it is often better to model them as
+**enum entities** using `:db/ident`.
 
 <div class="multi-lang">
 
 ```clojure
+;; Schema includes a ref attribute for order status
+(def schema {:order/id     {:db/valueType :db.type/string
+                            :db/unique    :db.unique/identity}
+             :order/status {:db/valueType :db.type/ref}})
+
 ;; 1. Define your "enum" entities first
 (d/transact! conn [{:db/ident :status/shipped}
                    {:db/ident :status/pending}])
@@ -212,40 +356,187 @@ For attributes that have a fixed set of values (like status or type), you can us
 ```
 
 ```java
+// Schema includes a ref attribute for order status
+Schema schema = Datalevin.schema()
+    .attr("order/id", Schema.attribute()
+        .valueType(Schema.ValueType.STRING)
+        .unique(Schema.Unique.IDENTITY))
+    .attr("order/status", Schema.attribute()
+        .valueType(Schema.ValueType.REF));
+
 // 1. Define your "enum" entities first
-Datalevin.transact(conn, List.of(
-    Map.of("db/ident", "status/shipped"),
-    Map.of("db/ident", "status/pending")));
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity().put("db/ident", Datalevin.kw("status/shipped")))
+    .entity(Tx.entity().put("db/ident", Datalevin.kw("status/pending"))));
 
 // 2. Your data refers to these entities by their ident
-Datalevin.transact(conn, List.of(
-    Map.of("order/id", "123", "order/status", "status/shipped")));
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity()
+        .put("order/id", "123")
+        .put("order/status", Datalevin.kw("status/shipped"))));
 ```
 
 ```python
+from datalevin import interop
+
+kw = interop().keyword
+
+# Schema includes a ref attribute for order status
+schema = {":order/id": {":db/valueType": ":db.type/string",
+                        ":db/unique": ":db.unique/identity"},
+          ":order/status": {":db/valueType": ":db.type/ref"}}
+
 # 1. Define your "enum" entities first
-d.transact(conn, [{"db/ident": "status/shipped"},
-                  {"db/ident": "status/pending"}])
+conn.transact([{":db/ident": kw(":status/shipped")},
+               {":db/ident": kw(":status/pending")}])
 
 # 2. Your data refers to these entities by their ident
-d.transact(conn, [{"order/id": "123", "order/status": "status/shipped"}])
+conn.transact([{":order/id": "123",
+                ":order/status": kw(":status/shipped")}])
 ```
 
 ```javascript
+import { interop } from "datalevin-node";
+
+const raw = interop();
+const shipped = await raw.keyword(":status/shipped");
+const pending = await raw.keyword(":status/pending");
+
+// Schema includes a ref attribute for order status
+const schema = {
+  ":order/id": {":db/valueType": ":db.type/string",
+                ":db/unique": ":db.unique/identity"},
+  ":order/status": {":db/valueType": ":db.type/ref"}
+};
+
 // 1. Define your "enum" entities first
-d.transact(conn, [{'db/ident': 'status/shipped'},
-                  {'db/ident': 'status/pending'}]);
+await conn.transact([{":db/ident": shipped},
+                     {":db/ident": pending}]);
 
 // 2. Your data refers to these entities by their ident
-d.transact(conn, [{'order/id': '123', 'order/status': 'status/shipped'}]);
+await conn.transact([{":order/id": "123", ":order/status": shipped}]);
 ```
 
 </div>
 
 By modeling enums as entities with `:db/ident`, you gain:
-1.  **Metadata**: You can attach display names, descriptions, or translations directly to the enum entity.
-2.  **Reference Integrity**: If you use a `:db.type/ref` for the status attribute, Datalevin can ensure that every status points to a valid ident.
+
+1.  **Metadata**: You can attach display names, descriptions, or translations
+    directly to the enum entity.
+2.  **Reference Semantics**: If you use a `:db.type/ref` for the status
+    attribute, Datalog joins and pulls treat the status as an entity reference
+    rather than an arbitrary string.
 3.  **Discovery**: You can query for all possible statuses using Datalog.
+
+### 4.4 Evolve Schema Explicitly
+
+Datalevin uses schema-on-write, but schema is still operational state. Initial
+schema is passed when opening a connection; later changes go through
+`update-schema` on the open connection. Schema changes are not transacted as
+ordinary datoms.
+
+Use schema evolution for three common cases:
+
+1.  **Add or refine schema properties** for an attribute your application now
+    wants to query, sort, search, or validate more precisely.
+2.  **Rename an attribute** when the model name has changed but the existing
+    facts should remain. Datalevin keeps the same internal attribute id, so
+    existing datoms become readable under the new attribute name.
+3.  **Delete schema metadata** for an attribute only after all datoms using
+    that attribute have been removed. Datalevin rejects deletion while facts
+    still exist for the attribute.
+
+<div class="multi-lang">
+
+```clojure
+;; Add or refine schema for an open connection.
+(d/update-schema conn
+                 {:user/last-login {:db/valueType :db.type/instant}})
+
+;; Rename an attribute. Existing facts are read as :user/contact-email.
+(d/update-schema conn nil nil {:user/email :user/contact-email})
+
+;; Delete schema metadata only after no facts remain for the attribute.
+(d/update-schema conn nil #{:user/temporary-note})
+```
+
+```java
+// Add or refine schema for an open connection.
+Schema update = Datalevin.schema()
+    .attr("user/last-login", Schema.attribute()
+        .valueType(Schema.ValueType.INSTANT));
+
+conn.updateSchema(update);
+
+// Rename an attribute. Existing facts are read as :user/contact-email.
+conn.updateSchema((Schema) null, null,
+    Map.of("user/email", "user/contact-email"));
+
+// Delete schema metadata only after no facts remain for the attribute.
+conn.updateSchema((Schema) null, List.of("user/temporary-note"), null);
+```
+
+```python
+# Add or refine schema for an open connection.
+conn.update_schema({":user/last-login":
+                    {":db/valueType": ":db.type/instant"}})
+
+# Rename an attribute. Existing facts are read as :user/contact-email.
+conn.update_schema(None,
+                   rename_map={":user/email": ":user/contact-email"})
+
+# Delete schema metadata only after no facts remain for the attribute.
+conn.update_schema(None, del_attrs=[":user/temporary-note"])
+```
+
+```javascript
+// Add or refine schema for an open connection.
+await conn.updateSchema({
+  ":user/last-login": {":db/valueType": ":db.type/instant"}
+});
+
+// Rename an attribute. Existing facts are read as :user/contact-email.
+await conn.updateSchema(null, {
+  renameMap: {":user/email": ":user/contact-email"}
+});
+
+// Delete schema metadata only after no facts remain for the attribute.
+await conn.updateSchema(null, {delAttrs: [":user/temporary-note"]});
+```
+
+</div>
+
+One especially useful evolution path is moving a prototype attribute from
+untyped EDN storage to a typed encoding. When you use `update-schema` to add
+`:db/valueType` to an existing attribute that was previously untyped, Datalevin
+migrates the stored values as part of the schema update:
+
+1.  It reads the existing EDN binary values for the attribute.
+2.  It attempts to decode each value into the new specified type.
+3.  It rewrites the index entries to use the typed encoding, enabling efficient
+    typed comparisons and range scans.
+
+This path supports the common workflow of starting flexible during prototyping
+and tightening the schema once access patterns are known. It applies to the
+untyped-to-typed case; changing one declared type to another declared type is a
+different, incompatible migration once data exists.
+
+Not every property can be changed freely once data exists. Datalevin validates
+schema mutations against stored datoms:
+
+- Changing `:db/valueType` is rejected when typed data already exists, except
+  for migrating an untyped EDN attribute to a specific type.
+- Changing `:db/cardinality` from many to one is rejected when the attribute has
+  existing datoms.
+- Adding `:db/unique` is allowed only when the existing values are consistent
+  with the requested uniqueness.
+- Changing embedding-related schema on a populated attribute requires an
+  explicit secondary-index rebuild.
+
+For incompatible changes, treat the change as a data migration: introduce the
+new attribute, backfill it from the old one, move readers and writers, retract
+the old facts, then delete the old schema metadata. This is usually safer than
+trying to change the meaning of a populated attribute in place.
 
 ---
 
@@ -253,15 +544,28 @@ By modeling enums as entities with `:db/ident`, you gain:
 
 When adding a new attribute to your Datalevin database, ask yourself:
 
-1.  **What is the type?** Use a specific type (`:db.type/long`, `:db.type/string`, etc.) for performance and range queries.
-2.  **Is it a reference?** Use `:db.type/ref` to enable joins and graph traversals.
-3.  **Is it a unique identity?** Use `:db.unique/identity` for natural keys (like emails) that you will use to lookup or upsert entities.
-4.  **Is it a system-wide constant?** Use **`:db/ident`** to give a unique, globally namespaced keyword to an entity, perfect for enums and static system data.
+1.  **What is the type?** Use a specific type (`:db.type/long`,
+    `:db.type/string`, etc.) for performance and range queries.
+2.  **Is it a reference?** Use `:db.type/ref` to enable joins and graph
+    traversals.
+3.  **Is it a unique identity?** Use `:db.unique/identity` for natural keys
+    (like emails) that you will use to lookup or upsert entities.
+4.  **Is it a system-wide constant?** Use **`:db/ident`** to give a unique,
+    globally namespaced keyword to an entity, perfect for enums and static
+    system data.
 5.  **Is it many-valued?** Use `:db.cardinality/many` for sets of values.
-6.  **Does it need keyword search?** Use `:db/fulltext` for string attributes you want to search.
-7.  **Does it need semantic text search?** Use `:db/embedding` for string attributes Datalevin should embed.
-8.  **Do you already have vectors?** Use `:db.type/vec` and configure vector domains.
-9.  **Is it flexible nested data?** Use `:db.type/idoc` for path-indexed documents.
+6.  **Does it need keyword search?** Use `:db/fulltext` for attributes you want
+    to search as text.
+7.  **Does it need semantic text search?** Use `:db/embedding` for string
+    attributes Datalevin should embed.
+8.  **Do you already have vectors?** Use `:db.type/vec` and configure vector
+    domains.
+9.  **Is it flexible nested data?** Use `:db.type/idoc` for path-indexed
+    documents.
 10. **Is it a component?** Use `:db/isComponent` for nested, "owned" entities.
+11. **How will it evolve?** Use `update-schema` for explicit schema changes,
+    and plan migrations for incompatible changes on populated attributes.
 
-By thoughtfully applying these properties, you create a schema that is both flexible enough for rapid development and robust enough for complex, high-performance applications.
+By thoughtfully applying these properties, you create a schema that is both
+flexible enough for rapid development and robust enough for complex,
+high-performance applications.

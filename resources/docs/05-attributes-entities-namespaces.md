@@ -186,34 +186,13 @@ d.transact(conn, [
 
 ---
 
-## 5. Schema Evolution and Migration
-
-Datalevin makes it easy to evolve your schema as your application requirements
-change. A common workflow is to start with untyped attributes during prototyping
-and then add types later for performance and range query support.
-
-### 5.1 Automatic Type Migration
-
-When you use `update-schema` to add a `:db/valueType` to an existing attribute
-that was previously untyped (and thus stored as EDN binary), Datalevin performs
-an **atomic data migration**.
-
-It will:
-1.  Read the existing EDN binary values.
-2.  Attempt to decode them into the new specified type.
-3.  Update the indexes (like AVE) to use the new typed encoding, which enables
-    efficient range scans.
-
-This means you don't need to manually write migration scripts to "upgrade" your
-data when moving from a flexible prototype to a structured production schema.
-
----
-
-## 6. Practical Summary: Schema Workflow
+## 5. Practical Summary: Schema Workflow
 
 1. **Prototyping**: Start without a schema. Just transact maps.
 2. **Optimization**: Once you know your access patterns, add `:db/valueType` to
-   enable range queries on specific attributes.
+   enable range queries on specific attributes. Chapter 11 covers the
+   `update-schema` workflow, including Datalevin's supported migration from
+   untyped EDN values to typed values.
 3. **Integrity**: Add `:db/unique/identity` for fields like emails or slugs so
    you can use them as "lookup refs" (e.g., `[:user/email
    "alice@example.com"]`).
