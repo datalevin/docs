@@ -521,6 +521,70 @@ and tightening the schema once access patterns are known. It applies to the
 untyped-to-typed case; changing one declared type to another declared type is a
 different, incompatible migration once data exists.
 
+### 4.5 Use Schema Validation and Coercion Deliberately
+
+Datalevin schema also participates in transaction preparation. Declared
+`:db/valueType` properties tell Datalevin how to encode values, and store
+options decide how strictly the transaction input is checked before those
+values are written.
+
+Two options are especially important:
+
+- **`:validate-data? true`** checks transaction values against declared
+  `:db/valueType` before writing. The default is `false`.
+- **`:closed-schema? true`** rejects transactions that mention attributes not
+  already present in the schema. The default is `false`, which preserves
+  schema-on-write behavior.
+
+One validation rule is always important: Datalevin does **not** store `nil`
+values. In JavaScript and Python client code, this also means application-level
+`null` or `None` must not be used as a database value. A missing value is
+represented by the absence of a datom, not by a stored null marker.
+
+```clojure
+(def schema
+  {:user/id        {:db/valueType :db.type/string
+                   :db/unique    :db.unique/identity}
+   :user/age       {:db/valueType :db.type/long}
+   :user/signup-at {:db/valueType :db.type/instant}})
+
+(def conn
+  (d/get-conn "/tmp/datalevin/users"
+              schema
+              {:validate-data? true
+               :closed-schema? true}))
+
+;; This fails: Datalevin rejects nil values.
+(d/transact! conn [{:user/id "u-1"
+                    :user/age nil}])
+```
+
+With `:validate-data? true`, a transaction that writes `"42"` to
+`:user/age`, a string UUID to a `:db.type/uuid` attribute, or a timestamp string
+to a `:db.type/instant` attribute is rejected unless the value already has the
+declared runtime type. This is useful at system boundaries where you want
+malformed input to fail early.
+
+With the default `:validate-data? false`, Datalevin still uses the declared type
+to canonicalize values where possible before encoding ordinary attribute values.
+For example, values may be converted to strings, numeric values may be narrowed
+to `long`, `float`, or `double`, strings may be parsed as UUIDs, integers may be
+converted to instants, keywords and symbols may be normalized, and tuple values
+are stored as vectors. This is convenient for trusted inputs, but it is not a
+substitute for application validation when user input quality matters. In
+particular, use correctly typed values for identities and lookup-facing
+attributes; Datalevin may need those values before general value correction.
+
+Schema validation is intentionally structural. It can enforce declared value
+types, uniqueness semantics, cardinality behavior, closed-schema writes, tuple
+shape, and specialized parsers such as `:db.type/idoc`. It does not by itself
+enforce arbitrary business rules such as "every user must have an email", "age
+must be positive", or "an order total must equal the sum of its line items."
+Keep those checks in transaction construction, application validation, import
+pipelines, or transaction functions. If a value becomes unknown or inapplicable,
+retract the existing datom or omit the attribute in new transaction data; do not
+replace it with `nil`.
+
 Not every property can be changed freely once data exists. Datalevin validates
 schema mutations against stored datoms:
 
@@ -565,6 +629,11 @@ When adding a new attribute to your Datalevin database, ask yourself:
 10. **Is it a component?** Use `:db/isComponent` for nested, "owned" entities.
 11. **How will it evolve?** Use `update-schema` for explicit schema changes,
     and plan migrations for incompatible changes on populated attributes.
+12. **How strict should writes be?** Use `:validate-data?` and
+    `:closed-schema?` when transaction input should be checked against the
+    declared schema.
+13. **Can it be absent?** Represent absence by omitting or retracting datoms,
+    not by storing `nil`, `null`, or sentinel strings.
 
 By thoughtfully applying these properties, you create a schema that is both
 flexible enough for rapid development and robust enough for complex,

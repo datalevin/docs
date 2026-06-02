@@ -6,9 +6,14 @@ part: "III — Modeling Across Paradigms"
 
 # Chapter 12: Relational Modeling Patterns
 
-Because Datalevin prefers normalized data, industry-standard **Entity-Relationship (ER) modeling** is not just applicable—it is the most effective way to design your database. 
+Because Datalevin prefers normalized data, industry-standard
+**Entity-Relationship (ER) modeling**[^er-model] is the most effective way to
+design your database.
 
-While SQL databases require "Object-Relational Mapping" (ORM) to bridge the gap between your mental model and rigid tables, Datalevin’s fact-based model maps almost 1:1 to how we reason about the world. This chapter explores how to apply classic relational modeling patterns to a Datalog-powered triplestore.
+While SQL databases require "Object-Relational Mapping" (ORM) to bridge the gap
+between your mental model and rigid tables, Datalevin’s fact-based model maps
+almost 1:1 to how we reason about the world. This chapter explores how to apply
+classic relational modeling patterns to a Datalog-powered triplestore.
 
 ---
 
@@ -17,31 +22,47 @@ While SQL databases require "Object-Relational Mapping" (ORM) to bridge the gap 
 When modeling a domain, think of your schema as a language.
 
 ### 1.1 Nouns (Entities)
-Nouns are the "things" in your system—the **Entities**. In Datalevin, we represent these using **Namespaced Keywords**.
-- **Rule**: Use **singular nouns** for namespaces.
-- **Example**: Use `:user/name`, not `:users/name`. Use `:product/price`, not `:products/price`.
 
-Singular namespacing makes Datalog queries feel like natural sentences: 
+Nouns are the "things" in your system: the **Entities**. In Datalevin, we
+represent these using **Namespaced Keywords**.
+
+- **Rule**: Use **singular nouns** for namespaces.
+- **Example**: Use `:user/name`, not `:users/name`. Use `:product/price`, not
+  `:products/price`.
+
+Singular namespacing makes Datalog queries feel like natural sentences:
 `[?e :user/name ?n]` reads as "the entity `?e` has a user name `?n`."
 
 ### 1.2 Adjectives (Attributes)
-Adjectives are the properties that describe a noun. These are your standard value-type attributes like strings, longs, and booleans.
+
+Adjectives are the properties that describe a noun. These are your standard
+value-type attributes like strings, longs, and booleans.
+
 - **Example**: `:product/color "Red"`, `:order/status :status/pending`.
 
 ### 1.3 Verbs (Relationships)
-Verbs describe how nouns interact. In Datalevin, verbs are modeled using `:db.type/ref`.
+
+Verbs describe how nouns interact. In Datalevin, verbs are modeled using
+`:db.type/ref`.
+
 - **Example**: `:user/follows`, `:order/items`.
 
 ---
 
 ## 2. Normalization: The Path to Performance
 
-In a document-oriented database, you are often taught to denormalize—to "pre-join" data into nested documents. In Datalevin, this is an anti-pattern. **Normalize by default.**
+In a document-oriented database, you are often taught to denormalize—to
+"pre-join" data into nested documents. In Datalevin, this is an anti-pattern.
+**Normalize by default.**
 
 ### 2.1 The "Join Entity" Pattern
-As discussed in Chapter 11, for many-to-many relationships, it is often better to use a **Join Entity** than a `:db.cardinality/many` attribute. 
 
-In ER terms, this is an **Associative Entity**. If you have `Users` and `Groups`, instead of a list of group IDs on the user, create a `Membership` entity.
+As discussed in Chapter 11, for many-to-many relationships, it is often better
+to use a **Join Entity** than a `:db.cardinality/many` attribute.
+
+In ER terms, this is an **Associative Entity**. If you have `Users` and
+`Groups`, instead of a list of group IDs on the user, create a `Membership`
+entity.
 
 ```clojure
 ;; Associative Entity: Membership
@@ -51,16 +72,133 @@ In ER terms, this is an **Associative Entity**. If you have `Users` and `Groups`
 ```
 
 This approach allows you to:
-1.  **Attach Metadata to the Relationship**: You can record *when* a user joined a group, or *who* invited them.
-2.  **Optimize Query Execution**: Datalevin's query optimizer can jump to a specific membership record faster than scanning a large list of IDs inside a single user entity.
+
+1.  **Attach Metadata to the Relationship**: You can record *when* a user joined
+    a group, or *who* invited them.
+2.  **Optimize Query Execution**: Datalevin's query optimizer can jump to a
+    specific membership record faster than scanning a large list of IDs inside a
+    single user entity.
 
 ---
 
-## 3. Documenting the Schema: `:db/doc`
+## 3. ER Design Decisions in Datalevin
 
-A schema is not just for the database engine; it is for the developers who will maintain the system for years to come. Every attribute in your schema should be documented.
+ER modeling is useful because it forces you to make a few decisions explicitly
+before you write schema. Datalevin does not require tables, but the same
+questions still produce better facts.
 
-Datalevin supports a **`:db/doc`** property in the schema map. Use it to explain the purpose and constraints of an attribute.
+### 3.1 Choose Stable Keys
+
+Every important entity type should have a stable domain identifier when the
+domain has one. Use Datalevin's internal entity IDs for storage and joins, but
+put natural identifiers in unique attributes so transactions, imports, and APIs
+can use lookup refs.
+
+```clojure
+{:user/id      {:db/valueType :db.type/string
+                :db/unique    :db.unique/identity}
+ :product/sku  {:db/valueType :db.type/string
+                :db/unique    :db.unique/identity}
+ :invoice/uuid {:db/valueType :db.type/uuid
+                :db/unique    :db.unique/identity}}
+```
+
+Prefer stable identifiers such as account IDs, SKUs, slugs, or UUIDs. Avoid
+using mutable labels such as display names as identities unless the domain
+treats them as immutable.
+
+### 3.2 Record Cardinality and Participation
+
+ER diagrams distinguish one-to-one, one-to-many, and many-to-many
+relationships. Datalevin represents these with reference attributes and
+cardinality, but it does not enforce all ER participation constraints for you.
+
+- **One-to-many**: Put a cardinality-one ref on the "many" side, such as
+  `:order/user` or `:comment/post`.
+- **Many-to-many**: Use an associative entity when the relationship is queried
+  directly, may grow large, or has attributes of its own.
+- **Optional participation**: Omit the datom when the relationship is unknown or
+  not applicable; do not invent sentinel values like `"N/A"`.
+- **Required participation**: Enforce it in transaction construction,
+  application validation, or import checks. The schema documents the model, but
+  a missing datom is still possible unless your write path rejects it.
+
+This distinction matters in Datalevin because absence is a normal fact shape.
+A query for users without an active subscription is a query over missing
+relationship facts. `nil`/ `null` is not a valid value in Datalevin.
+
+### 3.3 Promote Relationships That Have Attributes
+
+In ER modeling, a relationship can have attributes. In Datalevin, that is your
+signal to make the relationship an entity.
+
+```clojure
+;; A thin model: the relationship has nowhere to put its own facts.
+{:order/products [[:product/sku "SKU-1"] [:product/sku "SKU-2"]]}
+
+;; A stronger model: each line item is a relationship entity.
+{:line-item/order    [:order/id "ord-1001"]
+ :line-item/product  [:product/sku "SKU-1"]
+ :line-item/quantity 2
+ :line-item/price    1999}
+```
+
+This handles classic ER cases such as order line items, memberships,
+assignments, reservations, approvals, and permissions. It also handles ternary
+relationships cleanly: if a supplier sells a product to a store under a
+contract, model the contract as an entity with three refs, not as three separate
+binary links that lose the original meaning.
+
+### 3.4 Model Weak Entities and Ownership
+
+ER weak entities depend on an owner for identity or lifecycle. In Datalevin,
+model them as ordinary entities with a reference to the owner, and use
+`:db/isComponent` only when the child is truly owned by the parent and should be
+deleted with it.
+
+Good component candidates include invoice line items, document sections, or
+profile settings that have no useful life outside the parent. Poor component
+candidates include users, products, organizations, or tags that can be shared
+or referenced independently.
+
+### 3.5 Represent Types Without Inheritance Tables
+
+ER specialization maps naturally to facts. For a small closed set of subtypes,
+use an enum-style ref or `:db/ident` value:
+
+```clojure
+{:account/id   "acct-1"
+ :account/type :account.type/business
+ :account/name "Acme Corp"}
+```
+
+Use shared attributes in the common namespace and subtype-specific attributes
+only where they apply, such as `:business-account/tax-id` or
+`:personal-account/birth-date`. This keeps the model queryable without forcing
+an inheritance-table pattern into a fact database.
+
+### 3.6 Be Deliberate About Derived Facts
+
+ER analysis often identifies derived attributes, such as order totals, account
+balances, or comment counts. Prefer deriving these with Datalog when they are
+cheap and needed inside a transactionally current view. Store them only when
+they are expensive, part of an audit record, or must preserve a historical
+snapshot.
+
+When you do store a derived fact, document the source of truth and update rule
+with `:db/doc`. Future readers should be able to tell whether `:order/total` is
+authoritative, cached, or a historical snapshot.
+
+---
+
+## 4. Documenting the Schema: `:db/doc`
+
+A schema is not just for the database engine; it is for the developers who will
+maintain the system for years to come. Every attribute in your schema should be
+documented.
+
+Datalevin supports a **`:db/doc`** property in the schema map. Use it to explain
+the purpose and constraints of an attribute.
 
 <div class="multi-lang">
 
@@ -104,11 +242,15 @@ const schema = {
 
 </div>
 
-Think of `:db/doc` as "comments that live in the database." They can be queried and used to generate documentation automatically.
+Think of `:db/doc` as "comments that live in the database." They can be queried
+and used to generate documentation automatically.
 
 ---
 
-## 4. Modeling Patterns: From SQL to Datoms
+## 5. Modeling Patterns: From SQL to Datoms
+
+If one is familiar with concepts from SQL, a rough correspondence in Datalevin
+can be the following:
 
 | SQL Concept | Datalevin Equivalent |
 | :--- | :--- |
@@ -188,11 +330,23 @@ const ecommerceSchema = {
 
 ---
 
-## 5. Summary: Relational Best Practices
+## 6. Summary: Relational Best Practices
 
 1.  **Think in singular namespaces**: `:user/email`, not `:users/emails`.
-2.  **Normalize everything**: Use Join Entities for many-to-many relationships or when you need metadata on the link.
-3.  **Document as you go**: Use `:db/doc` to encode the "why" behind every attribute.
-4.  **Use keywords for enums**: Model your "lookup tables" as entities with `:db/ident`.
+2.  **Choose stable keys**: Use `:db.unique/identity` for domain identifiers you
+    will use in imports, APIs, and lookup refs.
+3.  **Normalize relationships**: Use join entities for many-to-many
+    relationships or whenever the relationship has its own attributes.
+4.  **Model ownership carefully**: Use `:db/isComponent` for true lifecycle
+    ownership, not just for convenient nesting.
+5.  **Represent subtypes as facts**: Use enum entities or subtype-specific
+    namespaces rather than inheritance-table patterns.
+6.  **Document as you go**: Use `:db/doc` to encode the "why" behind every
+    attribute, especially derived or denormalized facts.
 
-By applying these time-tested ER principles, you ensure your Datalevin database remains clean, performant, and understandable as your domain complexity grows.
+By applying these time-tested ER principles, you ensure your Datalevin database
+remains clean, performant, and understandable as your domain complexity grows.
+
+[^er-model]: Peter P. Chen, ["The Entity-Relationship Model - Toward a Unified
+    View of Data"](https://doi.org/10.1145/320434.320440), *ACM Transactions on
+    Database Systems* 1, no. 1, 1976, pp. 9-36.
