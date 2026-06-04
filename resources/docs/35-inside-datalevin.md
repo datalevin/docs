@@ -1,10 +1,10 @@
 ---
 title: "Inside Datalevin: Storage, Indexes, and Execution"
-chapter: 36
+chapter: 35
 part: "VIII — Internals and Extensions"
 ---
 
-# Chapter 36: Inside Datalevin: Storage, Indexes, and Execution
+# Chapter 35: Inside Datalevin: Storage, Indexes, and Execution
 
 For those who want to understand *why* Datalevin performs the way it does, this chapter provides a deep dive into its internal engine. We will look at the custom storage fork, the physical layout of indexes, the concurrency model, and the stages of the query execution pipeline.
 

@@ -1,10 +1,10 @@
 ---
 title: "Client-Server Architecture: Protocols, HA, and Security"
-chapter: 27
+chapter: 26
 part: "VI — Systems and Operations"
 ---
 
-# Chapter 27: Client-Server Architecture: Protocols, HA, and Security
+# Chapter 26: Client-Server Architecture: Protocols, HA, and Security
 
 While Datalevin is often used in embedded mode for maximum performance, its **Client-Server mode** is essential for multi-user environments, microservices architectures, and cross-language integration.
 

@@ -1,6 +1,6 @@
 ---
 title: "Datalog Schema Reference"
-chapter: 41
+chapter: 40
 part: "IX — Appendices"
 ---
 

@@ -1,10 +1,10 @@
 ---
 title: "Monitoring, Debugging, and Production Checklist"
-chapter: 30
+chapter: 29
 part: "VI — Systems and Operations"
 ---
 
-# Chapter 30: Monitoring, Debugging, and Production Checklist
+# Chapter 29: Monitoring, Debugging, and Production Checklist
 
 Running Datalevin in production requires a shift from a "developer" mindset to an "operator" mindset. Because Datalevin offloads much of its work to the operating system, monitoring the database often means monitoring the host environment.
 
@@ -59,7 +59,7 @@ This returns metrics such as:
 - **`entries`**: Total number of key-value pairs.
 
 ### 2.1 The Free List
-LMDB reuses deleted pages rather than shrinking the file. `db-stats` will show you how many pages are currently in the **Free List**. If this number is very high relative to your total pages, it may be time for a `d/compact` operation (Chapter 22).
+LMDB reuses deleted pages rather than shrinking the file. `db-stats` will show you how many pages are currently in the **Free List**. If this number is very high relative to your total pages, it may be time for a `d/compact` operation (Chapter 21).
 
 ---
 
@@ -67,7 +67,7 @@ LMDB reuses deleted pages rather than shrinking the file. `db-stats` will show y
 
 When queries are slow or the system feels sluggish, use these tools to find the bottleneck.
 
-- **Query Analysis**: Use `d/explain` (Chapter 24) to inspect query plans and understand execution strategy.
+- **Query Analysis**: Use `d/explain` (Chapter 23) to inspect query plans and understand execution strategy.
 - **Writer Contention**: If `d/transact!` calls are slow but the disk is idle, check whether multiple threads are competing for the direct LMDB writer path, or whether WAL group-commit settings are mismatched to the workload.
 - **Logging**: Use a library like Timbre to log transaction times and query latencies.
 

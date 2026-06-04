@@ -1,10 +1,10 @@
 ---
 title: "Query Planning and Optimization"
-chapter: 23
+chapter: 22
 part: "V — Performance and Dataflow"
 ---
 
-# Chapter 23: Query Planning and Optimization
+# Chapter 22: Query Planning and Optimization
 
 As discussed in Chapter 9, Datalog is **declarative**. You describe *what* you want, and Datalevin's **Query Optimizer** decides *how* to find it. This decoupling is critical for performance because even a simple change in the order of joins can make a query 1,000x faster or slower.
 
@@ -107,7 +107,7 @@ The optimizer handles complex clauses in stages:
 
 1.  **Index access clauses** produce intermediate results first
 2.  **Heuristics and variable dependencies** reorder remaining complex clauses (`and`, `or`, `not`, `not-join`, predicates, function bindings)
-3.  **Rules** are executed last (see Chapter 25)
+3.  **Rules** are executed last (see Chapter 24)
 
 `or-join` participates in link planning, and common `not-join` shapes can become anti-join steps when their join variables are bound in a single plan component. More complex negative clauses still fall back to late resolution.
 

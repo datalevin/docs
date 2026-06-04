@@ -1,10 +1,10 @@
 ---
 title: "Automatic Document Indexes and Path Queries"
-chapter: 19
+chapter: 18
 part: "IV — Indexes as Capabilities"
 ---
 
-# Chapter 19: Automatic Document Indexes and Path Queries
+# Chapter 18: Automatic Document Indexes and Path Queries
 
 Datalevin includes a document database feature called **idoc (Indexed
 Document)**. This allows you to store nested maps as single values while

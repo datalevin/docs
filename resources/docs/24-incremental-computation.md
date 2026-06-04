@@ -1,10 +1,10 @@
 ---
 title: "Incremental Computation and Semi-Naive Evaluation"
-chapter: 25
+chapter: 24
 part: "V — Performance and Dataflow"
 ---
 
-# Chapter 25: Rules Engine and Recursive Evaluation
+# Chapter 24: Rules Engine and Recursive Evaluation
 
 Datalog's power lies in its ability to define **recursive rules** that derive new facts from base data. However, evaluating recursive rules efficiently requires sophisticated algorithms to avoid exponential blowup.
 

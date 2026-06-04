@@ -1,10 +1,10 @@
 ---
 title: "Vector Search: Embeddings and Similarity Queries"
-chapter: 18
+chapter: 17
 part: "IV — Indexes as Capabilities"
 ---
 
-# Chapter 18: Vector Search: Embeddings and Similarity Queries
+# Chapter 17: Vector Search: Embeddings and Similarity Queries
 
 In the era of Large Language Models (LLMs), a database is not just a place to store structured facts; it is a repository for semantic meaning. Datalevin provides two related similarity-search features:
 

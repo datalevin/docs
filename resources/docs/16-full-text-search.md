@@ -1,10 +1,10 @@
 ---
 title: "Full-Text Search: Analyzers, Vector Space Model and Boolean Search Expression"
-chapter: 17
+chapter: 16
 part: "IV — Indexes as Capabilities"
 ---
 
-# Chapter 17: Full-Text Search: Analyzers, Vector Space Model and Boolean Search Expression
+# Chapter 16: Full-Text Search: Analyzers, Vector Space Model and Boolean Search Expression
 
 Most databases require a separate engine like Elasticsearch or Solr for full-text search. Datalevin includes a high-performance, integrated search engine built directly on top of its KV substrate. In the default synchronous indexing mode, your search index is transactionally consistent with your data and stored in the same LMDB data file. For heavier ingestion workloads, full-text domains can opt into asynchronous indexing.
 

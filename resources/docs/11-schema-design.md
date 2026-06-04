@@ -275,13 +275,13 @@ which changes how the database processes them.
 
 Setting `:db/fulltext true` tells Datalevin to maintain a specialized full-text
 index for that attribute, indexing values as text. This enables the
-`(fulltext ...)` predicate in Datalog (see Chapter 17).
+`(fulltext ...)` predicate in Datalog (see Chapter 16).
 
 ### 3.2 Embedding Search (`:db/embedding`)
 
 Setting `:db/embedding true` on a `:db.type/string` attribute tells Datalevin to
 compute text embeddings and maintain an embedding similarity index. Query it
-with `embedding-neighbors` using query text, not a vector (see Chapter 18).
+with `embedding-neighbors` using query text, not a vector (see Chapter 17).
 Embedding indexing is synchronous by default, but embedding domains can opt into
 `:indexing-mode :async` when provider calls are expensive.
 

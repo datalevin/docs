@@ -1,10 +1,10 @@
 ---
 title: "Encryption at Rest and Security Models"
-chapter: 28
+chapter: 27
 part: "VI — Systems and Operations"
 ---
 
-# Chapter 28: Encryption at Rest and Security Models
+# Chapter 27: Encryption at Rest and Security Models
 
 Security is a multi-layered responsibility. While Datalevin provides robust tools for access control, protecting the physical data requires a strategy that spans from the hardware up to the application code.
 

@@ -1,12 +1,12 @@
 ---
 title: "Episodic and Semantic Memory"
-chapter: 33
+chapter: 32
 part: "VII — Datalevin for Intelligent Systems"
 ---
 
-# Chapter 33: Episodic and Semantic Memory
+# Chapter 32: Episodic and Semantic Memory
 
-Building on the cognitive analogies from Chapter 31, this chapter dives into the practical implementation of **Episodic** and **Semantic** memory systems in Datalevin. We will look at the schema patterns and query strategies that make these systems efficient at scale.
+Building on the cognitive analogies from Chapter 30, this chapter dives into the practical implementation of **Episodic** and **Semantic** memory systems in Datalevin. We will look at the schema patterns and query strategies that make these systems efficient at scale.
 
 ---
 

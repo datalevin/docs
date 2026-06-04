@@ -1,10 +1,10 @@
 ---
 title: "Persistent Agent Memory Architectures"
-chapter: 31
+chapter: 30
 part: "VII — Datalevin for Intelligent Systems"
 ---
 
-# Chapter 31: Persistent Agent Memory Architectures
+# Chapter 30: Persistent Agent Memory Architectures
 
 The greatest limitation of modern Large Language Models (LLMs) is their lack of state. While they possess vast general knowledge, they are "reset" at the start of every session. To build true **Intelligent Agents**, we must provide them with a persistent memory—a place to store past experiences, learned facts, and evolving goals.
 
@@ -63,7 +63,7 @@ Because Datalevin supports recursive graph traversal (Chapter 13), an agent can 
 A typical persistent agent memory loop follows these steps:
 
 1.  **Perceive**: The agent receives an input.
-2.  **Recall**: The agent performs a **Hybrid Query** (Chapter 20) to find relevant past experiences (Vector) and structured facts (Datalog).
+2.  **Recall**: The agent performs a **Hybrid Query** (Chapter 19) to find relevant past experiences (Vector) and structured facts (Datalog).
 3.  **Reason**: The agent uses the recalled context to decide on an action.
 4.  **Consolidate**: After the action, the agent transacts the new experience back into Datalevin, creating new embeddings and updating graph relationships.
 

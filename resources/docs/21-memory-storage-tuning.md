@@ -1,10 +1,10 @@
 ---
 title: "Memory Layout and Storage Tuning"
-chapter: 22
+chapter: 21
 part: "V — Performance and Dataflow"
 ---
 
-# Chapter 22: Memory Layout and Storage Tuning
+# Chapter 21: Memory Layout and Storage Tuning
 
 Datalevin is a "zero-copy" database, which means its memory management is very different from standard JVM-based applications. While many databases fight the JVM Garbage Collector (GC), Datalevin works *with* the operating system's native memory management.
 
@@ -125,7 +125,7 @@ Key server and client-side knobs include:
 - **Wire Compression**: Adjust `*wire-compression-threshold*` and `*wire-compression-level*` for large payloads.
 - **Freshness Control**: Tune `*remote-db-last-modified-check-interval-ms*` to balance latency and data consistency.
 
-Refer to **Chapter 27: Client-Server Architecture** for a detailed guide on these parameters.
+Refer to **Chapter 26: Client-Server Architecture** for a detailed guide on these parameters.
 
 ---
 

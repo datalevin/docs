@@ -69,11 +69,11 @@
                                 "(d/transact! conn [[:put {:db/ident :kv\n                    :key \"mykey\"\n                    :value \"myvalue\"}]])\n\n(d/get-value conn :kv \"mykey\")")
 
                     (example-tx test-user-id
-                                "17-full-text-search"
+                                "16-full-text-search"
                                 "(d/q '[:find ?e\n  :in $ ?search\n  :where [?e :doc/content ?content]\n  [(fulltext $ :doc/content ?search) [[?e ?match]]]]\n  conn \"database\")")
 
                     (example-tx demo-user-id
-                                "18-vector-search"
+                                "17-vector-search"
                                 "(d/q '[:find ?e ?score\n  :in $ ?query-vector [?limit]\n  :where [?e :embedding/vector ?vec]\n  [(.score (datalevin.search/similarity-search ?vec ?query-vector)) ?score]]\n  db query-vec 10)")]]
       
       (d/transact! conn examples)

@@ -247,20 +247,126 @@ and used to generate documentation automatically.
 
 ---
 
-## 5. Modeling Patterns: From SQL to Datoms
+## 5. From Tables to Facts: Migrating SQL Models
 
-If one is familiar with concepts from SQL, a rough correspondence in Datalevin
-can be the following:
+Migrating from SQL to Datalevin is not a rejection of relational model,
+it should be thought of as a better representation of relational model:
+instead of storing rows inside table-shaped containers, Datalevin stores facts
+that can be joined, traversed, pulled, and indexed in several ways.
 
-| SQL Concept | Datalevin Equivalent |
-| :--- | :--- |
-| **Table** | A **Namespace** (e.g., `:user/`) |
-| **Row** | An **Entity ID** |
-| **Column** | An **Attribute** |
-| **Foreign Key** | A **Ref** attribute (`:db.type/ref`) |
-| **Join Table** | A **Join Entity** (Associative Entity) |
+### 5.1 Translate the Vocabulary
 
-### Example: A Normalized E-commerce Model
+The familiar SQL concepts still have Datalevin equivalents, but the boundaries
+move from tables to attributes and facts:
+
+| SQL Concept | Datalevin Equivalent | Migration Note |
+| :--- | :--- | :--- |
+| **Table** | **Namespace** such as `:order/` | A namespace groups attributes by domain meaning; it is not a physical table. |
+| **Row** | **Entity ID** | An entity is the set of facts that share the same entity ID. |
+| **Column** | **Attribute** | Attributes are schema objects with their own value type, cardinality, uniqueness, and index settings. |
+| **Primary Key** | **Unique identity attribute** | Use stable domain IDs with `:db.unique/identity`; keep Datalevin entity IDs internal. |
+| **Foreign Key** | **Ref attribute** | A `:db.type/ref` stores another entity ID and joins naturally in Datalog. |
+| **Join Table** | **Associative entity** | Model the join as its own entity when the relationship is large, queried directly, or has attributes. |
+| **NULL** | **No datom** | Datalevin does not store `nil`/`null`; absence means the fact is not present. |
+
+### 5.2 Decompose Rows into Facts
+
+In SQL, a row is the unit that receives a full set of column values:
+
+```sql
+INSERT INTO orders (order_id, customer_id, status, total_cents)
+VALUES ('ord-1001', 'cust-42', 'paid', 4299);
+```
+
+In Datalevin, the transaction can still be written as an entity map, but the
+stored representation is separate facts:
+
+```clojure
+{:order/id          "ord-1001"
+ :order/customer    [:customer/id "cust-42"]
+ :order/status      :order.status/paid
+ :order/total-cents 4299}
+```
+
+Conceptually, after lookup refs are resolved, the database contains datoms like:
+
+```clojure
+[2001 :order/id "ord-1001"]
+[2001 :order/customer 1001]
+[2001 :order/status :order.status/paid]
+[2001 :order/total-cents 4299]
+```
+
+This is why sparse and evolving domains work well in Datalevin. Optional fields
+do not require nullable columns. If a discount code, shipment, or cancellation
+reason is unknown, the corresponding datom is absent.
+
+### 5.3 Recast Joins as Shared Variables
+
+The most visible change for SQL developers is query syntax. SQL names tables and
+join conditions explicitly:
+
+```sql
+SELECT o.order_id, c.email
+FROM orders o
+JOIN customers c ON o.customer_id = c.customer_id
+WHERE o.status = 'paid';
+```
+
+Datalog describes the facts that must be true. The join happens because `?c` is
+shared by the order and customer patterns:
+
+```clojure
+[:find ?order-id ?email
+ :where [?o :order/id ?order-id]
+        [?o :order/status :order.status/paid]
+        [?o :order/customer ?c]
+        [?c :customer/email ?email]]
+```
+
+This is the same relational idea expressed declaratively. There is no `JOIN`
+keyword because unification over shared variables is the join.
+
+Aggregations follow the same principle. SQL uses `GROUP BY`; Datalog groups by
+the non-aggregate variables in `:find`:
+
+```clojure
+[:find ?status (count ?o)
+ :where [?o :order/status ?status]]
+```
+
+### 5.4 Model Foreign Keys and Join Tables Deliberately
+
+One-to-many relationships map directly to a reference on the "many" side, such
+as `:order/customer` or `:comment/post`.
+
+Many-to-many relationships require a choice:
+
+1.  Use a cardinality-many ref when the set is small, directly owned by the
+    entity, and has no attributes of its own.
+2.  Use an associative entity when the relationship needs metadata, lifecycle,
+    uniqueness, or direct queries.
+
+For SQL migrations, join tables usually become associative entities. A
+`user_groups` table with `user_id`, `group_id`, `role`, and `joined_at` is not
+just a link; it is a membership entity.
+
+### 5.5 Use a Practical Migration Checklist
+
+For an existing SQL application, migrate in this order:
+
+1.  Map each table to a namespace and each column to an attribute.
+2.  Preserve stable primary keys as `:db.unique/identity` attributes.
+3.  Convert foreign keys to `:db.type/ref` attributes that point to lookup refs.
+4.  Convert join tables with payload columns into associative entities.
+5.  Decide which nullable columns represent absent facts, optional refs, or
+    values that should be modeled differently.
+6.  Add `:db/doc` to attributes whose meaning came from SQL constraints,
+    comments, or application conventions.
+7.  Validate imports by comparing row counts, relationship counts, uniqueness
+    constraints, and representative business queries.
+
+### 5.6 Example: A Normalized E-commerce Schema
 
 <div class="multi-lang">
 
@@ -271,9 +377,13 @@ can be the following:
    :product/title {:db/fulltext true :db/valueType :db.type/string}
    :product/price {:db/valueType :db.type/long}
 
+   ;; Noun: Customer
+   :customer/id    {:db/unique :db.unique/identity :db/valueType :db.type/string}
+   :customer/email {:db/unique :db.unique/identity :db/valueType :db.type/string}
+
    ;; Noun: Order
    :order/id      {:db/unique :db.unique/identity :db/valueType :db.type/string}
-   :order/user    {:db/valueType :db.type/ref}
+   :order/customer {:db/valueType :db.type/ref}
 
    ;; Verb/Associative Entity: Line Item (joins Order and Product)
    :line-item/order    {:db/valueType :db.type/ref}
@@ -287,9 +397,12 @@ Map ecommerceSchema = Map.ofEntries(
     Map.entry("product/sku", Map.of("db/unique", "db.unique/identity", "db/valueType", "db.type/string")),
     Map.entry("product/title", Map.of("db/fulltext", true, "db/valueType", "db.type/string")),
     Map.entry("product/price", Map.of("db/valueType", "db.type/long")),
+    // Noun: Customer
+    Map.entry("customer/id", Map.of("db/unique", "db.unique/identity", "db/valueType", "db.type/string")),
+    Map.entry("customer/email", Map.of("db/unique", "db.unique/identity", "db/valueType", "db.type/string")),
     // Noun: Order
     Map.entry("order/id", Map.of("db/unique", "db.unique/identity", "db/valueType", "db.type/string")),
-    Map.entry("order/user", Map.of("db/valueType", "db.type/ref")),
+    Map.entry("order/customer", Map.of("db/valueType", "db.type/ref")),
     // Verb/Associative Entity: Line Item (joins Order and Product)
     Map.entry("line-item/order", Map.of("db/valueType", "db.type/ref")),
     Map.entry("line-item/product", Map.of("db/valueType", "db.type/ref")),
@@ -302,9 +415,12 @@ ecommerce_schema = {
     "product/sku": {"db/unique": "db.unique/identity", "db/valueType": "db.type/string"},
     "product/title": {"db/fulltext": True, "db/valueType": "db.type/string"},
     "product/price": {"db/valueType": "db.type/long"},
+    # Noun: Customer
+    "customer/id": {"db/unique": "db.unique/identity", "db/valueType": "db.type/string"},
+    "customer/email": {"db/unique": "db.unique/identity", "db/valueType": "db.type/string"},
     # Noun: Order
     "order/id": {"db/unique": "db.unique/identity", "db/valueType": "db.type/string"},
-    "order/user": {"db/valueType": "db.type/ref"},
+    "order/customer": {"db/valueType": "db.type/ref"},
     # Verb/Associative Entity: Line Item (joins Order and Product)
     "line-item/order": {"db/valueType": "db.type/ref"},
     "line-item/product": {"db/valueType": "db.type/ref"},
@@ -317,9 +433,12 @@ const ecommerceSchema = {
     'product/sku': {'db/unique': 'db.unique/identity', 'db/valueType': 'db.type/string'},
     'product/title': {'db/fulltext': true, 'db/valueType': 'db.type/string'},
     'product/price': {'db/valueType': 'db.type/long'},
+    // Noun: Customer
+    'customer/id': {'db/unique': 'db.unique/identity', 'db/valueType': 'db.type/string'},
+    'customer/email': {'db/unique': 'db.unique/identity', 'db/valueType': 'db.type/string'},
     // Noun: Order
     'order/id': {'db/unique': 'db.unique/identity', 'db/valueType': 'db.type/string'},
-    'order/user': {'db/valueType': 'db.type/ref'},
+    'order/customer': {'db/valueType': 'db.type/ref'},
     // Verb/Associative Entity: Line Item (joins Order and Product)
     'line-item/order': {'db/valueType': 'db.type/ref'},
     'line-item/product': {'db/valueType': 'db.type/ref'},
@@ -343,6 +462,9 @@ const ecommerceSchema = {
     namespaces rather than inheritance-table patterns.
 6.  **Document as you go**: Use `:db/doc` to encode the "why" behind every
     attribute, especially derived or denormalized facts.
+7.  **Migrate SQL incrementally**: Preserve stable keys, convert foreign keys to
+    refs, and validate migrated facts with the business queries the application
+    already depends on.
 
 By applying these time-tested ER principles, you ensure your Datalevin database
 remains clean, performant, and understandable as your domain complexity grows.

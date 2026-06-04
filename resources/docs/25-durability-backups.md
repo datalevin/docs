@@ -1,10 +1,10 @@
 ---
 title: "Durability, Backups, and Database Maintenance"
-chapter: 26
+chapter: 25
 part: "VI — Systems and Operations"
 ---
 
-# Chapter 26: Durability, Backups, and Database Maintenance
+# Chapter 25: Durability, Backups, and Database Maintenance
 
 Performance is useless if your data is not safe. Datalevin's storage engine (LMDB/DLMDB) is famous for its **reliability** and **immediate recovery** in the face of system crashes.
 
@@ -234,7 +234,7 @@ d.copy(conn, '/path/to/backup-db');
 
 - **Live Backups**: You can run `copy` while the database is being actively queried and written to.
 - **Consistency**: The copy represents a single, transactionally consistent point in time.
-- **Zero-Impact**: Because of LMDB's MVCC architecture (Chapter 27), the copy doesn't block writers or other readers.
+- **Zero-Impact**: Because of LMDB's MVCC architecture (Chapter 26), the copy doesn't block writers or other readers.
 
 ---
 

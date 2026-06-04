@@ -34,72 +34,70 @@ Part III — Modeling Across Paradigms
 
 14. Document Modeling and Path-Based Access
 
-15. From Tables to Facts: Migrating from SQL
-
 Part IV — Indexes as Capabilities
 
-16. Core Index Architecture: EAV and AVE
+15. Core Index Architecture: EAV and AVE
 
-17. Full-Text Search: Analyzers, Vector Space Model and Boolean Search Expression
+16. Full-Text Search: Analyzers, Vector Space Model and Boolean Search Expression
 
-18. Vector Search: Embeddings and Similarity Queries
+17. Vector Search: Embeddings and Similarity Queries
 
-19. Automatic Document Indexes and Path Queries
+18. Automatic Document Indexes and Path Queries
 
-20. Combining Indexes: Hybrid Queries Across KV, Logic, and Search
+19. Combining Indexes: Hybrid Queries Across KV, Logic, and Search
 
 Part V — Performance and Dataflow
 
-21. Batching, Sorting, and High-Throughput Ingestion
+20. Batching, Sorting, and High-Throughput Ingestion
 
-22. Memory Layout and Storage Tuning
+21. Memory Layout and Storage Tuning
 
-23. Query Planning and Optimization
+22. Query Planning and Optimization
 
-24. Profiling Queries and Understanding Execution
+23. Profiling Queries and Understanding Execution
 
-25. Incremental Computation and Semi-Naive Evaluation
+24. Incremental Computation and Semi-Naive Evaluation
 
 Part VI — Systems and Operations
 
-26. Durability, Snapshots, and Backup Strategies
+25. Durability, Snapshots, and Backup Strategies
 
-27. Client-Server Architecture: Protocols, HA, and Security
+26. Client-Server Architecture: Protocols, HA, and Security
 
-28. Encryption at Rest and Security Models
+27. Encryption at Rest and Security Models
 
-29. Deployment Patterns: Embedded, Server, Replicas, HA, MCP, and Pods
+28. Deployment Patterns: Embedded, Server, Replicas, HA, MCP, and Pods
 
-30. Monitoring, Debugging, and Production Checklist
+29. Monitoring, Debugging, and Production Checklist
 
 Part VII — Datalevin for Intelligent Systems
 
-31. Persistent Agent Memory Architectures
+30. Persistent Agent Memory Architectures
 
-32. Apperception Engines and Long-Term State
+31. Apperception Engines and Long-Term State
 
-33. Episodic and Semantic Memory
+32. Episodic and Semantic Memory
 
-34. Hybrid Retrieval: Datalog + Full-Text + Vector
+33. Hybrid Retrieval: Datalog + Full-Text + Vector
 
-35. Building Stateful AI Applications
+34. Building Stateful AI Applications
 
 Part VIII — Internals and Extensions
 
-36. Inside Datalevin: Storage, Indexes, and Execution (with Concurrency & MVCC)
+35. Inside Datalevin: Storage, Indexes, and Execution (with Concurrency & MVCC)
 
-37. Datalog Evaluation Strategies
+36. Datalog Evaluation Strategies
 
-38. Extending Datalevin: Custom Indexes, Predicates, and UDFs
+37. Extending Datalevin: Custom Indexes, Predicates, and UDFs
 
-39. Embedding Datalevin in Applications
+38. Embedding Datalevin in Applications
 
-40. Contributing to Datalevin and the Ecosystem
+39. Contributing to Datalevin and the Ecosystem
 
 Part IX — Appendices
 
-41. Datalog Schema Reference
+40. Datalog Schema Reference
 
-42. Key-Value API Reference
+41. Key-Value API Reference
 
-43. Datalog Built-In Functions Reference
+42. Datalog Built-In Functions Reference

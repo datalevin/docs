@@ -225,7 +225,7 @@ d.q('[:find ?e ' +
 
 </div>
 
-For a deep dive into the advanced path syntax and indexing mechanics of `idoc`, see **Chapter 19: Automatic Document Indexes**.
+For a deep dive into the advanced path syntax and indexing mechanics of `idoc`, see **Chapter 18: Automatic Document Indexes**.
 
 ---
 

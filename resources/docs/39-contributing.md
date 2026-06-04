@@ -1,10 +1,10 @@
 ---
 title: "Contributing to Datalevin and the Ecosystem"
-chapter: 40
+chapter: 39
 part: "VIII — Internals and Extensions"
 ---
 
-# Chapter 40: Contributing to Datalevin and the Ecosystem
+# Chapter 39: Contributing to Datalevin and the Ecosystem
 
 Datalevin is more than just a piece of software; it is a community-driven project aiming to redefine what a modern database can be. Whether you are a seasoned database engineer or a developer who just started using Datalog, there are many ways you can help grow the ecosystem.
 

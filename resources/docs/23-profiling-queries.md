@@ -1,12 +1,12 @@
 ---
 title: "Profiling Queries and Understanding Execution"
-chapter: 24
+chapter: 23
 part: "V — Performance and Dataflow"
 ---
 
-# Chapter 24: Profiling Queries and Understanding Execution
+# Chapter 23: Profiling Queries and Understanding Execution
 
-While Datalevin's query optimizer (Chapter 23) is highly intelligent, it is not omniscient. Sometimes a query that "should be fast" takes longer than expected. To debug these scenarios, you need to "look under the hood" of the execution plan.
+While Datalevin's query optimizer (Chapter 22) is highly intelligent, it is not omniscient. Sometimes a query that "should be fast" takes longer than expected. To debug these scenarios, you need to "look under the hood" of the execution plan.
 
 This chapter covers how to **Profile** your Datalog queries and understand the performance of each join and filter in your execution path.
 

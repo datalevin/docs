@@ -1,10 +1,10 @@
 ---
 title: "Extending Datalevin: Custom Indexes, Predicates, and UDFs"
-chapter: 38
+chapter: 37
 part: "VIII — Internals and Extensions"
 ---
 
-# Chapter 38: Extending Datalevin: Custom Indexes, Predicates, and UDFs
+# Chapter 37: Extending Datalevin: Custom Indexes, Predicates, and UDFs
 
 Datalevin is designed to be a flexible platform. While the built-in Datalog and search capabilities cover most use cases, you may occasionally need to extend the database with custom logic or specialized data structures.
 

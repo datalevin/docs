@@ -1,10 +1,10 @@
 ---
 title: "Datalog Evaluation Strategies"
-chapter: 37
+chapter: 36
 part: "VIII — Internals and Extensions"
 ---
 
-# Chapter 37: Datalog Evaluation Strategies
+# Chapter 36: Datalog Evaluation Strategies
 
 Datalog is a language with a long history in computer science. Over the decades, two primary strategies have emerged for evaluating logic queries: **Top-Down** and **Bottom-Up**.
 

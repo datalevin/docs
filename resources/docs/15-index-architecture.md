@@ -1,10 +1,10 @@
 ---
 title: "Core Index Architecture: EAV and AVE"
-chapter: 16
+chapter: 15
 part: "IV — Indexes as Capabilities"
 ---
 
-# Chapter 16: Core Index Architecture: EAV and AVE
+# Chapter 15: Core Index Architecture: EAV and AVE
 
 In a traditional relational database, an index is an "extra" structure you create to speed up specific queries. In Datalevin, the index **is** the database. Every piece of information you transact is automatically decomposed into multiple sorted representations.
 

@@ -1,10 +1,10 @@
 ---
 title: "Deployment Patterns: Embedded, Server, Replicas, HA, MCP, and Pods"
-chapter: 29
+chapter: 28
 part: "VI — Systems and Operations"
 ---
 
-# Chapter 29: Deployment Patterns: Embedded, Server, Replicas, HA, MCP, and Pods
+# Chapter 28: Deployment Patterns: Embedded, Server, Replicas, HA, MCP, and Pods
 
 Datalevin is designed to be highly portable. Whether you are building a small CLI tool or a massive distributed system, you can deploy Datalevin in the mode that best fits your operational requirements.
 
@@ -30,7 +30,7 @@ Embedded mode is the primary way to use Datalevin. You include it as a standard 
 
 ## 2. Server Mode: Centralized Management
 
-Server mode (detailed in **Chapter 27**) is used when you need multiple services to share a single Datalevin instance, centralized RBAC, or remote access over `dtlv://` URIs.
+Server mode (detailed in **Chapter 26**) is used when you need multiple services to share a single Datalevin instance, centralized RBAC, or remote access over `dtlv://` URIs.
 
 - **Architecture**: A standalone `dtlv` server process manages the storage and provides a network API.
 - **Benefits**: Centralized backup management, fine-grained RBAC, and the ability to share a single database across microservices.
