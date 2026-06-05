@@ -16,6 +16,11 @@ model. Use `idoc` when the nested structure is flexible metadata, imported JSON,
 Markdown-derived structure, or application-defined data that should be searched
 by path without forcing every field into the schema.
 
+The Java snippets in this chapter assume an open `Connection` named `conn`.
+Python and JavaScript snippets assume open `conn` and `db` handles. When an
+example passes a Datalog form as data, non-Clojure snippets use EDN helpers such
+as `Datalevin.edn`, `interop().read_edn`, and `await interop().readEdn`.
+
 ---
 
 ## 1. Logical Documents with `:db/isComponent`
@@ -28,41 +33,48 @@ datoms, but treats that entity as owned by its parent.
 <div class="multi-lang">
 
 ```clojure
-;; Schema: :post/comments is a component ref
+;; Schema: :post/comments owns comment entities.
 {:post/comments {:db/valueType   :db.type/ref
                  :db/cardinality :db.cardinality/many
-                 :db/isComponent true}}
+                 :db/isComponent true}
+ :comment/author {:db/valueType :db.type/ref}}
 ```
 
 ```java
-// Schema: post/comments is a component ref
 Map<String, Object> schema = Map.of(
     "post/comments", Map.of(
         "db/valueType", "db.type/ref",
         "db/cardinality", "db.cardinality/many",
         "db/isComponent", true
+    ),
+    "comment/author", Map.of(
+        "db/valueType", "db.type/ref"
     )
 );
 ```
 
 ```python
-# Schema: post/comments is a component ref
 schema = {
     "post/comments": {
         "db/valueType": "db.type/ref",
         "db/cardinality": "db.cardinality/many",
         "db/isComponent": True
+    },
+    "comment/author": {
+        "db/valueType": "db.type/ref"
     }
 }
 ```
 
 ```javascript
-// Schema: post/comments is a component ref
 const schema = {
   'post/comments': {
     'db/valueType': 'db.type/ref',
     'db/cardinality': 'db.cardinality/many',
     'db/isComponent': true
+  },
+  'comment/author': {
+    'db/valueType': 'db.type/ref'
   }
 };
 ```
@@ -77,21 +89,101 @@ visible to Datalog.
 For example, comments can be modeled as components of a post while their authors
 remain separate top-level entities:
 
+<div class="multi-lang">
+
 ```clojure
 (d/transact! conn
-  [{:db/id 1
+  [{:db/id 200
+    :user/name "Ada"
+    :user/email "ada@example.com"}
+   {:db/id 1
     :post/title "Indexes as Capabilities"
     :post/comments [{:comment/body "This clarifies the mental model."
-                     :comment/author [:user/email "ada@example.com"]}]}])
+                     :comment/author 200}]}])
 ```
 
+```java
+conn.transact(List.of(
+    Map.of("db/id", 200,
+           "user/name", "Ada",
+           "user/email", "ada@example.com"),
+    Map.of("db/id", 1,
+           "post/title", "Indexes as Capabilities",
+           "post/comments", List.of(
+               Map.of("comment/body", "This clarifies the mental model.",
+                      "comment/author", 200)))
+));
+```
+
+```python
+d.transact(conn, [
+    {"db/id": 200,
+     "user/name": "Ada",
+     "user/email": "ada@example.com"},
+    {"db/id": 1,
+     "post/title": "Indexes as Capabilities",
+     "post/comments": [
+         {"comment/body": "This clarifies the mental model.",
+          "comment/author": 200}]}
+])
+```
+
+```javascript
+d.transact(conn, [
+  {
+    'db/id': 200,
+    'user/name': 'Ada',
+    'user/email': 'ada@example.com'
+  },
+  {
+    'db/id': 1,
+    'post/title': 'Indexes as Capabilities',
+    'post/comments': [
+      {
+        'comment/body': 'This clarifies the mental model.',
+        'comment/author': 200
+      }
+    ]
+  }
+]);
+```
+
+</div>
+
 For triple-based documents, use pull patterns to navigate nested paths:
+
+<div class="multi-lang">
 
 ```clojure
 (d/pull db
         [:post/title {:post/comments [:comment/body {:comment/author [:user/name]}]}]
         1)
 ```
+
+```java
+conn.pull(
+    "[:post/title {:post/comments [:comment/body {:comment/author [:user/name]}]}]",
+    1);
+```
+
+```python
+d.pull(
+    db,
+    [":post/title", {":post/comments": [":comment/body",
+                                        {":comment/author": [":user/name"]}]}],
+    1)
+```
+
+```javascript
+d.pull(
+  db,
+  [':post/title', { ':post/comments': [':comment/body',
+                                       { ':comment/author': [':user/name'] }] }],
+  1
+);
+```
+
+</div>
 
 ---
 
@@ -177,16 +269,20 @@ Idoc values must be document-like maps. Nested vectors are treated as arrays.
   [{:db/id 101
     :user/metadata {:theme "dark"
                     :profile {:age 30 :name "Alice"}
-                    :tags ["beta" "admin"]}}])
+                    :tags ["beta" "admin"]
+                    :contact {:email "alice@example.com"}}
+    :user/raw-json "{\"middle\":null,\"theme\":\"dark\"}"}])
 ```
 
 ```java
-Datalevin.transact(conn, List.of(
+conn.transact(List.of(
     Map.of("db/id", 101,
            "user/metadata", Map.of(
                "theme", "dark",
                "profile", Map.of("age", 30, "name", "Alice"),
-               "tags", List.of("beta", "admin")))
+               "tags", List.of("beta", "admin"),
+               "contact", Map.of("email", "alice@example.com")),
+           "user/raw-json", "{\"middle\":null,\"theme\":\"dark\"}")
 ));
 ```
 
@@ -196,7 +292,9 @@ d.transact(conn, [
      "user/metadata": {
          "theme": "dark",
          "profile": {"age": 30, "name": "Alice"},
-         "tags": ["beta", "admin"]}}
+         "tags": ["beta", "admin"],
+         "contact": {"email": "alice@example.com"}},
+     "user/raw-json": '{"middle":null,"theme":"dark"}'}
 ])
 ```
 
@@ -206,8 +304,10 @@ d.transact(conn, [
     'user/metadata': {
       theme: 'dark',
       profile: { age: 30, name: 'Alice' },
-      tags: ['beta', 'admin']
-    } }
+      tags: ['beta', 'admin'],
+      contact: { email: 'alice@example.com' }
+    },
+    'user/raw-json': '{"middle":null,"theme":"dark"}' }
 ]);
 ```
 
@@ -233,16 +333,16 @@ whole document.
 ```clojure
 (d/transact! conn
   [[:db.fn/patchIdoc 101 :user/metadata
-    [[:set    [:theme] "light"]
+    [[:set    [:profile :display-name] "Alice A."]
      [:unset  [:profile :middle]]
      [:update [:tags] :conj "active"]]]])
 ```
 
 ```java
-Datalevin.transact(conn, List.of(
+conn.transact(List.of(
     List.of("db.fn/patchIdoc", 101, "user/metadata",
         List.of(
-            List.of("set", List.of("theme"), "light"),
+            List.of("set", List.of("profile", "display-name"), "Alice A."),
             List.of("unset", List.of("profile", "middle")),
             List.of("update", List.of("tags"), "conj", "active")
         ))
@@ -252,7 +352,7 @@ Datalevin.transact(conn, List.of(
 ```python
 d.transact(conn, [
     ["db.fn/patchIdoc", 101, "user/metadata",
-     [["set", ["theme"], "light"],
+     [["set", ["profile", "display-name"], "Alice A."],
       ["unset", ["profile", "middle"]],
       ["update", ["tags"], "conj", "active"]]]
 ])
@@ -261,7 +361,7 @@ d.transact(conn, [
 ```javascript
 d.transact(conn, [
   ['db.fn/patchIdoc', 101, 'user/metadata',
-    [['set', ['theme'], 'light'],
+    [['set', ['profile', 'display-name'], 'Alice A.'],
      ['unset', ['profile', 'middle']],
      ['update', ['tags'], 'conj', 'active']]]
 ]);
@@ -318,9 +418,8 @@ joined with ordinary facts.
 ```
 
 ```java
-Datalevin.q("[:find ?e " +
-            " :where [(idoc-match $ :user/metadata {:theme \"dark\"}) [[?e _ _]]]]",
-            db);
+conn.query("[:find ?e " +
+           " :where [(idoc-match $ :user/metadata {:theme \"dark\"}) [[?e _ _]]]]");
 ```
 
 ```python
@@ -339,6 +438,8 @@ d.q('[:find ?e ' +
 
 Nested maps express nested path matches:
 
+<div class="multi-lang">
+
 ```clojure
 (d/q '[:find ?e
        :where [(idoc-match $ :user/metadata
@@ -347,7 +448,31 @@ Nested maps express nested path matches:
      db)
 ```
 
+```java
+conn.query("[:find ?e " +
+           " :where [(idoc-match $ :user/metadata " +
+           "          {:profile {:age 30 :name \"Alice\"}}) [[?e _ _]]]]");
+```
+
+```python
+d.q('[:find ?e '
+     ' :where [(idoc-match $ :user/metadata '
+     '          {:profile {:age 30 :name "Alice"}}) [[?e _ _]]]]',
+     db)
+```
+
+```javascript
+d.q('[:find ?e ' +
+     ' :where [(idoc-match $ :user/metadata ' +
+     '          {:profile {:age 30 :name "Alice"}}) [[?e _ _]]]]',
+     db);
+```
+
+</div>
+
 Vectors are treated as arrays. A match succeeds if any element matches:
+
+<div class="multi-lang">
 
 ```clojure
 (d/q '[:find ?e
@@ -355,9 +480,30 @@ Vectors are treated as arrays. A match succeeds if any element matches:
      db)
 ```
 
+```java
+conn.query("[:find ?e " +
+           " :where [(idoc-match $ :user/metadata {:tags \"admin\"}) [[?e _ _]]]]");
+```
+
+```python
+d.q('[:find ?e '
+     ' :where [(idoc-match $ :user/metadata {:tags "admin"}) [[?e _ _]]]]',
+     db)
+```
+
+```javascript
+d.q('[:find ?e ' +
+     ' :where [(idoc-match $ :user/metadata {:tags "admin"}) [[?e _ _]]]]',
+     db);
+```
+
+</div>
+
 ### 4.1 Logical Combinators
 
 Use `[:and ...]`, `[:or ...]`, and `[:not ...]` inside query maps:
+
+<div class="multi-lang">
 
 ```clojure
 (d/q '[:find ?e
@@ -367,10 +513,37 @@ Use `[:and ...]`, `[:or ...]`, and `[:not ...]` inside query maps:
      db)
 ```
 
+```java
+conn.query("[:find ?e " +
+           " :where [(idoc-match $ :user/metadata " +
+           "          {:profile [:or {:age 30} {:age 40}]}) " +
+           "         [[?e _ _]]]]");
+```
+
+```python
+d.q('[:find ?e '
+     ' :where [(idoc-match $ :user/metadata '
+     '          {:profile [:or {:age 30} {:age 40}]}) '
+     '         [[?e _ _]]]]',
+     db)
+```
+
+```javascript
+d.q('[:find ?e ' +
+     ' :where [(idoc-match $ :user/metadata ' +
+     '          {:profile [:or {:age 30} {:age 40}]}) ' +
+     '         [[?e _ _]]]]',
+     db);
+```
+
+</div>
+
 ### 4.2 Predicates and Ranges
 
 Predicates can appear inline in query maps, or as path predicates supplied as
 query inputs:
+
+<div class="multi-lang">
 
 ```clojure
 ;; Inline predicate.
@@ -394,19 +567,138 @@ query inputs:
      '(< 20 [:profile :age] 40))
 ```
 
+```java
+// Inline predicate.
+conn.query("[:find ?e " +
+           " :where [(idoc-match $ :user/metadata " +
+           "          {:profile {:age (> 21)}}) [[?e _ _]]]]");
+
+// Path predicate supplied as data.
+conn.query("[:find ?e " +
+           " :in $ ?q " +
+           " :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]",
+           Datalevin.edn("(>= [:profile :age] 30)"));
+
+// Range via multi-arity comparison.
+conn.query("[:find ?e " +
+           " :in $ ?q " +
+           " :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]",
+           Datalevin.edn("(< 20 [:profile :age] 40)"));
+```
+
+```python
+# Inline predicate.
+d.q('[:find ?e '
+    ' :where [(idoc-match $ :user/metadata '
+    '          {:profile {:age (> 21)}}) [[?e _ _]]]]',
+    db)
+
+# Path predicate supplied as data.
+d.q('[:find ?e '
+    ' :in $ ?q '
+    ' :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]',
+    db,
+    interop().read_edn("(>= [:profile :age] 30)"))
+
+# Range via multi-arity comparison.
+d.q('[:find ?e '
+    ' :in $ ?q '
+    ' :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]',
+    db,
+    interop().read_edn("(< 20 [:profile :age] 40)"))
+```
+
+```javascript
+// Inline predicate.
+d.q('[:find ?e ' +
+    ' :where [(idoc-match $ :user/metadata ' +
+    '          {:profile {:age (> 21)}}) [[?e _ _]]]]',
+    db);
+
+// Path predicate supplied as data.
+d.q('[:find ?e ' +
+    ' :in $ ?q ' +
+    ' :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]',
+    db,
+    await interop().readEdn('(>= [:profile :age] 30)'));
+
+// Range via multi-arity comparison.
+d.q('[:find ?e ' +
+    ' :in $ ?q ' +
+    ' :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]',
+    db,
+    await interop().readEdn('(< 20 [:profile :age] 40)'));
+```
+
+</div>
+
 Supported predicates are `nil?`, `>`, `>=`, `<`, and `<=`.
 
 ### 4.3 Wildcard Paths
 
 Use wildcard path segments when the exact nested key is not known:
 
+<div class="multi-lang">
+
 ```clojure
 ;; Match any single key under :profile with value >= 30.
-'(>= [:profile :?] 30)
+(d/q '[:find ?e
+       :in $ ?q
+       :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]
+     db
+     '(>= [:profile :?] 30))
 
-;; Match a product field at any depth.
-{:* {:product "B"}}
+;; Match a name field at any depth.
+(d/q '[:find ?e
+       :where [(idoc-match $ :user/metadata {:* {:name "Alice"}})
+               [[?e _ _]]]]
+     db)
 ```
+
+```java
+// Match any single key under profile with value >= 30.
+conn.query("[:find ?e " +
+           " :in $ ?q " +
+           " :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]",
+           Datalevin.edn("(>= [:profile :?] 30)"));
+
+// Match a name field at any depth.
+conn.query("[:find ?e " +
+           " :where [(idoc-match $ :user/metadata {:* {:name \"Alice\"}}) " +
+           "         [[?e _ _]]]]");
+```
+
+```python
+# Match any single key under profile with value >= 30.
+d.q('[:find ?e '
+    ' :in $ ?q '
+    ' :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]',
+    db,
+    interop().read_edn("(>= [:profile :?] 30)"))
+
+# Match a name field at any depth.
+d.q('[:find ?e '
+    ' :where [(idoc-match $ :user/metadata {:* {:name "Alice"}}) '
+    '         [[?e _ _]]]]',
+    db)
+```
+
+```javascript
+// Match any single key under profile with value >= 30.
+d.q('[:find ?e ' +
+    ' :in $ ?q ' +
+    ' :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]',
+    db,
+    await interop().readEdn('(>= [:profile :?] 30)'));
+
+// Match a name field at any depth.
+d.q('[:find ?e ' +
+    ' :where [(idoc-match $ :user/metadata {:* {:name "Alice"}}) ' +
+    '         [[?e _ _]]]]',
+    db);
+```
+
+</div>
 
 `:?` matches exactly one path segment. `:*` matches any depth, including zero
 segments.
@@ -415,49 +707,44 @@ segments.
 
 To match null values, use `(nil?)`:
 
+<div class="multi-lang">
+
 ```clojure
 (d/q '[:find ?e
        :where [(idoc-match $ :user/raw-json {"middle" (nil?)}) [[?e _ _]]]]
      db)
 ```
 
+```java
+conn.query("[:find ?e " +
+           " :where [(idoc-match $ :user/raw-json {\"middle\" (nil?)}) " +
+           "         [[?e _ _]]]]");
+```
+
+```python
+d.q('[:find ?e '
+     ' :where [(idoc-match $ :user/raw-json {"middle" (nil?)}) '
+     '         [[?e _ _]]]]',
+     db)
+```
+
+```javascript
+d.q('[:find ?e ' +
+     ' :where [(idoc-match $ :user/raw-json {"middle" (nil?)}) ' +
+     '         [[?e _ _]]]]',
+     db);
+```
+
+</div>
+
 JSON keys are strings, so JSON documents should be matched with `"middle"`, not
 `:middle`.
 
 ### 4.5 Extracting Values with `idoc-get`
 
-`idoc-get` extracts a nested value from an idoc document by path:
+`idoc-get` extracts a nested value from an idoc document inside a Datalog query:
 
 <div class="multi-lang">
-
-```clojure
-(def doc (:user/metadata (d/entity db 101)))
-(idoc-get doc :profile :age) ;; => 30
-(idoc-get doc :tags)         ;; => ["beta" "admin"]
-```
-
-```java
-Object doc = Datalevin.entity(db, 101).get("user/metadata");
-Datalevin.idocGet(doc, "profile", "age"); // => 30
-Datalevin.idocGet(doc, "tags");           // => ["beta", "admin"]
-```
-
-```python
-doc = d.entity(db, 101)["user/metadata"]
-d.idoc_get(doc, "profile", "age")  # => 30
-d.idoc_get(doc, "tags")            # => ["beta", "admin"]
-```
-
-```javascript
-const doc = d.entity(db, 101)['user/metadata'];
-d.idocGet(doc, 'profile', 'age'); // => 30
-d.idocGet(doc, 'tags');           // => ['beta', 'admin']
-```
-
-</div>
-
-You can also bind the idoc value from `idoc-match` and extract a nested value in
-the same query:
 
 ```clojure
 (d/q '[:find ?e ?email
@@ -465,6 +752,28 @@ the same query:
               [(idoc-get ?doc :contact :email) ?email]]
      db)
 ```
+
+```java
+conn.query("[:find ?e ?email " +
+           " :where [(idoc-match $ :user/metadata {:theme \"dark\"}) [[?e _ ?doc]]] " +
+           "        [(idoc-get ?doc :contact :email) ?email]]");
+```
+
+```python
+d.q('[:find ?e ?email '
+     ' :where [(idoc-match $ :user/metadata {:theme "dark"}) [[?e _ ?doc]]] '
+     '        [(idoc-get ?doc :contact :email) ?email]]',
+     db)
+```
+
+```javascript
+d.q('[:find ?e ?email ' +
+    ' :where [(idoc-match $ :user/metadata {:theme "dark"}) [[?e _ ?doc]]] ' +
+    '        [(idoc-get ?doc :contact :email) ?email]]',
+    db);
+```
+
+</div>
 
 When a path traverses arrays, `idoc-get` returns a vector of matching values.
 
