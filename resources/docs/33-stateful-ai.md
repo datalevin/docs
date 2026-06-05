@@ -1,10 +1,10 @@
 ---
 title: "Building Stateful AI Applications"
-chapter: 34
+chapter: 33
 part: "VII — Datalevin for Intelligent Systems"
 ---
 
-# Chapter 34: Building Stateful AI Applications
+# Chapter 33: Building Stateful AI Applications
 
 The true potential of AI is not found in isolated chat sessions, but in applications that maintain a persistent state. A "Stateful AI" application is one where the AI's knowledge, goals, and behavior evolve alongside its users.
 
@@ -94,7 +94,7 @@ In a complex project, multiple agents might work together—one for coding, one 
 
 - **Common Workspace**: All agents share a single Datalevin database.
 - **Coordination via Graph**: Agents post tasks as entities and link them to each other.
-- **Security**: Use **Datalevin Server RBAC** (Chapter 27) to ensure the "Code Agent" can modify source entities, but the "Documentation Agent" can only view them.
+- **Security**: Use **Datalevin Server RBAC** (Chapter 26) to ensure the "Code Agent" can modify source entities, but the "Documentation Agent" can only view them.
 
 By sharing a transactionally consistent environment, agents can coordinate their efforts without complex message-passing protocols.
 
@@ -128,9 +128,9 @@ This makes Datalevin useful as a durable tool substrate for agents: memory stays
 Building stateful AI is about building systems that **accrue value over time**.
 
 - **Memory** (Ch 31) provides the history.
-- **Apperception** (Ch 32) provides the coherence.
-- **Hybrid Retrieval** (Ch 34) provides the context.
+- **Apperception** (Ch 30) provides the coherence.
+- **Hybrid Retrieval** (Ch 32) provides the context.
 - **Datalog** (Ch 9) provides the logic.
-- **MCP** (Ch 29) provides a controlled tool surface for AI clients.
+- **MCP** (Ch 27) provides a controlled tool surface for AI clients.
 
 By choosing Datalevin, you are not just choosing a place to store data; you are choosing a substrate that supports the full spectrum of machine intelligence—from exact logical reasoning to fuzzy semantic understanding.

@@ -1,6 +1,6 @@
 ---
 title: "Datalog Built-In Functions Reference"
-chapter: 42
+chapter: 41
 part: "IX — Appendices"
 ---
 

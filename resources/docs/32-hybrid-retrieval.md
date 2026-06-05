@@ -1,10 +1,10 @@
 ---
 title: "Hybrid Retrieval: Datalog + Full-Text + Vector"
-chapter: 33
+chapter: 32
 part: "VII — Datalevin for Intelligent Systems"
 ---
 
-# Chapter 33: Hybrid Retrieval: Datalog + Full-Text + Vector
+# Chapter 32: Hybrid Retrieval: Datalog + Full-Text + Vector
 
 In many AI architectures, Retrieval-Augmented Generation (RAG) is synonymous with "Vector Search." However, relying solely on vectors often leads to poor results for exact matches, such as product IDs, technical versions, or specific names.
 

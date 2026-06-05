@@ -1,6 +1,6 @@
 ---
 title: "Key-Value API Reference"
-chapter: 41
+chapter: 40
 part: "IX — Appendices"
 ---
 

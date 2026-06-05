@@ -42,62 +42,60 @@ Part IV — Indexes as Capabilities
 
 17. Vector Search: Embeddings and Similarity Queries
 
-18. Automatic Document Indexes and Path Queries
-
-19. Combining Indexes: Hybrid Queries Across KV, Logic, and Search
+18. Combining Indexes: Hybrid Queries Across KV, Logic, and Search
 
 Part V — Performance and Dataflow
 
-20. Batching, Sorting, and High-Throughput Ingestion
+19. Batching, Sorting, and High-Throughput Ingestion
 
-21. Memory Layout and Storage Tuning
+20. Memory Layout and Storage Tuning
 
-22. Query Planning and Optimization
+21. Query Planning and Optimization
 
-23. Profiling Queries and Understanding Execution
+22. Profiling Queries and Understanding Execution
 
-24. Incremental Computation and Semi-Naive Evaluation
+23. Incremental Computation and Semi-Naive Evaluation
 
 Part VI — Systems and Operations
 
-25. Durability, Snapshots, and Backup Strategies
+24. Durability, Snapshots, and Backup Strategies
 
-26. Client-Server Architecture: Protocols, HA, and Security
+25. Client-Server Architecture: Protocols, HA, and Security
 
-27. Encryption at Rest and Security Models
+26. Encryption at Rest and Security Models
 
-28. Deployment Patterns: Embedded, Server, Replicas, HA, MCP, and Pods
+27. Deployment Patterns: Embedded, Server, Replicas, HA, MCP, and Pods
 
-29. Monitoring, Debugging, and Production Checklist
+28. Monitoring, Debugging, and Production Checklist
 
 Part VII — Datalevin for Intelligent Systems
 
-30. Persistent Agent Memory Architectures
+29. Persistent Agent Memory Architectures
 
-31. Apperception Engines and Long-Term State
+30. Apperception Engines and Long-Term State
 
-32. Episodic and Semantic Memory
+31. Episodic and Semantic Memory
 
-33. Hybrid Retrieval: Datalog + Full-Text + Vector
+32. Hybrid Retrieval: Datalog + Full-Text + Vector
 
-34. Building Stateful AI Applications
+33. Building Stateful AI Applications
 
 Part VIII — Internals and Extensions
 
-35. Inside Datalevin: Storage, Indexes, and Execution (with Concurrency & MVCC)
+34. Inside Datalevin: Storage, Indexes, and Execution (with Concurrency & MVCC)
 
-36. Datalog Evaluation Strategies
+35. Datalog Evaluation Strategies
 
-37. Extending Datalevin: Custom Indexes, Predicates, and UDFs
+36. Extending Datalevin: Custom Indexes, Predicates, and UDFs
 
-38. Embedding Datalevin in Applications
+37. Embedding Datalevin in Applications
 
-39. Contributing to Datalevin and the Ecosystem
+38. Contributing to Datalevin and the Ecosystem
 
 Part IX — Appendices
 
-40. Datalog Schema Reference
+39. Datalog Schema Reference
 
-41. Key-Value API Reference
+40. Key-Value API Reference
 
-42. Datalog Built-In Functions Reference
+41. Datalog Built-In Functions Reference

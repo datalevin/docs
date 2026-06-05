@@ -1,12 +1,12 @@
 ---
 title: "Embedding Datalevin in Applications"
-chapter: 38
+chapter: 37
 part: "VIII — Internals and Extensions"
 ---
 
-# Chapter 38: Embedding Datalevin in Applications
+# Chapter 37: Embedding Datalevin in Applications
 
-Datalevin's primary deployment mode is **Embedded** (Chapter 28). This means the database is not a remote service you "talk to," but a library that your application "becomes."
+Datalevin's primary deployment mode is **Embedded** (Chapter 27). This means the database is not a remote service you "talk to," but a library that your application "becomes."
 
 This chapter covers the practical software engineering patterns for integrating Datalevin into your application lifecycle, testing suite, and deployment pipeline.
 

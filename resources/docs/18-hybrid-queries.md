@@ -1,10 +1,10 @@
 ---
 title: "Combining Indexes: Hybrid Queries Across KV, Logic, and Search"
-chapter: 19
+chapter: 18
 part: "IV — Indexes as Capabilities"
 ---
 
-# Chapter 19: Combining Indexes: Hybrid Queries Across KV, Logic, and Search
+# Chapter 18: Combining Indexes: Hybrid Queries Across KV, Logic, and Search
 
 The true power of Datalevin lies not in any single index, but in how they all work together. Because Datalog, full-text search, vector similarity, text embedding search, and document indexes all live in the same storage system, you can combine them in a single query.
 
