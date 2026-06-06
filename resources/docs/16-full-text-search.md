@@ -6,15 +6,22 @@ part: "IV — Indexes as Capabilities"
 
 # Chapter 16: Full-Text Search: Analyzers, Vector Space Model and Boolean Search Expression
 
-Most databases require a separate engine like Elasticsearch or Solr for full-text search. Datalevin includes a high-performance, integrated search engine built directly on top of its KV substrate. In the default synchronous indexing mode, your search index is transactionally consistent with your data and stored in the same LMDB data file. For heavier ingestion workloads, full-text domains can opt into asynchronous indexing.
+Most databases require a separate engine like Lucene, Elasticsearch or Solr for
+full-text search. Datalevin includes a high-performance, integrated search
+engine built directly on top of its KV substrate. In the default synchronous
+indexing mode, your search index is transactionally consistent with your data
+and stored in the same LMDB data file. For heavier ingestion workloads,
+full-text domains can opt into asynchronous indexing.
 
-This chapter explains how to enable full-text search, craft powerful search queries using boolean logic, and understand the underlying ranking algorithm.
+This chapter explains how to enable full-text search, craft powerful search
+queries using boolean logic, and understand the underlying ranking algorithm.
 
 ---
 
 ## 1. Enabling Full-Text Search
 
-To search for text within an attribute, declare `:db/fulltext true` in your schema:
+To search for text within an attribute, declare `:db/fulltext true` in your
+schema:
 
 <div class="multi-lang">
 
@@ -192,7 +199,8 @@ Available options:
 - `:domains` — list of search domains to query
 - `:doc-filter` — predicate function to filter results
 
-When `:display` is not `:refs`, destructure the extra values in the returned tuple. For example, relevance scores use `[e a v score]`:
+When `:display` is not `:refs`, destructure the extra values in the returned
+tuple. For example, relevance scores use `[e a v score]`:
 
 ```clojure
 (d/q '[:find ?e ?score
@@ -207,7 +215,8 @@ When `:display` is not `:refs`, destructure the extra values in the returned tup
 
 ## 3. Search Expressions and Boolean Logic
 
-Datalevin uses Clojure data structures for search expressions, enabling arbitrary boolean combinations:
+Datalevin uses Clojure data structures for search expressions, enabling
+arbitrary boolean combinations:
 
 ```clojure
 [:and "clojure" "database"]              ; both terms
@@ -236,40 +245,53 @@ Boolean operators can be arbitrarily nested:
 
 ## 4. Analyzers: Tokenization and Normalization
 
-When you transact a string into a full-text attribute, it passes through an **Analyzer**:
+When you transact a string into a full-text attribute, it passes through an
+**Analyzer**:
 
 1. **Tokenization**: Breaking text into terms
 2. **Normalization**: Lowercasing, punctuation handling
 3. **Stop-word removal**: Filtering common words (optional)
 
-Custom analyzers can be provided via the `:analyzer` option when creating a search engine. Utility functions for stemming, ngrams, and more are in `datalevin.search-utils`.
+Custom analyzers can be provided via the `:analyzer` option when creating a
+search engine. Utility functions for stemming, ngrams, and more are in
+`datalevin.search-utils`.
 
 ---
 
 ## 5. Ranking: TF-IDF and T-Wand Algorithm
 
 Datalevin uses the **Vector Space Model** with `lnu.ltn` weighting:
-- **Document vectors**: log-weighted term frequency, no idf, pivoted unique normalization
-- **Query vectors**: log-weighted term frequency, idf weighting, no normalization
 
-This weighting scheme handles document length well without penalizing longer documents.
+- **Document vectors**: log-weighted term frequency, no idf, pivoted unique
+  normalization
+- **Query vectors**: log-weighted term frequency, idf weighting, no
+  normalization
+
+This weighting scheme handles document length well without penalizing longer
+documents.
 
 ### 5.1 T-Wand Algorithm
 
-The search uses a **Tiered WAND** algorithm that processes documents in tiers by term coverage:
+The search uses a **Tiered WAND** algorithm that processes documents in tiers by
+term coverage:
+
 1. First, documents containing *all* query terms
 2. Then documents with *n-1* terms
 3. Continue until enough results are found
 
-This ensures documents with better term coverage rank higher, addressing a common frustration with search engines where partial matches outrank complete matches.
+This ensures documents with better term coverage rank higher, addressing a
+common frustration with search engines where partial matches outrank complete
+matches.
 
 ### 5.2 Term Proximity Scoring
 
 When `:index-position? true` is enabled, a two-stage ranking applies:
+
 1. TF-IDF scoring produces top `m * k` candidates
 2. Proximity scoring re-ranks the top `k` results
 
-This reflects the intuition that query terms appearing closer together indicate higher relevance.
+This reflects the intuition that query terms appearing closer together indicate
+higher relevance.
 
 ---
 
@@ -338,24 +360,32 @@ d.search(engine, 'red', { display: 'offsets' });
 
 </div>
 
-**Document References**: In Datalog's `fulltext`, results are datoms `[e a v]`. In standalone mode, the "doc-ref" can be anything—numbers, strings, maps—whatever uniquely identifies a document in your application. This flexibility lets you index external content without storing it in the database.
+**Document References**: In Datalog's `fulltext`, results are datoms `[e a v]`.
+In standalone mode, the "doc-ref" can be anything—numbers, strings,
+maps—whatever uniquely identifies a document in your application. This
+flexibility lets you index external content without storing it in the database.
 
 ---
 
 ## 7. Implementation Details
 
 The search indices are stored in LMDB sub-databases:
+
 - `terms` — map of term → term-info (id, max-weight, doc-frequency list)
 - `docs` — map of document id → doc reference and norm
 - `positions` — inverted lists for proximity (optional)
 
-Pre-computed norms load into memory on initialization. Term information loads per query. Document frequency lists use compressed bitmaps (Roaring Bitmaps) for efficient intersection/union operations.
+Pre-computed norms load into memory on initialization. Term information loads
+per query. Document frequency lists use compressed bitmaps (Roaring Bitmaps) for
+efficient intersection/union operations.
 
 ---
 
 ## 8. Asynchronous Indexing
 
-Full-text indexing is synchronous by default: a transaction updates source datoms and the full-text index before returning. This preserves read-your-writes behavior for `fulltext`.
+Full-text indexing is synchronous by default: a transaction updates source
+datoms and the full-text index before returning. This preserves read-your-writes
+behavior for `fulltext`.
 
 For high-ingestion workloads, a search domain can opt into async indexing:
 
@@ -376,10 +406,18 @@ or per domain:
              :indexing-mode   :async}}}
 ```
 
-In async mode, Datalevin commits the source datoms and a durable secondary-index job atomically. An in-process worker applies the search index update after commit and after DB-open recovery. Queries over that index are eventually consistent until the worker catches up. Use `secondary-index-status` or `wait-for-secondary-index` when an application needs to observe lag or wait for a specific transaction's index work.
+In async mode, Datalevin commits the source datoms and a durable secondary-index
+job atomically. An in-process worker applies the search index update after
+commit and after DB-open recovery. Queries over that index are eventually
+consistent until the worker catches up. Use `secondary-index-status` or
+`wait-for-secondary-index` when an application needs to observe lag or wait for
+a specific transaction's index work.
 
 ---
 
 ## Summary
 
-Full-text search in Datalevin is a first-class capability: tightly integrated, high-performance, and synchronous by default. Enable `:db/fulltext`, use the `fulltext` function with Clojure-style boolean expressions, and leverage search domains for organized indexing, without operating a separate search cluster.
+Full-text search in Datalevin is a first-class capability: tightly integrated,
+high-performance, and synchronous by default. Enable `:db/fulltext`, use the
+`fulltext` function with Clojure-style boolean expressions, and leverage search
+domains for organized indexing, without operating a separate search cluster.

@@ -17,6 +17,7 @@ This "index-first" architecture is what allows Datalog to perform complex joins 
 Every fact in Datalevin is a triple (a datom): `[Entity Attribute Value]`. To make searching efficient, Datalevin stores every datom in two different sorted orders within the underlying KV store (LMDB).
 
 ### 1.1 EAV (Entity-Attribute-Value)
+
 The EAV index is sorted primarily by the **Entity ID**, then by the **Attribute**, and finally by the **Value**.
 
 - **Structure**: `E -> A -> V`
@@ -24,6 +25,7 @@ The EAV index is sorted primarily by the **Entity ID**, then by the **Attribute*
 - **Query Role**: This index powers the **Pull API** and any join where the Entity is already known. Because all attributes for a single entity are stored contiguously in the B+Tree, retrieving a complete "document" for an entity is a single localized scan.
 
 ### 1.2 AVE (Attribute-Value-Entity)
+
 The AVE index is sorted primarily by the **Attribute**, then by the **Value**, and finally by the **Entity ID**.
 
 - **Structure**: `A -> V -> E`
@@ -58,73 +60,457 @@ Because **every attribute has an AVE index**, reverse navigation is just as fast
 
 ## 4. Index-Level APIs: Direct Access
 
-One of the most powerful features of Datalevin is that it exposes these indexes directly to the developer. You are not limited to the Datalog query engine; you can treat the indexes as **programmable capabilities**.
+One of the most powerful features of Datalevin is that it exposes these indexes
+directly to the developer. You are not limited to the Datalog query engine; you
+can treat the indexes as **programmable capabilities**.
 
-### 4.1 `d/datoms`: Low-Level Index Scans
-The `d/datoms` function allows you to perform a raw scan of an index. This is often faster than a full Datalog query for simple lookups.
+The Clojure examples below use `datalevin.core` as `d`. Java examples use
+`DatalevinInterop.coreInvokeBridge`, `Arrays.asList`, and assume `db` is the
+immutable database value from `DatalevinInterop.connectionDb(conn.handle())`.
+Python and JavaScript examples use the JSON API operation names; `conn_handle`
+is the handle returned by the JSON API `create-conn` operation, and
+colon-prefixed attribute strings are decoded as keywords by the JSON API.
+
+Direct index APIs return datoms in index order. They are best for simple, known
+access paths where you want the index itself, not the Datalog planner, to be the
+API boundary.
+
+### 4.1 Choosing an Index Access Function
+
+| Function | Use it when | Index behavior |
+| --- | --- | --- |
+| `datoms` | You know the target index and a prefix of its sort key. | Scans `:eav` or `:ave` in that index's natural order. |
+| `search-datoms` | You have an `(e, a, v)` pattern with wildcards. | Chooses an efficient index for the supplied components. |
+| `count-datoms` | You only need the number of matching datoms. | Counts the same wildcard pattern without materializing results. |
+| `seek-datoms` | You need a forward cursor starting at a lower bound. | Starts at the first datom greater than or equal to the supplied index key. |
+| `rseek-datoms` | You need a reverse cursor starting near an upper bound. | Same as `seek-datoms`, but walks backward. |
+| `index-range` | You need all values of one attribute between two bounds. | Scans the AVE range for one attribute. |
+
+For `:eav`, the positional components are `c1 = e`, `c2 = a`, and `c3 = v`. For
+`:ave`, they are `c1 = a`, `c2 = v`, and `c3 = e`.
+
+### 4.2 Prefix Scans with `datoms`
+
+Use `datoms` when you already know whether the lookup is entity-local (`:eav`)
+or value-local (`:ave`).
 
 <div class="multi-lang">
 
 ```clojure
-;; Get all attributes for entity 101 from the EAV index
+;; All datoms for entity 101, ordered by attribute and value.
 (d/datoms db :eav 101)
 
-;; Get all entities with age 30 from the AVE index
+;; A single attribute on entity 101.
+(d/datoms db :eav 101 :user/email)
+
+;; All entities whose :user/age value is 30.
 (d/datoms db :ave :user/age 30)
 ```
 
 ```java
-// Get all attributes for entity 101 from the EAV index
-Datalevin.datoms(db, "eav", 101);
+// All datoms for entity 101, ordered by attribute and value.
+DatalevinInterop.coreInvokeBridge(
+    "datoms",
+    Arrays.asList(db, DatalevinInterop.keyword("eav"), 101)
+);
 
-// Get all entities with age 30 from the AVE index
-Datalevin.datoms(db, "ave", "user/age", 30);
+// A single attribute on entity 101.
+DatalevinInterop.coreInvokeBridge(
+    "datoms",
+    Arrays.asList(db, DatalevinInterop.keyword("eav"),
+                  101, DatalevinInterop.keyword("user/email"))
+);
+
+// All entities whose :user/age value is 30.
+DatalevinInterop.coreInvokeBridge(
+    "datoms",
+    Arrays.asList(db, DatalevinInterop.keyword("ave"),
+                  DatalevinInterop.keyword("user/age"), 30)
+);
 ```
 
 ```python
-# Get all attributes for entity 101 from the EAV index
-d.datoms(db, "eav", 101)
+# All datoms for entity 101, ordered by attribute and value.
+exec_json("datoms", {"conn": conn_handle, "index": "eav", "c1": 101})
 
-# Get all entities with age 30 from the AVE index
-d.datoms(db, "ave", "user/age", 30)
+# A single attribute on entity 101.
+exec_json("datoms", {"conn": conn_handle, "index": "eav",
+                     "c1": 101, "c2": ":user/email"})
+
+# All entities whose :user/age value is 30.
+exec_json("datoms", {"conn": conn_handle, "index": "ave",
+                     "c1": ":user/age", "c2": 30})
 ```
 
 ```javascript
-// Get all attributes for entity 101 from the EAV index
-d.datoms(db, 'eav', 101);
+// All datoms for entity 101, ordered by attribute and value.
+await interop().execJson('datoms', { conn: connHandle, index: 'eav', c1: 101 });
 
-// Get all entities with age 30 from the AVE index
-d.datoms(db, 'ave', 'user/age', 30);
+// A single attribute on entity 101.
+await interop().execJson('datoms', {
+  conn: connHandle,
+  index: 'eav',
+  c1: 101,
+  c2: ':user/email'
+});
+
+// All entities whose :user/age value is 30.
+await interop().execJson('datoms', {
+  conn: connHandle,
+  index: 'ave',
+  c1: ':user/age',
+  c2: 30
+});
 ```
 
 </div>
 
-### 4.2 `d/index-range`: Precise Range Scans
-The `d/index-range` function allows you to scan a specific part of the AVE index using a range of values.
+### 4.3 Wildcard Lookup with `search-datoms`
+
+Use `search-datoms` when you want to describe the logical datom pattern as `(e,
+a, v)` and let Datalevin choose the index. A `nil` component is a wildcard. In
+Java and JSON API calls, omit a wildcard key from the argument map.
 
 <div class="multi-lang">
 
 ```clojure
-;; Find users with age between 20 and 30
-(d/index-range db :user/age 20 30)
+;; All attributes and values for entity 101.
+(d/search-datoms db 101 nil nil)
+
+;; All entities whose :user/age value is 30.
+(d/search-datoms db nil :user/age 30)
+
+;; The exact datom, if present.
+(d/search-datoms db 101 :user/email "ada@example.com")
 ```
 
 ```java
-// Find users with age between 20 and 30
-Datalevin.indexRange(db, "user/age", 20, 30);
+// All attributes and values for entity 101.
+DatalevinInterop.coreInvokeBridge(
+    "search-datoms",
+    Arrays.asList(db, 101, null, null)
+);
+
+// All entities whose :user/age value is 30.
+DatalevinInterop.coreInvokeBridge(
+    "search-datoms",
+    Arrays.asList(db, null, DatalevinInterop.keyword("user/age"), 30)
+);
+
+// The exact datom, if present.
+DatalevinInterop.coreInvokeBridge(
+    "search-datoms",
+    Arrays.asList(db, 101, DatalevinInterop.keyword("user/email"),
+                  "ada@example.com")
+);
 ```
 
 ```python
-# Find users with age between 20 and 30
-d.index_range(db, "user/age", 20, 30)
+# All attributes and values for entity 101.
+exec_json("search-datoms", {"conn": conn_handle, "e": 101})
+
+# All entities whose :user/age value is 30.
+exec_json("search-datoms", {"conn": conn_handle, "a": ":user/age", "v": 30})
+
+# The exact datom, if present.
+exec_json("search-datoms", {
+    "conn": conn_handle,
+    "e": 101,
+    "a": ":user/email",
+    "v": "ada@example.com"
+})
 ```
 
 ```javascript
-// Find users with age between 20 and 30
-d.indexRange(db, 'user/age', 20, 30);
+// All attributes and values for entity 101.
+await interop().execJson('search-datoms', { conn: connHandle, e: 101 });
+
+// All entities whose :user/age value is 30.
+await interop().execJson('search-datoms', {
+  conn: connHandle,
+  a: ':user/age',
+  v: 30
+});
+
+// The exact datom, if present.
+await interop().execJson('search-datoms', {
+  conn: connHandle,
+  e: 101,
+  a: ':user/email',
+  v: 'ada@example.com'
+});
 ```
 
 </div>
+
+### 4.4 Counting with `count-datoms`
+
+Use `count-datoms` when a query path needs selectivity, pagination totals, or a
+cheap existence check.
+
+<div class="multi-lang">
+
+```clojure
+;; How many datoms are attached to entity 101?
+(d/count-datoms db 101 nil nil)
+
+;; How many users have age 30?
+(d/count-datoms db nil :user/age 30)
+```
+
+```java
+// How many datoms are attached to entity 101?
+DatalevinInterop.coreInvokeBridge(
+    "count-datoms",
+    Arrays.asList(db, 101, null, null)
+);
+
+// How many users have age 30?
+DatalevinInterop.coreInvokeBridge(
+    "count-datoms",
+    Arrays.asList(db, null, DatalevinInterop.keyword("user/age"), 30)
+);
+```
+
+```python
+# How many datoms are attached to entity 101?
+exec_json("count-datoms", {"conn": conn_handle, "e": 101})
+
+# How many users have age 30?
+exec_json("count-datoms", {"conn": conn_handle, "a": ":user/age", "v": 30})
+```
+
+```javascript
+// How many datoms are attached to entity 101?
+await interop().execJson('count-datoms', { conn: connHandle, e: 101 });
+
+// How many users have age 30?
+await interop().execJson('count-datoms', {
+  conn: connHandle,
+  a: ':user/age',
+  v: 30
+});
+```
+
+</div>
+
+`count-datoms` is more direct than `(count (search-datoms ...))` because it does
+not have to allocate the matching datoms.
+
+### 4.5 Cursor Scans with `seek-datoms` and `rseek-datoms`
+
+Use `seek-datoms` when you want to start at an index key and continue forward.
+If no datom exactly matches the supplied components, Datalevin starts at the
+first datom that is greater in that index order. `rseek-datoms` uses the same
+idea in reverse. These are cursors, so they do not stop at a prefix
+automatically; use `datoms`, `index-range`, `take`, `limit`, or filtering when
+the scan must stay inside one logical range.
+
+<div class="multi-lang">
+
+```clojure
+;; Start a forward scan at :user/age 30 in AVE order.
+(d/seek-datoms db :ave :user/age 30 nil 10)
+
+;; Start a reverse scan near the high end of :user/created-at.
+(d/rseek-datoms db :ave :user/created-at 4102444800000 nil 5)
+
+;; Start at the :user/email position inside entity 101.
+(d/seek-datoms db :eav 101 :user/email)
+```
+
+```java
+// Start a forward scan at :user/age 30 in AVE order.
+DatalevinInterop.coreInvokeBridge(
+    "seek-datoms",
+    Arrays.asList(db, DatalevinInterop.keyword("ave"),
+                  DatalevinInterop.keyword("user/age"), 30, null, 10)
+);
+
+// Start a reverse scan near the high end of :user/created-at.
+DatalevinInterop.coreInvokeBridge(
+    "rseek-datoms",
+    Arrays.asList(db, DatalevinInterop.keyword("ave"),
+                  DatalevinInterop.keyword("user/created-at"),
+                  4102444800000L, null, 5)
+);
+
+// Start at the :user/email position inside entity 101.
+DatalevinInterop.coreInvokeBridge(
+    "seek-datoms",
+    Arrays.asList(db, DatalevinInterop.keyword("eav"),
+                  101, DatalevinInterop.keyword("user/email"))
+);
+```
+
+```python
+# Start a forward scan at :user/age 30 in AVE order.
+exec_json("seek-datoms", {"conn": conn_handle, "index": "ave",
+                          "c1": ":user/age", "c2": 30, "limit": 10})
+
+# Start a reverse scan near the high end of :user/created-at.
+exec_json("rseek-datoms", {"conn": conn_handle, "index": "ave",
+                           "c1": ":user/created-at",
+                           "c2": 4102444800000,
+                           "limit": 5})
+
+# Start at the :user/email position inside entity 101.
+exec_json("seek-datoms", {"conn": conn_handle, "index": "eav",
+                          "c1": 101, "c2": ":user/email"})
+```
+
+```javascript
+// Start a forward scan at :user/age 30 in AVE order.
+await interop().execJson('seek-datoms', {
+  conn: connHandle,
+  index: 'ave',
+  c1: ':user/age',
+  c2: 30,
+  limit: 10
+});
+
+// Start a reverse scan near the high end of :user/created-at.
+await interop().execJson('rseek-datoms', {
+  conn: connHandle,
+  index: 'ave',
+  c1: ':user/created-at',
+  c2: 4102444800000,
+  limit: 5
+});
+
+// Start at the :user/email position inside entity 101.
+await interop().execJson('seek-datoms', {
+  conn: connHandle,
+  index: 'eav',
+  c1: 101,
+  c2: ':user/email'
+});
+```
+
+</div>
+
+The JSON API uses `limit` and `offset` for paging sequence results. In Clojure,
+`seek-datoms` and `rseek-datoms` also have an arity that accepts `n` as the
+final argument.
+
+### 4.6 Range Scans with `index-range`
+
+Use `index-range` for the most common AVE range pattern: one attribute, lower
+bound, upper bound.
+
+<div class="multi-lang">
+
+```clojure
+;; Find users with age between 20 and 30, inclusive.
+(d/index-range db :user/age 20 30)
+
+;; Return just the matching entity ids.
+(map d/datom-e (d/index-range db :user/age 20 30))
+```
+
+```java
+// Find users with age between 20 and 30, inclusive.
+DatalevinInterop.coreInvokeBridge(
+    "index-range",
+    Arrays.asList(db, DatalevinInterop.keyword("user/age"), 20, 30)
+);
+
+// Return just the matching entity ids.
+List<?> datoms = (List<?>) DatalevinInterop.coreInvokeBridge(
+    "index-range",
+    Arrays.asList(db, DatalevinInterop.keyword("user/age"), 20, 30)
+);
+List<?> entityIds = datoms.stream()
+    .map(datom -> ((Map<?, ?>) datom).get(DatalevinInterop.keyword("e")))
+    .toList();
+```
+
+```python
+# Find users with age between 20 and 30, inclusive.
+datoms = exec_json("index-range", {"conn": conn_handle,
+                                   "attr": ":user/age",
+                                   "start": 20,
+                                   "end": 30})
+
+# Return just the matching entity ids.
+entity_ids = [datom["e"] for datom in datoms]
+```
+
+```javascript
+// Find users with age between 20 and 30, inclusive.
+const datoms = await interop().execJson('index-range', {
+  conn: connHandle,
+  attr: ':user/age',
+  start: 20,
+  end: 30
+});
+
+// Return just the matching entity ids.
+const entityIds = datoms.map((datom) => datom.e);
+```
+
+</div>
+
+### 4.7 Reading Datom Fields
+
+Clojure datoms have dedicated accessors. JSON API results encode datoms as maps
+with `e`, `a`, `v`, `tx`, and `added` fields. Java `coreInvokeBridge` results
+use Java maps whose keys are Clojure keywords such as `:e`, `:a`, and `:v`.
+
+<div class="multi-lang">
+
+```clojure
+(for [datom (d/datoms db :ave :user/age 30)]
+  {:entity (d/datom-e datom)
+   :attr   (d/datom-a datom)
+   :value  (d/datom-v datom)})
+```
+
+```java
+List<?> datoms = (List<?>) DatalevinInterop.coreInvokeBridge(
+    "datoms",
+    Arrays.asList(db, DatalevinInterop.keyword("ave"),
+                  DatalevinInterop.keyword("user/age"), 30)
+);
+
+for (Object item : datoms) {
+    Map<?, ?> datom = (Map<?, ?>) item;
+    Object entity = datom.get(DatalevinInterop.keyword("e"));
+    Object attr = datom.get(DatalevinInterop.keyword("a"));
+    Object value = datom.get(DatalevinInterop.keyword("v"));
+}
+```
+
+```python
+datoms = exec_json("datoms", {"conn": conn_handle, "index": "ave",
+                              "c1": ":user/age", "c2": 30})
+
+for datom in datoms:
+    entity = datom["e"]
+    attr = datom["a"]
+    value = datom["v"]
+```
+
+```javascript
+const datoms = await interop().execJson('datoms', {
+  conn: connHandle,
+  index: 'ave',
+  c1: ':user/age',
+  c2: 30
+});
+
+for (const datom of datoms) {
+  const entity = datom.e;
+  const attr = datom.a;
+  const value = datom.v;
+}
+```
+
+</div>
+
+These functions are intentionally low-level. Prefer Datalog for joins, rules,
+result shaping, and complex predicates. Reach for direct index access when the
+shape is simple enough that the index order itself is the query plan.
 
 ---
 
@@ -144,12 +530,12 @@ This nested storage eliminates redundant prefixes. In EAV, an entity with 10 att
 
 ---
 
-## 7. Summary: Indexes as Capabilities
+## 6. Summary: Indexes as Capabilities
 
 By making every attribute indexed by default and providing direct API access to those indexes, Datalevin transforms the database from a "black box" into a set of **programmable capabilities**.
 
 - **EAV** provides locality for entities and documents.
 - **AVE** provides fast lookups and range scans for values.
-- **Direct Access** allows you to build custom traversal logic that bypasses the query optimizer when absolute performance is required.
+- **Direct Access** gives you `datoms`, `search-datoms`, `count-datoms`, `seek-datoms`, `rseek-datoms`, and `index-range` for custom traversal logic when the access pattern is already known.
 
 Understanding these indexes is the first step toward mastering the more specialized capabilities of Datalevin, such as full-text search and vector similarity, which we will explore in the following chapters.
