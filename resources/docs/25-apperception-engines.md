@@ -1,10 +1,10 @@
 ---
 title: "Apperception Engines and Long-Term State"
-chapter: 30
-part: "VII — Datalevin for Intelligent Systems"
+chapter: 25
+part: "VI — Datalevin for Intelligent Systems"
 ---
 
-# Chapter 30: Apperception Engines and Long-Term State
+# Chapter 25: Apperception Engines and Long-Term State
 
 While "memory" is about storage and retrieval, **Apperception** is about the integration of new information into a coherent internal model of the world. An AI agent with apperception doesn't just record events; it understands how those events change its "core beliefs" and future goals.
 

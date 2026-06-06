@@ -1,10 +1,10 @@
 ---
 title: "Persistent Agent Memory Architectures"
-chapter: 29
-part: "VII — Datalevin for Intelligent Systems"
+chapter: 24
+part: "VI — Datalevin for Intelligent Systems"
 ---
 
-# Chapter 29: Persistent Agent Memory Architectures
+# Chapter 24: Persistent Agent Memory Architectures
 
 The greatest limitation of modern Large Language Models (LLMs) is their lack of state. While they possess vast general knowledge, they are "reset" at the start of every session. To build true **Intelligent Agents**, we must provide them with a persistent memory—a place to store past experiences, learned facts, and evolving goals.
 

@@ -1,10 +1,10 @@
 ---
 title: "Datalog Schema Reference"
-chapter: 39
-part: "IX — Appendices"
+chapter: 29
+part: "VII — Appendices"
 ---
 
-# Appendix A: Datalog Schema Reference
+# Chapter 29: Datalog Schema Reference
 
 This appendix is a compact reference for Datalevin Datalog schema maps. For
 design guidance, see Chapter 5 and Chapter 11. For specialized index behavior,

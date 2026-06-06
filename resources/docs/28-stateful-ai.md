@@ -1,14 +1,14 @@
 ---
 title: "Building Stateful AI Applications"
-chapter: 33
-part: "VII — Datalevin for Intelligent Systems"
+chapter: 28
+part: "VI — Datalevin for Intelligent Systems"
 ---
 
-# Chapter 33: Building Stateful AI Applications
+# Chapter 28: Building Stateful AI Applications
 
 The true potential of AI is not found in isolated chat sessions, but in applications that maintain a persistent state. A "Stateful AI" application is one where the AI's knowledge, goals, and behavior evolve alongside its users.
 
-This chapter synthesizes the patterns from Part VII into three practical application examples, showing how Datalevin serves as the central nervous system for stateful AI.
+This chapter synthesizes the patterns from Part VI into three practical application examples, showing how Datalevin serves as the central nervous system for stateful AI.
 
 ---
 
@@ -94,7 +94,7 @@ In a complex project, multiple agents might work together—one for coding, one 
 
 - **Common Workspace**: All agents share a single Datalevin database.
 - **Coordination via Graph**: Agents post tasks as entities and link them to each other.
-- **Security**: Use **Datalevin Server RBAC** (Chapter 26) to ensure the "Code Agent" can modify source entities, but the "Documentation Agent" can only view them.
+- **Security**: Use **Datalevin Server RBAC** (Chapter 23) to ensure the "Code Agent" can modify source entities, but the "Documentation Agent" can only view them.
 
 By sharing a transactionally consistent environment, agents can coordinate their efforts without complex message-passing protocols.
 

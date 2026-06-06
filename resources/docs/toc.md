@@ -44,58 +44,34 @@ Part IV — Indexes as Capabilities
 
 18. Combining Indexes: Hybrid Queries Across KV, Logic, and Search
 
-Part V — Performance and Dataflow
+Part V — Performance and Operations
 
 19. Batching, Sorting, and High-Throughput Ingestion
 
-20. Memory Layout and Storage Tuning
+20. Storage Tuning, Durability, and Database Maintenance
 
-21. Query Planning and Optimization
+21. Query Planning, Optimization, and Profiling
 
-22. Profiling Queries and Understanding Execution
+22. Rules Engine and Recursive Evaluation
 
-23. Incremental Computation and Semi-Naive Evaluation
+23. Client-Server, Security, Deployment, and Production Operations
 
-Part VI — Systems and Operations
+Part VI — Datalevin for Intelligent Systems
 
-24. Durability, Snapshots, and Backup Strategies
+24. Persistent Agent Memory Architectures
 
-25. Client-Server Architecture: Protocols, HA, and Security
+25. Apperception Engines and Long-Term State
 
-26. Encryption at Rest and Security Models
+26. Episodic and Semantic Memory
 
-27. Deployment Patterns: Embedded, Server, Replicas, HA, MCP, and Pods
+27. Hybrid Retrieval: Datalog + Full-Text + Vector
 
-28. Monitoring, Debugging, and Production Checklist
+28. Building Stateful AI Applications
 
-Part VII — Datalevin for Intelligent Systems
+Part VII — Appendices
 
-29. Persistent Agent Memory Architectures
+29. Datalog Schema Reference
 
-30. Apperception Engines and Long-Term State
+30. Datalog Built-In Functions Reference
 
-31. Episodic and Semantic Memory
-
-32. Hybrid Retrieval: Datalog + Full-Text + Vector
-
-33. Building Stateful AI Applications
-
-Part VIII — Internals and Extensions
-
-34. Inside Datalevin: Storage, Indexes, and Execution (with Concurrency & MVCC)
-
-35. Datalog Evaluation Strategies
-
-36. Extending Datalevin: Custom Indexes, Predicates, and UDFs
-
-37. Embedding Datalevin in Applications
-
-38. Contributing to Datalevin and the Ecosystem
-
-Part IX — Appendices
-
-39. Datalog Schema Reference
-
-40. Key-Value API Reference
-
-41. Datalog Built-In Functions Reference
+31. Key-Value API Reference

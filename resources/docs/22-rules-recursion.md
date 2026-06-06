@@ -1,14 +1,20 @@
 ---
-title: "Incremental Computation and Semi-Naive Evaluation"
-chapter: 23
-part: "V — Performance and Dataflow"
+title: "Rules Engine and Recursive Evaluation"
+chapter: 22
+part: "V — Performance and Operations"
 ---
 
-# Chapter 23: Rules Engine and Recursive Evaluation
+# Chapter 22: Rules Engine and Recursive Evaluation
 
 Datalog's power lies in its ability to define **recursive rules** that derive new facts from base data. However, evaluating recursive rules efficiently requires sophisticated algorithms to avoid exponential blowup.
 
 This chapter explores Datalevin's **bottom-up rules engine**, which implements the latest research advances in Datalog evaluation with several innovations of its own.
+
+Top-down logic evaluation, as in Prolog, starts from a goal and works backward.
+It can be focused, but recursive database queries with cycles can loop or repeat
+work. Datalevin uses bottom-up, set-oriented evaluation for recursive rules, then
+uses magic-set rewrites and outer-query bindings to keep that evaluation focused
+on the part of the graph the user actually asked about.
 
 ---
 
@@ -38,6 +44,10 @@ Datalevin uses **Semi-Naive Evaluation (SNE)**, the standard bottom-up strategy:
 3.  **Stratification**: Rules run in strongly connected components (strata) in topological order
 
 This ensures every fact is derived exactly once, providing linear performance for deep graph traversals.
+
+Evaluation is set-oriented rather than tuple-at-a-time. Joins operate over
+candidate sets and iterators so the storage layer can use sequential page scans,
+merge-style operations, and bulk filtering rather than repeated random lookups.
 
 ---
 
@@ -75,6 +85,12 @@ For recursive rules that meet **T-stratification** criteria, Datalevin implement
 - Avoids storing intermediate delta sets
 - Significantly reduces memory usage for long recursion chains
 
+### 4.4 Stratified Negation
+
+Datalevin supports `not` and `not-join` with stratified semantics: facts needed
+by a negative clause are computed before the negation is applied. This keeps rule
+evaluation consistent and gives recursive queries a single, well-defined result.
+
 ---
 
 ## 5. Benchmarks
@@ -86,7 +102,7 @@ Datalevin's rules engine has been validated against industry benchmarks:
 
 ---
 
-## 7. Summary: Why Bottom-Up Wins
+## 6. Summary: Why Bottom-Up Wins
 
 Datalevin's rules engine combines academic rigor with practical innovations:
 

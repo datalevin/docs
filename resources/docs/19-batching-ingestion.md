@@ -1,7 +1,7 @@
 ---
 title: "Batching, Sorting, and High-Throughput Ingestion"
 chapter: 19
-part: "V — Performance and Dataflow"
+part: "V — Performance and Operations"
 ---
 
 # Chapter 19: Batching, Sorting, and High-Throughput Ingestion
@@ -242,6 +242,6 @@ When you need to ingest data at scale, follow this checklist:
 4.  **Sort your data**: Sort by Entity ID before transacting to minimize B+Tree fragmentation.
 5.  **Use `init-db`/`fill-db`** for the fastest possible initial load into an empty database.
 
-For non-durable modes that trade safety for speed, see Chapter 24.
+For non-durable modes that trade safety for speed, see Chapter 20.
 
 By following these patterns, you can achieve extreme write throughput.

@@ -222,9 +222,9 @@ you can follow a goal-based path:
 
 - Application builders: Part I, Part II, then Part III and Part IV.
 - Data modelers: Part I, Part III, then Part IV.
-- Operators and platform engineers: Part I, Part II, then Part VI.
-- AI system builders: Part I through Part IV, then Part VII.
-- Contributors and internals-focused readers: Part I, Part II, then Part VIII.
+- Operators and platform engineers: Part I, Part II, then Part V.
+- AI system builders: Part I through Part IV, then Part VI.
+- Internals-focused readers: Part I, Part II, then Part V.
 
 Our goal is not only to teach you how to use Datalevin, but to introduce a
 different way of thinking about databases: as logical, composable, and

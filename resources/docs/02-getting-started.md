@@ -361,7 +361,7 @@ force `:wal? true` and default to the `:strict` WAL durability profile.
 Membership changes are explicit operator actions through
 `datalevin.client/ha-update-membership!`.
 
-Chapter 25 covers details of server behavior, client tuning, async read
+Chapter 23 covers details of server behavior, client tuning, async read
 replicas, and HA.
 
 ---
