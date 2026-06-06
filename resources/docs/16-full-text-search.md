@@ -78,7 +78,8 @@ const schema = {
 
 </div>
 
-Attributes with `:db.fulltext/autoDomain true` become their own search domain (named after the attribute). By default, all full-text attributes participate in the `datalevin` domain.
+The concept of search domains and `:db.fulltext/autoDomain` will be explained in
+section 3.
 
 ---
 
@@ -121,7 +122,8 @@ d.q('[:find ?e ?a ?v ' +
 
 ### 2.1 Attribute-Specific Search
 
-To search within a specific attribute:
+To search within a specific attribute, that attribute must have
+`:db.fulltext/autoDomain true` in the schema:
 
 <div class="multi-lang">
 
@@ -165,7 +167,7 @@ Pass an option map as the last argument:
 ```clojure
 (d/q '[:find ?e ?a ?v
        :in $ ?q
-       :where [(fulltext $ :post/content ?q {:top 5}) [[?e ?a ?v]]]]
+       :where [(fulltext $ ?q {:top 5}) [[?e ?a ?v]]]]
      db
      "database")
 ```
@@ -173,21 +175,21 @@ Pass an option map as the last argument:
 ```java
 Datalevin.q("[:find ?e ?a ?v " +
             " :in $ ?q " +
-            " :where [(fulltext $ :post/content ?q {:top 5}) [[?e ?a ?v]]]]",
+            " :where [(fulltext $ ?q {:top 5}) [[?e ?a ?v]]]]",
             db, "database");
 ```
 
 ```python
 d.q('[:find ?e ?a ?v '
      ' :in $ ?q '
-     ' :where [(fulltext $ :post/content ?q {:top 5}) [[?e ?a ?v]]]]',
+     ' :where [(fulltext $ ?q {:top 5}) [[?e ?a ?v]]]]',
      db, "database")
 ```
 
 ```javascript
 d.q('[:find ?e ?a ?v ' +
      ' :in $ ?q ' +
-     ' :where [(fulltext $ :post/content ?q {:top 5}) [[?e ?a ?v]]]]',
+     ' :where [(fulltext $ ?q {:top 5}) [[?e ?a ?v]]]]',
      db, 'database');
 ```
 
@@ -195,9 +197,20 @@ d.q('[:find ?e ?a ?v ' +
 
 Available options:
 - `:top` — number of results (default 10)
-- `:display` — `:refs` (default), `:refs+scores`, `:texts`, `:offsets`, or `:texts+offsets`
+- `:display` — `:refs` (default), `:refs+scores`, `:texts`, `:offsets`, or
+  `:texts+offsets`
 - `:domains` — list of search domains to query
 - `:doc-filter` — predicate function to filter results
+
+`:refs` returns the reference to the documents, in Datalog store, that's the
+datoms themselves, which can be destructured into `?e`, `?a`, and `?v` component
+variables.
+
+`:scores` are the relevant score of the match. `:texts` are the original text.
+
+`:offsets` are the positions of the search terms in the document, which
+requires the search engine has the option `:index-position? true` (default is
+`false`) to be usable.
 
 When `:display` is not `:refs`, destructure the extra values in the returned
 tuple. For example, relevance scores use `[e a v score]`:
@@ -213,7 +226,210 @@ tuple. For example, relevance scores use `[e a v score]`:
 
 ---
 
-## 3. Search Expressions and Boolean Logic
+## 3. Search Domains
+
+A search domain is a named full-text index. Each domain has its own search
+engine, term statistics, analyzer settings, position index setting, and indexing
+mode. Domains let one database support different search surfaces without
+running a separate service: public site search, private draft search,
+autocomplete, admin-only search, or an attribute-specific index can all live in
+the same Datalevin store.
+
+Domains are strings. They are not Datalog namespaces, and they are not inferred
+from an attribute namespace unless you ask Datalevin to create an automatic
+attribute domain.
+
+There are two separate decisions:
+
+- Schema properties assign attributes to domains.
+- Store options configure the search engine used by each domain.
+
+### 3.1 Assigning Attributes to Domains
+
+Full-text attributes enter domains according to these rules:
+
+| Schema on a `:db/fulltext` attribute | Domain membership |
+| --- | --- |
+| No domain keys | The default `"datalevin"` domain |
+| `:db.fulltext/domains ["public"]` | Only the listed domains |
+| `:db.fulltext/domains ["datalevin" "public"]` | The default domain plus `public` |
+| `:db.fulltext/autoDomain true` | Also an attribute domain, such as `"post/title"` |
+
+If both `:db.fulltext/domains` and `:db.fulltext/autoDomain` are present, the
+attribute participates in all listed domains plus its attribute domain. Include
+`"datalevin"` explicitly when an attribute with listed domains should also be
+searched through the default domain.
+
+Full-text attribute domains use the attribute name without the leading colon:
+`:title` becomes `"title"` and `:post/title` becomes `"post/title"`. This rule
+is specific to full-text search. Vector and embedding domains use a different
+storage naming rule for namespaced attributes.
+
+<div class="multi-lang">
+
+```clojure
+(def search-schema
+  {:post/title {:db/valueType :db.type/string
+                :db/fulltext  true
+                :db.fulltext/domains ["public"]
+                :db.fulltext/autoDomain true}
+   :post/body  {:db/valueType :db.type/string
+                :db/fulltext  true
+                :db.fulltext/domains ["public"]}
+   :post/draft {:db/valueType :db.type/string
+                :db/fulltext  true
+                :db.fulltext/domains ["private"]}
+   :note/body  {:db/valueType :db.type/string
+                :db/fulltext  true}})
+```
+
+```java
+Map<String, Object> searchSchema = Map.of(
+    "post/title", Map.of(
+        "db/valueType", "db.type/string",
+        "db/fulltext", true,
+        "db.fulltext/domains", List.of("public"),
+        "db.fulltext/autoDomain", true
+    ),
+    "post/body", Map.of(
+        "db/valueType", "db.type/string",
+        "db/fulltext", true,
+        "db.fulltext/domains", List.of("public")
+    ),
+    "post/draft", Map.of(
+        "db/valueType", "db.type/string",
+        "db/fulltext", true,
+        "db.fulltext/domains", List.of("private")
+    ),
+    "note/body", Map.of(
+        "db/valueType", "db.type/string",
+        "db/fulltext", true
+    )
+);
+```
+
+```python
+search_schema = {
+    "post/title": {
+        "db/valueType": "db.type/string",
+        "db/fulltext": True,
+        "db.fulltext/domains": ["public"],
+        "db.fulltext/autoDomain": True
+    },
+    "post/body": {
+        "db/valueType": "db.type/string",
+        "db/fulltext": True,
+        "db.fulltext/domains": ["public"]
+    },
+    "post/draft": {
+        "db/valueType": "db.type/string",
+        "db/fulltext": True,
+        "db.fulltext/domains": ["private"]
+    },
+    "note/body": {
+        "db/valueType": "db.type/string",
+        "db/fulltext": True
+    }
+}
+```
+
+```javascript
+const searchSchema = {
+  'post/title': {
+    'db/valueType': 'db.type/string',
+    'db/fulltext': true,
+    'db.fulltext/domains': ['public'],
+    'db.fulltext/autoDomain': true
+  },
+  'post/body': {
+    'db/valueType': 'db.type/string',
+    'db/fulltext': true,
+    'db.fulltext/domains': ['public']
+  },
+  'post/draft': {
+    'db/valueType': 'db.type/string',
+    'db/fulltext': true,
+    'db.fulltext/domains': ['private']
+  },
+  'note/body': {
+    'db/valueType': 'db.type/string',
+    'db/fulltext': true
+  }
+};
+```
+
+</div>
+
+In this schema, `:post/title` is indexed in `"public"` and `"post/title"`,
+`:post/body` is indexed in `"public"`, `:post/draft` is indexed in
+`"private"`, and `:note/body` is indexed in the default `"datalevin"` domain.
+
+### 3.2 Configuring Domains
+
+Use `:search-domains` to configure named domains. A domain mentioned in schema
+but omitted from `:search-domains` is still created with default search-engine
+settings. Use `:search-opts` for the default `"datalevin"` domain.
+
+```clojure
+(def conn
+  (d/create-conn
+    "/tmp/search-domains"
+    search-schema
+    {:search-opts
+     {:index-position? true}
+
+     :search-domains
+     {"public"     {:index-position? true}
+      "private"    {:indexing-mode :async}
+      "post/title" {:index-position? true}}}))
+```
+
+Use per-domain configuration when search surfaces need different behavior. For
+example, a public documentation domain may enable phrase search with
+`:index-position? true`, while a high-ingestion private domain may use
+`:indexing-mode :async`. Autocomplete can be another domain over the same
+attribute with a prefix analyzer.
+
+### 3.3 Querying Domains
+
+An unqualified `fulltext` call searches all full-text domains in the database.
+Use `:domains` to limit the query to one or more named domains:
+
+```clojure
+;; Search every full-text domain.
+(d/q '[:find ?e ?a ?v
+       :where [(fulltext $ "clojure") [[?e ?a ?v]]]]
+     db)
+
+;; Search only public text.
+(d/q '[:find ?e ?a ?v
+       :where [(fulltext $ "clojure" {:domains ["public"]}) [[?e ?a ?v]]]]
+     db)
+
+;; Search only private drafts.
+(d/q '[:find ?e ?a ?v
+       :where [(fulltext $ "roadmap" {:domains ["private"]}) [[?e ?a ?v]]]]
+     db)
+
+;; Search only :post/title through its auto-created attribute domain.
+(d/q '[:find ?e ?v
+       :where [(fulltext $ :post/title "clojure") [[?e _ ?v]]]]
+     db)
+```
+
+The attribute-specific form is a convenience for querying the attribute domain.
+It is available only when the attribute has `:db.fulltext/autoDomain true`.
+Domain-specific search is more general: it can search any named domain, including
+domains that combine several attributes.
+
+In summary, when no explicit domains are supplied, full-text attributes
+participate in the default `"datalevin"` domain. Attributes with
+`:db.fulltext/autoDomain true` also become their own search domain, named after
+the attribute without the leading colon, such as `"post/title"`.
+
+---
+
+## 4. Search Expressions and Boolean Logic
 
 Datalevin uses Clojure data structures for search expressions, enabling
 arbitrary boolean combinations:
@@ -225,7 +441,7 @@ arbitrary boolean combinations:
 [:and "clojure" [:not "java"]]           ; clojure but not java
 ```
 
-### 3.1 Phrase Search
+### 4.1 Phrase Search
 
 Phrases are encoded as maps. Requires `:index-position? true` at index time:
 
@@ -233,7 +449,7 @@ Phrases are encoded as maps. Requires `:index-position? true` at index time:
 [:and {:phrase "little lamb"} "fleece"]
 ```
 
-### 3.2 Complex Expressions
+### 4.2 Complex Expressions
 
 Boolean operators can be arbitrarily nested:
 
@@ -243,7 +459,7 @@ Boolean operators can be arbitrarily nested:
 
 ---
 
-## 4. Analyzers: Tokenization and Normalization
+## 5. Analyzers: Tokenization and Normalization
 
 When you transact a string into a full-text attribute, it passes through an
 **Analyzer**:
@@ -256,11 +472,107 @@ Custom analyzers can be provided via the `:analyzer` option when creating a
 search engine. Utility functions for stemming, ngrams, and more are in
 `datalevin.search-utils`.
 
+### 5.1 Analyzer Pipelines with `datalevin.search-utils`
+
+The `datalevin.search-utils` namespace provides tokenizer and token-filter
+functions for building analyzers. An analyzer returns tokens as `[term position
+offset]` triples.
+
+```clojure
+(require '[datalevin.search-utils :as su])
+
+(def stem-analyzer
+  (su/create-analyzer
+    {:tokenizer (su/create-regexp-tokenizer #"\W+")
+     :token-filters [su/lower-case-token-filter
+                     su/en-stop-words-token-filter
+                     (su/create-stemming-token-filter "english")]}))
+
+(mapv vec (stem-analyzer "Running runners in databases"))
+;; => [["run" 0 0] ["runner" 1 8] ["databas" 3 19]]
+```
+
+Use the analyzer in Datalog full-text options when the search domain should use
+the same normalization at index time and query time:
+
+```clojure
+(def conn
+  (d/create-conn
+    "/tmp/posts"
+    {:post/body {:db/valueType :db.type/string
+                 :db/fulltext  true}}
+    {:search-opts {:analyzer stem-analyzer}}))
+
+(d/transact! conn
+  [{:db/id 10 :post/body "Runners are running fast"}
+   {:db/id 11 :post/body "Databases store data"}])
+
+(d/q '[:find [?e ...]
+       :where [(fulltext $ "run") [[?e _ _]]]]
+     (d/db conn))
+;; => [10]
+```
+
+### 5.2 Prefix and N-Gram Indexing
+
+For autocomplete, apply `prefix-token-filter` at index time, but use a normal
+query analyzer. This indexes `"search"` as `"s"`, `"se"`, `"sea"`, and so on,
+while a query for `"sea"` remains a single token.
+
+```clojure
+(def prefix-index-analyzer
+  (su/create-analyzer
+    {:tokenizer (su/create-regexp-tokenizer #"\W+")
+     :token-filters [su/lower-case-token-filter
+                     su/prefix-token-filter]}))
+
+(def query-analyzer
+  (su/create-analyzer
+    {:tokenizer (su/create-regexp-tokenizer #"\W+")
+     :token-filters [su/lower-case-token-filter]}))
+
+(def engine
+  (d/new-search-engine
+    (d/open-kv "/tmp/search-autocomplete")
+    {:analyzer       prefix-index-analyzer
+     :query-analyzer query-analyzer}))
+
+(d/add-doc engine 1 "search")
+(d/search engine "sea")
+;; => (1)
+```
+
+For fuzzy or substring-style matching, use ngrams. The example below indexes
+3-character grams, so `"Datalevin"` contributes tokens such as `"dat"`, `"ata"`,
+`"tal"`, and `"ale"`.
+
+```clojure
+(def trigram-analyzer
+  (su/create-analyzer
+    {:tokenizer (su/create-regexp-tokenizer #"\W+")
+     :token-filters [su/lower-case-token-filter
+                     (su/create-min-length-token-filter 3)
+                     (su/create-ngram-token-filter 3)]}))
+
+(def trigram-engine
+  (d/new-search-engine
+    (d/open-kv "/tmp/search-trigrams")
+    {:analyzer       trigram-analyzer
+     :query-analyzer trigram-analyzer}))
+
+(d/add-doc trigram-engine 1 "Datalevin")
+(d/add-doc trigram-engine 2 "Search")
+(d/search trigram-engine "tale")
+;; => (1)
+```
+
 ---
 
-## 5. Ranking: TF-IDF and T-Wand Algorithm
+## 6. Ranking: TF-IDF and T-Wand Algorithm
 
-Datalevin uses the **Vector Space Model** with `lnu.ltn` weighting:
+Datalevin uses the standard **Vector Space Model** and TF-IDF weighting
+described by Manning, Raghavan, and Schütze in *Introduction to Information
+Retrieval*, with `lnu.ltn` weighting schema:
 
 - **Document vectors**: log-weighted term frequency, no idf, pivoted unique
   normalization
@@ -270,10 +582,10 @@ Datalevin uses the **Vector Space Model** with `lnu.ltn` weighting:
 This weighting scheme handles document length well without penalizing longer
 documents.
 
-### 5.1 T-Wand Algorithm
+### 6.1 T-Wand Algorithm
 
-The search uses a **Tiered WAND** algorithm that processes documents in tiers by
-term coverage:
+The search uses a novel **Tiered WAND** algorithm, described in my
+T-Wand blog post, that processes documents in tiers by term coverage:
 
 1. First, documents containing *all* query terms
 2. Then documents with *n-1* terms
@@ -283,7 +595,7 @@ This ensures documents with better term coverage rank higher, addressing a
 common frustration with search engines where partial matches outrank complete
 matches.
 
-### 5.2 Term Proximity Scoring
+### 6.2 Term Proximity Scoring
 
 When `:index-position? true` is enabled, a two-stage ranking applies:
 
@@ -295,7 +607,7 @@ higher relevance.
 
 ---
 
-## 6. Standalone Search Engine
+## 7. Standalone Search Engine
 
 Datalevin can be used as a standalone search engine outside of Datalog:
 
@@ -367,7 +679,7 @@ flexibility lets you index external content without storing it in the database.
 
 ---
 
-## 7. Implementation Details
+## 8. Implementation Details
 
 The search indices are stored in LMDB sub-databases:
 
@@ -381,7 +693,7 @@ efficient intersection/union operations.
 
 ---
 
-## 8. Asynchronous Indexing
+## 9. Asynchronous Indexing
 
 Full-text indexing is synchronous by default: a transaction updates source
 datoms and the full-text index before returning. This preserves read-your-writes
@@ -398,12 +710,18 @@ For high-ingestion workloads, a search domain can opt into async indexing:
     {:search-opts {:indexing-mode :async}}))
 ```
 
-or per domain:
+or per domain, when the attribute is assigned to that domain:
 
 ```clojure
-{:search-domains
- {"content" {:index-position? true
-             :indexing-mode   :async}}}
+(def conn
+  (d/create-conn
+    "/tmp/search-db"
+    {:post/content {:db/valueType :db.type/string
+                    :db/fulltext  true
+                    :db.fulltext/domains ["content"]}}
+    {:search-domains
+     {"content" {:index-position? true
+                 :indexing-mode   :async}}}))
 ```
 
 In async mode, Datalevin commits the source datoms and a durable secondary-index
@@ -412,6 +730,19 @@ commit and after DB-open recovery. Queries over that index are eventually
 consistent until the worker catches up. Use `secondary-index-status` or
 `wait-for-secondary-index` when an application needs to observe lag or wait for
 a specific transaction's index work.
+
+---
+
+## References
+
+1. Christopher D. Manning, Prabhakar Raghavan, and Hinrich Schütze,
+   *Introduction to Information Retrieval*, Cambridge University Press, 2008,
+   Chapter 6: [Scoring, term weighting and the vector space model](https://nlp.stanford.edu/IR-book/html/htmledition/scoring-term-weighting-and-the-vector-space-model-1.html),
+   especially Section 6.3,
+   [The vector space model for scoring](https://nlp.stanford.edu/IR-book/html/htmledition/the-vector-space-model-for-scoring-1.html).
+
+2. Huahai Yang, [T-Wand: Beat Lucene in Less Than 600 Lines of Code](https://yyhh.org/blog/2021/11/t-wand-beat-lucene-in-less-than-600-lines-of-code/),
+   yyhh.org, November 5, 2021.
 
 ---
 
