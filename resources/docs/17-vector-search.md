@@ -6,18 +6,30 @@ part: "IV — Indexes as Capabilities"
 
 # Chapter 17: Vector Search: Embeddings and Similarity Queries
 
-In the era of Large Language Models (LLMs), a database is not just a place to store structured facts; it is a repository for semantic meaning. Datalevin provides two related similarity-search features:
+In the era of Large Language Models (LLMs), a database is not just a place to
+store structured facts, but also a repository for semantic meanings, which are
+often measured by vector similarity. Datalevin provides two related
+similarity-search features:
 
-- `:db.type/vec` stores user-supplied dense vectors and indexes them for nearest-neighbor search.
-- `:db/embedding true` indexes string datoms by embedding similarity. Datalevin computes the vectors during transaction processing and returns the original source datoms in queries.
+- `:db.type/vec` stores user-supplied dense vectors and indexes them for
+  nearest-neighbor search.
+- `:db/embedding true` indexes string datoms by embedding similarity. Datalevin
+  computes the vectors during transaction processing and returns the original
+  source datoms in queries.
 
-This chapter explains how to configure both paths, perform nearest-neighbor searches, and understand the underlying HNSW engine.
+This chapter explains how to configure both paths, perform semantic searches,
+and understand the underlying Hierarchical Navigable Small World (HNSW) engine.
+The Java snippets use the high-level `Connection` API. Python snippets use
+`datalevin.connect`, and JavaScript snippets use `connect` from
+`datalevin-node`.
 
 ---
 
 ## 1. Configuring Vector Search
 
-To store vectors in Datalevin, define an attribute with type `:db.type/vec`. Vector dimensions and similarity metrics are configured at the database level, not per-attribute:
+To store vectors in Datalevin, define an attribute with type `:db.type/vec`.
+Vector dimensions and similarity metrics are configured at the domain level (see
+1.2):
 
 <div class="multi-lang">
 
@@ -35,38 +47,46 @@ To store vectors in Datalevin, define an attribute with type `:db.type/vec`. Vec
 Connection conn = Datalevin.createConn(
     "/tmp/mydb",
     Map.of(
-        "id", Map.of("db/valueType", "db.type/string",
-                      "db/unique", "db.unique/identity"),
-        "embedding", Map.of("db/valueType", "db.type/vec")
+        "id", Map.of("db/valueType", ":db.type/string",
+                     "db/unique", ":db.unique/identity"),
+        "embedding", Map.of("db/valueType", ":db.type/vec")
     ),
     Map.of("vector-opts", Map.of(
         "dimensions", 300,
-        "metric-type", "cosine"
+        "metric-type", ":cosine"
     ))
 );
 ```
 
 ```python
-conn = d.create_conn(
+from datalevin import connect
+
+conn = connect(
     "/tmp/mydb",
-    {
-        "id": {"db/valueType": "db.type/string",
-               "db/unique": "db.unique/identity"},
-        "embedding": {"db/valueType": "db.type/vec"}
+    schema={
+        ":id": {":db/valueType": ":db.type/string",
+                ":db/unique": ":db.unique/identity"},
+        ":embedding": {":db/valueType": ":db.type/vec"}
     },
-    {"vector_opts": {"dimensions": 300, "metric_type": "cosine"}}
+    opts={":vector-opts": {":dimensions": 300,
+                           ":metric-type": ":cosine"}}
 )
 ```
 
 ```javascript
-const conn = d.createConn(
+import { connect } from "datalevin-node";
+
+const conn = await connect(
   '/tmp/mydb',
   {
-    id: { 'db/valueType': 'db.type/string',
-          'db/unique': 'db.unique/identity' },
-    embedding: { 'db/valueType': 'db.type/vec' }
-  },
-  { vectorOpts: { dimensions: 300, metricType: 'cosine' } }
+    schema: {
+      ':id': { ':db/valueType': ':db.type/string',
+               ':db/unique': ':db.unique/identity' },
+      ':embedding': { ':db/valueType': ':db.type/vec' }
+    },
+    opts: { ':vector-opts': { ':dimensions': 300,
+                              ':metric-type': ':cosine' } }
+  }
 );
 ```
 
@@ -83,21 +103,57 @@ Configure these in `:vector-opts`:
   - `:dot-product` — Dot product
   - `:haversine` — Great-circle distance for geo coordinates
   - `:divergence` — Jensen-Shannon divergence for probability distributions
-  - `:pearson`, `:jaccard`, `:hamming`, `:tanimoto`, `:sorensen` — other specialized metrics
-- **`:quantization`** — Scalar type: `:float` (default), `:double`, `:float16`, `:int8`, `:byte`
+  - `:pearson`, `:jaccard`, `:hamming`, `:tanimoto`, `:sorensen` — other
+    specialized metrics
+- **`:quantization`** — Scalar type: `:float` (default), `:double`, `:float16`,
+  `:int8`, `:byte`
 - **`:connectivity`** — Connections per node (default 16). Range 5-48.
 - **`:expansion-add`** — Candidates during indexing (default 128)
 - **`:expansion-search`** — Candidates during search (default 64)
 
-### 1.2 Vector Search Domains
+### 1.2 Vector and Embedding Domains
 
-By default, each `:db.type/vec` attribute becomes its own search domain. For `:embedding`, the domain name is `"embedding"`. For `:user/profile`, it becomes `"user_profile"` (namespaces become underscores).
+Chapter 16 introduced domains as named secondary indexes. Vector search uses the
+same idea, but the backing index is an HNSW index rather than an inverted
+full-text index, so the operational rules are different.
+
+The most important difference is that vector search is always domain-scoped.
+Unlike `fulltext`, `vec-neighbors` and `embedding-neighbors` do not search every
+domain when no domain is specified. Use either the attribute-specific form or an
+explicit `:domains` option.
+
+For `:db.type/vec` attributes:
+
+- Each vector attribute gets an attribute domain automatically.
+- Namespaced attributes use underscores in domain names: `:embedding` becomes
+  `"embedding"`, and `:user/profile` becomes `"user_profile"`.
+- `:db.vec/domains` adds shared vector domains for an attribute; configure all
+  participating domains, including the attribute domain, with compatible vector
+  options.
+- All vectors in a vector domain must have the same dimensions, metric, and
+  quantization settings.
+
+For `:db/embedding` attributes:
+
+- Embedding domains are configured separately from raw vector domains.
+- If no `:db.embedding/domains` is specified, the attribute participates in the
+  default `"datalevin"` embedding domain.
+- `:db.embedding/autoDomain true` adds the attribute domain and enables
+  attribute-specific `embedding-neighbors`.
+- Each embedding domain is tied to an embedding provider as well as vector
+  search options such as metric and dimensions.
+
+Configure defaults with `:vector-opts` and `:embedding-opts`; use
+`:vector-domains` and `:embedding-domains` for per-domain overrides. The same
+domain string can appear in full-text, vector, and embedding configuration, but
+those are separate indexes.
 
 ---
 
 ## 2. Similarity Search with `vec-neighbors`
 
-The `vec-neighbors` function returns matching datoms as `[e a v]` triples, ordered by similarity:
+The `vec-neighbors` function returns matching datoms as `[e a v]` triples,
+ordered by similarity:
 
 <div class="multi-lang">
 
@@ -111,30 +167,34 @@ The `vec-neighbors` function returns matching datoms as `[e a v]` triples, order
 ```
 
 ```java
-Datalevin.q("[:find ?i ?v " +
-            " :in $ ?q " +
-            " :where " +
-            " [(vec-neighbors $ :embedding ?q {:top 4}) [[?e ?a ?v]]] " +
-            " [?e :id ?i]]",
-            Datalevin.db(conn), queryVector);
+conn.query("[:find ?i ?v " +
+           " :in $ ?q " +
+           " :where " +
+           " [(vec-neighbors $ :embedding ?q {:top 4}) [[?e ?a ?v]]] " +
+           " [?e :id ?i]]",
+           queryVector);
 ```
 
 ```python
-d.q('[:find ?i ?v '
-     ' :in $ ?q '
-     ' :where '
-     ' [(vec-neighbors $ :embedding ?q {:top 4}) [[?e ?a ?v]]] '
-     ' [?e :id ?i]]',
-     d.db(conn), query_vector)
+conn.query(
+    "[:find ?i ?v "
+    " :in $ ?q "
+    " :where "
+    " [(vec-neighbors $ :embedding ?q {:top 4}) [[?e ?a ?v]]] "
+    " [?e :id ?i]]",
+    query_vector,
+)
 ```
 
 ```javascript
-d.q('[:find ?i ?v ' +
-     ' :in $ ?q ' +
-     ' :where ' +
-     ' [(vec-neighbors $ :embedding ?q {:top 4}) [[?e ?a ?v]]] ' +
-     ' [?e :id ?i]]',
-     d.db(conn), queryVector);
+await conn.query(
+  '[:find ?i ?v ' +
+  ' :in $ ?q ' +
+  ' :where ' +
+  ' [(vec-neighbors $ :embedding ?q {:top 4}) [[?e ?a ?v]]] ' +
+  ' [?e :id ?i]]',
+  queryVector
+);
 ```
 
 </div>
@@ -150,20 +210,121 @@ d.q('[:find ?i ?v ' +
 
 ### 2.2 Domain-Specific Search
 
-Search across multiple domains:
+The attribute-specific form searches the attribute domain:
+
+<div class="multi-lang">
 
 ```clojure
-(vec-neighbors $ query-vec {:top 4 :domains ["embedding" "profile_vec"]})
+(d/q '[:find ?e ?dist
+       :in $ ?q
+       :where [(vec-neighbors $ :embedding ?q
+                              {:top 4 :display :refs+dists})
+               [[?e _ _ ?dist]]]]
+     db
+     query-vec)
 ```
+
+```java
+conn.query("[:find ?e ?dist " +
+           " :in $ ?q " +
+           " :where [(vec-neighbors $ :embedding ?q " +
+           "                          {:top 4 :display :refs+dists}) " +
+           "         [[?e _ _ ?dist]]]]",
+           queryVector);
+```
+
+```python
+conn.query(
+    "[:find ?e ?dist "
+    " :in $ ?q "
+    " :where [(vec-neighbors $ :embedding ?q "
+    "                          {:top 4 :display :refs+dists}) "
+    "         [[?e _ _ ?dist]]]]",
+    query_vector,
+)
+```
+
+```javascript
+await conn.query(
+  '[:find ?e ?dist ' +
+  ' :in $ ?q ' +
+  ' :where [(vec-neighbors $ :embedding ?q ' +
+  '                          {:top 4 :display :refs+dists}) ' +
+  '         [[?e _ _ ?dist]]]]',
+  queryVector
+);
+```
+
+</div>
+
+Use `:domains` when the query should search named vector domains directly:
+
+<div class="multi-lang">
+
+```clojure
+(d/q '[:find ?e ?dist
+       :in $ ?q
+       :where [(vec-neighbors $ ?q
+                              {:top 4
+                               :domains ["embedding"]
+                               :display :refs+dists})
+               [[?e _ _ ?dist]]]]
+     db
+     query-vec)
+```
+
+```java
+conn.query("[:find ?e ?dist " +
+           " :in $ ?q " +
+           " :where [(vec-neighbors $ ?q " +
+           "                          {:top 4 " +
+           "                           :domains [\"embedding\"] " +
+           "                           :display :refs+dists}) " +
+           "         [[?e _ _ ?dist]]]]",
+           queryVector);
+```
+
+```python
+conn.query(
+    "[:find ?e ?dist "
+    " :in $ ?q "
+    " :where [(vec-neighbors $ ?q "
+    "                          {:top 4 "
+    "                           :domains [\"embedding\"] "
+    "                           :display :refs+dists}) "
+    "         [[?e _ _ ?dist]]]]",
+    query_vector,
+)
+```
+
+```javascript
+await conn.query(
+  '[:find ?e ?dist ' +
+  ' :in $ ?q ' +
+  ' :where [(vec-neighbors $ ?q ' +
+  '                          {:top 4 ' +
+  '                           :domains ["embedding"] ' +
+  '                           :display :refs+dists}) ' +
+  '         [[?e _ _ ?dist]]]]',
+  queryVector
+);
+```
+
+</div>
 
 ---
 
 ## 3. Text Embedding Indexes
 
-Use `:db/embedding true` when the source data is text and you want Datalevin to maintain the embedding vector index for you. Unlike `:db.type/vec`, the stored datom remains the original string. The embedding vector is a secondary index detail.
+Use `:db/embedding true` when the source data is text and you want Datalevin to
+maintain the embedding vector index for you. Unlike `:db.type/vec`, the stored
+datom remains the original string. The embedding vector is a secondary index
+detail.
+
+<div class="multi-lang">
 
 ```clojure
-(def schema
+(def embedding-schema
   {:doc/id   {:db/valueType :db.type/string
               :db/unique    :db.unique/identity}
    :doc/text {:db/valueType            :db.type/string
@@ -174,12 +335,90 @@ Use `:db/embedding true` when the source data is text and you want Datalevin to 
 (def conn
   (d/create-conn
     "/tmp/embedding-db"
-    schema
+    embedding-schema
     {:embedding-opts {:provider    :default
                       :metric-type :cosine}}))
 ```
 
-The built-in default provider uses a bundled CPU-only llama.cpp embedder. If no model path is supplied, Datalevin uses `multilingual-e5-small-Q8_0.gguf`; the model is downloaded under the database root on first use when missing. For larger models or hosted embedding APIs, use an OpenAI-compatible provider:
+```java
+Map<String, Object> embeddingSchema = Map.of(
+    "doc/id", Map.of(
+        "db/valueType", ":db.type/string",
+        "db/unique", ":db.unique/identity"
+    ),
+    "doc/text", Map.of(
+        "db/valueType", ":db.type/string",
+        "db/embedding", true,
+        "db.embedding/domains", List.of("docs"),
+        "db.embedding/autoDomain", true
+    )
+);
+
+Connection conn = Datalevin.createConn(
+    "/tmp/embedding-db",
+    embeddingSchema,
+    Map.of("embedding-opts", Map.of(
+        "provider", ":default",
+        "metric-type", ":cosine"
+    ))
+);
+```
+
+```python
+from datalevin import connect
+
+embedding_schema = {
+    ":doc/id": {
+        ":db/valueType": ":db.type/string",
+        ":db/unique": ":db.unique/identity",
+    },
+    ":doc/text": {
+        ":db/valueType": ":db.type/string",
+        ":db/embedding": True,
+        ":db.embedding/domains": ["docs"],
+        ":db.embedding/autoDomain": True,
+    },
+}
+
+conn = connect(
+    "/tmp/embedding-db",
+    schema=embedding_schema,
+    opts={":embedding-opts": {":provider": ":default",
+                              ":metric-type": ":cosine"}},
+)
+```
+
+```javascript
+import { connect } from "datalevin-node";
+
+const embeddingSchema = {
+  ':doc/id': {
+    ':db/valueType': ':db.type/string',
+    ':db/unique': ':db.unique/identity'
+  },
+  ':doc/text': {
+    ':db/valueType': ':db.type/string',
+    ':db/embedding': true,
+    ':db.embedding/domains': ['docs'],
+    ':db.embedding/autoDomain': true
+  }
+};
+
+const conn = await connect('/tmp/embedding-db', {
+  schema: embeddingSchema,
+  opts: { ':embedding-opts': { ':provider': ':default',
+                               ':metric-type': ':cosine' } }
+});
+```
+
+</div>
+
+The built-in default provider uses a bundled CPU-only llama.cpp embedder. If no
+model path is supplied, Datalevin uses `multilingual-e5-small-Q8_0.gguf`; the
+model is downloaded under the database root on first use when missing. For larger
+models or hosted embedding APIs, use an OpenAI-compatible provider:
+
+<div class="multi-lang">
 
 ```clojure
 {:embedding-opts
@@ -191,7 +430,50 @@ The built-in default provider uses a bundled CPU-only llama.cpp embedder. If no 
   :metric-type        :cosine}}
 ```
 
+```java
+Map<String, Object> opts = Map.of(
+    "embedding-opts", Map.of(
+        "provider", ":openai-compatible",
+        "model", "text-embedding-3-small",
+        "base-url", "https://api.openai.com/v1",
+        "api-key-env", "OPENAI_API_KEY",
+        "request-dimensions", 1536,
+        "metric-type", ":cosine"
+    )
+);
+```
+
+```python
+opts = {
+    ":embedding-opts": {
+        ":provider": ":openai-compatible",
+        ":model": "text-embedding-3-small",
+        ":base-url": "https://api.openai.com/v1",
+        ":api-key-env": "OPENAI_API_KEY",
+        ":request-dimensions": 1536,
+        ":metric-type": ":cosine",
+    }
+}
+```
+
+```javascript
+const opts = {
+  ':embedding-opts': {
+    ':provider': ':openai-compatible',
+    ':model': 'text-embedding-3-small',
+    ':base-url': 'https://api.openai.com/v1',
+    ':api-key-env': 'OPENAI_API_KEY',
+    ':request-dimensions': 1536,
+    ':metric-type': ':cosine'
+  }
+};
+```
+
+</div>
+
 Query with `embedding-neighbors`. The query input is text, not a vector:
+
+<div class="multi-lang">
 
 ```clojure
 (d/q '[:find ?id ?text
@@ -204,7 +486,45 @@ Query with `embedding-neighbors`. The query input is text, not a vector:
      "vector search docs")
 ```
 
+```java
+conn.query("[:find ?id ?text " +
+           " :in $ ?q " +
+           " :where " +
+           " [(embedding-neighbors $ ?q {:domains [\"docs\"] :top 5}) " +
+           "  [[?e _ ?text]]] " +
+           " [?e :doc/id ?id]]",
+           "vector search docs");
+```
+
+```python
+conn.query(
+    "[:find ?id ?text "
+    " :in $ ?q "
+    " :where "
+    " [(embedding-neighbors $ ?q {:domains [\"docs\"] :top 5}) "
+    "  [[?e _ ?text]]] "
+    " [?e :doc/id ?id]]",
+    "vector search docs",
+)
+```
+
+```javascript
+await conn.query(
+  '[:find ?id ?text ' +
+  ' :in $ ?q ' +
+  ' :where ' +
+  ' [(embedding-neighbors $ ?q {:domains ["docs"] :top 5}) ' +
+  '  [[?e _ ?text]]] ' +
+  ' [?e :doc/id ?id]]',
+  'vector search docs'
+);
+```
+
+</div>
+
 Attribute-specific embedding search requires `:db.embedding/autoDomain true`:
+
+<div class="multi-lang">
 
 ```clojure
 (d/q '[:find ?id ?dist
@@ -217,11 +537,52 @@ Attribute-specific embedding search requires `:db.embedding/autoDomain true`:
      "semantic database")
 ```
 
+```java
+conn.query("[:find ?id ?dist " +
+           " :in $ ?q " +
+           " :where " +
+           " [(embedding-neighbors $ :doc/text ?q " +
+           "                      {:top 5 :display :refs+dists}) " +
+           "  [[?e _ _ ?dist]]] " +
+           " [?e :doc/id ?id]]",
+           "semantic database");
+```
+
+```python
+conn.query(
+    "[:find ?id ?dist "
+    " :in $ ?q "
+    " :where "
+    " [(embedding-neighbors $ :doc/text ?q "
+    "                      {:top 5 :display :refs+dists}) "
+    "  [[?e _ _ ?dist]]] "
+    " [?e :doc/id ?id]]",
+    "semantic database",
+)
+```
+
+```javascript
+await conn.query(
+  '[:find ?id ?dist ' +
+  ' :in $ ?q ' +
+  ' :where ' +
+  ' [(embedding-neighbors $ :doc/text ?q ' +
+  '                      {:top 5 :display :refs+dists}) ' +
+  '  [[?e _ _ ?dist]]] ' +
+  ' [?e :doc/id ?id]]',
+  'semantic database'
+);
+```
+
+</div>
+
 Important rules:
 - `:db/embedding` applies to string attributes.
-- If no embedding domain is specified, the attribute participates in the default `"datalevin"` embedding domain.
+- If no embedding domain is specified, the attribute participates in the default
+  `"datalevin"` embedding domain.
 - `:db/embedding` may coexist with `:db/fulltext` on the same attribute.
-- Changing embedding-related schema on populated attributes requires an explicit rebuild workflow.
+- Changing embedding-related schema on populated attributes requires an explicit
+  rebuild workflow.
 
 ---
 
@@ -229,7 +590,9 @@ Important rules:
 
 Datalevin can be used as a standalone vector database:
 
-<div class="multi-lang">
+The standalone vector-index API is shown in Clojure. In Java, Python, and
+JavaScript, use the Datalog vector examples above unless the binding layer you
+are using exposes standalone vector-index handles.
 
 ```clojure
 (def lmdb (d/open-kv "/tmp/vector-db"))
@@ -242,51 +605,23 @@ Datalevin can be used as a standalone vector database:
 ;=> ("cat" "dog")
 ```
 
-```java
-LMDB lmdb = Datalevin.openKv("/tmp/vector-db");
-VectorIndex index = Datalevin.newVectorIndex(lmdb,
-    Map.of("dimensions", 300));
+**Vector References**: In Datalog's `vec-neighbors`, results are datoms `[e a
+v]`. In standalone mode, `vec-ref` can be any Clojure data (under 512
+bytes)—strings, numbers, maps, or any identifier meaningful to your application.
 
-Datalevin.addVec(index, "cat", catVector);
-Datalevin.addVec(index, "dog", dogVector);
-
-Datalevin.searchVec(index, queryVector, Map.of("top", 2));
-// => ["cat", "dog"]
-```
-
-```python
-lmdb = d.open_kv("/tmp/vector-db")
-index = d.new_vector_index(lmdb, {"dimensions": 300})
-
-d.add_vec(index, "cat", cat_vector)
-d.add_vec(index, "dog", dog_vector)
-
-d.search_vec(index, query_vector, {"top": 2})
-# => ["cat", "dog"]
-```
-
-```javascript
-const lmdb = d.openKv('/tmp/vector-db');
-const index = d.newVectorIndex(lmdb, { dimensions: 300 });
-
-d.addVec(index, 'cat', catVector);
-d.addVec(index, 'dog', dogVector);
-
-d.searchVec(index, queryVector, { top: 2 });
-// => ['cat', 'dog']
-```
-
-</div>
-
-**Vector References**: In Datalog's `vec-neighbors`, results are datoms `[e a v]`. In standalone mode, `vec-ref` can be any Clojure data (under 512 bytes)—strings, numbers, maps, or any identifier meaningful to your application.
-
-Multiple vectors can share the same `vec-ref`. For example, different image embeddings might all reference the same tag `"cat"`, or document chunks in a RAG system might all reference the same document ID.
+Multiple vectors can share the same `vec-ref`. For example, different image
+embeddings might all reference the same tag `"cat"`, or document chunks in a RAG
+system might all reference the same document ID.
 
 ---
 
 ## 5. The Core Engine: HNSW
 
-Datalevin's vector search uses **Hierarchical Navigable Small World (HNSW)** graphs, implemented via the [usearch](https://github.com/unum-cloud/usearch) library with SIMD optimizations.
+Datalevin's vector search uses **Hierarchical Navigable Small World (HNSW)**
+graphs, the graph-based approximate nearest-neighbor method introduced by
+Malkov and Yashunin, implemented via the
+[usearch](https://github.com/unum-cloud/usearch) library with SIMD
+optimizations.
 
 ### 5.1 How HNSW Works
 
@@ -294,19 +629,22 @@ HNSW builds a multi-layer graph where each node is a vector:
 - **Higher layers** have long-range connections for fast "skipping"
 - **Lower layers** have short-range connections for precision
 
-Search starts at the top layer and "zooms in" through descending layers to find nearest neighbors.
+Search starts at the top layer and "zooms in" through descending layers to find
+nearest neighbors.
 
 ### 5.2 Performance Trade-offs
 
 - **`:connectivity`** (M) — Higher = better recall, more memory
-- **`:expansion-add`** (efConstruction) — Higher = better index quality, slower writes
+- **`:expansion-add`** (efConstruction) — Higher = better index quality, slower
+  writes
 - **`:expansion-search`** (ef) — Higher = better recall, slower queries
 
 ---
 
 ## 6. Hybrid Retrieval: Combining Logic and Similarity
 
-Vector search integrates with Datalog, enabling hybrid queries that combine semantic similarity with structured filters:
+Vector search integrates with Datalog, enabling hybrid queries that combine
+semantic similarity with structured filters:
 
 <div class="multi-lang">
 
@@ -323,52 +661,61 @@ Vector search integrates with Datalog, enabling hybrid queries that combine sema
 ```
 
 ```java
-Datalevin.q("[:find ?title ?v " +
-            " :in $ ?target-vec " +
-            " :where " +
-            " [(vec-neighbors $ :product/embedding ?target-vec {:top 10}) [[?e _ ?v]]] " +
-            " [?e :product/title ?title] " +
-            " [?e :product/status :status/in-stock] " +
-            " [?e :product/price ?price] " +
-            " [(< ?price 100.0)]]",
-            db, queryVec);
+conn.query("[:find ?title ?v " +
+           " :in $ ?target-vec " +
+           " :where " +
+           " [(vec-neighbors $ :product/embedding ?target-vec {:top 10}) [[?e _ ?v]]] " +
+           " [?e :product/title ?title] " +
+           " [?e :product/status :status/in-stock] " +
+           " [?e :product/price ?price] " +
+           " [(< ?price 100.0)]]",
+           queryVec);
 ```
 
 ```python
-d.q('[:find ?title ?v '
-     ' :in $ ?target-vec '
-     ' :where '
-     ' [(vec-neighbors $ :product/embedding ?target-vec {:top 10}) [[?e _ ?v]]] '
-     ' [?e :product/title ?title] '
-     ' [?e :product/status :status/in-stock] '
-     ' [?e :product/price ?price] '
-     ' [(< ?price 100.0)]]',
-     db, query_vec)
+conn.query(
+    "[:find ?title ?v "
+    " :in $ ?target-vec "
+    " :where "
+    " [(vec-neighbors $ :product/embedding ?target-vec {:top 10}) [[?e _ ?v]]] "
+    " [?e :product/title ?title] "
+    " [?e :product/status :status/in-stock] "
+    " [?e :product/price ?price] "
+    " [(< ?price 100.0)]]",
+    query_vec,
+)
 ```
 
 ```javascript
-d.q('[:find ?title ?v ' +
-     ' :in $ ?target-vec ' +
-     ' :where ' +
-     ' [(vec-neighbors $ :product/embedding ?target-vec {:top 10}) [[?e _ ?v]]] ' +
-     ' [?e :product/title ?title] ' +
-     ' [?e :product/status :status/in-stock] ' +
-     ' [?e :product/price ?price] ' +
-     ' [(< ?price 100.0)]]',
-     db, queryVec);
+await conn.query(
+  '[:find ?title ?v ' +
+  ' :in $ ?target-vec ' +
+  ' :where ' +
+  ' [(vec-neighbors $ :product/embedding ?target-vec {:top 10}) [[?e _ ?v]]] ' +
+  ' [?e :product/title ?title] ' +
+  ' [?e :product/status :status/in-stock] ' +
+  ' [?e :product/price ?price] ' +
+  ' [(< ?price 100.0)]]',
+  queryVec
+);
 ```
 
 </div>
 
-This is essential for **Retrieval-Augmented Generation (RAG)**: find semantically similar documents, then filter by metadata, access control, or recency.
+This is essential for **Retrieval-Augmented Generation (RAG)**: find
+semantically similar documents, then filter by metadata, access control, or
+recency.
 
 ---
 
 ## 7. Asynchronous Vector and Embedding Indexing
 
-Vector and embedding indexing are synchronous by default. A transaction updates the source datoms and the secondary index before returning.
+Vector and embedding indexing are synchronous by default. A transaction updates
+the source datoms and the secondary index before returning.
 
 For ingestion-heavy workloads, configure async indexing:
+
+<div class="multi-lang">
 
 ```clojure
 {:vector-opts {:dimensions    300
@@ -376,7 +723,41 @@ For ingestion-heavy workloads, configure async indexing:
                :indexing-mode :async}}
 ```
 
+```java
+Map<String, Object> opts = Map.of(
+    "vector-opts", Map.of(
+        "dimensions", 300,
+        "metric-type", ":cosine",
+        "indexing-mode", ":async"
+    )
+);
+```
+
+```python
+opts = {
+    ":vector-opts": {
+        ":dimensions": 300,
+        ":metric-type": ":cosine",
+        ":indexing-mode": ":async",
+    }
+}
+```
+
+```javascript
+const opts = {
+  ':vector-opts': {
+    ':dimensions': 300,
+    ':metric-type': ':cosine',
+    ':indexing-mode': ':async'
+  }
+};
+```
+
+</div>
+
 or for embedding providers:
+
+<div class="multi-lang">
 
 ```clojure
 {:embedding-opts
@@ -387,10 +768,66 @@ or for embedding providers:
   :indexing-mode :async}}
 ```
 
-In async mode, transactions commit the source datoms plus durable index jobs, and an in-process worker updates the secondary index after commit. Failed jobs retry with bounded backoff and worker leases, so a later worker can reclaim stalled work. Use `secondary-index-status` and `wait-for-secondary-index` to inspect lag or wait for a transaction's index work.
+```java
+Map<String, Object> opts = Map.of(
+    "embedding-opts", Map.of(
+        "provider", ":openai-compatible",
+        "model", "text-embedding-3-small",
+        "api-key-env", "OPENAI_API_KEY",
+        "metric-type", ":cosine",
+        "indexing-mode", ":async"
+    )
+);
+```
+
+```python
+opts = {
+    ":embedding-opts": {
+        ":provider": ":openai-compatible",
+        ":model": "text-embedding-3-small",
+        ":api-key-env": "OPENAI_API_KEY",
+        ":metric-type": ":cosine",
+        ":indexing-mode": ":async",
+    }
+}
+```
+
+```javascript
+const opts = {
+  ':embedding-opts': {
+    ':provider': ':openai-compatible',
+    ':model': 'text-embedding-3-small',
+    ':api-key-env': 'OPENAI_API_KEY',
+    ':metric-type': ':cosine',
+    ':indexing-mode': ':async'
+  }
+};
+```
+
+</div>
+
+In async mode, transactions commit the source datoms plus durable index jobs,
+and an in-process worker updates the secondary index after commit. Failed jobs
+retry with bounded backoff and worker leases, so a later worker can reclaim
+stalled work. Use `secondary-index-status` and `wait-for-secondary-index` to
+inspect lag or wait for a transaction's index work.
+
+---
+
+## References
+
+1. Yu. A. Malkov and D. A. Yashunin,
+   [Efficient and robust approximate nearest neighbor search using Hierarchical
+   Navigable Small World graphs](https://arxiv.org/abs/1603.09320),
+   arXiv:1603.09320, 2016; IEEE Transactions on Pattern Analysis and Machine
+   Intelligence 42(4):824-836, 2020,
+   [doi:10.1109/TPAMI.2018.2889473](https://doi.org/10.1109/TPAMI.2018.2889473).
 
 ---
 
 ## Summary
 
-Vector search transforms Datalevin into a semantic database. Use `:db.type/vec` and `vec-neighbors` when your application owns vectors directly; use `:db/embedding` and `embedding-neighbors` when Datalevin should embed string datoms and maintain the vector index for you.
+Vector search transforms Datalevin into a semantic database. Use `:db.type/vec`
+and `vec-neighbors` when your application owns vectors directly; use
+`:db/embedding` and `embedding-neighbors` when Datalevin should embed string
+datoms and maintain the vector index for you.
