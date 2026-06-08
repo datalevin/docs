@@ -50,7 +50,7 @@ Part V — Performance and Operations
 
 20. Durability, Database Maintenance, and Storage Tuning
 
-21. Query Planning, Optimization, and Profiling
+21. Query Planning, Optimization, and Diagnostics
 
 22. Rules Engine and Recursive Evaluation
 
