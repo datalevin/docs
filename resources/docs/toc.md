@@ -48,7 +48,7 @@ Part V — Performance and Operations
 
 19. Batching, Sorting, and High-Throughput Ingestion
 
-20. Storage Tuning, Durability, and Database Maintenance
+20. Durability, Database Maintenance, and Storage Tuning
 
 21. Query Planning, Optimization, and Profiling
 

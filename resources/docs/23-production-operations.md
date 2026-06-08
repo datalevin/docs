@@ -645,7 +645,11 @@ This section provides a comprehensive guide to monitoring Datalevin, debugging p
 Datalevin's performance is tied directly to the health of the host's memory and disk.
 
 #### 1.1 Disk I/O and Latency
-Every commit in Datalevin is a synchronous flush to disk (unless using `:nosync`).
+
+In the direct LMDB commit path, durable commits are limited by synchronous disk
+flushes unless you use a non-durable flag such as `:nosync`. In WAL mode, commit
+latency depends on the selected durability profile.
+
 - **Monitor**: Disk IOPS and `iowait`.
 - **Recommendation**: Use **NVMe SSDs** for the best performance. High-latency block storage (like network-attached drives) will severely limit your write throughput.
 
@@ -657,37 +661,49 @@ Because Datalevin uses memory-mapping, the OS Page Cache is your "buffer pool."
 
 ---
 
-### 2. Database Health: `d/db-stats`
+### 2. Database Health: `d/stat`
 
-You can inspect the internal health of the B+Tree using the `db-stats` function.
+You can inspect LMDB B+Tree statistics with `stat`. In Clojure, `stat` operates
+on a KV handle; for a Datalog database directory, the `dtlv stat` command opens
+the store and reports the same kind of LMDB statistics.
 
 <div class="multi-lang">
 
 ```clojure
-(d/db-stats db)
+(def kv (d/open-kv "/data/companydb"))
+
+(d/stat kv)
+
+(d/open-dbi kv "datalevin/eav")
+(d/stat kv "datalevin/eav")
 ```
 
 ```java
-Map<String, Object> stats = Datalevin.dbStats(db);
+KV kv = Datalevin.openKV("/data/companydb");
+
+Map<?, ?> stats = kv.stat();
+
+kv.openDbi("datalevin/eav");
+Map<?, ?> eavStats = kv.stat("datalevin/eav");
 ```
 
-```python
-stats = d.db_stats(db)
-```
-
-```javascript
-const stats = d.dbStats(db);
+```console
+$ dtlv -d /data/companydb stat
+$ dtlv -d /data/companydb stat datalevin/eav
 ```
 
 </div>
 
 This returns metrics such as:
-- **`branch_pages` / `leaf_pages`**: The structure of your tree.
-- **`overflow_pages`**: Pages used for large values.
-- **`entries`**: Total number of key-value pairs.
+- **`:branch-pages` / `:leaf-pages`**: The structure of your tree.
+- **`:overflow-pages`**: Pages used for large values.
+- **`:entries`**: Total number of key-value pairs.
 
 #### 2.1 The Free List
-LMDB reuses deleted pages rather than shrinking the file. `db-stats` will show you how many pages are currently in the **Free List**. If this number is very high relative to your total pages, it may be time for a `d/compact` operation (Chapter 20).
+LMDB reuses deleted pages rather than shrinking the file in place. After large
+deletions, create a compacted copy with `d/copy` using `true` as the third
+argument, or with `dtlv -c copy` (Chapter 20), then replace the original database
+as controlled maintenance.
 
 ---
 
@@ -718,14 +734,14 @@ Before you "go live," ensure your configuration matches these best practices.
 - [ ] **Transparent Huge Pages (THP)**: Often recommended to be disabled or set to `madvise` for database workloads.
 
 #### 4.3 Operations
-- [ ] **Automated Backups**: Use `d/copy` to create transactionally consistent backups without downtime.
+- [ ] **Automated Backups**: Use `d/copy` on a Datalog database value or KV handle, or use `dtlv copy`, to create transactionally consistent backups without downtime.
 - [ ] **Monitoring Hooks**: Use `d/listen!` to track transaction volume and data growth.
 - [ ] **Replica Lag**: For non-HA async read replicas, monitor `datalevin.client/replica-status`, especially `:replica-lag-lsn`, `:replica-degraded-reason`, and `:replica-last-error`.
 - [ ] **HA Membership Drift**: In consensus HA, keep each node's `:ha-members` and promotable control-plane voter mapping aligned with the authoritative membership hash. Use `datalevin.client/ha-update-membership!` for operator-driven membership changes.
-- [ ] **Health Checks**: Implement a `/health` endpoint that performs a simple `(d/q '[:find ?e :limit 1] db)` to verify end-to-end connectivity.
+- [ ] **Health Checks**: Implement a `/health` endpoint that performs a simple `(d/q '[:find ?e :where [?e _ _] :limit 1] db)` to verify end-to-end connectivity.
 
 ---
 
 ### Summary
 
-Datalevin is a "quiet" database. When tuned correctly, it requires very little maintenance. By monitoring the OS Page Cache, keeping your B+Tree compacted, and following the production checklist, you can ensure that your Datalevin deployment remains fast and reliable for years.
+Datalevin is a "quiet" database. When tuned correctly, it requires very little maintenance. By monitoring the OS Page Cache, keeping compacted copies in your maintenance plan, and following the production checklist, you can ensure that your Datalevin deployment remains fast and reliable for years.
