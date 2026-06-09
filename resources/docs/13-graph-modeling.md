@@ -67,7 +67,7 @@ Instead of a simple `:user/follows` ref, create a `Follow` entity:
 ```
 
 This transforms a simple edge into a node that can hold any number of
-attributes, effectively giving you property-graph-style modeling[^property-graph]
+attributes, effectively giving you property-graph-style modeling [1]
 while keeping Datalevin's normalized fact representation.
 
 ---
@@ -593,7 +593,9 @@ By treating your data as a graph from the beginning, you unlock powerful
 analytical capabilities that are difficult or impossible to achieve with
 traditional relational models.
 
-[^property-graph]: Renzo Angles, ["The Property Graph Database
-    Model"](https://ceur-ws.org/Vol-2100/paper26.pdf), *Proceedings of the 12th
-    Alberto Mendelzon International Workshop on Foundations of Data Management*,
-    CEUR Workshop Proceedings 2100, 2018.
+## References
+
+[1] Renzo Angles, ["The Property Graph Database
+Model"](https://ceur-ws.org/Vol-2100/paper26.pdf), *Proceedings of the 12th
+Alberto Mendelzon International Workshop on Foundations of Data Management*,
+CEUR Workshop Proceedings 2100, 2018.

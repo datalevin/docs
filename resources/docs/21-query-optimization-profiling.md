@@ -388,7 +388,7 @@ Datalevin plans a query and why a query may be slower than expected.
 
 ## References
 
-1. Patricia G. Selinger, Morton M. Astrahan, Donald D. Chamberlin,
+[1] Patricia G. Selinger, Morton M. Astrahan, Donald D. Chamberlin,
    Raymond A. Lorie, and Thomas G. Price,
    [Access Path Selection in a Relational Database Management System](https://research.ibm.com/publications/access-path-selection-in-a-relational-database-management-system),
    SIGMOD 1979, pp. 23-34,

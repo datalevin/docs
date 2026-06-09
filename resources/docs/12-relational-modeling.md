@@ -7,7 +7,7 @@ part: "III — Modeling Across Paradigms"
 # Chapter 12: Relational Modeling Patterns
 
 Because Datalevin prefers normalized data, industry-standard
-**Entity-Relationship (ER) modeling**[^er-model] is the most effective way to
+**Entity-Relationship (ER) modeling** [1] is the most effective way to
 design your database.
 
 While SQL databases require "Object-Relational Mapping" (ORM) to bridge the gap
@@ -469,6 +469,8 @@ const ecommerceSchema = {
 By applying these time-tested ER principles, you ensure your Datalevin database
 remains clean, performant, and understandable as your domain complexity grows.
 
-[^er-model]: Peter P. Chen, ["The Entity-Relationship Model - Toward a Unified
-    View of Data"](https://doi.org/10.1145/320434.320440), *ACM Transactions on
-    Database Systems* 1, no. 1, 1976, pp. 9-36.
+## References
+
+[1] Peter P. Chen, ["The Entity-Relationship Model - Toward a Unified
+View of Data"](https://doi.org/10.1145/320434.320440), *ACM Transactions on
+Database Systems* 1, no. 1, 1976, pp. 9-36.

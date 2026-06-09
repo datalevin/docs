@@ -60,11 +60,11 @@ Part VI — Datalevin for Intelligent Systems
 
 24. Persistent Agent Memory Architectures
 
-25. Apperception Engines and Long-Term State
+25. Episodic, Semantic, and Working Memory
 
-26. Episodic and Semantic Memory
+26. Recall and Context Assembly
 
-27. Hybrid Retrieval: Datalog + Full-Text + Vector
+27. Apperception, Truth Maintenance, and Long-Term State
 
 28. Building Stateful AI Applications
 
@@ -75,3 +75,5 @@ Part VII — Appendices
 30. Datalog Built-In Functions Reference
 
 31. Key-Value API Reference
+
+32. EDN Format

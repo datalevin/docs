@@ -619,7 +619,7 @@ system might all reference the same document ID.
 
 Datalevin's vector search uses **Hierarchical Navigable Small World (HNSW)**
 graphs, the graph-based approximate nearest-neighbor method introduced by
-Malkov and Yashunin, implemented via the
+Malkov and Yashunin [1], implemented via the
 [usearch](https://github.com/unum-cloud/usearch) library with SIMD
 optimizations.
 
@@ -816,7 +816,7 @@ inspect lag or wait for a transaction's index work.
 
 ## References
 
-1. Yu. A. Malkov and D. A. Yashunin,
+[1] Yu. A. Malkov and D. A. Yashunin,
    [Efficient and robust approximate nearest neighbor search using Hierarchical
    Navigable Small World graphs](https://arxiv.org/abs/1603.09320),
    arXiv:1603.09320, 2016; IEEE Transactions on Pattern Analysis and Machine

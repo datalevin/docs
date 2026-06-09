@@ -230,7 +230,7 @@ filtering so you don't have to.
 
 If SQL is like giving the database a set of instructions on how to assemble a
 table, Datalog is like giving the database a **description** of the answer you
-want. That declarative style comes from logic programming[^logic-programming]:
+want. That declarative style comes from logic programming [1]:
 programs are expressed as logical clauses, and evaluation searches for values
 that make those clauses true.
 
@@ -416,6 +416,8 @@ The Datalevin mental model is about moving from "data-in-boxes" to "data-as-fact
 By embracing this model, you unlock a level of flexibility and power that
 traditional databases struggle to match.
 
-[^logic-programming]: Robert A. Kowalski, ["Predicate Logic as Programming
-    Language"](https://www.doc.ic.ac.uk/~rak/papers/IFIP74.pdf), IFIP Congress,
-    1974, pp. 569-574.
+## References
+
+[1] Robert A. Kowalski, ["Predicate Logic as Programming
+Language"](https://www.doc.ic.ac.uk/~rak/papers/IFIP74.pdf), IFIP Congress,
+1974, pp. 569-574.

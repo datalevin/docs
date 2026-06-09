@@ -572,7 +572,7 @@ For fuzzy or substring-style matching, use ngrams. The example below indexes
 
 Datalevin uses the standard **Vector Space Model** and TF-IDF weighting
 described by Manning, Raghavan, and Schütze in *Introduction to Information
-Retrieval*, with `lnu.ltn` weighting schema:
+Retrieval* [1], with `lnu.ltn` weighting schema:
 
 - **Document vectors**: log-weighted term frequency, no idf, pivoted unique
   normalization
@@ -584,8 +584,8 @@ documents.
 
 ### 6.1 T-Wand Algorithm
 
-The search uses a novel **Tiered WAND** algorithm, described in my
-T-Wand blog post, that processes documents in tiers by term coverage:
+The search uses a novel **Tiered WAND** algorithm, described in the T-Wand blog
+post [2]. It processes documents in tiers by term coverage:
 
 1. First, documents containing *all* query terms
 2. Then documents with *n-1* terms
@@ -735,13 +735,13 @@ a specific transaction's index work.
 
 ## References
 
-1. Christopher D. Manning, Prabhakar Raghavan, and Hinrich Schütze,
+[1] Christopher D. Manning, Prabhakar Raghavan, and Hinrich Schütze,
    *Introduction to Information Retrieval*, Cambridge University Press, 2008,
    Chapter 6: [Scoring, term weighting and the vector space model](https://nlp.stanford.edu/IR-book/html/htmledition/scoring-term-weighting-and-the-vector-space-model-1.html),
    especially Section 6.3,
    [The vector space model for scoring](https://nlp.stanford.edu/IR-book/html/htmledition/the-vector-space-model-for-scoring-1.html).
 
-2. Huahai Yang, [T-Wand: Beat Lucene in Less Than 600 Lines of Code](https://yyhh.org/blog/2021/11/t-wand-beat-lucene-in-less-than-600-lines-of-code/),
+[2] Huahai Yang, [T-Wand: Beat Lucene in Less Than 600 Lines of Code](https://yyhh.org/blog/2021/11/t-wand-beat-lucene-in-less-than-600-lines-of-code/),
    yyhh.org, November 5, 2021.
 
 ---
