@@ -1,266 +1,392 @@
 ---
-title: "Client-Server, Security, Deployment, and Production Operations"
+title: "Deployment and Production Operations"
 chapter: 23
 part: "V — Performance and Operations"
 ---
 
-# Chapter 23: Client-Server, Security, Deployment, and Production Operations
+# Chapter 23: Deployment and Production Operations
 
-Production Datalevin work combines protocol choices, access control, deployment topology, and day-two operations. This chapter collects those operational concerns in one place.
-
----
-
-## 1. Client-Server Architecture
-
-While Datalevin is often used in embedded mode for maximum performance, its **Client-Server mode** is essential for multi-user environments, microservices architectures, and cross-language integration.
-
-This section covers how to set up the Datalevin server, connect from remote clients, manage security through Role-Based Access Control (RBAC), and tune the protocol for high-performance distributed systems.
+Chapter 20 covered durability, snapshots, copy, dump/load, and storage tuning.
+This chapter focuses on the next layer: how to choose a deployment shape, run
+Datalevin as a server when needed, secure remote access, operate replicas or HA,
+and monitor a production system.
 
 ---
 
-### 1. The Datalevin Server
+## 1. Choose a Deployment Mode
 
-The Datalevin server is a high-performance, non-blocking network service that exposes the Datalog and KV APIs over a TCP connection.
+Datalevin can run as an embedded library, a TCP server, a read-replica topology,
+a consensus-lease HA cluster, an MCP tool process, or a Babashka pod. The data
+model and storage format stay the same; the operational boundary changes.
 
-#### 1.1 Starting the Server
-You can start the server using the native `dtlv` CLI or via the JVM uberjar.
+| Mode | Best Fit | Main Trade-Off |
+| :--- | :--- | :--- |
+| Embedded | Single-process services, desktop apps, local tools | Fastest path, but access is local to the process and storage path |
+| Server | Shared databases, remote clients, centralized RBAC | Adds network latency and serialization |
+| Async read replica | Read scaling or workload isolation without failover | Eventually consistent and read-only; no automatic promotion |
+| Consensus-lease HA | Automatic write-leader promotion and follower reads | Requires quorum discipline, fencing, and explicit membership management |
+| MCP | AI tools that need controlled Datalevin access | Tool-call boundary; writes disabled unless explicitly allowed |
+| Babashka pod | Scripts and maintenance tasks | IPC boundary; convenient but not the zero-copy embedded path |
+
+### 1.1 Embedded Mode
+
+Embedded mode is the default choice when one application owns the database path.
+It keeps the application and Datalevin in the same process, so reads use the OS
+page cache directly and avoid network serialization. It is a good fit for
+single-node services, local-first applications, desktop tools, and containers
+with per-instance storage.
+
+Leave RAM headroom for the OS page cache. On small VMs, a small amount of swap
+can prevent brief memory spikes from killing the process, but Datalevin
+performance still depends on keeping the active working set in memory.
+
+### 1.2 Server Mode
+
+Use server mode when multiple applications need to share a Datalevin instance,
+when non-JVM clients need a remote database, or when you need server-side RBAC.
+The server exposes Datalog and KV APIs over `dtlv://` URIs and also provides a
+JSON command surface used by MCP and other adapters.
+
+### 1.3 Read Replicas and HA
+
+Async read replicas and consensus HA both depend on WAL records, but they solve
+different problems:
+
+- **Async read replicas** scale or isolate reads behind one primary writer. They
+  do not elect a leader, fence writes, or promote automatically.
+- **Consensus-lease HA** keeps one write leader per database, uses a Raft-backed
+  control plane for leases and membership, and lets followers serve reads.
+
+Choose async replicas when stale-by-lag reads are acceptable. Choose HA only
+when automatic failover is worth the extra operational surface.
+
+### 1.4 Tooling Modes
+
+`dtlv mcp` runs a local MCP server over `stdio`. It can open local databases or
+remote `dtlv://` targets. Read-only tools are the default; write tools require
+starting MCP with write access enabled.
+
+The Babashka pod is useful for fast scripts, maintenance jobs, and ad hoc data
+tasks. It runs as a separate process and communicates with Babashka over IPC.
+
+### 1.5 Native Language Libraries
+
+Datalevin publishes libraries for several host languages:
+
+- **Clojure**: `datalevin/datalevin` on Clojars, plus
+  `org.datalevin/datalevin-embedded` for embedded-only JVM use.
+- **Java**: `org.datalevin:datalevin-java` on Maven Central.
+- **Python**: `datalevin` on PyPI.
+- **Node.js**: `datalevin-node` on npm.
+
+These libraries can open embedded databases. They can also connect to remote
+Datalevin servers where the wrapper supports remote `dtlv://` connections.
+
+### 1.6 High-Density Multi-Tenancy
+
+A useful Datalevin pattern is one database file per tenant, workspace, or user.
+This is common in personal knowledge management and local-first systems.
+
+The advantages are operational:
+
+- Per-tenant backup, restore, migration, and deletion are file-level operations.
+- The OS page cache shares memory across many idle databases efficiently.
+- Tenant isolation is physical rather than a repeated query predicate.
+- The same database file can often move between server and local devices.
+
+The trade-off is fleet management. You need naming, discovery, backup, and
+retention automation for many small databases instead of one large database.
+
+---
+
+## 2. Run a Datalevin Server
+
+The server is a non-blocking network service that exposes Datalevin APIs over a
+TCP connection. It listens on `127.0.0.1:8898` by default.
+
+### 2.1 Start the Server
+
+Use the native `dtlv` binary for lightweight deployments. Use the JVM standalone
+jar for highly concurrent or long-running server workloads where normal JVM
+monitoring and GC choices matter.
 
 ```console
-# Using the native CLI tool
-$ DATALEVIN_DEFAULT_PASSWORD=secret dtlv serv -r /data/datalevin -p 8898
+# Native CLI
+$ DATALEVIN_DEFAULT_PASSWORD=secret \
+  dtlv serv -r /data/datalevin -p 8898 --host 0.0.0.0
 
-# Using JVM uberjar (recommended for production)
+# JVM standalone jar
 $ DATALEVIN_DEFAULT_PASSWORD=secret \
   java --add-opens=java.base/java.nio=ALL-UNNAMED \
        --add-opens=java.base/sun.nio.ch=ALL-UNNAMED \
-       -jar datalevin-0.10.15-standalone.jar serv --host 0.0.0.0 -r /data/datalevin
+       -jar datalevin-standalone.jar serv --host 0.0.0.0 -r /data/datalevin
 ```
 
-- **`-r <path>`**: The root directory for data storage (Default Posix: `/var/lib/datalevin`, Windows: `C:\ProgramData\Datalevin`).
-- **`-p <port>`**: The port to listen on (default: `8898`).
-- **`--host <host>`**: The address to bind to (default: `127.0.0.1`). Binding to a non-loopback address requires `DATALEVIN_DEFAULT_PASSWORD`.
-- **`-v`**: Enable verbose server debug logs.
-- **`--idle-timeout <ms>`**: Disconnect inactive sessions to reclaim resources (default: `172800000` ms, or 48 hours).
+Important options:
 
-#### 1.2 Under the Hood: The Wire Protocol
-Datalevin uses a custom wire protocol designed for efficiency:
-- **Asynchronous**: The server uses an event-driven architecture to handle thousands of concurrent connections.
-- **Message Format**: A TLV (Type-Length-Value) format inspired by PostgreSQL.
-- **Serialization**: The default serialization is **Nippy**, which is extremely fast for Clojure-to-Clojure communication. For other languages, **Transit+JSON** is used.
-- **JSON API**: Datalevin also has a language-neutral JSON command API with handle-based sessions, Datalog/KV operations, admin operations, search, and vector support. The Python and Node bindings use JVM interop today, but the JSON API is the stable shape exposed to MCP and other adapters that need machine-readable request and response payloads.
+- **`-r <path>`**: Root directory for databases. The default is
+  `/var/lib/datalevin` on POSIX systems and `C:\ProgramData\Datalevin` on
+  Windows.
+- **`-p <port>`**: Listening port. The default is `8898`.
+- **`--host <host>`**: Listening address. Binding to a non-loopback address
+  requires `DATALEVIN_DEFAULT_PASSWORD`.
+- **`--idle-timeout <ms>`**: Disconnect inactive sessions. The default is
+  `172800000` ms, or 48 hours.
+- **`-v`**: Enable verbose server logs on stdout.
 
----
+Run the server under the platform's service manager, such as `systemd`,
+`launchd`, or `sc.exe`, and make sure the service account has read/write access
+to the data root.
 
-### 2. Connecting to the Server
+### 2.2 Connect to a Remote Database
 
-Datalevin provides a unified connection API. The same `d/get-conn` function used for local databases works for remote ones by providing a URI.
+Remote Datalog and KV databases use this URI shape:
 
-#### 2.1 Connection URIs
-The URI format follows this pattern:
-`dtlv://<user>:<pass>@<host>:<port>/<db-name>?store=datalog|kv`
+```text
+dtlv://<user>:<pass>@<host>:<port>/<db-name>?store=datalog|kv
+```
+
+`store` is optional and defaults to `datalog`. Database names must be unique
+across the whole server, so a Datalog database and a KV database cannot share
+the same server-side name.
 
 <div class="multi-lang">
 
 ```clojure
 (require '[datalevin.core :as d])
 
-;; Connect to a remote Datalog database
-(def conn (d/get-conn "dtlv://admin:pass@localhost:8898/mydb"))
+(def conn
+  (d/get-conn "dtlv://datalevin:secret@localhost:8898/app"))
 
-;; Use it just like a local connection
-(d/transact! conn [{:name "Alice"}])
+(d/q '[:find ?e . :where [?e _ _]] @conn)
 ```
 
 ```java
 import datalevin.Connection;
 import datalevin.Datalevin;
 
-// Connect to a remote Datalog database
-Connection conn = Datalevin.getConn("dtlv://admin:pass@localhost:8898/mydb");
+Connection conn =
+    Datalevin.getConn("dtlv://datalevin:secret@localhost:8898/app");
 
-// Use it just like a local connection
-conn.transact(List.of(Map.of("name", "Alice")));
+Object result = conn.query("[:find ?e . :where [?e _ _]]");
 ```
 
 ```python
 from datalevin import connect
 
-# Connect to a remote Datalog database
-conn = connect("dtlv://admin:pass@localhost:8898/mydb")
+conn = connect("dtlv://datalevin:secret@localhost:8898/app")
 
-# Use it just like a local connection
-conn.transact([{"name": "Alice"}])
+result = conn.query("[:find ?e . :where [?e _ _]]")
 ```
 
 ```javascript
 import { connect } from "datalevin-node";
 
-// Connect to a remote Datalog database
-const conn = await connect("dtlv://admin:pass@localhost:8898/mydb");
+const conn = await connect("dtlv://datalevin:secret@localhost:8898/app");
 
-// Use it just like a local connection
-await conn.transact([{ name: "Alice" }]);
+const result = await conn.query("[:find ?e . :where [?e _ _]]");
 ```
 
 </div>
 
-- **`store`**: Specifies the storage engine. Options are `datalog` (default) or `kv`.
-- **`db-name`**: Must be unique across the entire server instance.
+### 2.3 Use the Admin Client
 
-#### 2.2 The `datalevin.client` Namespace
-For administrative tasks (managing users, roles, and databases), use the `datalevin.client` namespace.
+Administrative operations use `datalevin.client/new-client` in Clojure and the
+corresponding wrapper client in other host languages.
 
 <div class="multi-lang">
 
 ```clojure
 (require '[datalevin.client :as c])
 
-;; Create an administrative client
-(def client (c/new-client "dtlv://admin:pass@localhost:8898"))
+(def client
+  (c/new-client "dtlv://datalevin:secret@localhost:8898"))
 ```
 
 ```java
 import datalevin.Client;
 import datalevin.Datalevin;
 
-// Create an administrative client
-Client client = Datalevin.newClient("dtlv://admin:pass@localhost:8898");
+Client client =
+    Datalevin.newClient("dtlv://datalevin:secret@localhost:8898");
 ```
 
 ```python
 from datalevin import new_client
 
-# Create an administrative client
-client = new_client("dtlv://admin:pass@localhost:8898")
+client = new_client("dtlv://datalevin:secret@localhost:8898")
 ```
 
 ```javascript
 import { newClient } from "datalevin-node";
 
-// Create an administrative client
-const client = await newClient("dtlv://admin:pass@localhost:8898");
+const client = await newClient("dtlv://datalevin:secret@localhost:8898");
 ```
 
 </div>
 
+### 2.4 Protocol and Client Tuning
+
+The server protocol uses a TLV-style message format. Clojure clients use Nippy
+serialization by default; language-neutral adapters use Transit/JSON or the JSON
+command API.
+
+Most deployments should start with defaults. Tune only when a measured workload
+needs it:
+
+- **Freshness checks**:
+  `datalevin.constants/*remote-db-last-modified-check-interval-ms*` defaults to
+  `0`, which checks remote modification state on every call. A positive interval
+  reduces round trips but can delay observation of remote updates.
+- **Connection pool**: `datalevin.client/new-client` accepts `:pool-size`
+  (default `3`) and `:time-out` (default `60000` ms).
+- **HA write retry**: `:ha-write-retry-timeout-ms` and
+  `:ha-write-retry-delay-ms` bound automatic retries after retryable HA write
+  rejections such as `:not-leader`.
+- **Wire compression**:
+  `datalevin.constants/*wire-compression-threshold*` defaults to `8192` bytes,
+  and `datalevin.constants/*wire-compression-level*` defaults to `3`.
+
+For network-heavy workloads, prefer fewer larger requests. Batch writes with
+`transact!`, use `transact-async` when appropriate, use `pull` instead of many
+small entity lookups, and keep `:find` clauses specific so large unused result
+sets are not serialized over the wire.
+
+### 2.5 Runtime UDFs in Server Mode
+
+Descriptor-backed `:db/udf` functions resolve where the query or transaction
+executes. Embedded databases can receive a runtime registry in store options.
+Remote transactions execute in the server process, so the UDF registry or
+resolver must be installed on the server. Client-local registries are not
+consulted for remote transaction execution.
+
+In HA deployments, `:ha-require-udf-ready? true` makes a leader reject writes
+until installed transaction UDF descriptors can be resolved by the server
+runtime.
+
 ---
 
-### 3. Security: Role-Based Access Control (RBAC)
+## 3. Security and Access Control
 
-Datalevin Server includes a sophisticated RBAC system to ensure data security in shared environments.
+Security has two separate layers: physical protection of database files and
+server authorization for remote access.
 
-#### 3.1 Permission Hierarchy
-Permissions are hierarchical:
-- `:view`: Can read data.
-- `:alter`: Can read and write data.
-- `:create`: Can create new databases.
-- `:control`: Full administrative access (can manage users/roles).
+### 3.1 Default Admin Account
 
-#### 3.2 Managing Users and Roles
-A typical security workflow involves creating a role with specific permissions and assigning it to a user.
+Every server has a built-in administrative user:
+
+- **Username**: `datalevin`
+- **Default password**: `datalevin`
+
+Set `DATALEVIN_DEFAULT_PASSWORD` when starting the server. It is required when
+binding to a non-loopback address and should be treated as mandatory in
+production. Leave the `datalevin` user for administration and create separate
+application users with narrower roles.
+
+### 3.2 RBAC Model
+
+Server permissions are granted to roles, then roles are assigned to users. Every
+user also has a private role named `:datalevin.role/<username>`.
+
+Each permission has three parts:
+
+- **Action**: `:datalevin.server/view`, `:datalevin.server/alter`,
+  `:datalevin.server/create`, or `:datalevin.server/control`.
+- **Object**: `:datalevin.server/database`, `:datalevin.server/user`,
+  `:datalevin.server/role`, or `:datalevin.server/server`.
+- **Target**: A database name, username, role keyword, or `nil` for all targets
+  of that object type.
+
+The actions are hierarchical: `:alter` includes read access, `:create` includes
+lower actions, and `:control` is administrative control.
+
+### 3.3 Create a Least-Privilege User
+
+This example creates a user, creates a role, grants read-only access to one
+database, and assigns the role to the user.
 
 <div class="multi-lang">
 
 ```clojure
-;; 1. Create a user
 (c/create-user client "alice" "password123")
+(c/create-role client :app.role/analyst)
 
-;; 2. Create a role
-(c/create-role client "analyst")
+(c/grant-permission client
+                    :app.role/analyst
+                    :datalevin.server/view
+                    :datalevin.server/database
+                    "sales-db")
 
-;; 3. Grant permission to the role for a specific database
-(c/grant-permission client "analyst" :datalevin.server/view "sales-db")
-
-;; 4. Assign the role to the user
-(c/assign-role client "alice" "analyst")
+(c/assign-role client :app.role/analyst "alice")
 ```
 
 ```java
-// 1. Create a user
+import datalevin.PermissionAction;
+import datalevin.PermissionObject;
+
 client.createUser("alice", "password123");
+client.createRole("app.role/analyst");
 
-// 2. Create a role
-client.createRole("analyst");
+client.grantPermission("app.role/analyst",
+                       PermissionAction.VIEW,
+                       PermissionObject.DATABASE,
+                       "sales-db");
 
-// 3. Grant permission to the role for a specific database
-client.grantPermission("analyst", "datalevin.server/view", "sales-db");
-
-// 4. Assign the role to the user
-client.assignRole("alice", "analyst");
+client.assignRole("app.role/analyst", "alice");
 ```
 
 ```python
-# 1. Create a user
 client.create_user("alice", "password123")
+client.create_role("app.role/analyst")
 
-# 2. Create a role
-client.create_role("analyst")
+client.grant_permission("app.role/analyst",
+                        "datalevin.server/view",
+                        "datalevin.server/database",
+                        "sales-db")
 
-# 3. Grant permission to the role for a specific database
-client.grant_permission("analyst", "datalevin.server/view", "sales-db")
-
-# 4. Assign the role to the user
-client.assign_role("alice", "analyst")
+client.assign_role("app.role/analyst", "alice")
 ```
 
 ```javascript
-// 1. Create a user
-client.createUser('alice', 'password123');
+await client.createUser("alice", "password123");
+await client.createRole("app.role/analyst");
 
-// 2. Create a role
-client.createRole('analyst');
+await client.grantPermission("app.role/analyst",
+                             "datalevin.server/view",
+                             "datalevin.server/database",
+                             "sales-db");
 
-// 3. Grant permission to the role for a specific database
-client.grantPermission('analyst', 'datalevin.server/view', 'sales-db');
-
-// 4. Assign the role to the user
-client.assignRole('alice', 'analyst');
+await client.assignRole("app.role/analyst", "alice");
 ```
 
 </div>
 
-#### 3.3 Default Credentials
-The server initializes with a default admin:
-- **Username**: `datalevin`
-- **Password**: `datalevin` (or set via `DATALEVIN_DEFAULT_PASSWORD` env var).
+### 3.4 Encryption at Rest
 
-**Security Warning**: Always change the default password immediately after installation.
-When the server binds to a non-loopback address, `DATALEVIN_DEFAULT_PASSWORD` is required at startup.
+Datalevin does not currently provide database-level transparent data encryption.
+Use encryption at the layer where it is easiest to operate and audit:
 
----
+- Cloud volume encryption such as AWS EBS, GCP Persistent Disk, or Azure Disk
+  Encryption.
+- OS or filesystem encryption such as LUKS, FileVault, or `fscrypt`.
+- Application-level encryption for sensitive fields such as PII or secrets.
 
-### 4. Client-Side Tuning Knobs
-
-These parameters control how the client interacts with the server and can be tuned via dynamic variables or client options.
-
-#### 4.1 Freshness and Latency
-- **`datalevin.constants/*remote-db-last-modified-check-interval-ms*`**: 
-    - Sets the interval for checking if the remote DB has changed (default: `0`).
-    - `0` ensures strict freshness (check on every call); higher values reduce network round trips.
-
-#### 4.2 Connection Pooling
-Passed as a map to `datalevin.client/new-client`:
-- **`:pool-size`**: Maximum pooled connections per client instance (default: `3`).
-- **`:time-out`**: Timeout in milliseconds for obtaining a connection and retrying requests (default: `60000`).
-- **`:ha-write-retry-timeout-ms`**: Extra bounded retry budget for retryable HA write failover.
-- **`:ha-write-retry-delay-ms`**: Delay between HA write retry rounds.
-
-#### 4.3 Wire Compression (zstd)
-These affect the protocol payload size and CPU usage:
-- **`datalevin.constants/*wire-compression-threshold*`**: Minimum payload size in bytes before attempting compression (default: `8192`).
-- **`datalevin.constants/*wire-compression-level*`**: The zstd compression level (default: `3`).
+For SaaS systems, envelope encryption is usually an application concern: keep
+tenant keys in a managed KMS and encrypt sensitive values before transacting
+them into Datalevin.
 
 ---
 
-### 5. Replication and High Availability
+## 4. Replication and High Availability
 
-Datalevin server has two different replication paths: non-HA async read replicas for read scaling, and consensus-lease HA for automatic leader promotion and follower reads.
+Replication and HA are server-mode features. Chapter 20 covers WAL durability
+and snapshots; this section covers the operational shape.
 
-#### 5.1 Non-HA Async Read Replicas
+### 4.1 Non-HA Async Read Replicas
 
-Use a non-HA async read replica when you want one primary writer server and one or more read-only servers, but do not need leader election, quorum, fencing, automatic promotion, or write failover.
-
-The primary database must have WAL enabled. `:wal-durability-profile :strict` is recommended because the replica sync loop tails records up to the source durable LSN.
+Use an async read replica when you want one primary writer and one or more
+read-only servers. The primary must have WAL enabled. A strict WAL durability
+profile is recommended because the replica tails durable source records.
 
 Configure the replica when opening the database on the replica server:
 
@@ -274,31 +400,38 @@ Configure the replica when opening the database on the replica server:
 
 (def replica-conn
   (d/create-conn
-    "dtlv://replica-admin:pass@replica-host:8898/app"
-    schema
-    {:replica/read-only? true
-     :replica/source "dtlv://replicator:pass@primary-host:8898/app"
-     :replica/id "app-replica-us-west"
-     :replica/poll-ms 250
-     :replica/report-ms 5000
-     :wal? true
-     :wal-durability-profile :strict}))
+   "dtlv://replica-admin:pass@replica-host:8898/app"
+   schema
+   {:replica/read-only? true
+    :replica/source "dtlv://replicator:pass@primary-host:8898/app"
+    :replica/id "app-replica-us-west"
+    :replica/poll-ms 250
+    :replica/report-ms 5000
+    :wal? true
+    :wal-durability-profile :strict}))
 ```
 
-On first open, if the local replica database does not exist, Datalevin bootstraps it from the primary copy interface. After that, the replica tails source WAL records in LSN order and periodically reports its applied LSN back to the primary so WAL garbage collection preserves needed segments. If the local replica database already exists, it is reused; remove that local database directory to force a fresh bootstrap.
+On first open, Datalevin bootstraps the replica from the primary copy interface
+if the local replica database does not exist. After that, the replica tails WAL
+records in LSN order and reports its applied LSN to the primary so WAL garbage
+collection preserves needed segments.
 
-Replica reads use the normal APIs against the replica URI. User writes are rejected by the replica server, even if the authenticated user otherwise has write permission:
+The source user in `:replica/source` must be able to open/copy the primary
+database, read the transaction log, and update the replica floor. In practice,
+grant the replicator user database `:datalevin.server/alter` permission. The
+user opening the local replica needs permission to create or open the database
+on the replica server.
+
+Replica reads use normal APIs. User writes are rejected by the replica server:
 
 ```clojure
 (d/q '[:find [?name ...] :where [?e :name ?name]] @replica-conn)
 
-;; Throws: replica is read-only
+;; Throws: Replica is read-only
 (d/transact! replica-conn [{:db/id -1 :name "blocked"}])
 ```
 
-The source user in `:replica/source` must be allowed to copy/open the primary database, read the transaction log, and update the replica floor on the primary. In practice, grant that replicator user database `:datalevin.server/alter` permission. The user opening the local replica needs permission to create or open the database on the replica server.
-
-Replica status is available through `datalevin.client`:
+Replica status is available through the Clojure admin client:
 
 ```clojure
 (def client
@@ -307,32 +440,48 @@ Replica status is available through `datalevin.client`:
 (cl/replica-status client "app")
 ```
 
-The returned map includes `:replica/read-only?`, `:replica/source`, `:replica/id`, `:replica-applied-lsn`, `:replica-source-durable-lsn`, `:replica-source-committed-lsn`, `:replica-lag-lsn`, `:replica-last-sync-ms`, `:replica-degraded-reason`, and `:replica-last-error`.
+The returned map includes `:replica-applied-lsn`,
+`:replica-source-durable-lsn`, `:replica-source-committed-lsn`,
+`:replica-lag-lsn`, `:replica-last-sync-ms`,
+`:replica-degraded-reason`, and `:replica-last-error`.
 
-#### 5.2 Consensus-Lease HA and Follower Reads
+### 4.2 Consensus-Lease HA
 
-Datalevin server supports consensus-lease HA. Each HA database has exactly one write leader at a time. Followers replicate from the leader using WAL records and snapshots, and can serve reads.
+Consensus HA gives each HA database exactly one write leader at a time.
+Followers replicate from the leader using WAL records and snapshots and can
+serve reads.
 
-The HA design has three layers:
+The design has three operational layers:
 
-- **Data plane**: Leader writes append to WAL; followers copy and replay records in order. If a follower falls too far behind retained WAL, it bootstraps from a snapshot and resumes replay.
-- **Control plane**: A Raft-backed consensus group stores the current lease owner, term, leader endpoint, membership hash, and leader LSN.
-- **Local runtime state**: Each database on each node is a `:follower`, `:candidate`, `:leader`, or `:demoting`.
+- **Data plane**: The leader appends writes to WAL; followers copy and replay
+  records. A follower that falls behind retained WAL bootstraps from a snapshot.
+- **Control plane**: A Raft-backed group stores the lease owner, term, leader
+  endpoint, membership hash, and leader LSN.
+- **Local state**: Each database on each node is a `:follower`, `:candidate`,
+  `:leader`, or `:demoting`.
 
-Writes are admitted only when the local node has fresh proof that it is the current leader and not demoting. Promotion is conservative: candidates check membership, lag, lease state, and fencing before accepting writes. HA forces `:wal? true` and defaults to `:wal-durability-profile :strict`.
+Writes are admitted only when the node has fresh proof that it is the current
+leader and is not demoting. HA forces `:wal? true` and defaults to
+`:wal-durability-profile :strict`.
 
-Clients do not need a separate replica API. Connect to a follower endpoint for follower reads:
+For follower reads, connect to a follower endpoint with the normal APIs:
 
 ```clojure
-(def replica
+(def follower
   (d/get-conn "dtlv://user:pass@replica-host:8898/app"))
 ```
 
-Use RBAC for enforced read-only access: grant only `:datalevin.server/view`. Ordinary one-shot writes can retry across known HA endpoints when a node responds with retryable states such as `:not-leader`. Explicit remote write transactions can retry while opening, but once opened they remain pinned to the server session that accepted them.
+Use RBAC to enforce read-only access. Grant only `:datalevin.server/view` to
+users that should read from followers.
 
-#### 5.3 Operator-Driven HA Membership Updates
+### 4.3 HA Membership Updates
 
-Consensus HA membership is operator managed. Datalevin does not discover data nodes automatically, but an administrator can update the authoritative membership for an open HA database with `datalevin.client/ha-update-membership!`.
+Consensus HA membership is operator managed. Datalevin does not discover data
+nodes automatically. Update the authoritative membership for an open HA database
+with `datalevin.client/ha-update-membership!`.
+
+`ha-members` endpoints use `host:port` strings and must be ordered by ascending
+`:node-id`.
 
 ```clojure
 (require '[datalevin.client :as cl])
@@ -341,331 +490,66 @@ Consensus HA membership is operator managed. Datalevin does not discover data no
   (cl/new-client "dtlv://admin:pass@node-a:8898"))
 
 (cl/ha-update-membership!
-  client
-  "app"
-  {:ha-members
-   [{:node-id 1 :endpoint "node-a:8898"}
-    {:node-id 2 :endpoint "node-b:8898"}
-    {:node-id 3 :endpoint "node-c-new:8898"}]
-   :ha-control-plane
-   {:voters [{:peer-id "node-a:9098" :promotable? true :ha-node-id 1}
-             {:peer-id "node-b:9098" :promotable? true :ha-node-id 2}
-             {:peer-id "node-c-new:9098" :promotable? true :ha-node-id 3}]}})
+ client
+ "app"
+ {:ha-members
+  [{:node-id 1 :endpoint "node-a:8898"}
+   {:node-id 2 :endpoint "node-b:8898"}
+   {:node-id 3 :endpoint "node-c-new:8898"}]
+  :ha-control-plane
+  {:voters [{:peer-id "node-a:9098" :promotable? true :ha-node-id 1}
+            {:peer-id "node-b:9098" :promotable? true :ha-node-id 2}
+            {:peer-id "node-c-new:9098" :promotable? true :ha-node-id 3}]}})
 ```
 
-The request validates the proposed `:ha-members` and control-plane voters, persists the new HA options on the target server, optionally replaces the Raft voter set, CAS-updates the authoritative membership hash, clears existing leases by default, and restarts that server's local HA runtime. The caller needs database alter permission plus server control permission, and the request must be issued outside `with-transaction`.
+The request validates the member and voter lists, persists the new HA options on
+the target server, optionally replaces the Raft voter set, CAS-updates the
+authoritative membership hash, clears existing leases by default, and restarts
+that server's local HA runtime.
 
-Useful request keys are:
+Useful request keys:
 
 - **`:ha-members`**: Replacement data-node member list.
-- **`:ha-control-plane {:voters [...]}`** or **`:ha-control-plane-voters`**: Replacement control-plane voters. This live API only changes the voter list, not other control-plane settings.
-- **`:expected-membership-hash`**: Optional CAS guard. If omitted, the server reads the current authoritative hash before applying the update.
-- **`:replace-voters?`**: Defaults to `true`; set to `false` only when the control-plane voter set was changed separately.
-- **`:clear-leases?`**: Defaults to `true`; this forces write leadership to be reacquired under the new membership.
+- **`:ha-control-plane {:voters [...]}`** or
+  **`:ha-control-plane-voters`**: Replacement control-plane voters.
+- **`:expected-membership-hash`**: Optional CAS guard.
+- **`:replace-voters?`**: Defaults to `true`.
+- **`:clear-leases?`**: Defaults to `true`, forcing leadership to be reacquired.
 - **`:timeout-ms`**: Optional control-plane operation timeout.
 
-Run the same update on each surviving or newly staged server, or otherwise open those servers with the same new HA options, so local persisted options match the authoritative hash. A node whose local membership hash does not match the authoritative hash fails closed and will not promote or admit writes until the mismatch is resolved. Repeating the same desired update is idempotent and can be used to persist local options on nodes staged before the first cluster-wide hash update.
+Run the same desired update on surviving or newly staged servers so local
+persisted options match the authoritative membership hash. A node with a
+membership mismatch fails closed and will not promote or admit writes until the
+mismatch is resolved.
 
 ---
 
-### 6. Runtime UDFs in Server Mode
-
-Descriptor-backed `:db/udf` functions resolve in the runtime where the query or transaction executes. For embedded databases, pass a runtime registry in store options. For remote transactions, the UDF registry must be installed in the server process; client-local registries are not consulted.
-
-This distinction matters in HA deployments. If `:ha-require-udf-ready? true` is set, a leader rejects writes until all installed `:db/udf` transaction descriptors can be resolved by the server runtime.
-
----
-
-### 7. Performance Considerations
-
-#### 7.1 Latency and Batching
-Every network call introduces latency. While `d/q` and `d/transact!` are optimized, frequent small operations can be slow over a network.
-- **Batching**: Use `d/transact!` with multiple datoms or `d/transact-async` to reduce the number of round trips.
-- **Pull**: Use the `d/pull` API to fetch large entity trees in a single request rather than performing multiple lookups.
-
-#### 7.2 Serialization Overheads
-While Nippy is fast, serializing large result sets can still take time. Ensure your queries are specific (`:find` only what you need) to minimize the amount of data sent over the wire.
-
----
-
-### Summary: Scaling with Datalevin Server
-
-The Client-Server architecture allows Datalevin to move beyond a single-process library into a centralized data hub for your entire infrastructure. By combining the speed of the underlying engine with a robust network protocol and security model, Datalevin provides a bridge between the simplicity of SQLite and the power of enterprise databases.
-
----
-
-## 2. Encryption and Security Models
-
-Security is a multi-layered responsibility. While Datalevin provides robust tools for access control, protecting the physical data requires a strategy that spans from the hardware up to the application code.
-
-This section provides guidance on how to secure your Datalevin data at rest and how to use the built-in Role-Based Access Control (RBAC) in Datalevin Server.
-
----
-
-### 1. Encryption at Rest: A Layered Approach
-
-Datalevin does not currently provide database-level encryption (e.g., TDE). Instead, it follows the industry-standard recommendation of securing data at the layers where encryption is most efficient and manageable.
-
-#### 1.1 The Security Stack
-To protect your data at rest, consider encryption at these levels, from bottom to top:
-
-1.  **Hardware**: Use hardware-encrypted drives or Hardware Security Modules (HSMs) for key management.
-2.  **Disk/Volume**: This is the most common and recommended starting point.
-    *   **On-Premise**: Use **LUKS** (Linux) or **FileVault** (macOS).
-    *   **Cloud**: Use managed encryption like **AWS EBS encryption**, **GCP Persistent Disk encryption**, or **Azure Disk Encryption**. These handles key rotation and management for you with zero performance overhead.
-3.  **File System**: Use tools like `fscrypt` to encrypt specific directories at the OS level.
-4.  **Application Level**: For extremely sensitive fields (e.g., PII, credit card numbers), encrypt the data in your application code before sending it to Datalevin.
-
-#### 1.2 Multi-Tenancy and Envelope Encryption
-If you are building a SaaS with multiple tenants, you may need **Envelope Encryption**.
-- Use a cloud-managed service like **AWS KMS** or **GCP KMS** to manage per-tenant "Data Encryption Keys" (DEKs).
-- Your application encrypts the sensitive fields with a tenant's DEK before transacting them as a blob or string into Datalevin.
-
----
-
-### 2. Security Models: Datalevin Server RBAC
-
-When running in server mode, Datalevin provides a comprehensive **Role-Based Access Control (RBAC)** system to ensure that only authorized users can query or modify specific data.
-
-#### 2.1 Users and Roles
-- **Users**: Access is secured by a username and a salted/hashed password.
-- **Default User**: Every server has a default administrative user named `datalevin`. Set `DATALEVIN_DEFAULT_PASSWORD` when starting the server; it is required when binding to a non-loopback address and should be treated as mandatory in production.
-- **Roles**: Permissions are granted to roles, which are then assigned to users. Every user also has a built-in private role named `:datalevin.role/<username>`.
-
-#### 2.2 The Permission Triple: Act, Obj, Tgt
-Permissions in Datalevin are defined by three components:
-
-1.  **Action (`act`)**: What the user can do.
-    *   `:datalevin.server/view`: Read-only access (query, pull).
-    *   `:datalevin.server/alter`: Modify data (transact).
-    *   `:datalevin.server/create`: Create new databases or users.
-    *   `:datalevin.server/control`: Full administrative control.
-2.  **Object (`obj`)**: What type of thing they are acting on (e.g., `:datalevin.server/database`, `:datalevin.server/user`).
-3.  **Target (`tgt`)**: The specific name of the database, user, or role. Use `nil` to target all objects of that type.
-
-#### 2.3 Managing Access via REPL
-Administrative tasks are performed via the server REPL:
-
-```clojure
-;; 1. Create a new user
-(create-user "alice" "secure-password")
-
-;; 2. Grant 'view' permission on a specific database to Alice
-(grant-permission :datalevin.role/alice 
-                  :datalevin.server/view 
-                  :datalevin.server/database 
-                  "prod-db")
-
-;; 3. Create a custom 'editor' role and assign it to Alice
-(create-role :app.role/editor)
-(grant-permission :app.role/editor :datalevin.server/alter :datalevin.server/database "prod-db")
-(assign-role "alice" :app.role/editor)
-```
-
----
-
-### 3. Summary: Security Best Practices
-
-1.  **Start with Cloud Disk Encryption**: If you are on AWS/GCP/Azure, enable volume encryption for your database storage.
-2.  **Change the Default Admin Password**: Never leave the `datalevin` user with its default credentials.
-3.  **Principle of Least Privilege**: Create specific users for your applications and grant them only the `:view` or `:alter` permissions they need for specific databases.
-4.  **Use Application-Level Encryption for PII**: Don't rely on the database to protect highly sensitive fields; encrypt them before they leave your application server.
-
-By combining infrastructure-level encryption with Datalevin's granular RBAC, you can build systems that are both highly functional and securely defended.
-
----
-
-## 3. Deployment Patterns
-
-Datalevin is designed to be highly portable. Whether you are building a small CLI tool or a massive distributed system, you can deploy Datalevin in the mode that best fits your operational requirements.
-
-This section explores the architectural trade-offs of the primary deployment modes: **Embedded**, **Server**, **Async Read Replica**, **HA Server**, **MCP**, and **Babashka Pods**.
-
----
-
-### 1. Embedded Mode: Maximum Performance
-
-Embedded mode is the primary way to use Datalevin. You include it as a standard library in your application.
-
-- **Architecture**: Your application and Datalevin share the same process and address space.
-- **Performance**: This is the fastest possible deployment. Because Datalevin uses memory-mapping (mmap), your application reads data directly from the OS Page Cache with **zero-copy overhead**.
-- **Operational Simplicity**: No separate database process to manage, monitor, or secure. The database file is just another part of your application's state.
-- **Ops Note**: On small single-node VMs, leave RAM headroom for the OS page cache and provision at least **1 GB of swap** so brief memory spikes do not immediately kill the process.
-
-**Best for**:
-- High-performance, single-node services.
-- Containerized applications where each container has its own volume.
-- Desktop applications or local tools.
-
----
-
-### 2. Server Mode: Centralized Management
-
-Server mode is used when you need multiple services to share a single Datalevin instance, centralized RBAC, or remote access over `dtlv://` URIs.
-
-- **Architecture**: A standalone `dtlv` server process manages the storage and provides a network API.
-- **Benefits**: Centralized backup management, fine-grained RBAC, and the ability to share a single database across microservices.
-- **Trade-offs**: Network latency and serialization overhead (Nippy/Transit).
-
-**Best for**:
-- Microservices architectures where data must be shared.
-- Shared development environments for teams.
-- Non-JVM applications needing Datalog or KV storage.
-
----
-
-### 3. Non-HA Async Read Replicas
-
-Async read replicas are server databases opened with `:replica/read-only? true` and a `:replica/source` pointing at a primary `dtlv://` database. They are separate from consensus HA.
-
-- **Architecture**: One primary writer database with WAL enabled, plus one or more read-only replica databases that bootstrap from primary copy and then tail durable WAL records.
-- **Benefits**: Read scaling, geographic or workload isolation for queries, and simpler operations than a consensus cluster.
-- **Trade-offs**: Eventually consistent reads, no automatic promotion, no fencing, no quorum, and no write failover.
-
-**Best for**:
-- Read-heavy services where stale-by-lag reads are acceptable.
-- Reporting, analytics, or search-serving nodes that should not accept writes.
-- Teams that want read capacity without operating consensus HA.
-
----
-
-### 4. HA Server Mode: Leader, Followers, and Failover
-
-Consensus-lease HA is the operational mode for services that need automatic write-leader promotion and read-capable followers.
-
-- **Architecture**: One write leader per database, follower replicas that replay WAL records, and a Raft-backed control plane for leases, terms, membership, and promotion decisions.
-- **Benefits**: Automatic leader promotion, follower read capacity, WAL/snapshot-based rejoin, and explicit fail-closed behavior when membership, clock skew, lag, or fencing is unsafe.
-- **Trade-offs**: Explicit operator-managed membership updates, required fencing hooks, quorum operational discipline, and no multi-leader writes.
-
-**Best for**:
-- Production services that need automatic failover.
-- Read-heavy systems that benefit from follower reads.
-- Operator-managed clusters where safety is more important than accepting writes during uncertainty.
-
----
-
-### 5. MCP Mode: Tool Surface for AI Applications
-
-`dtlv mcp` runs a local MCP server over `stdio`. It is a process adapter over Datalevin APIs and can open local databases or remote `dtlv://` targets.
-
-- **Architecture**: A local MCP client launches `dtlv mcp`; Datalevin handles database operations behind the MCP tool calls.
-- **Safety**: Read-only tools are the default. Write tools require `dtlv --allow-writes mcp`.
-- **Scope**: MCP handle ids are session-scoped, and responses include structured payloads suitable for machine use.
-
-**Best for**:
-- AI applications that need controlled read access to Datalevin.
-- Local tooling that wants a stable JSON-shaped tool surface.
-- Workflows that should use the same database APIs without embedding application-specific client code.
-
----
-
-### 6. Babashka Pods: Rapid Scripting
-
-Babashka is a fast-starting Clojure interpreter for scripting. Datalevin provides a **Pod** that allows you to use its Datalog and KV capabilities within a script without the overhead of the full JVM startup.
-
-- **Architecture**: The Pod runs as a separate process and communicates with Babashka via IPC.
-- **Performance**: High (IPC overhead is minimal compared to network), but lacks the zero-copy speed of the embedded mode.
-- **Convenience**: Single-binary installation and instantaneous startup.
-
-**Best for**:
-- CLI tools that store state.
-- Database maintenance and migration scripts.
-- Ephemeral tasks or "Lambda"-style functions.
-
----
-
-### 7. Native Language Libraries
-
-Datalevin also publishes embedded libraries for several host languages:
-
-- **Clojure**: `datalevin/datalevin` on Clojars, plus `org.datalevin/datalevin-embedded` for embedded-only JVM use.
-- **Java**: `org.datalevin:datalevin-java` on Maven Central.
-- **Python**: `datalevin` on PyPI.
-- **Node.js**: `datalevin-node` on npm.
-
-These packages are still embedded runtimes. They are excellent when a Java, Python, or Node application owns a local database path, or when the language wrapper is used as a remote Datalevin client.
-
----
-
-### 8. Architectural Comparison Table
-
-| Feature | Embedded | Server | Async Read Replica | HA Server | MCP | Babashka Pod |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Communication** | Direct calls | TCP | TCP + WAL tailing | TCP + replication/control plane | stdio | IPC |
-| **Overhead** | Lowest | Network serialization | Network + replica lag | Network + HA coordination | Tool-call serialization | IPC |
-| **Security** | OS/file permissions | RBAC | RBAC + server-side write rejection | RBAC + HA fencing | Read-only by default | OS-level |
-| **Writes** | Local single-writer storage path; WAL can improve concurrent caller throughput | Multi-client, server-coordinated | Primary only; rejected on replica | One leader per database | Disabled unless allowed | Local process path |
-| **Reads** | Local zero-copy | Remote client reads | Replica reads, eventually consistent | Leader or follower reads | Local or remote target | Pod process |
-| **Tech Stack** | Clojure, Java, Python, Node | Datalevin clients | Datalevin clients | Datalevin clients | MCP clients | Babashka |
-
----
-
-### 9. Case Study: High-Density Multi-Tenancy
-
-A powerful but less common deployment pattern is **high-density multi-tenancy**. Instead of a single massive database for all users, you create a separate Datalevin database for every user or workspace.
-
-#### The PKM Pattern
-One known use case of Datalevin is in **Personal Knowledge Management (PKM)** systems. Some PKM companies deploy thousands of individual Datalevin databases on a single physical machine. In this architecture, each user or workspace gets its own dedicated database file.
-
-#### Why It Works
-Datalevin is exceptionally lightweight because it is built on LMDB, which uses memory-mapped files (mmap). 
-
-- **Minimal Overhead**: The memory overhead for an idle Datalevin instance is nearly zero. The OS kernel manages the page cache across all database files, ensuring that only the active data for active users resides in physical RAM.
-- **Strict Isolation**: Because each user has a physically separate database, there is zero risk of "cross-talk" or accidental data leakage between tenants at the database level.
-- **Operational Simplicity**: Tasks like per-user backups, data migrations, or even "deleting an account" become simple file-system operations. You don't need complex `WHERE user_id = ?` logic for every single query.
-- **Local-First Synchronization**: The same database file used on the server can be transferred to a user's local device and opened with the same Datalevin library, making it an ideal choice for local-first applications that require robust offline capabilities.
-
----
-
-### Summary: Designing for Your Lifecycle
-
-Datalevin's deployment flexibility allows your application to evolve.
-
-1.  **Prototype with Pods**: Use the Babashka Pod for quick scripts and local experiments.
-2.  **Scale with Embedded**: When building your production application, use Embedded mode for maximum performance.
-3.  **Expose with MCP**: For AI tools, expose a read-only local tool surface before adding write tools.
-4.  **Expand with Server**: If you need to share data across microservices or teams, "promote" to Server mode.
-5.  **Add read replicas**: If reads need isolation or capacity but writes can stay on one primary, add non-HA async read-only replicas.
-6.  **Harden with HA**: If the server becomes critical infrastructure and needs automatic failover, move selected databases to consensus-lease HA.
-
-Because the underlying data format is identical in all modes, you can move between patterns without data migration.
-
----
-
-## 4. Monitoring, Debugging, and Production Checklist
-
-Running Datalevin in production requires a shift from a "developer" mindset to an "operator" mindset. Because Datalevin offloads much of its work to the operating system, monitoring the database often means monitoring the host environment.
-
-This section provides a comprehensive guide to monitoring Datalevin, debugging performance issues, and a checklist for a production-ready deployment.
-
----
-
-### 1. Monitoring the Environment
-
-Datalevin's performance is tied directly to the health of the host's memory and disk.
-
-#### 1.1 Disk I/O and Latency
-
-In the direct LMDB commit path, durable commits are limited by synchronous disk
-flushes unless you use a non-durable flag such as `:nosync`. In WAL mode, commit
-latency depends on the selected durability profile.
-
-- **Monitor**: Disk IOPS and `iowait`.
-- **Recommendation**: Use **NVMe SSDs** for the best performance. High-latency block storage (like network-attached drives) will severely limit your write throughput.
-
-#### 1.2 The Page Cache and RSS
-Because Datalevin uses memory-mapping, the OS Page Cache is your "buffer pool."
-- **Resident Set Size (RSS)**: This shows how much of the database is currently "hot" in RAM.
-- **Virtual Size**: This will match your `:mapsize` and is not a cause for concern.
-- **Tuning**: Monitor "Page Faults." A high number of major page faults indicates that your working set doesn't fit in RAM, causing the OS to fetch data from disk frequently.
-
----
-
-### 2. Database Health: `d/stat`
-
-You can inspect LMDB B+Tree statistics with `stat`. In Clojure, `stat` operates
-on a KV handle; for a Datalog database directory, the `dtlv stat` command opens
-the store and reports the same kind of LMDB statistics.
+## 5. Monitoring and Diagnostics
+
+Datalevin relies heavily on the operating system for memory mapping and disk
+I/O. Production monitoring should combine host metrics with Datalevin-specific
+checks.
+
+### 5.1 Host Metrics
+
+Watch these first:
+
+- **Disk latency and `iowait`**: Durable direct-LMDB commits are bounded by
+  synchronous flush latency. WAL commit latency depends on the chosen durability
+  profile.
+- **Free disk space**: LMDB copy-on-write and WAL files need enough room for
+  new pages, snapshots, and retained WAL segments.
+- **Page cache and major page faults**: Datalevin's effective buffer pool is the
+  OS page cache. Major page faults indicate that the active working set is not
+  resident.
+- **RSS vs virtual size**: A large virtual mapping reflects `:mapsize`; it is
+  not the same as resident memory.
+
+### 5.2 Database Statistics
+
+Use `stat` to inspect LMDB B+Tree statistics. In Clojure, `stat` operates on a
+KV handle. For a Datalog database directory, the `dtlv stat` command opens the
+store and reports the same class of LMDB statistics.
 
 <div class="multi-lang">
 
@@ -694,54 +578,74 @@ $ dtlv -d /data/companydb stat datalevin/eav
 
 </div>
 
-This returns metrics such as:
-- **`:branch-pages` / `:leaf-pages`**: The structure of your tree.
-- **`:overflow-pages`**: Pages used for large values.
-- **`:entries`**: Total number of key-value pairs.
+Useful fields include `:branch-pages`, `:leaf-pages`, `:overflow-pages`, and
+`:entries`. LMDB reuses deleted pages rather than shrinking the file in place.
+After large deletions, use the compact-copy workflow from Chapter 20 during
+controlled maintenance.
 
-#### 2.1 The Free List
-LMDB reuses deleted pages rather than shrinking the file in place. After large
-deletions, create a compacted copy with `d/copy` using `true` as the third
-argument, or with `dtlv -c copy` (Chapter 20), then replace the original database
-as controlled maintenance.
+### 5.3 Query and Write Diagnostics
 
----
+- Use `explain` from Chapter 21 to inspect query plans and, with `{:run? true}`,
+  compare estimates with actual result sizes.
+- If writes are slow and disk is busy, check storage latency and the selected
+  durability profile.
+- If writes are slow while disk is idle, look for writer contention, many small
+  transactions, or WAL group-commit settings that do not fit the workload.
+- Log transaction latency, query latency, and result sizes at the application
+  boundary. Datalevin cannot know which latency budget matters to your service.
 
-### 3. Debugging and Profiling
+### 5.4 Replication and HA Checks
 
-When queries are slow or the system feels sluggish, use these tools to find the bottleneck.
+For async replicas, monitor `datalevin.client/replica-status`, especially
+`:replica-lag-lsn`, `:replica-degraded-reason`, and `:replica-last-error`.
 
-- **Query Analysis**: Use `d/explain` (Chapter 21) to inspect query plans and understand execution strategy.
-- **Writer Contention**: If `d/transact!` calls are slow but the disk is idle, check whether multiple threads are competing for the direct LMDB writer path, or whether WAL group-commit settings are mismatched to the workload.
-- **Logging**: Use a library like Timbre to log transaction times and query latencies.
+For HA clusters, monitor leader identity, follower lag, membership hash
+agreement, clock skew, and fencing health. Keep each node's `:ha-members` and
+promotable control-plane voters aligned with the authoritative membership hash.
 
----
+### 5.5 Health Checks
 
-### 4. The Production Checklist
+A service health check should prove that the application can reach the database
+path it depends on. For a Datalog database, use a scalar probe:
 
-Before you "go live," ensure your configuration matches these best practices.
+```clojure
+(d/q '[:find ?e . :where [?e _ _]] db)
+```
 
-#### 4.1 Memory and Storage
-- [ ] **`:mapsize`**: Set to at least 2x your expected data size.
-- [ ] **`:max-readers`**: Keep the default 1024 unless your bounded worker pool can exceed it.
-- [ ] **WAL Mode**: Enable `:wal? true` when you need WAL throughput, replay, replication, or HA behavior.
-- [ ] **Durability Profile**: Choose `:strict`, `:relaxed`, or `:extra` based on your safety requirements.
-- [ ] **`:nosync`**: Ensure this is **FALSE** (default) for production data safety.
+This is cheaper than returning a relation with `:limit 1`; the health check only
+needs one scalar value or `nil`.
 
-#### 4.2 Operating System Tuning
-- [ ] **`vm.swappiness`**: Set to `1` or `10` to prevent the OS from swapping database pages to disk.
-- [ ] **`vm.dirty_ratio`**: Adjust to ensure the OS flushes writes to disk consistently.
-- [ ] **Transparent Huge Pages (THP)**: Often recommended to be disabled or set to `madvise` for database workloads.
-
-#### 4.3 Operations
-- [ ] **Automated Backups**: Use `d/copy` on a Datalog database value or KV handle, or use `dtlv copy`, to create transactionally consistent backups without downtime.
-- [ ] **Monitoring Hooks**: Use `d/listen!` to track transaction volume and data growth.
-- [ ] **Replica Lag**: For non-HA async read replicas, monitor `datalevin.client/replica-status`, especially `:replica-lag-lsn`, `:replica-degraded-reason`, and `:replica-last-error`.
-- [ ] **HA Membership Drift**: In consensus HA, keep each node's `:ha-members` and promotable control-plane voter mapping aligned with the authoritative membership hash. Use `datalevin.client/ha-update-membership!` for operator-driven membership changes.
-- [ ] **Health Checks**: Implement a `/health` endpoint that performs a simple `(d/q '[:find ?e :where [?e _ _] :limit 1] db)` to verify end-to-end connectivity.
+For server deployments, check both the server process and the application-level
+operation that your service needs, such as a read-only query for read endpoints
+or a small write in a dedicated health database for write-path checks.
 
 ---
 
-### Summary
+## 6. Production Checklist
 
-Datalevin is a "quiet" database. When tuned correctly, it requires very little maintenance. By monitoring the OS Page Cache, keeping compacted copies in your maintenance plan, and following the production checklist, you can ensure that your Datalevin deployment remains fast and reliable for years.
+Use this as a final review before production:
+
+- Choose the simplest deployment mode that satisfies the availability and access
+  requirements.
+- Run the server under a service manager with a dedicated data directory and
+  restricted filesystem permissions.
+- Set `DATALEVIN_DEFAULT_PASSWORD`; do not expose a server using the built-in
+  default password.
+- Create application users and roles with least-privilege RBAC permissions.
+- Use disk or volume encryption for the data directory, and application-level
+  encryption for sensitive fields.
+- Follow Chapter 20 for `:mapsize`, `:max-readers`, WAL, durability profile,
+  copy, dump/load, snapshots, and compaction.
+- Automate transactionally consistent backups and test restores.
+- Monitor disk latency, free space, page-cache behavior, query latency, write
+  latency, and result sizes.
+- For async replicas, monitor replica lag and degraded state.
+- For HA, keep membership, voter mapping, clock discipline, and fencing checks
+  part of normal operations.
+- Install server-side UDF registries before relying on descriptor-backed UDFs in
+  remote transactions.
+
+Datalevin is operationally quiet when the deployment boundary is chosen
+correctly. Most production issues come from choosing a topology that is more
+complex than the application needs, starving the OS page cache, or failing to
+test backup and restore paths.

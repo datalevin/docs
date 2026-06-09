@@ -72,6 +72,42 @@ const results = d.q(
 ### 2.2 Truth Maintenance
 If new data is transacted that supersedes old data, the engine uses Datalevin's atomic transactions to update the state. Because Datalevin is fact-centric (datoms), you can retract specific old facts while keeping the rest of the model intact.
 
+### 2.3 Confidence, Utility, and Evidence
+
+Long-lived agents should not treat every extracted fact as equally durable. A
+practical world model records where a fact came from, how confident the system
+is, and how useful that fact has been during later turns.
+
+```clojure
+{:fact/id                #uuid "00000000-0000-0000-0000-000000000201"
+ :fact/content           "Alice prefers release notes with risk summaries."
+ :fact/subject           [:user/id "alice"]
+ :fact/source-episode    [:episode/id #uuid "00000000-0000-0000-0000-000000000202"]
+ :fact/confidence        0.74
+ :fact/utility           0.6
+ :fact/created-at        #inst "2026-06-01T10:00:00Z"
+ :fact/last-confirmed-at #inst "2026-06-08T09:30:00Z"}
+```
+
+Confidence can be reinforced when new evidence agrees with an existing fact,
+lowered when the fact is contradicted, and decayed when it has not been
+confirmed for a long time. Utility captures a different signal: whether the fact
+actually helped answer questions, choose tools, or personalize behavior.
+
+```clojure
+(d/q '[:find ?fact ?confidence ?utility
+       :in $ ?min-confidence ?min-utility
+       :where [?f :fact/content ?fact]
+              [?f :fact/confidence ?confidence]
+              [?f :fact/utility ?utility]
+              [(< ?confidence ?min-confidence)]
+              [(< ?utility ?min-utility)]]
+     db 0.3 0.2)
+```
+
+This makes maintenance explicit. A background job can archive low-confidence,
+low-utility facts while preserving the original episodes as historical evidence.
+
 ---
 
 ## 3. Synthesizing Higher-Level Insights
@@ -99,12 +135,49 @@ Unlike a static config file, this state is **dynamic**. As the agent "apperceive
 
 ---
 
-## 5. Summary: The Engine of Self-Consistency
+## 5. Operating Envelopes
+
+Do not hide hard constraints in prompt prose. Store them as data, resolve them
+before each turn, and attach the resolved envelope to the turn record.
+
+A useful precedence order is:
+
+```text
+organization policy > goal contract > task constraints > user preferences > session scratch
+```
+
+Each layer can live in Datalevin as an `idoc`:
+
+```clojure
+{:policy/id      :policy/org
+ :policy/source  :policy.source/organization
+ :policy/envelope {:tools {:email-send :require-approval}
+                   :limits {:max-llm-calls 20}}}
+
+{:goal/id       #uuid "00000000-0000-0000-0000-000000000203"
+ :goal/contract {:objective "Prepare a weekly account update"
+                 :envelope {:style {:brevity :short}
+                            :limits {:max-llm-calls 8}}}}
+
+{:task/id          #uuid "00000000-0000-0000-0000-000000000204"
+ :task/goal        [:goal/id #uuid "00000000-0000-0000-0000-000000000203"]
+ :task/constraints {:tools {:calendar-event-create :deny}}}
+```
+
+The resolved envelope is ordinary data, so it can be audited, tested, replayed,
+and queried. This is especially important for autonomous or scheduled work,
+where the agent may run without a human watching every turn.
+
+---
+
+## 6. Summary: The Engine of Self-Consistency
 
 An Apperception Engine transforms a database from a passive archive into an active participant in the agent's intelligence.
 
 - **Consistency**: Datalog ensures the model stays logically sound.
 - **Inference**: Rules derive knowledge that isn't explicitly stated.
 - **Evolution**: Graphs allow for a fluid, growing understanding of the world.
+- **Policy**: Operating envelopes keep behavioral constraints inspectable and
+  separate from prompt text.
 
 By building on Datalevin, you provide your AI with more than just a memory; you give it a **substrate for coherent thought**.

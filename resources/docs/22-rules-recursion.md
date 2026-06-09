@@ -6,9 +6,13 @@ part: "V — Performance and Operations"
 
 # Chapter 22: Rules Engine and Recursive Evaluation
 
-Datalog's power lies in its ability to define **recursive rules** that derive new facts from base data. However, evaluating recursive rules efficiently requires sophisticated algorithms to avoid exponential blowup.
+Datalog's power lies in its ability to define **recursive rules** that derive
+new facts from base data. However, evaluating recursive rules efficiently
+requires sophisticated algorithms to avoid exponential blowup.
 
-This chapter explores Datalevin's **bottom-up rules engine**, which implements the latest research advances in Datalog evaluation with several innovations of its own.
+This chapter explores Datalevin's **bottom-up rules engine**, which implements
+the latest research advances in Datalog evaluation with several innovations of
+its own.
 
 Top-down logic evaluation, as in Prolog, starts from a goal and works backward.
 It can be focused, but recursive database queries with cycles can loop or repeat
@@ -29,21 +33,28 @@ Consider a simple recursive rule for finding ancestors:
 In a **Naive Evaluation** model:
 1.  **Iteration 1**: Find all parents (the base case).
 2.  **Iteration 2**: Join all parents with themselves to find grandparents.
-3.  **Iteration 3**: Join all parents with the *entire set* of ancestors found in iterations 1 and 2.
+3.  **Iteration 3**: Join all parents with the *entire set* of ancestors found
+    in iterations 1 and 2.
 
-The problem is **redundant computation**. In iteration 3, you re-calculate grandparents already found in iteration 2. This exponential blowup makes naive recursion unusable for large graphs.
+
+The problem is **redundant computation**. In iteration 3, you re-calculate
+grandparents already found in iteration 2. This exponential blowup makes naive
+recursion unusable for large graphs.
 
 ---
 
 ## 2. Semi-Naive Fixpoint Evaluation
 
-Datalevin uses **Semi-Naive Evaluation (SNE)**, the standard bottom-up strategy:
+Datalevin uses **Semi-Naive Evaluation (SNE)**, the standard bottom-up strategy
+for recursive Datalog evaluation [1]:
 
 1.  **Delta tracking**: Only process *new* tuples discovered in each iteration
 2.  **Fixpoint**: Continue until no new tuples are produced
-3.  **Stratification**: Rules run in strongly connected components (strata) in topological order
+3.  **Stratification**: Rules run in strongly connected components (strata) in
+    topological order
 
-This ensures every fact is derived exactly once, providing linear performance for deep graph traversals.
+This ensures every fact is derived exactly once, providing linear performance
+for deep graph traversals.
 
 Evaluation is set-oriented rather than tuple-at-a-time. Joins operate over
 candidate sets and iterators so the storage layer can use sequential page scans,
@@ -53,11 +64,15 @@ merge-style operations, and bulk filtering rather than repeated random lookups.
 
 ## 3. Magic Set Rewrite
 
-Datalevin implements the **magic set rewrite** algorithm. This technique adds "magic rules" that leverage bound variables to prune unnecessary intermediate results.
+Datalevin implements the **magic set rewrite** algorithm, a classic Datalog
+program transformation for making bottom-up evaluation goal-directed [1] [2].
+This technique adds "magic rules" that leverage bound variables to prune
+unnecessary intermediate results.
 
 When querying for ancestors of a *specific person* (e.g., "who are Alice's
 ancestors?"), magic sets push that filter down into the recursive rule, so the
-engine doesn't compute the entire family tree, just the paths leading from Alice.
+engine doesn't compute the entire family tree, just the paths leading from
+Alice.
 
 ---
 
@@ -65,7 +80,8 @@ engine doesn't compute the entire family tree, just the paths leading from Alice
 
 ### 4.1 Seeding Tuples
 
-Unlike a standalone SNE engine, Datalevin's rules engine doesn't work from a blank slate. It receives **seeding tuples** from outer query clauses.
+Unlike a standalone SNE engine, Datalevin's rules engine doesn't work from a
+blank slate. It receives **seeding tuples** from outer query clauses.
 
 These seeds:
 - Come from index scans powered by the cost-based optimizer
@@ -74,9 +90,12 @@ These seeds:
 
 ### 4.2 Inline Non-Recursive Clauses
 
-Datalevin identifies clauses not involved in recursion, pulls them out, and adds them to regular query clauses where the **cost-based optimizer** can work on them.
+Datalevin identifies clauses not involved in recursion, pulls them out, and adds
+them to regular query clauses where the **cost-based optimizer** can work on
+them.
 
-SNE only operates on rules actually involved in recursion. This innovation leverages index-based joins (faster than SNE) for non-recursive parts.
+SNE only operates on rules actually involved in recursion. This innovation
+leverages index-based joins (faster than SNE) for non-recursive parts.
 
 ### 4.3 Temporal Elimination
 
@@ -97,8 +116,11 @@ evaluation consistent and gives recursive queries a single, well-defined result.
 
 Datalevin's rules engine has been validated against industry benchmarks:
 
-- **LDBC SNB Benchmark**: Industry graph database benchmark. Datalevin compares favorably with Neo4j, particularly on queries leveraging rules.
-- **Math Genealogy Benchmark**: Compared with Datomic and Datascript. Datalevin is significantly faster, with **several orders of magnitude** speedup on recursive rules.
+- **LDBC SNB Benchmark**: Industry graph database benchmark. Datalevin compares
+  favorably with Neo4j, particularly on queries leveraging rules.
+- **Math Genealogy Benchmark**: Compared with Datomic that implements the same
+  rule language. Datalevin is significantly faster, with **several orders of
+  magnitude** speedup on recursive rules.
 
 ---
 
@@ -113,3 +135,14 @@ Datalevin's rules engine combines academic rigor with practical innovations:
 - **Temporal Elimination**: Save memory for T-stratified rules
 
 The result is a rules engine that can handle millions of nodes in recursive queries while remaining memory-efficient and fast.
+
+## References
+
+[1] Todd J. Green, Shan Shan Huang, Boon Thau Loo, and Wenchao Zhou,
+[Datalog and Recursive Query Processing](https://www.nowpublishers.com/article/Details/DBS-017),
+Foundations and Trends in Databases, vol. 5, no. 2, pp. 105-195, 2013,
+[doi:10.1561/1900000017](https://doi.org/10.1561/1900000017).
+
+[2] Francois Bancilhon, David Maier, Yehoshua Sagiv, and Jeffrey D. Ullman,
+[Magic Sets and Other Strange Ways to Implement Logic Programs](https://doi.org/10.1145/6012.15399),
+PODS 1986, pp. 1-15, [doi:10.1145/6012.15399](https://doi.org/10.1145/6012.15399).

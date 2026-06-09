@@ -6,6 +6,11 @@ part: "V — Performance and Operations"
 
 # Chapter 21: Query Planning, Optimization, and Diagnostics
 
+Datalevin has a novel query optimizer that leverages the unique strengths of
+triple stores in facilitating cardinality estimation, one of the hardest
+problems in databases design. With such, Datalevin is able to handle very
+complex query and return results quickly.
+
 A fast query depends on both the plan Datalevin chooses and the evidence you can
 collect when that plan surprises you. This chapter combines optimizer mechanics
 with the `explain` workflow used to diagnose real query behavior.
@@ -181,8 +186,11 @@ Datalevin's query engine has been validated against industry benchmarks:
 
 ### 9. Summary: The Optimizer's Principles
 
-Datalevin's optimizer is designed to be **unobtrusive**. Trust the engine to
-find the optimal path.
+In summary, Datalevin has a sophisticated query optimizer that compiles
+declarative query clauses into optimized execution steps that leverages index
+scans as much as possible, utilizes cheap counts of the triple storage, and
+generate plans similar to a hand written one. Users can trust the engine to find
+the optimal path.
 
 - **Order Doesn't Matter**: The physical order of `:where` clauses has no
   impact.
@@ -199,11 +207,10 @@ While Datalevin's query optimizer is highly intelligent, it is not omniscient.
 Sometimes a query that "should be fast" takes longer than expected. To debug
 these scenarios, you need to "look under the hood" of the execution plan.
 
-Datalevin's public diagnostic API for Datalog queries is **`explain`**. There is
-no separate `trace` query modifier or profiling function. By default, `explain`
-plans the query without running it. When called with `{:run? true}`, it executes
-the query as well and adds measured result-size and timing information to the
-explain output.
+Datalevin's public diagnostic API for Datalog queries is **`explain`**. By
+default, `explain` plans the query without running it. When called with `{:run?
+true}`, it executes the query as well and adds measured result-size and timing
+information to the explain output.
 
 ---
 

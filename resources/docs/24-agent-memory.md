@@ -35,7 +35,7 @@ Many agent architectures attempt to combine a Vector DB (for similarity) with a 
 
 ```clojure
 ;; An "Experience" entity in Datalevin
-{:experience/id      #uuid "..."
+{:experience/id      #uuid "00000000-0000-0000-0000-000000000001"
  :experience/text    "I helped the user debug a Clojure macro today."
  :experience/vector  [...] ; Optional user-supplied vector
  :experience/user    [:user/id "alice"]
@@ -58,17 +58,94 @@ Because Datalevin supports recursive graph traversal (Chapter 13), an agent can 
 
 ---
 
-## 4. Architectural Implementation: The Memory Loop
+## 4. Memory Scopes: Goal, Task, Session, Turn
+
+Real agents need more than a bag of memories. They need scoped state with clear
+lifetimes:
+
+- **Goal**: the durable contract with the user: objective, constraints, budget,
+  and success criteria.
+- **Task**: an execution unit under a goal, with its own plan, runtime state,
+  checkpoints, and boundary summaries.
+- **Session**: an interaction channel with transient scratch context, recent
+  turns, approvals, and working memory.
+- **Turn**: the smallest reasoning/action cycle, useful for audit, token
+  accounting, tool calls, and replay.
+
+Model these scopes as ordinary entities and references:
+
+```clojure
+{:goal/id       #uuid "00000000-0000-0000-0000-000000000101"
+ :goal/status   :goal.status/active
+ :goal/contract {:objective "Monitor release readiness"
+                 :success   "Open blockers are summarized before 09:00"
+                 :budget    {:max-llm-calls 12}}}
+
+{:task/id       #uuid "00000000-0000-0000-0000-000000000102"
+ :task/goal     [:goal/id #uuid "00000000-0000-0000-0000-000000000101"]
+ :task/state    :task.state/running
+ :task/contract {:kind :task
+                 :version 1
+                 :steps [{:id :collect :kind :tool}
+                         {:id :summarize :kind :llm}]}}
+
+{:session/id      #uuid "00000000-0000-0000-0000-000000000103"
+ :session/task    [:task/id #uuid "00000000-0000-0000-0000-000000000102"]
+ :session/scratch {:notes ["User prefers short deployment summaries."]}}
+```
+
+The `:goal/contract`, `:task/contract`, and `:session/scratch` fields are good
+uses for `:db.type/idoc`: they are structured documents that need to move
+transactionally with the graph, but do not need every nested field promoted to a
+top-level attribute.
+
+### 4.1 Working Memory as a Projection
+
+Working memory should not be the whole database. Treat it as a bounded,
+session-scoped projection over long-term memory:
+
+```clojure
+{:wm/id      #uuid "00000000-0000-0000-0000-000000000104"
+ :wm/session [:session/id #uuid "00000000-0000-0000-0000-000000000103"]
+ :wm/topics  "Release readiness and database migration risk"
+ :wm/config  {:max-slots 15
+              :decay-factor 0.85
+              :eviction-threshold 0.1}}
+
+{:wm.slot/wm        [:wm/id #uuid "00000000-0000-0000-0000-000000000104"]
+ :wm.slot/entity    [:db/ident :concept/migrations]
+ :wm.slot/relevance 0.82
+ :wm.slot/pinned?   false}
+```
+
+Each turn can refresh this projection by retrieving candidate concepts,
+episodes, and documents, expanding one hop through the context graph, then
+decaying entries that were not refreshed. Pinned slots preserve user- or
+application-critical context without making every retrieved fact permanent
+prompt material.
+
+---
+
+## 5. Architectural Implementation: The Memory Loop
 
 A typical persistent agent memory loop follows these steps:
 
 1.  **Perceive**: The agent receives an input.
-2.  **Recall**: The agent performs a **Hybrid Query** (Chapter 18) to find relevant past experiences (Vector) and structured facts (Datalog).
-3.  **Reason**: The agent uses the recalled context to decide on an action.
-4.  **Consolidate**: After the action, the agent transacts the new experience back into Datalevin, creating new embeddings and updating graph relationships.
+2.  **Refresh Working Memory**: The agent retrieves relevant entities, facts,
+    episodes, and documents into a bounded projection.
+3.  **Recall**: The agent performs a **Hybrid Query** (Chapter 18) to find
+    relevant past experiences and structured facts.
+4.  **Reason**: The agent uses the recalled context to decide on an action.
+5.  **Act and Audit**: Tool calls, approvals, and model usage are recorded as
+    turn data.
+6.  **Consolidate**: After the action, the agent transacts the new experience
+    back into Datalevin, creating embeddings and updating graph relationships.
 
 ---
 
 ## Summary
 
-Datalevin is not just a database for AI; it is a **memory substrate**. By consolidating episodic, semantic, and working memory into a single, high-performance engine, you reduce the impedance mismatch between the LLM and its data, enabling the creation of agents that truly "learn" and "remember" across time.
+Datalevin is not just a database for AI; it is a **memory substrate**. By
+consolidating episodic, semantic, scoped task state, and working-memory
+projections into a single engine, you reduce the impedance mismatch between the
+LLM and its data, enabling agents that learn and remember across time.

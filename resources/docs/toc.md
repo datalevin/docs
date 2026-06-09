@@ -54,7 +54,7 @@ Part V — Performance and Operations
 
 22. Rules Engine and Recursive Evaluation
 
-23. Client-Server, Security, Deployment, and Production Operations
+23. Deployment and Production Operations
 
 Part VI — Datalevin for Intelligent Systems
 
