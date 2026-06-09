@@ -1,5 +1,7 @@
 *Datalevin: The Definitive Guide to Logical and Intelligent Databases*
 
+0. Preface
+
 Part I — Foundations: A Multi-Paradigm Database
 
 1. Why Datalevin: Logic, Graphs, and Key–Value in One Engine

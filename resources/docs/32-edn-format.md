@@ -16,7 +16,9 @@ Readers coming from JSON, SQL, Java, Python, or JavaScript do not need to learn
 Clojure as a programming language in order to read the examples. EDN is data,
 not code. It is closer to JSON with richer scalar types and symbolic names than
 to a programming syntax. This appendix gives the EDN subset and Datalevin
-conventions needed to read and write the examples in the rest of the book.
+conventions needed to read and write the examples in the rest of the book. The
+official EDN specification is maintained at the [edn-format
+repository](https://github.com/edn-format/edn).
 
 ---
 
@@ -542,4 +544,5 @@ the same small notation.
 ## References
 
 [1] Rich Hickey and contributors, [Extensible Data
-Notation](https://github.com/edn-format/edn), edn-format specification.
+Notation](https://github.com/edn-format/edn), official edn-format
+specification.

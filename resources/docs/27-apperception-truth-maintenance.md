@@ -11,7 +11,7 @@ chapter covers the next problem: what happens when new information should change
 the agent's long-term model?
 
 Memory is about storage and retrieval. **Apperception** is about integrating new
-information into a coherent internal model of the world. An AI agent with
+information into a coherent internal model of the world [1]. An AI agent with
 apperception does not just record events; it understands how those events change
 its current beliefs, goal hierarchy, operating envelope, and future behavior.
 
@@ -37,6 +37,13 @@ apperception engine is a layer that:
 This chapter deliberately comes after recall and context assembly. A retrieval
 pipeline can decide what to show the LLM for this turn. Apperception decides
 what should become part of long-term state after the turn.
+
+The term is also useful because of recent AI work on the Apperception Engine,
+which frames "making sense" as constructing an interpretable symbolic theory
+that explains observations while satisfying coherence or unity conditions [1].
+This chapter does not implement that system directly; it borrows the same design
+ideas. New observations should be integrated into an explicit, coherent,
+inspectable model rather than left as disconnected prompt fragments.
 
 ---
 
@@ -198,6 +205,85 @@ By running these rules periodically or during ingestion, the apperception engine
 compresses many episodic memories into a smaller set of high-value semantic
 facts.
 
+### 4.1 Example: Deriving an Active Interest
+
+Suppose the episode store contains recent questions from Alice:
+
+```clojure
+[{:episode/id        #uuid "00000000-0000-0000-0000-000000000801"
+  :episode/user      [:user/id "alice"]
+  :episode/type      :event.type/question
+  :episode/topic     :concept/clojure
+  :episode/timestamp #inst "2026-06-02T10:00:00Z"
+  :episode/summary   "Alice asked how Clojure protocols differ from interfaces."}
+
+ {:episode/id        #uuid "00000000-0000-0000-0000-000000000802"
+  :episode/user      [:user/id "alice"]
+  :episode/type      :event.type/question
+  :episode/topic     :concept/clojure
+  :episode/timestamp #inst "2026-06-04T14:30:00Z"
+  :episode/summary   "Alice asked about transducer performance."}
+
+ {:episode/id        #uuid "00000000-0000-0000-0000-000000000803"
+  :episode/user      [:user/id "alice"]
+  :episode/type      :event.type/question
+  :episode/topic     :concept/clojure
+  :episode/timestamp #inst "2026-06-08T09:15:00Z"
+  :episode/summary   "Alice asked for macro debugging examples."}]
+```
+
+A synthesis job can query for repeated interest in a topic over a time window:
+
+```clojure
+(d/q '[:find ?user (count ?episode)
+       :keys user question-count
+       :in $ ?topic ?since
+       :where [?episode :episode/type :event.type/question]
+              [?episode :episode/topic ?topic]
+              [?episode :episode/user ?user]
+              [?episode :episode/timestamp ?ts]
+              [(> ?ts ?since)]]
+     db :concept/clojure #inst "2026-06-01T00:00:00Z")
+```
+
+If the count crosses the application's threshold, the job writes a derived
+insight and keeps the evidence explicit:
+
+```clojure
+{:insight/id       #uuid "00000000-0000-0000-0000-000000000811"
+ :insight/kind     :insight.kind/active-interest
+ :insight/subject  [:user/id "alice"]
+ :insight/topic    :concept/clojure
+ :insight/content  "Alice is actively learning Clojure."
+ :insight/rule     :rule/active-interest-v1
+ :insight/window   {:since #inst "2026-06-01T00:00:00Z"
+                    :until #inst "2026-06-09T00:00:00Z"}
+ :insight/evidence [[:episode/id #uuid "00000000-0000-0000-0000-000000000801"]
+                    [:episode/id #uuid "00000000-0000-0000-0000-000000000802"]
+                    [:episode/id #uuid "00000000-0000-0000-0000-000000000803"]]
+ :insight/confidence 0.78
+ :insight/status     :insight.status/current}
+```
+
+The application can also project the accepted insight into the user knowledge
+graph:
+
+```clojure
+{:user/id              "alice"
+ :user/interested-in   :concept/clojure
+ :user/learning-state  {:topic      :concept/clojure
+                        :state      :learning.state/active
+                        :evidence   [:insight/id #uuid "00000000-0000-0000-0000-000000000811"]
+                        :updated-at #inst "2026-06-09T00:00:00Z"}}
+```
+
+The important property is explainability. The agent can later retrieve the
+compact fact "Alice is actively learning Clojure" for personalization, but the
+system can still inspect the episodes, rule version, time window, and confidence
+that produced it. If Alice stops asking about Clojure or starts focusing on a
+different topic, a later apperception pass can supersede the insight rather than
+silently rewriting history.
+
 The compression should remain inspectable. A derived fact should carry the rule
 or model version that produced it, the source episodes or facts, and the time
 range over which the pattern was observed. This prevents "insight" from becoming
@@ -223,6 +309,96 @@ time. That does not mean the model should rewrite its own policy at will. It
 means the application can record evidence about strategy performance, then use
 rules, review workflows, or explicit approvals to update the long-term agent
 configuration.
+
+### 5.1 Example: Updating an Agent Strategy
+
+Consider a release-writing agent whose identity and strategy are stored as data:
+
+```clojure
+{:agent/id       :agent/release-writer
+ :agent/role     "Prepare release-readiness summaries."
+ :agent/style    {:brevity :short
+                  :tone    :direct}
+ :agent/strategy [:strategy/release-summary-v1]}
+
+{:strategy/id          :strategy/release-summary-v1
+ :strategy/status      :strategy.status/current
+ :strategy/instruction "Summarize CI, migrations, blockers, and next action."
+ :strategy/constraints {:max-words 120
+                        :include-risk? true}}
+```
+
+After several runs, the agent has performance evidence:
+
+```clojure
+[{:run/id          #uuid "00000000-0000-0000-0000-000000000901"
+  :run/agent       :agent/release-writer
+  :run/strategy    :strategy/release-summary-v1
+  :run/outcome     :run.outcome/revised-by-user
+  :run/feedback    "Summary omitted migration risk."
+  :run/timestamp   #inst "2026-06-02T09:10:00Z"}
+
+ {:run/id          #uuid "00000000-0000-0000-0000-000000000902"
+  :run/agent       :agent/release-writer
+  :run/strategy    :strategy/release-summary-v1
+  :run/outcome     :run.outcome/revised-by-user
+  :run/feedback    "Need explicit backup verification status."
+  :run/timestamp   #inst "2026-06-05T09:05:00Z"}]
+```
+
+An apperception pass can detect the pattern:
+
+```clojure
+(d/q '[:find ?strategy (count ?run)
+       :keys strategy revision-count
+       :in $ ?since
+       :where [?run :run/strategy ?strategy]
+              [?run :run/outcome :run.outcome/revised-by-user]
+              [?run :run/timestamp ?ts]
+              [(> ?ts ?since)]]
+     db #inst "2026-06-01T00:00:00Z")
+```
+
+If the revision count crosses a threshold, the system should not let the model
+silently rewrite its own identity. Instead, write a proposed strategy update
+with evidence and review state:
+
+```clojure
+{:strategy.proposal/id       #uuid "00000000-0000-0000-0000-000000000911"
+ :strategy.proposal/agent    :agent/release-writer
+ :strategy.proposal/replaces :strategy/release-summary-v1
+ :strategy.proposal/body     {:instruction "Summarize CI, migrations, backup verification, blockers, and next action."
+                              :constraints {:max-words 120
+                                            :include-risk? true
+                                            :include-backup-status? true}}
+ :strategy.proposal/evidence [[:run/id #uuid "00000000-0000-0000-0000-000000000901"]
+                              [:run/id #uuid "00000000-0000-0000-0000-000000000902"]]
+ :strategy.proposal/status   :review.status/pending}
+```
+
+After approval, the update becomes a normal graph transition:
+
+```clojure
+[{:strategy/id     :strategy/release-summary-v1
+  :strategy/status :strategy.status/superseded
+  :strategy/superseded-by :strategy/release-summary-v2}
+
+ {:strategy/id          :strategy/release-summary-v2
+  :strategy/status      :strategy.status/current
+  :strategy/instruction "Summarize CI, migrations, backup verification, blockers, and next action."
+  :strategy/constraints {:max-words 120
+                         :include-risk? true
+                         :include-backup-status? true}
+  :strategy/derived-from [:strategy.proposal/id #uuid "00000000-0000-0000-0000-000000000911"]}
+
+ {:agent/id       :agent/release-writer
+  :agent/strategy :strategy/release-summary-v2}]
+```
+
+This is long-term state evolution without prompt drift. The agent's identity and
+strategy changed, but the change is explainable: there is performance evidence,
+a proposal, an approval state, and a supersession link from the old strategy to
+the new one.
 
 ---
 
@@ -300,3 +476,10 @@ active participant in the agent's intelligence.
 
 By building on Datalevin, you provide the AI with more than memory. You give it
 a substrate for coherent long-term state.
+
+## References
+
+[1] Richard Evans, Jose Hernandez-Orallo, Johannes Welbl, Pushmeet Kohli, and
+Marek Sergot, ["Making sense of sensory
+input"](https://doi.org/10.1016/j.artint.2020.103438), *Artificial Intelligence*
+293, 2021, article 103438.

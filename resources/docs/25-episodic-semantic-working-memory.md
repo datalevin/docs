@@ -420,7 +420,7 @@ next chapter focuses on retrieval and context assembly.
 
 Episodic, semantic, and working memory solve different problems. Episodes
 preserve history. Semantic facts organize what the agent believes or knows.
-A consolidation loop move episodes into semantic facts. Working memory selects
+A consolidation loop transform episodes into facts. Working memory selects
 what should matter now.
 
 Datalevin's advantage is that these are not separate silos. They can be queried,

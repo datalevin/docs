@@ -11,6 +11,15 @@ language for finding complex patterns in your data. Unlike SQL, which often
 requires you to think about *how* to get your data, Datalog lets you focus on
 *what* data you want.
 
+The flavor of Datalog used by Datalevin follows the Datomic-style query form
+that Datomic pioneered and popularized in the Clojure ecosystem [1]. Instead of
+writing Prolog-like rule syntax, you write queries as EDN data: vectors,
+keywords, symbols, lists, and maps. This makes queries easier to compose, pass
+through APIs, quote in Clojure, and read in non-Clojure client languages. The
+surface syntax is more application-friendly, but the underlying concepts are
+still the classic Datalog concepts: variables, unification, conjunction,
+predicates, rules, and recursive derivation.
+
 This chapter covers the fundamentals of writing Datalog queries, the role of the
 query optimizer, and best practices for performance.
 
@@ -983,3 +992,8 @@ optimizer will find the most efficient path to your data.
 In the next chapter, we will explore **Rules and Recursion**, which allow you to
 encapsulate this logic for reuse and traverse complex, hierarchical data
 structures.
+
+## References
+
+[1] Datomic, [Query Reference](https://docs.datomic.com/query/query-data-reference.html),
+Datomic documentation.

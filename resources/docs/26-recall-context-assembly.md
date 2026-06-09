@@ -44,11 +44,11 @@ over the curated packet.
 
 ## 2. Why Vectors Are Not Enough
 
-Vector embeddings are good at capturing semantic similarity, but they are
-fuzzy. A search for "Datalevin 0.10.15" might return results for "Datomic
-0.10" because the texts are semantically related, even though the version is
-wrong. Product IDs, exact names, incident numbers, schema attributes, dates, and
-permissions often need symbolic precision.
+Vector embeddings are good at capturing semantic similarity, but they are fuzzy.
+A search for "Datalevin 1.0.15" might return results for "Datomic 1.0.1015"
+because the texts are semantically related, even though the software and
+versions are wrong. Product IDs, exact names, incident numbers, schema
+attributes, dates, and permissions often need symbolic precision.
 
 The useful mental model is symbolic structure as the skeleton and data-driven
 models as flexible functions. Embeddings, classifiers, and LLM calls are
@@ -61,7 +61,8 @@ This keeps model calls from becoming unreviewable authority. A model may say
 "this message appears to be about billing," but Datalevin can store that as a
 classification with a score, join it with the user's account permissions, and
 route it through explicit task logic. If the classification was wrong, the
-stored score and source give you something to inspect and correct.
+stored score and source give you something to inspect and correct, and the
+transactions or the queries will tell you exactly where things went wrong.
 
 ---
 
@@ -144,16 +145,17 @@ const results = d.q(
 
 </div>
 
-For production RAG, add text, vector, and authorization lenses. The point is not
-that every query must use every index. The point is that the application should
-select the lenses that match the task, then make that retrieval policy explicit.
+For production RAG, add text, vector, and authorization lenses. Not every query
+must use every lens, the application should instead select the lenses that
+match the task, then make that retrieval policy explicit.
 
 ---
 
 ## 4. Implementing a Hybrid Query
 
 In Datalevin, full-text search, vector search, and logical constraints can be
-combined in one `:where` block.
+combined in one `:where` block. The retrieval is semantically precise and fast,
+avoid the need for fragile and slow glue code.
 
 <div class="multi-lang">
 

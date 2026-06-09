@@ -6,7 +6,9 @@ part: "VI — Datalevin for Intelligent Systems"
 
 # Chapter 28: Building Stateful AI Applications
 
-The true potential of AI is not found in isolated chat sessions, but in applications that maintain a persistent state. A "Stateful AI" application is one where the AI's knowledge, goals, and behavior evolve alongside its users.
+The true potential of AI is not found in isolated chat sessions, but in
+applications that maintain a persistent state. A "Stateful AI" application is
+one where the AI's knowledge, goals, and behavior evolve alongside its users.
 
 This chapter synthesizes the Part VI arc into practical application examples:
 memory architecture, concrete memory records, recall and context assembly,
@@ -16,10 +18,13 @@ truth maintenance, and application-level task control.
 
 ## 1. Pattern: The "Database-as-Environment"
 
-In most applications, the database is a passive storage layer. In a Stateful AI application, the database is an **Active Environment**.
+In most applications, the database is a passive storage layer. In a Stateful AI
+application, the database is an **Active Environment**.
+
 - The agent "lives" in the database.
 - Every interaction updates its world model.
-- Its "personality" is not a static prompt, but a collection of entities and relationships in Datalevin.
+- Its "personality" is not a static prompt, but a collection of entities and
+  relationships in Datalevin.
 
 An agent runtime also needs a control loop. Perceptors convert external input
 into structured observations. Actuators call tools or services. A central
@@ -72,8 +77,10 @@ the shared environment that makes the loop resumable and inspectable.
 
 Imagine an AI tutor that helps a student learn Clojure over six months.
 
-- **Episodic Memory**: Every question the student asks and every mistake they make is stored as an episode.
-- **Semantic State**: A "Student Knowledge Graph" tracks which concepts (e.g., "Recursion", "Macros", "Transducers") the student has mastered.
+- **Episodic Memory**: Every question the student asks and every mistake they
+  make is stored as an episode.
+- **Semantic State**: A "Student Knowledge Graph" tracks which concepts (e.g.,
+  "Recursion", "Macros", "Transducers") the student has mastered.
 - **Stateful Logic**:
     <div class="multi-lang">
 
@@ -137,13 +144,18 @@ The tutor's advice is always **grounded** in the student's actual history.
 
 ## 4. Example 2: Multi-Agent Collaboration Workspace
 
-In a complex project, multiple agents might work together—one for coding, one for testing, and one for documentation.
+In a complex project, multiple agents might work together—one for coding, one
+for testing, and one for documentation.
 
 - **Common Workspace**: All agents share a single Datalevin database.
-- **Coordination via Graph**: Agents post tasks as entities and link them to each other.
-- **Security**: Use **Datalevin Server RBAC** (Chapter 23) to ensure the "Code Agent" can modify source entities, but the "Documentation Agent" can only view them.
+- **Coordination via Graph**: Agents post tasks as entities and link them to
+  each other.
+- **Security**: Use **Datalevin Server RBAC** (Chapter 23) to ensure the "Code
+  Agent" can modify source entities, but the "Documentation Agent" can only view
+  them.
 
-By sharing a transactionally consistent environment, agents can coordinate their efforts without complex message-passing protocols.
+By sharing a transactionally consistent environment, agents can coordinate their
+efforts without complex message-passing protocols.
 
 ---
 
@@ -152,19 +164,26 @@ By sharing a transactionally consistent environment, agents can coordinate their
 A documentation site (like this one!) that "learns" from user feedback.
 
 - **Interaction Log**: Store every search query and every "Is this helpful?" click.
-- **Inference**: A background agent uses **Full-Text Search** to find areas where users frequently search but fail to find answers.
-- **Synthesis**: The agent uses an LLM to draft a new `idoc` document addressing the gap and transacts it into the database for human review.
+- **Inference**: A background agent uses **Full-Text Search** to find areas
+  where users frequently search but fail to find answers.
+- **Synthesis**: The agent uses an LLM to draft a new `idoc` document addressing
+  the gap and transacts it into the database for human review.
 
 ---
 
 ## 6. Example 4: MCP-Backed Agent Tools
 
-For AI applications that use MCP, `dtlv mcp` provides a local `stdio` tool server over Datalevin databases.
+For AI applications that use MCP, `dtlv mcp` provides a local `stdio` tool
+server over Datalevin databases.
 
 - **Read-first safety**: `dtlv mcp` starts with write tools disabled.
-- **Explicit writes**: `dtlv --allow-writes mcp` is required before tools can mutate a database.
-- **Structured payloads**: Tool calls return machine-readable `structuredContent`, with response limits and truncation metadata for large results.
-- **Local and remote targets**: The MCP server can open local database paths or remote `dtlv://` URIs behind the same local process.
+- **Explicit writes**: `dtlv --allow-writes mcp` is required before tools can
+  mutate a database.
+- **Structured payloads**: Tool calls return machine-readable
+  `structuredContent`, with response limits and truncation metadata for large
+  results.
+- **Local and remote targets**: The MCP server can open local database paths or
+  remote `dtlv://` URIs behind the same local process.
 
 This makes Datalevin useful as a durable tool substrate for agents: memory stays in a real database, while the tool boundary remains explicit.
 

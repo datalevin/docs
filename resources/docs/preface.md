@@ -5,83 +5,67 @@ chapter: 0
 
 # Preface
 
-Modern applications demand more from data systems than any single traditional
-paradigm can easily provide. Transactional integrity, rich relationships,
-flexible documents, full-text search, and semantic retrieval are now expected
-to coexist. Historically, these needs were met by stitching together
-specialized databases: relational systems for structured data, document stores
-for flexibility, graph databases for relationships, and separate engines for
-search and vectors. While powerful, this approach introduces architectural
-complexity, impedance mismatches, and significant operational overhead.
+Modern applications rarely fit inside one traditional database model.
 
-In response, a newer class of systems has emerged that markets itself as
-multi-paradigm, aiming to unify several data models under one roof. Platforms
-such as ArangoDB exemplify this direction with a document-first model that also
-supports graph and key-value-style access within a single engine. Relational
-databases tackle the challenge by allowing extensions for other access patterns.
-For example, PostgreSQL adds JSONB column for document use cases and pg-vec
-extension for vector search. These evolutions represent an important step
-forward: they reduce the number of moving parts and make it easier to combine
-different access patterns.
+An application may need transactional updates, graph-shaped relationships,
+document-shaped payloads, fast key-value access, full-text search, vector
+similarity, analytics over recent activity, and long-term state that can be
+explained later. In many systems, each requirement becomes another service:
+PostgreSQL for records, Redis for low-latency state, Elasticsearch for search,
+a vector database for embeddings, a document store for flexible payloads, and a
+queue or workflow engine for long-running tasks.
 
-However, most multi-paradigm databases or databases with extensions still
-organize around traditional storage shape as the primary abstraction. They do
-not build the database from the ground up for multi-paradigm data modeling. The
-multiple data models are provided as add-ons, with reasoning, inference, and
-long-term state evolution treated as external concerns.
+That architecture can work. It also creates friction. Data has to be copied
+between systems. Consistency becomes an application concern. Search results and
+transactional state can drift apart. Operationally, the system becomes a
+collection of moving parts that must be secured, backed up, observed, upgraded,
+and understood together.
+
+Datalevin starts from a different premise: many of these needs can share one
+small, composable data model.
+
+At its core, Datalevin stores facts. A fact says that an entity has an attribute
+with a value. From that simple shape, Datalevin builds relational queries,
+graph traversal, document modeling, key-value access, full-text search, vector
+search, and logical rules. The important idea is not that every workload looks
+the same. The important idea is that these workloads can cooperate inside one
+transactional engine instead of being bolted together after the fact.
 
 ![Datalevin unified data model](/images/unified.jpg)
 
-Datalevin[^name-origin] starts from a different premise: the database is built
-from the ground up to be multi-paradigm friendly. It achieves this flexibility by
-modeling data as atomic facts first. In relational and document database systems,
-an aggregate shape (a document, a row, or a column, with nested fields, columns, or
-rows) is the primary unit of storage, update, and retrieval. In Datalevin's **triple
-model**, the atomic unit is a fact of three elements: `entity`, `attribute`, and
-`value`.
+Datalevin is built on LMDB, a fast memory-mapped key-value store,
+but it is not only a key-value wrapper. It exposes KV APIs when direct sorted
+access is the right tool, and it provides a Datalog database when relationships,
+constraints, identity, and logical queries are the right tool. It also integrates
+full-text indexes, vector and embedding indexes, and path-indexed documents so
+that search and reasoning can meet in the same query.
 
-This fact-first approach is a first-principled choice. It keeps the core model
-small and composable, and delays workload-specific optimization decisions until
-they are justified by real needs. For example, rows or columns are just
-different organizations of the same set of facts. Rows are `entity`-major sorted
-facts, and columns are `attribute` and `value` sorted facts.
-
-On top of this conceptual model, Datalevin provides a unified implementation
-stack. Facts and indexes are persisted in a high-performance key-value engine,
-while the same key-value layer is exposed directly when low-level access is
-useful.
-
-The triple model supports a powerful query language called **Datalog**.[^datalog]
-It can declaratively express complex relational queries. In addition, query
-clauses in Datalog can be grouped into named reusable components called
-**rules**, which allow logical derivation of new facts and navigation in graphs.
+Here is the flavor of the model across the main application APIs:
 
 <div class="multi-lang">
 
 ```clojure
 (require '[datalevin.core :as d])
 
-;; Define a schema and open a database
-(def schema {:person/name  {:db/unique :db.unique/identity}
-             :person/follows {:db/valueType :db.type/ref
-                              :db/cardinality :db.cardinality/many}})
+(def schema
+  {:person/name    {:db/unique :db.unique/identity}
+   :person/follows {:db/valueType   :db.type/ref
+                    :db/cardinality :db.cardinality/many}})
 
 (def conn (d/get-conn "/tmp/preface-demo" schema))
 
-;; Transact some facts
 (d/transact! conn
-  [{:person/name "Alice" :person/follows [{:person/name "Bob"}]}
-   {:person/name "Bob"   :person/follows [{:person/name "Carol"}]}
-   {:person/name "Carol" :person/follows [{:person/name "Alice"}]}])
+  [{:person/name "Alice"
+    :person/follows [{:person/name "Bob"}]}
+   {:person/name "Bob"
+    :person/follows [{:person/name "Carol"}]}])
 
-;; Query: who does Alice follow, and who do they follow?
-(d/q '[:find ?name ?follows-name
-       :where
-       [?alice :person/name "Alice"]
-       [?alice :person/follows ?friend]
-       [?friend :person/name ?name]
-       [?friend :person/follows ?fof]
-       [?fof :person/name ?follows-name]]
+(d/q '[:find ?friend ?friend-of-friend
+       :where [?alice :person/name "Alice"]
+              [?alice :person/follows ?f]
+              [?f :person/name ?friend]
+              [?f :person/follows ?ff]
+              [?ff :person/name ?friend-of-friend]]
      (d/db conn))
 ;; => #{["Bob" "Carol"]}
 ```
@@ -90,29 +74,26 @@ clauses in Datalog can be grouped into named reusable components called
 import datalevin.core.*;
 import java.util.*;
 
-// Define a schema and open a database
 Map<String, Object> schema = Map.of(
-    "person/name",  Map.of("db/unique", "db.unique/identity"),
+    "person/name", Map.of("db/unique", "db.unique/identity"),
     "person/follows", Map.of("db/valueType", "db.type/ref",
                              "db/cardinality", "db.cardinality/many"));
 
 Connection conn = Datalevin.getConn("/tmp/preface-demo", schema);
 
-// Transact some facts
 Datalevin.transact(conn, List.of(
-    Map.of("person/name", "Alice", "person/follows", List.of(Map.of("person/name", "Bob"))),
-    Map.of("person/name", "Bob",   "person/follows", List.of(Map.of("person/name", "Carol"))),
-    Map.of("person/name", "Carol", "person/follows", List.of(Map.of("person/name", "Alice")))));
+    Map.of("person/name", "Alice",
+           "person/follows", List.of(Map.of("person/name", "Bob"))),
+    Map.of("person/name", "Bob",
+           "person/follows", List.of(Map.of("person/name", "Carol")))));
 
-// Query: who does Alice follow, and who do they follow?
 Set<List<Object>> results = Datalevin.q(
-    "[:find ?name ?follows-name " +
-    " :where " +
-    " [?alice :person/name \"Alice\"] " +
-    " [?alice :person/follows ?friend] " +
-    " [?friend :person/name ?name] " +
-    " [?friend :person/follows ?fof] " +
-    " [?fof :person/name ?follows-name]]",
+    "[:find ?friend ?friend-of-friend " +
+    " :where [?alice :person/name \"Alice\"] " +
+    "        [?alice :person/follows ?f] " +
+    "        [?f :person/name ?friend] " +
+    "        [?f :person/follows ?ff] " +
+    "        [?ff :person/name ?friend-of-friend]]",
     Datalevin.db(conn));
 // => #{["Bob" "Carol"]}
 ```
@@ -120,121 +101,203 @@ Set<List<Object>> results = Datalevin.q(
 ```python
 import datalevin as d
 
-# Define a schema and open a database
 schema = {
-    "person/name":  {"db/unique": "db.unique/identity"},
+    "person/name": {"db/unique": "db.unique/identity"},
     "person/follows": {"db/valueType": "db.type/ref",
                        "db/cardinality": "db.cardinality/many"}}
 
 conn = d.get_conn("/tmp/preface-demo", schema)
 
-# Transact some facts
 d.transact(conn, [
-    {"person/name": "Alice", "person/follows": [{"person/name": "Bob"}]},
-    {"person/name": "Bob",   "person/follows": [{"person/name": "Carol"}]},
-    {"person/name": "Carol", "person/follows": [{"person/name": "Alice"}]}])
+    {"person/name": "Alice",
+     "person/follows": [{"person/name": "Bob"}]},
+    {"person/name": "Bob",
+     "person/follows": [{"person/name": "Carol"}]}])
 
-# Query: who does Alice follow, and who do they follow?
 results = d.q("""
-    [:find ?name ?follows-name
-     :where
-     [?alice :person/name "Alice"]
-     [?alice :person/follows ?friend]
-     [?friend :person/name ?name]
-     [?friend :person/follows ?fof]
-     [?fof :person/name ?follows-name]]""",
+    [:find ?friend ?friend-of-friend
+     :where [?alice :person/name "Alice"]
+            [?alice :person/follows ?f]
+            [?f :person/name ?friend]
+            [?f :person/follows ?ff]
+            [?ff :person/name ?friend-of-friend]]""",
     d.db(conn))
 # => {("Bob", "Carol")}
 ```
 
 ```javascript
-import { Datalevin } from 'datalevin';
+import { Datalevin as d } from 'datalevin';
 
-// Define a schema and open a database
 const schema = {
-  "person/name":  {"db/unique": "db.unique/identity"},
+  "person/name": {"db/unique": "db.unique/identity"},
   "person/follows": {"db/valueType": "db.type/ref",
                      "db/cardinality": "db.cardinality/many"}
 };
 
 const conn = d.getConn("/tmp/preface-demo", schema);
 
-// Transact some facts
 d.transact(conn, [
-  {"person/name": "Alice", "person/follows": [{"person/name": "Bob"}]},
-  {"person/name": "Bob",   "person/follows": [{"person/name": "Carol"}]},
-  {"person/name": "Carol", "person/follows": [{"person/name": "Alice"}]}
+  {"person/name": "Alice",
+   "person/follows": [{"person/name": "Bob"}]},
+  {"person/name": "Bob",
+   "person/follows": [{"person/name": "Carol"}]}
 ]);
 
-// Query: who does Alice follow, and who do they follow?
 const results = d.q(
-  `[:find ?name ?follows-name
-    :where
-    [?alice :person/name "Alice"]
-    [?alice :person/follows ?friend]
-    [?friend :person/name ?name]
-    [?friend :person/follows ?fof]
-    [?fof :person/name ?follows-name]]`,
+  `[:find ?friend ?friend-of-friend
+    :where [?alice :person/name "Alice"]
+           [?alice :person/follows ?f]
+           [?f :person/name ?friend]
+           [?f :person/follows ?ff]
+           [?ff :person/name ?friend-of-friend]]`,
   d.db(conn));
 // => Set([["Bob", "Carol"]])
 ```
 
 </div>
 
-The triple model also allows rich secondary indices on attributes and their
-values. For example, full-text search, vector similarity, and automatic document
-indexing are all nicely integrated into the same transactional and query
-workflow of Datalevin. Rather than bolting on external services, Datalevin
-unifies these capabilities in one execution and storage model.
+The example is small, but it shows the shape of the book. Data is represented as
+facts. Relationships are ordinary values. Queries are data. The database can
+answer questions by joining facts, following references, and applying logic.
+Later chapters extend the same foundation to transactions, schema design,
+documents, full-text search, vectors, rules, operations, and intelligent
+applications.
 
-This architectural choice becomes especially important in the era of intelligent
-applications. Large language models and autonomous agents require more than fast
-lookups: they require persistent memory, evolving context, and the ability to
-integrate new observations into an existing internal model over time. Datalevin
-is designed to serve as this substrate. By combining key-value storage, logical
-querying, graph traversal, full-text and vector search, and flexible deployment
-modes (embedded, client/server, and lightweight pods), Datalevin supports a new
-class of systems in which databases are not just passive repositories, but
-active participants in reasoning and collaboration.
+## Why This Book Exists
 
-*Datalevin: The Definitive Guide to Logical and Intelligent Databases* is written
-for practitioners who want to go beyond isolated data models and toward unified,
-long-lived systems. You will learn how Datalevin can be used as a fast embedded
-store, a networked database, or an application-integrated component; how to
-model data relationally, graphically, and document-style within the same engine;
-how to leverage full-text and vector indexes in Datalog; and how these
-pieces come together to enable persistent agent memory and human-agent
-collaboration.
+Datalevin is compact, but it is not a toy. It can be embedded in an application,
+run as a server, used from scripts, accessed from multiple language clients, and
+deployed as part of production systems. It also supports a style of modeling
+that is unfamiliar to many engineers who come from table-first, document-first,
+or service-first architectures.
+
+This book exists to make that style practical.
+
+The first goal is to teach Datalevin as a database: how to open it, transact
+data, read data, design schemas, model relationships, use the key-value layer,
+query with Datalog [1], tune storage, and operate the system.
+
+The second goal is to teach a way of thinking. Datalevin works best when you
+learn to see application data as facts, relationships, indexes, and derived
+knowledge. A row, a document, a graph edge, a search hit, and a vector neighbor
+do not have to live in separate conceptual universes. They can be different
+views over the same durable facts.
+
+The third goal is to show why this matters now. Large language models and
+agentic applications are pushing databases into a new role. A useful AI system
+does not only need prompt text. It needs persistent memory, scoped task state,
+retrieval with permissions and provenance, audit trails, and a way to integrate
+new observations into a coherent long-term model. Part VI of this book shows how
+Datalevin can serve as that memory substrate.
+
+## How the Book Is Organized
+
+Part I builds the foundation. It explains why Datalevin exists, how to get
+started, how to think in facts rather than containers, how LMDB shapes the
+storage model, and how attributes, entities, and namespaces work.
+
+Part II covers the core APIs. You will use Datalevin as a key-value store,
+transact data atomically, read with lookup, pull, and entity APIs, and learn
+Datalog fundamentals, rules, recursion, and derived knowledge.
+
+Part III is about modeling. It shows how relational, graph, and document
+patterns map onto Datalevin's fact-first model, and how to make schema choices
+that can evolve without losing clarity.
+
+Part IV treats indexes as capabilities. You will learn the core EAV and AVE
+indexes, full-text search, vector and embedding search, and hybrid queries that
+combine KV access, logic, text, and similarity.
+
+Part V is about performance and operations. It covers batching, ingestion,
+durability, storage tuning, query planning, rules-engine execution, deployment,
+security, replication, monitoring, and production checklists.
+
+Part VI applies the database to intelligent systems. It develops a line from
+persistent agent memory, to episodic, semantic, and working memory, to recall
+and context assembly, to apperception and truth maintenance, and finally to
+stateful AI application patterns.
+
+Part VII is reference material. It summarizes schema keys, Datalog built-ins,
+the key-value API, and EDN, the data notation used throughout the book.
 
 ## Who This Book Is For
 
-This book is for software engineers, data engineers, and technical architects
-building data-intensive systems. It is written for teams using Datalevin across
-Clojure, Java, JavaScript, and Python APIs.
+This book is for engineers who build data-intensive applications and want more
+than a single-purpose store. You may be building an embedded application, a
+backend service, a knowledge graph, a search-heavy product, a durable workflow
+system, or an AI application that needs memory and auditability.
 
-You should be comfortable with basic database concepts, such as transactions,
-normalizations, and query predicates. No prior Datalog experience is required.
+You should be comfortable with basic database ideas: transactions, indexes,
+schemas, predicates, and query results. You do not need prior Datalog
+experience. The book introduces Datalog from first principles, then returns to it
+throughout the modeling, search, performance, and intelligent-systems chapters.
+Datalevin uses the Datomic-style EDN form of Datalog: friendlier for application
+developers than the older Prolog-like notation, but still based on the same
+logic-programming ideas of variables, unification, and rules.
 
-## How to Use This Book
+Most examples use Clojure because Datalevin's native data model is easiest to
+see in EDN and Datalog forms. The ideas are not limited to Clojure. Datalevin
+also exposes Java, Python, JavaScript, command-line, server, and MCP surfaces,
+and the book calls out those modes where they matter.
 
-Read sequentially if you are new to Datalevin. If you already have experience,
-you can follow a goal-based path:
+If EDN is new to you, read Appendix 32 early. You do not need to become a
+Clojure programmer to understand EDN, but the notation appears everywhere in
+schemas, transactions, queries, rules, and examples.
 
-- Application builders: Part I, Part II, then Part III and Part IV.
-- Data modelers: Part I, Part III, then Part IV.
-- Operators and platform engineers: Part I, Part II, then Part V.
-- AI system builders: Part I through Part IV, then Part VI.
-- Internals-focused readers: Part I, Part II, then Part V.
+## How to Read This Book
 
-Our goal is not only to teach you how to use Datalevin, but to introduce a
-different way of thinking about databases: as logical, composable, and
-intelligent foundations for modern software.
+If you are new to Datalevin, read Parts I and II in order. They establish the
+mental model and the APIs that later chapters assume.
 
-[^name-origin]: Datalevin builds on LMDB, an abbreviation of Lightning Memory-Mapped
-    Database, a battle-tested key-value storage with exceptional read
-    performance. "levin" is an old English word for lightning.
+If you are designing an application schema, continue into Part III before
+optimizing anything. Good Datalevin design starts with clear facts, identities,
+and relationships.
 
-[^datalog]: Stefano Ceri, Georg Gottlob, and Letizia Tanca, ["What You Always
-    Wanted to Know About Datalog (And Never Dared to Ask)"](https://hdl.handle.net/11311/665510),
-    IEEE Transactions on Knowledge and Data Engineering 1, no. 1, 1989,
-    pp. 146-166.
+If you are building search or retrieval features, read Parts III and IV
+together. The most useful retrieval systems combine modeling choices with the
+right indexes.
+
+If you are operating Datalevin in production, read Part V after the foundations.
+The operational chapters make more sense once you know how data, indexes, and
+queries are represented.
+
+If you are building AI systems, resist the urge to jump straight to Part VI.
+Persistent memory and agent state are only reliable when the underlying data
+model, transactions, indexes, and query semantics are clear. Part VI is not a
+separate AI appendix; it is the natural consequence of the earlier parts.
+
+## What You Should Take Away
+
+By the end of the book, you should be able to:
+
+- model application data as durable facts without losing relational, graph, or
+  document expressiveness;
+- use Datalog for declarative queries, joins, rules, and recursive relationships;
+- choose when to use Datalevin's Datalog layer and when to use the lower-level
+  key-value API directly;
+- combine full-text search, vector search, and logical constraints in one
+  retrieval pipeline;
+- design schemas and indexes that support both correctness and performance;
+- operate Datalevin in embedded, server, scripting, and production contexts;
+- build persistent-memory systems for agents without treating a chat transcript
+  as the only source of truth.
+
+The larger argument of the book is simple: databases can be more than passive
+containers. A database can be a logical substrate: a place where facts are
+stored, relationships are traversed, knowledge is derived, evidence is preserved,
+and intelligent systems can maintain state over time.
+
+Datalevin is one concrete way to build on that idea.
+
+## Notes
+
+Datalevin builds on LMDB, an abbreviation of Lightning Memory-Mapped Database, a
+battle-tested key-value store with exceptional read performance. "Levin" is an
+old English word for lightning.
+
+## References
+
+[1] Stefano Ceri, Georg Gottlob, and Letizia Tanca, ["What You Always Wanted to
+Know About Datalog (And Never Dared to
+Ask)"](https://hdl.handle.net/11311/665510), *IEEE Transactions on Knowledge and
+Data Engineering* 1, no. 1, 1989, pp. 146-166.
