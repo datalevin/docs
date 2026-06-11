@@ -1,10 +1,10 @@
 ---
-title: "EDN Format"
-chapter: 32
+title: "Appendix D: EDN Format"
+chapter: 31
 part: "VII — Appendices"
 ---
 
-# Chapter 32: EDN Format
+# Appendix D: EDN Format
 
 EDN, short for Extensible Data Notation, is the data notation used throughout
 this book. Datalevin is written in Clojure, so its native examples use EDN

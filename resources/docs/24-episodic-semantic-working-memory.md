@@ -1,12 +1,12 @@
 ---
 title: "Episodic, Semantic, and Working Memory"
-chapter: 25
+chapter: 24
 part: "VI — Datalevin for Intelligent Systems"
 ---
 
-# Chapter 25: Episodic, Semantic, and Working Memory
+# Chapter 24: Episodic, Semantic, and Working Memory
 
-Chapter 24 described the overall architecture: a persistent agent needs scoped
+Chapter 23 described the overall architecture: a persistent agent needs scoped
 state, a context graph, and a transactional memory substrate. This chapter
 defines the memory records themselves. The goal is to separate kinds of memory
 by lifetime and purpose, while keeping them queryable together.
@@ -79,38 +79,38 @@ every attribute in AVE, range queries on `:episode/timestamp` are efficient.
 
 ```java
 // Find all chat episodes from the last 24 hours.
-Collection results = Datalevin.q(
+Object results = conn.query(
     "[:find ?summary " +
     " :in $ ?since " +
     " :where [?e :episode/type :event.type/chat] " +
     "        [?e :episode/timestamp ?ts] " +
     "        [(> ?ts ?since)] " +
     "        [?e :episode/summary ?summary]]",
-    db, twentyFourHoursAgo);
+    twentyFourHoursAgo);
 ```
 
 ```python
 # Find all chat episodes from the last 24 hours.
-results = d.q(
+results = conn.query(
     '[:find ?summary '
     ' :in $ ?since '
     ' :where [?e :episode/type :event.type/chat] '
     '        [?e :episode/timestamp ?ts] '
     '        [(> ?ts ?since)] '
     '        [?e :episode/summary ?summary]]',
-    db, twenty_four_hours_ago)
+    twenty_four_hours_ago)
 ```
 
 ```javascript
 // Find all chat episodes from the last 24 hours.
-const results = d.q(
+const results = await conn.query(
     '[:find ?summary ' +
     ' :in $ ?since ' +
     ' :where [?e :episode/type :event.type/chat] ' +
     '        [?e :episode/timestamp ?ts] ' +
     '        [(> ?ts ?since)] ' +
     '        [?e :episode/summary ?summary]]',
-    db, twentyFourHoursAgo);
+    twentyFourHoursAgo);
 ```
 
 </div>
@@ -198,7 +198,7 @@ asked about Clojure.
 
 Semantic inference should remain explicit. If a rule derives `:user/interested`
 from several episodes, write the derived fact with a source rule, supporting
-evidence, and confidence. This lets the apperception layer in Chapter 27 later
+evidence, and confidence. This lets the apperception layer in Chapter 26 later
 revise or retract the derived fact without losing the original episodes.
 
 ---

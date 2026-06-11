@@ -35,43 +35,42 @@ schema:
 ```
 
 ```java
-Map<String, Object> schema = Map.of(
-    "post/title", Map.of(
-        "db/valueType", "db.type/string",
-        "db/fulltext", true,
-        "db.fulltext/autoDomain", true
-    ),
-    "post/content", Map.of(
-        "db/valueType", "db.type/string",
-        "db/fulltext", true
-    )
-);
+Schema schema = Datalevin.schema()
+    .attr("post/title",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .fulltext(true)
+              .prop("db.fulltext/autoDomain", true))
+    .attr("post/content",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .fulltext(true));
 ```
 
 ```python
 schema = {
-    "post/title": {
-        "db/valueType": "db.type/string",
-        "db/fulltext": True,
-        "db.fulltext/autoDomain": True
+    ":post/title": {
+        ":db/valueType": ":db.type/string",
+        ":db/fulltext": True,
+        ":db.fulltext/autoDomain": True
     },
-    "post/content": {
-        "db/valueType": "db.type/string",
-        "db/fulltext": True
+    ":post/content": {
+        ":db/valueType": ":db.type/string",
+        ":db/fulltext": True
     }
 }
 ```
 
 ```javascript
 const schema = {
-  'post/title': {
-    'db/valueType': 'db.type/string',
-    'db/fulltext': true,
-    'db.fulltext/autoDomain': true
+  ":post/title": {
+    ":db/valueType": ":db.type/string",
+    ":db/fulltext": true,
+    ":db.fulltext/autoDomain": true
   },
-  'post/content': {
-    'db/valueType': 'db.type/string',
-    'db/fulltext': true
+  ":post/content": {
+    ":db/valueType": ":db.type/string",
+    ":db/fulltext": true
   }
 };
 ```
@@ -98,24 +97,24 @@ The `fulltext` function returns matching datoms as `[e a v]` triples, ordered by
 ```
 
 ```java
-Datalevin.q("[:find ?e ?a ?v " +
-            " :in $ ?q " +
-            " :where [(fulltext $ ?q) [[?e ?a ?v]]]]",
-            db, "red fox");
+conn.query("[:find ?e ?a ?v " +
+           " :in $ ?q " +
+           " :where [(fulltext $ ?q) [[?e ?a ?v]]]]",
+           "red fox");
 ```
 
 ```python
-d.q('[:find ?e ?a ?v '
-     ' :in $ ?q '
-     ' :where [(fulltext $ ?q) [[?e ?a ?v]]]]',
-     db, "red fox")
+conn.query('[:find ?e ?a ?v '
+           ' :in $ ?q '
+           ' :where [(fulltext $ ?q) [[?e ?a ?v]]]]',
+           "red fox")
 ```
 
 ```javascript
-d.q('[:find ?e ?a ?v ' +
-     ' :in $ ?q ' +
-     ' :where [(fulltext $ ?q) [[?e ?a ?v]]]]',
-     db, 'red fox');
+await conn.query('[:find ?e ?a ?v ' +
+                 ' :in $ ?q ' +
+                 ' :where [(fulltext $ ?q) [[?e ?a ?v]]]]',
+                 "red fox");
 ```
 
 </div>
@@ -136,24 +135,24 @@ To search within a specific attribute, that attribute must have
 ```
 
 ```java
-Datalevin.q("[:find ?e ?a ?v " +
-            " :in $ ?q " +
-            " :where [(fulltext $ :post/title ?q) [[?e ?a ?v]]]]",
-            db, "clojure");
+conn.query("[:find ?e ?a ?v " +
+           " :in $ ?q " +
+           " :where [(fulltext $ :post/title ?q) [[?e ?a ?v]]]]",
+           "clojure");
 ```
 
 ```python
-d.q('[:find ?e ?a ?v '
-     ' :in $ ?q '
-     ' :where [(fulltext $ :post/title ?q) [[?e ?a ?v]]]]',
-     db, "clojure")
+conn.query('[:find ?e ?a ?v '
+           ' :in $ ?q '
+           ' :where [(fulltext $ :post/title ?q) [[?e ?a ?v]]]]',
+           "clojure")
 ```
 
 ```javascript
-d.q('[:find ?e ?a ?v ' +
-     ' :in $ ?q ' +
-     ' :where [(fulltext $ :post/title ?q) [[?e ?a ?v]]]]',
-     db, 'clojure');
+await conn.query('[:find ?e ?a ?v ' +
+                 ' :in $ ?q ' +
+                 ' :where [(fulltext $ :post/title ?q) [[?e ?a ?v]]]]',
+                 "clojure");
 ```
 
 </div>
@@ -173,24 +172,24 @@ Pass an option map as the last argument:
 ```
 
 ```java
-Datalevin.q("[:find ?e ?a ?v " +
-            " :in $ ?q " +
-            " :where [(fulltext $ ?q {:top 5}) [[?e ?a ?v]]]]",
-            db, "database");
+conn.query("[:find ?e ?a ?v " +
+           " :in $ ?q " +
+           " :where [(fulltext $ ?q {:top 5}) [[?e ?a ?v]]]]",
+           "database");
 ```
 
 ```python
-d.q('[:find ?e ?a ?v '
-     ' :in $ ?q '
-     ' :where [(fulltext $ ?q {:top 5}) [[?e ?a ?v]]]]',
-     db, "database")
+conn.query('[:find ?e ?a ?v '
+           ' :in $ ?q '
+           ' :where [(fulltext $ ?q {:top 5}) [[?e ?a ?v]]]]',
+           "database")
 ```
 
 ```javascript
-d.q('[:find ?e ?a ?v ' +
-     ' :in $ ?q ' +
-     ' :where [(fulltext $ ?q {:top 5}) [[?e ?a ?v]]]]',
-     db, 'database');
+await conn.query('[:find ?e ?a ?v ' +
+                 ' :in $ ?q ' +
+                 ' :where [(fulltext $ ?q {:top 5}) [[?e ?a ?v]]]]',
+                 "database");
 ```
 
 </div>
@@ -284,76 +283,75 @@ storage naming rule for namespaced attributes.
 ```
 
 ```java
-Map<String, Object> searchSchema = Map.of(
-    "post/title", Map.of(
-        "db/valueType", "db.type/string",
-        "db/fulltext", true,
-        "db.fulltext/domains", List.of("public"),
-        "db.fulltext/autoDomain", true
-    ),
-    "post/body", Map.of(
-        "db/valueType", "db.type/string",
-        "db/fulltext", true,
-        "db.fulltext/domains", List.of("public")
-    ),
-    "post/draft", Map.of(
-        "db/valueType", "db.type/string",
-        "db/fulltext", true,
-        "db.fulltext/domains", List.of("private")
-    ),
-    "note/body", Map.of(
-        "db/valueType", "db.type/string",
-        "db/fulltext", true
-    )
-);
+Schema searchSchema = Datalevin.schema()
+    .attr("post/title",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .fulltext(true)
+              .prop("db.fulltext/domains", List.of("public"))
+              .prop("db.fulltext/autoDomain", true))
+    .attr("post/body",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .fulltext(true)
+              .prop("db.fulltext/domains", List.of("public")))
+    .attr("post/draft",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .fulltext(true)
+              .prop("db.fulltext/domains", List.of("private")))
+    .attr("note/body",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .fulltext(true));
 ```
 
 ```python
 search_schema = {
-    "post/title": {
-        "db/valueType": "db.type/string",
-        "db/fulltext": True,
-        "db.fulltext/domains": ["public"],
-        "db.fulltext/autoDomain": True
+    ":post/title": {
+        ":db/valueType": ":db.type/string",
+        ":db/fulltext": True,
+        ":db.fulltext/domains": ["public"],
+        ":db.fulltext/autoDomain": True
     },
-    "post/body": {
-        "db/valueType": "db.type/string",
-        "db/fulltext": True,
-        "db.fulltext/domains": ["public"]
+    ":post/body": {
+        ":db/valueType": ":db.type/string",
+        ":db/fulltext": True,
+        ":db.fulltext/domains": ["public"]
     },
-    "post/draft": {
-        "db/valueType": "db.type/string",
-        "db/fulltext": True,
-        "db.fulltext/domains": ["private"]
+    ":post/draft": {
+        ":db/valueType": ":db.type/string",
+        ":db/fulltext": True,
+        ":db.fulltext/domains": ["private"]
     },
-    "note/body": {
-        "db/valueType": "db.type/string",
-        "db/fulltext": True
+    ":note/body": {
+        ":db/valueType": ":db.type/string",
+        ":db/fulltext": True
     }
 }
 ```
 
 ```javascript
 const searchSchema = {
-  'post/title': {
-    'db/valueType': 'db.type/string',
-    'db/fulltext': true,
-    'db.fulltext/domains': ['public'],
-    'db.fulltext/autoDomain': true
+  ":post/title": {
+    ":db/valueType": ":db.type/string",
+    ":db/fulltext": true,
+    ":db.fulltext/domains": ["public"],
+    ":db.fulltext/autoDomain": true
   },
-  'post/body': {
-    'db/valueType': 'db.type/string',
-    'db/fulltext': true,
-    'db.fulltext/domains': ['public']
+  ":post/body": {
+    ":db/valueType": ":db.type/string",
+    ":db/fulltext": true,
+    ":db.fulltext/domains": ["public"]
   },
-  'post/draft': {
-    'db/valueType': 'db.type/string',
-    'db/fulltext': true,
-    'db.fulltext/domains': ['private']
+  ":post/draft": {
+    ":db/valueType": ":db.type/string",
+    ":db/fulltext": true,
+    ":db.fulltext/domains": ["private"]
   },
-  'note/body': {
-    'db/valueType': 'db.type/string',
-    'db/fulltext': true
+  ":note/body": {
+    ":db/valueType": ":db.type/string",
+    ":db/fulltext": true
   }
 };
 ```
@@ -609,9 +607,8 @@ higher relevance.
 
 ## 7. Standalone Search Engine
 
-Datalevin can be used as a standalone search engine outside of Datalog:
-
-<div class="multi-lang">
+Datalevin can be used as a standalone search engine outside of Datalog from
+embedded Clojure:
 
 ```clojure
 (def lmdb (d/open-kv "/tmp/search-db"))
@@ -626,51 +623,6 @@ Datalevin can be used as a standalone search engine outside of Datalog:
 (d/search engine "red" {:display :offsets})
 ;=> ([1 (["red" [10 39]])] [2 (["red" [40]])])
 ```
-
-```java
-LMDB lmdb = Datalevin.openKv("/tmp/search-db");
-SearchEngine engine = Datalevin.newSearchEngine(lmdb,
-    Map.of("index-position?", true));
-
-Datalevin.addDoc(engine, 1, "The quick red fox jumped over the lazy red dogs.");
-Datalevin.addDoc(engine, 2, "Mary had a little lamb whose fleece was red as fire.");
-
-Datalevin.search(engine, "red");
-// => [1, 2]
-
-Datalevin.search(engine, "red", Map.of("display", "offsets"));
-// => [[1, [["red", [10, 39]]]], [2, [["red", [40]]]]]
-```
-
-```python
-lmdb = d.open_kv("/tmp/search-db")
-engine = d.new_search_engine(lmdb, {"index_position": True})
-
-d.add_doc(engine, 1, "The quick red fox jumped over the lazy red dogs.")
-d.add_doc(engine, 2, "Mary had a little lamb whose fleece was red as fire.")
-
-d.search(engine, "red")
-# => [1, 2]
-
-d.search(engine, "red", {"display": "offsets"})
-# => [[1, [["red", [10, 39]]]], [2, [["red", [40]]]]]
-```
-
-```javascript
-const lmdb = d.openKv('/tmp/search-db');
-const engine = d.newSearchEngine(lmdb, { indexPosition: true });
-
-d.addDoc(engine, 1, 'The quick red fox jumped over the lazy red dogs.');
-d.addDoc(engine, 2, 'Mary had a little lamb whose fleece was red as fire.');
-
-d.search(engine, 'red');
-// => [1, 2]
-
-d.search(engine, 'red', { display: 'offsets' });
-// => [[1, [['red', [10, 39]]]], [2, [['red', [40]]]]]
-```
-
-</div>
 
 **Document References**: In Datalog's `fulltext`, results are datoms `[e a v]`.
 In standalone mode, the "doc-ref" can be anything—numbers, strings,

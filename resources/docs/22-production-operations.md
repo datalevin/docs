@@ -1,10 +1,10 @@
 ---
 title: "Deployment and Production Operations"
-chapter: 23
+chapter: 22
 part: "V — Performance and Operations"
 ---
 
-# Chapter 23: Deployment and Production Operations
+# Chapter 22: Deployment and Production Operations
 
 Chapter 20 covered durability, snapshots, copy, dump/load, and storage tuning.
 This chapter focuses on the next layer: how to choose a deployment shape, run

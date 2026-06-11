@@ -205,23 +205,23 @@ try (KV kv = Datalevin.openKV("/data/app-kv")) {
 ```
 
 ```python
-import datalevin as d
+from datalevin import exec_json
 
-kv = d.exec_json("open-kv", {"dir": "/data/app-kv"})
+kv = exec_json("open-kv", {"dir": "/data/app-kv"})
 try:
-    d.exec_json("copy", {"kv": kv, "dest": "/path/to/backup-kv"})
+    exec_json("copy", {"kv": kv, "dest": "/path/to/backup-kv"})
 finally:
-    d.exec_json("release-handle", {"handle": kv})
+    exec_json("release-handle", {"handle": kv})
 ```
 
 ```javascript
-import { execJson } from 'datalevin';
+import { execJson } from "datalevin-node";
 
-const kv = await execJson('open-kv', { dir: '/data/app-kv' });
+const kv = await execJson("open-kv", { dir: "/data/app-kv" });
 try {
-  await execJson('copy', { kv, dest: '/path/to/backup-kv' });
+  await execJson("copy", { kv, dest: "/path/to/backup-kv" });
 } finally {
-  await execJson('release-handle', { handle: kv });
+  await execJson("release-handle", { handle: kv });
 }
 ```
 
@@ -430,14 +430,15 @@ Connection conn = Datalevin.getConn(path, schema,
 
 ```python
 # Set mapsize to 128 GiB (in MiB)
-conn = d.connect(path, schema, {"kv-opts": {"mapsize": 131072}})
+conn = connect(path, schema=schema,
+               opts={":kv-opts": {":mapsize": 131072}})
 ```
 
 ```javascript
 // Set mapsize to 128 GiB (in MiB)
 const conn = await connect(path, {
   schema,
-  opts: { 'kv-opts': { mapsize: 131072 } }
+  opts: { ":kv-opts": { ":mapsize": 131072 } }
 });
 ```
 
@@ -498,13 +499,14 @@ Connection conn = Datalevin.getConn(path, schema,
 ```
 
 ```python
-conn = d.connect(path, schema, {"kv-opts": {"max-readers": 512}})
+conn = connect(path, schema=schema,
+               opts={":kv-opts": {":max-readers": 512}})
 ```
 
 ```javascript
 const conn = await connect(path, {
   schema,
-  opts: { 'kv-opts': { 'max-readers': 512 } }
+  opts: { ":kv-opts": { ":max-readers": 512 } }
 });
 ```
 

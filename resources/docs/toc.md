@@ -52,30 +52,28 @@ Part V — Performance and Operations
 
 20. Durability, Database Maintenance, and Storage Tuning
 
-21. Query Planning, Optimization, and Diagnostics
+21. Query Planning, Recursive Evaluation, and Diagnostics
 
-22. Rules Engine and Recursive Evaluation
-
-23. Deployment and Production Operations
+22. Deployment and Production Operations
 
 Part VI — Datalevin for Intelligent Systems
 
-24. Persistent Agent Memory Architectures
+23. Persistent Agent Memory Architectures
 
-25. Episodic, Semantic, and Working Memory
+24. Episodic, Semantic, and Working Memory
 
-26. Recall and Context Assembly
+25. Recall and Context Assembly
 
-27. Apperception, Truth Maintenance, and Long-Term State
+26. Apperception, Truth Maintenance, and Long-Term State
 
-28. Building Stateful AI Applications
+27. Building Stateful AI Applications
 
 Part VII — Appendices
 
-29. Datalog Schema Reference
+28. Appendix A: Datalog Schema Reference
 
-30. Datalog Built-In Functions Reference
+29. Appendix B: Key-Value API Reference
 
-31. Key-Value API Reference
+30. Appendix C: Datalog Built-In Functions Reference
 
-32. EDN Format
+31. Appendix D: EDN Format

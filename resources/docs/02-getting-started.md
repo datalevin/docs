@@ -30,7 +30,7 @@ Choose another mode when the deployment shape requires it:
 | `dtlv` CLI | You want a REPL, shell scripts, import/export, backup, or maintenance commands. | The `dtlv` executable. |
 | Babashka pod | You write fast Clojure scripts with `bb`. | Babashka and either the pod release or local `dtlv`. |
 | MCP server | An AI client or agent needs local database tools. | `dtlv` and an MCP-compliant client. |
-| Replication or HA | You need read scaling or automatic failover. | Server mode, WAL, and Chapter 23. |
+| Replication or HA | You need read scaling or automatic failover. | Server mode, WAL, and Chapter 22. |
 
 The rest of this chapter follows that order.
 
@@ -454,7 +454,7 @@ force `:wal? true` and default to the `:strict` WAL durability profile.
 Membership changes are explicit operator actions through
 `datalevin.client/ha-update-membership!`.
 
-Chapter 23 covers details of server behavior, client tuning, async read
+Chapter 22 covers details of server behavior, client tuning, async read
 replicas, and HA.
 
 ---

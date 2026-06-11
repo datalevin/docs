@@ -36,17 +36,19 @@ seen before, Datalevin automatically adds it to the internal schema.
 
 ```java
 // This works even if user/name was never defined
-Datalevin.transact(conn, List.of(Map.of("user/name", "Alice")));
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity()
+        .put("user/name", "Alice")));
 ```
 
 ```python
 # This works even if user/name was never defined
-d.transact(conn, [{"user/name": "Alice"}])
+conn.transact([{":user/name": "Alice"}])
 ```
 
 ```javascript
 // This works even if user/name was never defined
-d.transact(conn, [{"user/name": "Alice"}]);
+await conn.transact([{ ":user/name": "Alice" }]);
 ```
 
 </div>
@@ -164,21 +166,24 @@ IDs. Tempids can be a negative integer or a string.
 ```
 
 ```java
-Datalevin.transact(conn, List.of(
-    Map.of("db/id", -1, "user/name", "Alice"),
-    Map.of("db/id", -2, "user/name", "Bob", "user/friend", -1))); // Bob follows Alice using her tempid
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity(-1)
+        .put("user/name", "Alice"))
+    .entity(Tx.entity(-2)
+        .put("user/name", "Bob")
+        .put("user/friend", -1))); // Bob follows Alice using her tempid
 ```
 
 ```python
-d.transact(conn, [
-    {"db/id": -1, "user/name": "Alice"},
-    {"db/id": -2, "user/name": "Bob", "user/friend": -1}])  # Bob follows Alice using her tempid
+conn.transact([
+    {":db/id": -1, ":user/name": "Alice"},
+    {":db/id": -2, ":user/name": "Bob", ":user/friend": -1}])  # Bob follows Alice using her tempid
 ```
 
 ```javascript
-d.transact(conn, [
-  {"db/id": -1, "user/name": "Alice"},
-  {"db/id": -2, "user/name": "Bob", "user/friend": -1}  // Bob follows Alice using her tempid
+await conn.transact([
+  { ":db/id": -1, ":user/name": "Alice" },
+  { ":db/id": -2, ":user/name": "Bob", ":user/friend": -1 }  // Bob follows Alice using her tempid
 ]);
 ```
 

@@ -41,40 +41,39 @@ datoms, but treats that entity as owned by its parent.
 ```
 
 ```java
-Map<String, Object> schema = Map.of(
-    "post/comments", Map.of(
-        "db/valueType", "db.type/ref",
-        "db/cardinality", "db.cardinality/many",
-        "db/isComponent", true
-    ),
-    "comment/author", Map.of(
-        "db/valueType", "db.type/ref"
-    )
-);
+Schema schema = Datalevin.schema()
+    .attr("post/comments",
+          Schema.attribute()
+              .valueType(Schema.ValueType.REF)
+              .cardinality(Schema.Cardinality.MANY)
+              .isComponent(true))
+    .attr("comment/author",
+          Schema.attribute()
+              .valueType(Schema.ValueType.REF));
 ```
 
 ```python
 schema = {
-    "post/comments": {
-        "db/valueType": "db.type/ref",
-        "db/cardinality": "db.cardinality/many",
-        "db/isComponent": True
+    ":post/comments": {
+        ":db/valueType": ":db.type/ref",
+        ":db/cardinality": ":db.cardinality/many",
+        ":db/isComponent": True
     },
-    "comment/author": {
-        "db/valueType": "db.type/ref"
+    ":comment/author": {
+        ":db/valueType": ":db.type/ref"
     }
 }
 ```
 
 ```javascript
 const schema = {
-  'post/comments': {
-    'db/valueType': 'db.type/ref',
-    'db/cardinality': 'db.cardinality/many',
-    'db/isComponent': true
+  ":post/comments": {
+    ":db/valueType": ":db.type/ref",
+    ":db/cardinality": ":db.cardinality/many",
+    ":db/isComponent": true
   },
-  'comment/author': {
-    'db/valueType': 'db.type/ref'
+  ":comment/author": {
+    ":db/valueType": ":db.type/ref"
   }
 };
 ```
@@ -103,45 +102,46 @@ remain separate top-level entities:
 ```
 
 ```java
-conn.transact(List.of(
-    Map.of("db/id", 200,
-           "user/name", "Ada",
-           "user/email", "ada@example.com"),
-    Map.of("db/id", 1,
-           "post/title", "Indexes as Capabilities",
-           "post/comments", List.of(
-               Map.of("comment/body", "This clarifies the mental model.",
-                      "comment/author", 200)))
-));
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity(200)
+        .put("user/name", "Ada")
+        .put("user/email", "ada@example.com"))
+    .entity(Tx.entity(1)
+        .put("post/title", "Indexes as Capabilities")
+        .put("post/comments", List.of(
+            Tx.entity()
+                .put("comment/body", "This clarifies the mental model.")
+                .put("comment/author", 200)
+                .build()))));
 ```
 
 ```python
-d.transact(conn, [
-    {"db/id": 200,
-     "user/name": "Ada",
-     "user/email": "ada@example.com"},
-    {"db/id": 1,
-     "post/title": "Indexes as Capabilities",
-     "post/comments": [
-         {"comment/body": "This clarifies the mental model.",
-          "comment/author": 200}]}
+conn.transact([
+    {":db/id": 200,
+     ":user/name": "Ada",
+     ":user/email": "ada@example.com"},
+    {":db/id": 1,
+     ":post/title": "Indexes as Capabilities",
+     ":post/comments": [
+         {":comment/body": "This clarifies the mental model.",
+          ":comment/author": 200}]}
 ])
 ```
 
 ```javascript
-d.transact(conn, [
+await conn.transact([
   {
-    'db/id': 200,
-    'user/name': 'Ada',
-    'user/email': 'ada@example.com'
+    ":db/id": 200,
+    ":user/name": "Ada",
+    ":user/email": "ada@example.com"
   },
   {
-    'db/id': 1,
-    'post/title': 'Indexes as Capabilities',
-    'post/comments': [
+    ":db/id": 1,
+    ":post/title": "Indexes as Capabilities",
+    ":post/comments": [
       {
-        'comment/body': 'This clarifies the mental model.',
-        'comment/author': 200
+        ":comment/body": "This clarifies the mental model.",
+        ":comment/author": 200
       }
     ]
   }
@@ -167,16 +167,14 @@ conn.pull(
 ```
 
 ```python
-d.pull(
-    db,
+conn.pull(
     [":post/title", {":post/comments": [":comment/body",
                                         {":comment/author": [":user/name"]}]}],
     1)
 ```
 
 ```javascript
-d.pull(
-  db,
+await conn.pull(
   [':post/title', { ':post/comments': [':comment/body',
                                        { ':comment/author': [':user/name'] }] }],
   1
@@ -214,40 +212,39 @@ Declare an idoc attribute with `:db/valueType :db.type/idoc`. The optional
 ```
 
 ```java
-Map<String, Object> schema = Map.of(
-    "user/metadata", Map.of(
-        "db/valueType", "db.type/idoc",
-        "db/domain", "user_metadata"
-    ),
-    "user/raw-json", Map.of(
-        "db/valueType", "db.type/idoc",
-        "db/idocFormat", "json"
-    )
-);
+Schema schema = Datalevin.schema()
+    .attr("user/metadata",
+          Schema.attribute()
+              .valueType(Schema.ValueType.IDOC)
+              .prop("db/domain", "user_metadata"))
+    .attr("user/raw-json",
+          Schema.attribute()
+              .valueType(Schema.ValueType.IDOC)
+              .prop("db/idocFormat", Datalevin.kw("json")));
 ```
 
 ```python
 schema = {
-    "user/metadata": {
-        "db/valueType": "db.type/idoc",
-        "db/domain": "user_metadata"
+    ":user/metadata": {
+        ":db/valueType": ":db.type/idoc",
+        ":db/domain": "user_metadata"
     },
-    "user/raw-json": {
-        "db/valueType": "db.type/idoc",
-        "db/idocFormat": "json"
+    ":user/raw-json": {
+        ":db/valueType": ":db.type/idoc",
+        ":db/idocFormat": ":json"
     }
 }
 ```
 
 ```javascript
 const schema = {
-  'user/metadata': {
-    'db/valueType': 'db.type/idoc',
-    'db/domain': 'user_metadata'
+  ":user/metadata": {
+    ":db/valueType": ":db.type/idoc",
+    ":db/domain": "user_metadata"
   },
-  'user/raw-json': {
-    'db/valueType': 'db.type/idoc',
-    'db/idocFormat': 'json'
+  ":user/raw-json": {
+    ":db/valueType": ":db.type/idoc",
+    ":db/idocFormat": ":json"
   }
 };
 ```
@@ -275,39 +272,38 @@ Idoc values must be document-like maps. Nested vectors are treated as arrays.
 ```
 
 ```java
-conn.transact(List.of(
-    Map.of("db/id", 101,
-           "user/metadata", Map.of(
-               "theme", "dark",
-               "profile", Map.of("age", 30, "name", "Alice"),
-               "tags", List.of("beta", "admin"),
-               "contact", Map.of("email", "alice@example.com")),
-           "user/raw-json", "{\"middle\":null,\"theme\":\"dark\"}")
-));
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity(101)
+        .put("user/metadata", Map.of(
+            "theme", "dark",
+            "profile", Map.of("age", 30, "name", "Alice"),
+            "tags", List.of("beta", "admin"),
+            "contact", Map.of("email", "alice@example.com")))
+        .put("user/raw-json", "{\"middle\":null,\"theme\":\"dark\"}")));
 ```
 
 ```python
-d.transact(conn, [
-    {"db/id": 101,
-     "user/metadata": {
+conn.transact([
+    {":db/id": 101,
+     ":user/metadata": {
          "theme": "dark",
          "profile": {"age": 30, "name": "Alice"},
          "tags": ["beta", "admin"],
          "contact": {"email": "alice@example.com"}},
-     "user/raw-json": '{"middle":null,"theme":"dark"}'}
+     ":user/raw-json": '{"middle":null,"theme":"dark"}'}
 ])
 ```
 
 ```javascript
-d.transact(conn, [
-  { 'db/id': 101,
-    'user/metadata': {
-      theme: 'dark',
-      profile: { age: 30, name: 'Alice' },
-      tags: ['beta', 'admin'],
-      contact: { email: 'alice@example.com' }
+await conn.transact([
+  { ":db/id": 101,
+    ":user/metadata": {
+      theme: "dark",
+      profile: { age: 30, name: "Alice" },
+      tags: ["beta", "admin"],
+      contact: { email: "alice@example.com" }
     },
-    'user/raw-json': '{"middle":null,"theme":"dark"}' }
+    ":user/raw-json": "{\"middle\":null,\"theme\":\"dark\"}" }
 ]);
 ```
 
@@ -339,31 +335,29 @@ whole document.
 ```
 
 ```java
-conn.transact(List.of(
-    List.of("db.fn/patchIdoc", 101, "user/metadata",
-        List.of(
-            List.of("set", List.of("profile", "display-name"), "Alice A."),
-            List.of("unset", List.of("profile", "middle")),
-            List.of("update", List.of("tags"), "conj", "active")
-        ))
-));
+conn.transact(Datalevin.tx()
+    .raw(Datalevin.edn(
+        "[:db.fn/patchIdoc 101 :user/metadata " +
+        " [[:set [:profile :display-name] \"Alice A.\"] " +
+        "  [:unset [:profile :middle]] " +
+        "  [:update [:tags] :conj \"active\"]]]")));
 ```
 
 ```python
-d.transact(conn, [
-    ["db.fn/patchIdoc", 101, "user/metadata",
-     [["set", ["profile", "display-name"], "Alice A."],
-      ["unset", ["profile", "middle"]],
-      ["update", ["tags"], "conj", "active"]]]
+conn.transact([
+    [":db.fn/patchIdoc", 101, ":user/metadata",
+     [[":set", [":profile", ":display-name"], "Alice A."],
+      [":unset", [":profile", ":middle"]],
+      [":update", [":tags"], ":conj", "active"]]]
 ])
 ```
 
 ```javascript
-d.transact(conn, [
-  ['db.fn/patchIdoc', 101, 'user/metadata',
-    [['set', ['profile', 'display-name'], 'Alice A.'],
-     ['unset', ['profile', 'middle']],
-     ['update', ['tags'], 'conj', 'active']]]
+await conn.transact([
+  [":db.fn/patchIdoc", 101, ":user/metadata",
+    [[":set", [":profile", ":display-name"], "Alice A."],
+     [":unset", [":profile", ":middle"]],
+     [":update", [":tags"], ":conj", "active"]]]
 ]);
 ```
 
@@ -423,15 +417,13 @@ conn.query("[:find ?e " +
 ```
 
 ```python
-d.q('[:find ?e '
-     ' :where [(idoc-match $ :user/metadata {:theme "dark"}) [[?e _ _]]]]',
-     db)
+conn.query('[:find ?e '
+           ' :where [(idoc-match $ :user/metadata {:theme "dark"}) [[?e _ _]]]]')
 ```
 
 ```javascript
-d.q('[:find ?e ' +
-     ' :where [(idoc-match $ :user/metadata {:theme "dark"}) [[?e _ _]]]]',
-     db);
+await conn.query('[:find ?e ' +
+                 ' :where [(idoc-match $ :user/metadata {:theme "dark"}) [[?e _ _]]]]');
 ```
 
 </div>
@@ -455,17 +447,15 @@ conn.query("[:find ?e " +
 ```
 
 ```python
-d.q('[:find ?e '
-     ' :where [(idoc-match $ :user/metadata '
-     '          {:profile {:age 30 :name "Alice"}}) [[?e _ _]]]]',
-     db)
+conn.query('[:find ?e '
+           ' :where [(idoc-match $ :user/metadata '
+           '          {:profile {:age 30 :name "Alice"}}) [[?e _ _]]]]')
 ```
 
 ```javascript
-d.q('[:find ?e ' +
-     ' :where [(idoc-match $ :user/metadata ' +
-     '          {:profile {:age 30 :name "Alice"}}) [[?e _ _]]]]',
-     db);
+await conn.query('[:find ?e ' +
+                 ' :where [(idoc-match $ :user/metadata ' +
+                 '          {:profile {:age 30 :name "Alice"}}) [[?e _ _]]]]');
 ```
 
 </div>
@@ -486,15 +476,13 @@ conn.query("[:find ?e " +
 ```
 
 ```python
-d.q('[:find ?e '
-     ' :where [(idoc-match $ :user/metadata {:tags "admin"}) [[?e _ _]]]]',
-     db)
+conn.query('[:find ?e '
+           ' :where [(idoc-match $ :user/metadata {:tags "admin"}) [[?e _ _]]]]')
 ```
 
 ```javascript
-d.q('[:find ?e ' +
-     ' :where [(idoc-match $ :user/metadata {:tags "admin"}) [[?e _ _]]]]',
-     db);
+await conn.query('[:find ?e ' +
+                 ' :where [(idoc-match $ :user/metadata {:tags "admin"}) [[?e _ _]]]]');
 ```
 
 </div>
@@ -521,19 +509,17 @@ conn.query("[:find ?e " +
 ```
 
 ```python
-d.q('[:find ?e '
-     ' :where [(idoc-match $ :user/metadata '
-     '          {:profile [:or {:age 30} {:age 40}]}) '
-     '         [[?e _ _]]]]',
-     db)
+conn.query('[:find ?e '
+           ' :where [(idoc-match $ :user/metadata '
+           '          {:profile [:or {:age 30} {:age 40}]}) '
+           '         [[?e _ _]]]]')
 ```
 
 ```javascript
-d.q('[:find ?e ' +
-     ' :where [(idoc-match $ :user/metadata ' +
-     '          {:profile [:or {:age 30} {:age 40}]}) ' +
-     '         [[?e _ _]]]]',
-     db);
+await conn.query('[:find ?e ' +
+                 ' :where [(idoc-match $ :user/metadata ' +
+                 '          {:profile [:or {:age 30} {:age 40}]}) ' +
+                 '         [[?e _ _]]]]');
 ```
 
 </div>
@@ -588,46 +574,40 @@ conn.query("[:find ?e " +
 
 ```python
 # Inline predicate.
-d.q('[:find ?e '
-    ' :where [(idoc-match $ :user/metadata '
-    '          {:profile {:age (> 21)}}) [[?e _ _]]]]',
-    db)
+conn.query('[:find ?e '
+           ' :where [(idoc-match $ :user/metadata '
+           '          {:profile {:age (> 21)}}) [[?e _ _]]]]')
 
 # Path predicate supplied as data.
-d.q('[:find ?e '
-    ' :in $ ?q '
-    ' :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]',
-    db,
-    interop().read_edn("(>= [:profile :age] 30)"))
+conn.query('[:find ?e '
+           ' :in $ ?q '
+           ' :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]',
+           interop().read_edn("(>= [:profile :age] 30)"))
 
 # Range via multi-arity comparison.
-d.q('[:find ?e '
-    ' :in $ ?q '
-    ' :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]',
-    db,
-    interop().read_edn("(< 20 [:profile :age] 40)"))
+conn.query('[:find ?e '
+           ' :in $ ?q '
+           ' :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]',
+           interop().read_edn("(< 20 [:profile :age] 40)"))
 ```
 
 ```javascript
 // Inline predicate.
-d.q('[:find ?e ' +
-    ' :where [(idoc-match $ :user/metadata ' +
-    '          {:profile {:age (> 21)}}) [[?e _ _]]]]',
-    db);
+await conn.query('[:find ?e ' +
+                 ' :where [(idoc-match $ :user/metadata ' +
+                 '          {:profile {:age (> 21)}}) [[?e _ _]]]]');
 
 // Path predicate supplied as data.
-d.q('[:find ?e ' +
-    ' :in $ ?q ' +
-    ' :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]',
-    db,
-    await interop().readEdn('(>= [:profile :age] 30)'));
+await conn.query('[:find ?e ' +
+                 ' :in $ ?q ' +
+                 ' :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]',
+                 await interop().readEdn("(>= [:profile :age] 30)"));
 
 // Range via multi-arity comparison.
-d.q('[:find ?e ' +
-    ' :in $ ?q ' +
-    ' :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]',
-    db,
-    await interop().readEdn('(< 20 [:profile :age] 40)'));
+await conn.query('[:find ?e ' +
+                 ' :in $ ?q ' +
+                 ' :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]',
+                 await interop().readEdn("(< 20 [:profile :age] 40)"));
 ```
 
 </div>
@@ -670,32 +650,28 @@ conn.query("[:find ?e " +
 
 ```python
 # Match any single key under profile with value >= 30.
-d.q('[:find ?e '
-    ' :in $ ?q '
-    ' :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]',
-    db,
-    interop().read_edn("(>= [:profile :?] 30)"))
+conn.query('[:find ?e '
+           ' :in $ ?q '
+           ' :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]',
+           interop().read_edn("(>= [:profile :?] 30)"))
 
 # Match a name field at any depth.
-d.q('[:find ?e '
-    ' :where [(idoc-match $ :user/metadata {:* {:name "Alice"}}) '
-    '         [[?e _ _]]]]',
-    db)
+conn.query('[:find ?e '
+           ' :where [(idoc-match $ :user/metadata {:* {:name "Alice"}}) '
+           '         [[?e _ _]]]]')
 ```
 
 ```javascript
 // Match any single key under profile with value >= 30.
-d.q('[:find ?e ' +
-    ' :in $ ?q ' +
-    ' :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]',
-    db,
-    await interop().readEdn('(>= [:profile :?] 30)'));
+await conn.query('[:find ?e ' +
+                 ' :in $ ?q ' +
+                 ' :where [(idoc-match $ :user/metadata ?q) [[?e _ _]]]]',
+                 await interop().readEdn("(>= [:profile :?] 30)"));
 
 // Match a name field at any depth.
-d.q('[:find ?e ' +
-    ' :where [(idoc-match $ :user/metadata {:* {:name "Alice"}}) ' +
-    '         [[?e _ _]]]]',
-    db);
+await conn.query('[:find ?e ' +
+                 ' :where [(idoc-match $ :user/metadata {:* {:name "Alice"}}) ' +
+                 '         [[?e _ _]]]]');
 ```
 
 </div>
@@ -722,17 +698,15 @@ conn.query("[:find ?e " +
 ```
 
 ```python
-d.q('[:find ?e '
-     ' :where [(idoc-match $ :user/raw-json {"middle" (nil?)}) '
-     '         [[?e _ _]]]]',
-     db)
+conn.query('[:find ?e '
+           ' :where [(idoc-match $ :user/raw-json {"middle" (nil?)}) '
+           '         [[?e _ _]]]]')
 ```
 
 ```javascript
-d.q('[:find ?e ' +
-     ' :where [(idoc-match $ :user/raw-json {"middle" (nil?)}) ' +
-     '         [[?e _ _]]]]',
-     db);
+await conn.query('[:find ?e ' +
+                 ' :where [(idoc-match $ :user/raw-json {"middle" (nil?)}) ' +
+                 '         [[?e _ _]]]]');
 ```
 
 </div>
@@ -760,17 +734,15 @@ conn.query("[:find ?e ?email " +
 ```
 
 ```python
-d.q('[:find ?e ?email '
-     ' :where [(idoc-match $ :user/metadata {:theme "dark"}) [[?e _ ?doc]]] '
-     '        [(idoc-get ?doc :contact :email) ?email]]',
-     db)
+conn.query('[:find ?e ?email '
+           ' :where [(idoc-match $ :user/metadata {:theme "dark"}) [[?e _ ?doc]]] '
+           '        [(idoc-get ?doc :contact :email) ?email]]')
 ```
 
 ```javascript
-d.q('[:find ?e ?email ' +
-    ' :where [(idoc-match $ :user/metadata {:theme "dark"}) [[?e _ ?doc]]] ' +
-    '        [(idoc-get ?doc :contact :email) ?email]]',
-    db);
+await conn.query('[:find ?e ?email ' +
+                 ' :where [(idoc-match $ :user/metadata {:theme "dark"}) [[?e _ ?doc]]] ' +
+                 '        [(idoc-get ?doc :contact :email) ?email]]');
 ```
 
 </div>

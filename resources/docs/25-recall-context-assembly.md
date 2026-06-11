@@ -1,12 +1,12 @@
 ---
 title: "Recall and Context Assembly"
-chapter: 26
+chapter: 25
 part: "VI — Datalevin for Intelligent Systems"
 ---
 
-# Chapter 26: Recall and Context Assembly
+# Chapter 25: Recall and Context Assembly
 
-Chapter 25 defined the records an agent stores: episodes, semantic facts,
+Chapter 24 defined the records an agent stores: episodes, semantic facts,
 working-memory slots, and session documents. This chapter explains how those
 records become useful to an LLM at inference time.
 
@@ -103,7 +103,7 @@ knowledge:
 
 ```java
 // Double-lens query: episodic + semantic.
-Collection results = Datalevin.q(
+Object results = conn.query(
     "[:find ?fact " +
     " :in $ % ?topic ?user ?since " +
     " :where (or (and [?e :episode/user ?user] " +
@@ -112,12 +112,12 @@ Collection results = Datalevin.q(
     "                 [?e :episode/summary ?fact]) " +
     "            (and [?c :concept/name ?topic] " +
     "                 [?c :concept/description ?fact]))]",
-    db, memoryRules, "Vector Search", userId, oneHourAgo);
+    memoryRules, "Vector Search", userId, oneHourAgo);
 ```
 
 ```python
 # Double-lens query: episodic + semantic.
-results = d.q(
+results = conn.query(
     '[:find ?fact '
     ' :in $ % ?topic ?user ?since '
     ' :where (or (and [?e :episode/user ?user] '
@@ -126,12 +126,12 @@ results = d.q(
     '                 [?e :episode/summary ?fact]) '
     '            (and [?c :concept/name ?topic] '
     '                 [?c :concept/description ?fact]))]',
-    db, memory_rules, "Vector Search", user_id, one_hour_ago)
+    memory_rules, "Vector Search", user_id, one_hour_ago)
 ```
 
 ```javascript
 // Double-lens query: episodic + semantic.
-const results = d.q(
+const results = await conn.query(
     '[:find ?fact ' +
     ' :in $ % ?topic ?user ?since ' +
     ' :where (or (and [?e :episode/user ?user] ' +
@@ -140,7 +140,7 @@ const results = d.q(
     '                 [?e :episode/summary ?fact]) ' +
     '            (and [?c :concept/name ?topic] ' +
     '                 [?c :concept/description ?fact]))]',
-    db, memoryRules, 'Vector Search', userId, oneHourAgo);
+    memoryRules, "Vector Search", userId, oneHourAgo);
 ```
 
 </div>
@@ -184,9 +184,7 @@ avoid the need for fragile and slow glue code.
 ```
 
 ```java
-import datalevin.core.*;
-
-var results = Datalevin.q(
+Object results = conn.query(
     "[:find ?content ?combined-score " +
     " :in $ ?q-text ?q-vec ?user-id " +
     " :where [(fulltext $ :doc/content ?q-text {:top 50 :display :refs+scores}) [[?e _ _ ?fts-score]]]" +
@@ -195,11 +193,11 @@ var results = Datalevin.q(
     "        [?e :doc/status :published]" +
     "        [?user-id :user/permissions ?e]" +
     "        [(- ?fts-score ?vec-dist) ?combined-score]]",
-    db, "performance tuning", queryEmbedding, userId);
+    "performance tuning", queryEmbedding, userId);
 ```
 
 ```python
-results = d.q(
+results = conn.query(
     """[:find ?content ?combined-score
         :in $ ?q-text ?q-vec ?user-id
         :where [(fulltext $ :doc/content ?q-text {:top 50 :display :refs+scores})
@@ -210,11 +208,11 @@ results = d.q(
                [?e :doc/status :published]
                [?user-id :user/permissions ?e]
                [(- ?fts-score ?vec-dist) ?combined-score]]""",
-    db, "performance tuning", query_embedding, user_id)
+    "performance tuning", query_embedding, user_id)
 ```
 
 ```javascript
-const results = d.q(
+const results = await conn.query(
     `[:find ?content ?combined-score
       :in $ ?q-text ?q-vec ?user-id
       :where [(fulltext $ :doc/content ?q-text {:top 50 :display :refs+scores})
@@ -225,7 +223,7 @@ const results = d.q(
              [?e :doc/status :published]
              [?user-id :user/permissions ?e]
              [(- ?fts-score ?vec-dist) ?combined-score]]`,
-    db, 'performance tuning', queryEmbedding, userId);
+    "performance tuning", queryEmbedding, userId);
 ```
 
 </div>

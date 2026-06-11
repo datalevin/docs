@@ -40,7 +40,22 @@ constraints, identity, and logical queries are the right tool. It also integrate
 full-text indexes, vector and embedding indexes, and path-indexed documents so
 that search and reasoning can meet in the same query.
 
-Here is the flavor of the model across the main application APIs:
+Here is the flavor of the model across the main application APIs. The examples
+in this book use one convention throughout:
+
+- Clojure examples use EDN directly.
+- Java examples use the high-level `datalevin` package, especially typed schema
+  and transaction builders. Attribute names are written as strings such as
+  `"person/name"`; the Java wrapper turns them into Datalevin keywords.
+- Python examples use `from datalevin import connect` and connection methods
+  such as `conn.transact`, `conn.query`, and `conn.pull`. Schema and transaction
+  maps use EDN keyword strings such as `":person/name"`.
+- JavaScript examples use `connect` from `datalevin-node`, `await conn.*`
+  methods, and the same colon-prefixed keyword strings as Python.
+
+When Java examples must pass a raw option map or UDF descriptor, keyword values
+are still written as colon-prefixed strings such as `":cosine"` or
+`":tx-fn"`, because those maps are normalized by the Java wrapper at runtime.
 
 <div class="multi-lang">
 
@@ -71,87 +86,98 @@ Here is the flavor of the model across the main application APIs:
 ```
 
 ```java
-import datalevin.core.*;
-import java.util.*;
+import datalevin.*;
 
-Map<String, Object> schema = Map.of(
-    "person/name", Map.of("db/unique", "db.unique/identity"),
-    "person/follows", Map.of("db/valueType", "db.type/ref",
-                             "db/cardinality", "db.cardinality/many"));
+Schema schema = Datalevin.schema()
+    .attr("person/name",
+          Schema.attribute().unique(Schema.Unique.IDENTITY))
+    .attr("person/follows",
+          Schema.attribute()
+              .valueType(Schema.ValueType.REF)
+              .cardinality(Schema.Cardinality.MANY));
 
 Connection conn = Datalevin.getConn("/tmp/preface-demo", schema);
 
-Datalevin.transact(conn, List.of(
-    Map.of("person/name", "Alice",
-           "person/follows", List.of(Map.of("person/name", "Bob"))),
-    Map.of("person/name", "Bob",
-           "person/follows", List.of(Map.of("person/name", "Carol")))));
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity(-1)
+        .put("person/name", "Alice")
+        .put("person/follows", Datalevin.listOf(-2)))
+    .entity(Tx.entity(-2)
+        .put("person/name", "Bob")
+        .put("person/follows", Datalevin.listOf(-3)))
+    .entity(Tx.entity(-3)
+        .put("person/name", "Carol")));
 
-Set<List<Object>> results = Datalevin.q(
+Object results = conn.query(
     "[:find ?friend ?friend-of-friend " +
     " :where [?alice :person/name \"Alice\"] " +
     "        [?alice :person/follows ?f] " +
     "        [?f :person/name ?friend] " +
     "        [?f :person/follows ?ff] " +
-    "        [?ff :person/name ?friend-of-friend]]",
-    Datalevin.db(conn));
+    "        [?ff :person/name ?friend-of-friend]]");
 // => #{["Bob" "Carol"]}
 ```
 
 ```python
-import datalevin as d
+from datalevin import connect
 
 schema = {
-    "person/name": {"db/unique": "db.unique/identity"},
-    "person/follows": {"db/valueType": "db.type/ref",
-                       "db/cardinality": "db.cardinality/many"}}
+    ":person/name": {":db/unique": ":db.unique/identity"},
+    ":person/follows": {":db/valueType": ":db.type/ref",
+                        ":db/cardinality": ":db.cardinality/many"}}
 
-conn = d.get_conn("/tmp/preface-demo", schema)
+with connect("/tmp/preface-demo", schema=schema) as conn:
+    conn.transact([
+        {":db/id": -1,
+         ":person/name": "Alice",
+         ":person/follows": [-2]},
+        {":db/id": -2,
+         ":person/name": "Bob",
+         ":person/follows": [-3]},
+        {":db/id": -3,
+         ":person/name": "Carol"}])
 
-d.transact(conn, [
-    {"person/name": "Alice",
-     "person/follows": [{"person/name": "Bob"}]},
-    {"person/name": "Bob",
-     "person/follows": [{"person/name": "Carol"}]}])
-
-results = d.q("""
-    [:find ?friend ?friend-of-friend
-     :where [?alice :person/name "Alice"]
-            [?alice :person/follows ?f]
-            [?f :person/name ?friend]
-            [?f :person/follows ?ff]
-            [?ff :person/name ?friend-of-friend]]""",
-    d.db(conn))
-# => {("Bob", "Carol")}
+    results = conn.query("""
+        [:find ?friend ?friend-of-friend
+         :where [?alice :person/name "Alice"]
+                [?alice :person/follows ?f]
+                [?f :person/name ?friend]
+                [?f :person/follows ?ff]
+                [?ff :person/name ?friend-of-friend]]""")
+    # => [["Bob", "Carol"]]
 ```
 
 ```javascript
-import { Datalevin as d } from 'datalevin';
+import { connect } from "datalevin-node";
 
 const schema = {
-  "person/name": {"db/unique": "db.unique/identity"},
-  "person/follows": {"db/valueType": "db.type/ref",
-                     "db/cardinality": "db.cardinality/many"}
+  ":person/name": { ":db/unique": ":db.unique/identity" },
+  ":person/follows": {
+    ":db/valueType": ":db.type/ref",
+    ":db/cardinality": ":db.cardinality/many"
+  }
 };
 
-const conn = d.getConn("/tmp/preface-demo", schema);
+const conn = await connect("/tmp/preface-demo", { schema });
 
-d.transact(conn, [
-  {"person/name": "Alice",
-   "person/follows": [{"person/name": "Bob"}]},
-  {"person/name": "Bob",
-   "person/follows": [{"person/name": "Carol"}]}
-]);
+try {
+  await conn.transact([
+    { ":db/id": -1, ":person/name": "Alice", ":person/follows": [-2] },
+    { ":db/id": -2, ":person/name": "Bob", ":person/follows": [-3] },
+    { ":db/id": -3, ":person/name": "Carol" }
+  ]);
 
-const results = d.q(
-  `[:find ?friend ?friend-of-friend
-    :where [?alice :person/name "Alice"]
-           [?alice :person/follows ?f]
-           [?f :person/name ?friend]
-           [?f :person/follows ?ff]
-           [?ff :person/name ?friend-of-friend]]`,
-  d.db(conn));
-// => Set([["Bob", "Carol"]])
+  const results = await conn.query(
+    `[:find ?friend ?friend-of-friend
+      :where [?alice :person/name "Alice"]
+             [?alice :person/follows ?f]
+             [?f :person/name ?friend]
+             [?f :person/follows ?ff]
+             [?ff :person/name ?friend-of-friend]]`);
+  // => [["Bob", "Carol"]]
+} finally {
+  await conn.close();
+}
 ```
 
 </div>
@@ -240,7 +266,7 @@ see in EDN and Datalog forms. The ideas are not limited to Clojure. Datalevin
 also exposes Java, Python, JavaScript, command-line, server, and MCP surfaces,
 and the book calls out those modes where they matter.
 
-If EDN is new to you, read Appendix 32 early. You do not need to become a
+If EDN is new to you, read Appendix D early. You do not need to become a
 Clojure programmer to understand EDN, but the notation appears everywhere in
 schemas, transactions, queries, rules, and examples.
 

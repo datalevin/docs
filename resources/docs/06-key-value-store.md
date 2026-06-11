@@ -44,39 +44,33 @@ to create it is needed.
 ```
 
 ```java
-import datalevin.core.*;
+import datalevin.Datalevin;
+import datalevin.KV;
 
 // Open the store
-KVStore kv = Datalevin.openKv("/tmp/my-kv-store");
-
-// KV ops ...
-
-// Always remember to close it when the application shuts down
-Datalevin.closeKv(kv);
+try (KV kv = Datalevin.openKV("/tmp/my-kv-store")) {
+    // KV ops ...
+}
 ```
 
 ```python
-import datalevin as d
+from datalevin import open_kv
 
 # Open the store
-kv = d.open_kv("/tmp/my-kv-store")
-
-# KV ops ...
-
-# Always remember to close it when the application shuts down
-d.close_kv(kv)
+with open_kv("/tmp/my-kv-store") as kv:
+    # KV ops ...
 ```
 
 ```javascript
-import { Datalevin } from 'datalevin';
+import { openKv } from "datalevin-node";
 
 // Open the store
-const kv = d.openKv('/tmp/my-kv-store');
-
-// KV ops ...
-
-// Always remember to close it when the application shuts down
-d.closeKv(kv);
+const kv = await openKv("/tmp/my-kv-store");
+try {
+  // KV ops ...
+} finally {
+  await kv.close();
+}
 ```
 
 </div>
@@ -115,17 +109,17 @@ intermediate computation results, or high-speed buffers.
 
 ```java
 // Open an in-memory KV store (no file persistence), directory can be null
-KVStore memKv = Datalevin.openKv(null, Map.of("inmemory?", true));
+KV memKv = Datalevin.openKV(null, Map.of("inmemory?", true));
 ```
 
 ```python
 # Open an in-memory KV store (no file persistence), directory can be None
-mem_kv = d.open_kv(None, {"inmemory?": True})
+mem_kv = open_kv(None, opts={":inmemory?": True})
 ```
 
 ```javascript
 // Open an in-memory KV store (no file persistence), directory can be null
-const memKv = d.openKv(null, { "inmemory?": true });
+const memKv = await openKv(null, { ":inmemory?": true });
 ```
 
 </div>
@@ -155,17 +149,17 @@ of DBI is opened with `open-dbi`.
 
 ```java
 // Open a regular dbi called "people" in kv store
-Datalevin.openDbi(kv, "people");
+kv.openDbi("people");
 ```
 
 ```python
 # Open a regular dbi called "people" in kv store
-d.open_dbi(kv, "people")
+kv.open_dbi("people")
 ```
 
 ```javascript
 // Open a regular dbi called "people" in kv store
-d.openDbi(kv, 'people');
+await kv.openDbi("people");
 ```
 
 </div>
@@ -185,17 +179,17 @@ DBI is opened with `open-list-dbi`.
 
 ```java
 // Open a list-dbi (DUPSORT DBI) called "tags"
-Datalevin.openListDbi(kv, "tags");
+kv.openListDbi("tags");
 ```
 
 ```python
 # Open a list-dbi (DUPSORT DBI) called "tags"
-d.open_list_dbi(kv, "tags")
+kv.open_list_dbi("tags")
 ```
 
 ```javascript
 // Open a list-dbi (DUPSORT DBI) called "tags"
-d.openListDbi(kv, 'tags');
+await kv.openListDbi("tags");
 ```
 
 </div>
@@ -218,23 +212,23 @@ Data are transacted to a KV store using `transact-kv` function.
 
 ```java
 // Add multiple values to the same key in a list dbi
-Datalevin.transactKv(kv, List.of(
-    List.of("put", "tags", "clojure", "fast", "string"),
-    List.of("put", "tags", "clojure", "expressive", "string")));
+kv.transact(List.of(
+    List.of(Datalevin.kw("put"), "tags", "clojure", "fast", "string"),
+    List.of(Datalevin.kw("put"), "tags", "clojure", "expressive", "string")));
 ```
 
 ```python
 # Add multiple values to the same key in a list dbi
-d.transact_kv(kv, [
-    ["put", "tags", "clojure", "fast", "string"],
-    ["put", "tags", "clojure", "expressive", "string"]])
+kv.transact([
+    [":put", "tags", "clojure", "fast", ":string"],
+    [":put", "tags", "clojure", "expressive", ":string"]])
 ```
 
 ```javascript
 // Add multiple values to the same key in a list dbi
-d.transactKv(kv, [
-  ['put', 'tags', 'clojure', 'fast', 'string'],
-  ['put', 'tags', 'clojure', 'expressive', 'string']
+await kv.transact([
+  [":put", "tags", "clojure", "fast", ":string"],
+  [":put", "tags", "clojure", "expressive", ":string"]
 ]);
 ```
 
@@ -260,20 +254,8 @@ queries.
 
 ```java
 // Get all values for a key
-List<Object> values = Datalevin.getList(kv, "tags", "clojure");
+List<?> values = kv.getList("tags", "clojure", "string", "string");
 // => ["expressive", "fast"] ; sorted values
-```
-
-```python
-# Get all values for a key
-values = d.get_list(kv, "tags", "clojure")
-# => ["expressive", "fast"]  # sorted values
-```
-
-```javascript
-// Get all values for a key
-const values = d.getList(kv, 'tags', 'clojure');
-// => ['expressive', 'fast'] // sorted values
 ```
 
 </div>
@@ -441,8 +423,6 @@ the maximum key size is **511 bytes**.
 involving reads and writes that must be atomic, use the `with-transaction-kv`
 macro.
 
-<div class="multi-lang">
-
 ```clojure
 (d/with-transaction-kv [tx kv]
   (let [current (or (d/get-value tx "counters" "hits") 0)
@@ -450,32 +430,6 @@ macro.
     (d/transact-kv tx
       [[:put "counters" "hits" new-val]])))
 ```
-
-```java
-Datalevin.withTransactionKv(kv, tx -> {
-    Object current = Datalevin.getValue(tx, "counters", "hits");
-    long newVal = (current != null ? (long) current : 0) + 1;
-    Datalevin.transactKv(tx, List.of(
-        List.of("put", "counters", "hits", newVal)));
-});
-```
-
-```python
-with d.transaction_kv(kv) as tx:
-    current = d.get_value(tx, "counters", "hits") or 0
-    new_val = current + 1
-    d.transact_kv(tx, [["put", "counters", "hits", new_val]])
-```
-
-```javascript
-d.withTransactionKv(kv, (tx) => {
-  const current = d.getValue(tx, 'counters', 'hits') ?? 0;
-  const newVal = current + 1;
-  d.transactKv(tx, [['put', 'counters', 'hits', newVal]]);
-});
-```
-
-</div>
 
 This macro ensures that:
 1. All reads and writes inside the block share the same transaction snapshot.

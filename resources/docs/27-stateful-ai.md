@@ -1,10 +1,10 @@
 ---
 title: "Building Stateful AI Applications"
-chapter: 28
+chapter: 27
 part: "VI — Datalevin for Intelligent Systems"
 ---
 
-# Chapter 28: Building Stateful AI Applications
+# Chapter 27: Building Stateful AI Applications
 
 The true potential of AI is not found in isolated chat sessions, but in
 applications that maintain a persistent state. A "Stateful AI" application is
@@ -52,7 +52,7 @@ A typical persistent agent memory loop follows these steps:
    the turn later.
 2. **Refresh Working Memory**: The agent retrieves relevant entities, facts,
    episodes, and documents into a bounded projection.
-3. **Recall**: The agent performs a hybrid query (Chapter 26) to find relevant
+3. **Recall**: The agent performs a hybrid query (Chapter 25) to find relevant
    past experiences and structured facts.
 4. **Reason**: The agent uses the recalled context to decide on an action.
 5. **Act and Audit**: Tool calls, approvals, and model usage are recorded as
@@ -97,44 +97,39 @@ Imagine an AI tutor that helps a student learn Clojure over six months.
     ```
 
     ```java
-    import datalevin.core.*;
-
     // Find concepts the student hasn't mastered but has prerequisite knowledge for
-    var results = Datalevin.q(
+    Object results = conn.query(
         "[:find ?concept " +
         " :where [?student :student/level ?level]" +
         "        [?concept :concept/difficulty ?d]" +
         "        [(< ?d ?level)]" +
         "        (not [?student :student/mastered ?concept])" +
         "        [?concept :concept/prereq ?pre]" +
-        "        [?student :student/mastered ?pre]]",
-        db);
+        "        [?student :student/mastered ?pre]]");
     ```
 
     ```python
     # Find concepts the student hasn't mastered but has prerequisite knowledge for
-    results = d.q(
+    results = conn.query(
         """[:find ?concept
             :where [?student :student/level ?level]
                    [?concept :concept/difficulty ?d]
                    [(< ?d ?level)]
                    (not [?student :student/mastered ?concept])
                    [?concept :concept/prereq ?pre]
-                   [?student :student/mastered ?pre]]""",
-        db)
+                   [?student :student/mastered ?pre]]""")
     ```
 
     ```javascript
     // Find concepts the student hasn't mastered but has prerequisite knowledge for
-    const results = d.q(
+    const results = await conn.query(
         `[:find ?concept
           :where [?student :student/level ?level]
                  [?concept :concept/difficulty ?d]
                  [(< ?d ?level)]
                  (not [?student :student/mastered ?concept])
                  [?concept :concept/prereq ?pre]
-                 [?student :student/mastered ?pre]]`,
-        db);
+                 [?student :student/mastered ?pre]]`);
     ```
 
     </div>
@@ -150,7 +145,7 @@ for testing, and one for documentation.
 - **Common Workspace**: All agents share a single Datalevin database.
 - **Coordination via Graph**: Agents post tasks as entities and link them to
   each other.
-- **Security**: Use **Datalevin Server RBAC** (Chapter 23) to ensure the "Code
+- **Security**: Use **Datalevin Server RBAC** (Chapter 22) to ensure the "Code
   Agent" can modify source entities, but the "Documentation Agent" can only view
   them.
 
@@ -323,13 +318,13 @@ without storing prompt text or secret-bearing tool payloads.
 
 Building stateful AI is about building systems that **accrue value over time**.
 
-- **Memory architecture** (Chapter 24) provides the durable substrate and scope
+- **Memory architecture** (Chapter 23) provides the durable substrate and scope
   boundaries.
-- **Episodic, semantic, and working memory** (Chapter 25) provide the records
+- **Episodic, semantic, and working memory** (Chapter 24) provide the records
   that history and knowledge live in.
-- **Recall and context assembly** (Chapter 26) provide the model with a bounded,
+- **Recall and context assembly** (Chapter 25) provide the model with a bounded,
   organized view of relevant state.
-- **Apperception and truth maintenance** (Chapter 27) keep long-term knowledge
+- **Apperception and truth maintenance** (Chapter 26) keep long-term knowledge
   coherent as new evidence arrives.
 - **Datalog** (Chapter 9) provides the logic.
 - **MCP and tool records** provide a controlled tool surface for AI clients.

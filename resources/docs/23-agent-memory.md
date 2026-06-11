@@ -1,10 +1,10 @@
 ---
 title: "Persistent Agent Memory Architectures"
-chapter: 24
+chapter: 23
 part: "VI — Datalevin for Intelligent Systems"
 ---
 
-# Chapter 24: Persistent Agent Memory Architectures
+# Chapter 23: Persistent Agent Memory Architectures
 
 The greatest limitation of modern Large Language Models (LLMs) is their lack of
 state. While they possess vast general knowledge, they are "reset" at the start
@@ -213,8 +213,8 @@ without forcing every prompt-facing detail into schema.
 
 The rest of Part VI expands this sketch in the order an agent uses it. Chapter
 25 defines the concrete memory records: episodes, semantic facts, working-memory
-slots, and session documents. Chapter 26 explains how those records are
-retrieved, ranked, and assembled into a prompt. Chapter 27 covers the harder
+slots, and session documents. Chapter 25 explains how those records are
+retrieved, ranked, and assembled into a prompt. Chapter 26 covers the harder
 problem of keeping long-term state coherent as new evidence arrives.
 
 ---

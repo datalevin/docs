@@ -1,10 +1,10 @@
 ---
-title: "Datalog Schema Reference"
-chapter: 29
+title: "Appendix A: Datalog Schema Reference"
+chapter: 28
 part: "VII — Appendices"
 ---
 
-# Chapter 29: Datalog Schema Reference
+# Appendix A: Datalog Schema Reference
 
 This appendix is a compact reference for Datalevin Datalog schema maps. For
 design guidance, see Chapter 5 and Chapter 11. For specialized index behavior,
@@ -72,10 +72,10 @@ All the acceptable attributes properties are the following:
 | `:db/doc` | string | Human-readable attribute documentation. |
 | `:db/fulltext` | `true`, `false` | Maintains a full-text secondary index. Values are converted with `str` before indexing. |
 | `:db.fulltext/domains` | sequence of strings | Adds a full-text attribute to explicit search domains. |
-| `:db.fulltext/autoDomain` | `true`, `false` | Adds an attribute-specific full-text domain derived from the attribute name. |
+| `:db.fulltext/autoDomain` | `true`, `false` | Adds an attribute-specific full-text domain named by the attribute without the leading colon. |
 | `:db/embedding` | `true`, `false` | Maintains an embedding index for string values. Requires `:db/valueType :db.type/string`. |
 | `:db.embedding/domains` | non-empty sequence of non-blank strings | Adds an embedding attribute to explicit embedding domains. |
-| `:db.embedding/autoDomain` | `true`, `false` | Adds an attribute-specific embedding domain derived from the attribute name. |
+| `:db.embedding/autoDomain` | `true`, `false` | Adds an attribute-specific embedding domain using vector-domain naming. |
 | `:db.vec/domains` | sequence of strings | Adds a `:db.type/vec` attribute to explicit vector domains. |
 | `:db/idocFormat` | `:edn`, `:json`, `:markdown` | Format hint for `:db.type/idoc`; defaults to `:edn`. |
 | `:db/tupleAttrs` | non-empty sequence of attribute keywords | Composite tuple derived from other attributes. |
@@ -212,7 +212,12 @@ Use `:db/fulltext true` for attributes that should participate in full-text sear
              :db.fulltext/autoDomain true}}
 ```
 
-If no explicit domain is given, full-text attributes participate in the default `"datalevin"` domain. `:db.fulltext/autoDomain true` also creates an attribute-specific domain derived from the attribute name, with `/` replaced by `_`.
+If no explicit domain is given, full-text attributes participate in the default
+`"datalevin"` domain. `:db.fulltext/autoDomain true` also creates an
+attribute-specific domain named by the attribute without the leading colon:
+`:title` becomes `"title"` and `:post/body` becomes `"post/body"`. Unlike
+vector and embedding domains, full-text auto domains keep `/` in namespaced
+attribute names.
 
 Store-level `:search-opts` and `:search-domains` configure search domain options such as `:indexing-mode :async`.
 
@@ -227,7 +232,10 @@ Use `:db.type/vec` when your application supplies vectors:
                   :db.vec/domains ["items"]}}
 ```
 
-By default, each vector attribute has an attribute-specific domain derived from the attribute name. Configure dimensions, metric, and indexing mode in `:vector-opts` or `:vector-domains`.
+By default, each vector attribute has an attribute-specific domain derived from
+the attribute name with `/` replaced by `_`: `:embedding` becomes `"embedding"`
+and `:item/embedding` becomes `"item_embedding"`. Configure dimensions, metric,
+and indexing mode in `:vector-opts` or `:vector-domains`.
 
 Use `:db/embedding true` when Datalevin should embed string datoms:
 
@@ -243,6 +251,8 @@ Embedding rules:
 - The attribute must have `:db/valueType :db.type/string`.
 - `:db.embedding/domains` must be a non-empty sequence of non-blank strings.
 - If no explicit domain is given, the attribute participates in the default `"datalevin"` embedding domain.
+- `:db.embedding/autoDomain true` creates an attribute-specific embedding domain
+  using the same slash-to-underscore naming rule as vector domains.
 - Changing `:db/embedding`, `:db.embedding/domains`, or `:db.embedding/autoDomain` on a populated attribute is rejected; rebuild explicitly instead.
 
 Store-level `:embedding-opts`, `:embedding-domains`, and `:embedding-providers` configure providers, dimensions, metric, and indexing mode.

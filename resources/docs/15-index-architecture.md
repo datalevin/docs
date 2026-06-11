@@ -64,12 +64,13 @@ One of the most powerful features of Datalevin is that it exposes these indexes
 directly to the developer. You are not limited to the Datalog query engine; you
 can treat the indexes as **programmable capabilities**.
 
-The Clojure examples below use `datalevin.core` as `d`. Java examples use
-`DatalevinInterop.coreInvokeBridge`, `Arrays.asList`, and assume `db` is the
-immutable database value from `DatalevinInterop.connectionDb(conn.handle())`.
-Python and JavaScript examples use the JSON API operation names; `conn_handle`
-is the handle returned by the JSON API `create-conn` operation, and
-colon-prefixed attribute strings are decoded as keywords by the JSON API.
+The Clojure examples below use `datalevin.core` as `d`. Java examples assume a
+high-level `Connection conn` and call the supported `conn.exec(...)` escape
+hatch for connection-scoped JSON operations. Python examples use `exec_json`
+from `datalevin`; JavaScript examples use `execJson` from `datalevin-node`.
+For Python and JavaScript, `conn_handle` is the handle returned by the JSON API
+`create-conn` operation. Colon-prefixed attribute strings are decoded as
+keywords by the JSON API.
 
 Direct index APIs return datoms in index order. They are best for simple, known
 access paths where you want the index itself, not the Datalog planner, to be the
@@ -109,24 +110,15 @@ or value-local (`:ave`).
 
 ```java
 // All datoms for entity 101, ordered by attribute and value.
-DatalevinInterop.coreInvokeBridge(
-    "datoms",
-    Arrays.asList(db, DatalevinInterop.keyword("eav"), 101)
-);
+conn.exec("datoms", Map.of("index", "eav", "c1", 101));
 
 // A single attribute on entity 101.
-DatalevinInterop.coreInvokeBridge(
-    "datoms",
-    Arrays.asList(db, DatalevinInterop.keyword("eav"),
-                  101, DatalevinInterop.keyword("user/email"))
-);
+conn.exec("datoms",
+          Map.of("index", "eav", "c1", 101, "c2", ":user/email"));
 
 // All entities whose :user/age value is 30.
-DatalevinInterop.coreInvokeBridge(
-    "datoms",
-    Arrays.asList(db, DatalevinInterop.keyword("ave"),
-                  DatalevinInterop.keyword("user/age"), 30)
-);
+conn.exec("datoms",
+          Map.of("index", "ave", "c1", ":user/age", "c2", 30));
 ```
 
 ```python
@@ -144,10 +136,10 @@ exec_json("datoms", {"conn": conn_handle, "index": "ave",
 
 ```javascript
 // All datoms for entity 101, ordered by attribute and value.
-await interop().execJson('datoms', { conn: connHandle, index: 'eav', c1: 101 });
+await execJson('datoms', { conn: connHandle, index: 'eav', c1: 101 });
 
 // A single attribute on entity 101.
-await interop().execJson('datoms', {
+await execJson('datoms', {
   conn: connHandle,
   index: 'eav',
   c1: 101,
@@ -155,7 +147,7 @@ await interop().execJson('datoms', {
 });
 
 // All entities whose :user/age value is 30.
-await interop().execJson('datoms', {
+await execJson('datoms', {
   conn: connHandle,
   index: 'ave',
   c1: ':user/age',
@@ -186,23 +178,14 @@ Java and JSON API calls, omit a wildcard key from the argument map.
 
 ```java
 // All attributes and values for entity 101.
-DatalevinInterop.coreInvokeBridge(
-    "search-datoms",
-    Arrays.asList(db, 101, null, null)
-);
+conn.exec("search-datoms", Map.of("e", 101));
 
 // All entities whose :user/age value is 30.
-DatalevinInterop.coreInvokeBridge(
-    "search-datoms",
-    Arrays.asList(db, null, DatalevinInterop.keyword("user/age"), 30)
-);
+conn.exec("search-datoms", Map.of("a", ":user/age", "v", 30));
 
 // The exact datom, if present.
-DatalevinInterop.coreInvokeBridge(
-    "search-datoms",
-    Arrays.asList(db, 101, DatalevinInterop.keyword("user/email"),
-                  "ada@example.com")
-);
+conn.exec("search-datoms",
+          Map.of("e", 101, "a", ":user/email", "v", "ada@example.com"));
 ```
 
 ```python
@@ -223,17 +206,17 @@ exec_json("search-datoms", {
 
 ```javascript
 // All attributes and values for entity 101.
-await interop().execJson('search-datoms', { conn: connHandle, e: 101 });
+await execJson('search-datoms', { conn: connHandle, e: 101 });
 
 // All entities whose :user/age value is 30.
-await interop().execJson('search-datoms', {
+await execJson('search-datoms', {
   conn: connHandle,
   a: ':user/age',
   v: 30
 });
 
 // The exact datom, if present.
-await interop().execJson('search-datoms', {
+await execJson('search-datoms', {
   conn: connHandle,
   e: 101,
   a: ':user/email',
@@ -260,16 +243,10 @@ cheap existence check.
 
 ```java
 // How many datoms are attached to entity 101?
-DatalevinInterop.coreInvokeBridge(
-    "count-datoms",
-    Arrays.asList(db, 101, null, null)
-);
+conn.exec("count-datoms", Map.of("e", 101));
 
 // How many users have age 30?
-DatalevinInterop.coreInvokeBridge(
-    "count-datoms",
-    Arrays.asList(db, null, DatalevinInterop.keyword("user/age"), 30)
-);
+conn.exec("count-datoms", Map.of("a", ":user/age", "v", 30));
 ```
 
 ```python
@@ -282,10 +259,10 @@ exec_json("count-datoms", {"conn": conn_handle, "a": ":user/age", "v": 30})
 
 ```javascript
 // How many datoms are attached to entity 101?
-await interop().execJson('count-datoms', { conn: connHandle, e: 101 });
+await execJson('count-datoms', { conn: connHandle, e: 101 });
 
 // How many users have age 30?
-await interop().execJson('count-datoms', {
+await execJson('count-datoms', {
   conn: connHandle,
   a: ':user/age',
   v: 30
@@ -321,26 +298,19 @@ the scan must stay inside one logical range.
 
 ```java
 // Start a forward scan at :user/age 30 in AVE order.
-DatalevinInterop.coreInvokeBridge(
-    "seek-datoms",
-    Arrays.asList(db, DatalevinInterop.keyword("ave"),
-                  DatalevinInterop.keyword("user/age"), 30, null, 10)
-);
+conn.exec("seek-datoms",
+          Map.of("index", "ave", "c1", ":user/age", "c2", 30, "limit", 10));
 
 // Start a reverse scan near the high end of :user/created-at.
-DatalevinInterop.coreInvokeBridge(
-    "rseek-datoms",
-    Arrays.asList(db, DatalevinInterop.keyword("ave"),
-                  DatalevinInterop.keyword("user/created-at"),
-                  4102444800000L, null, 5)
-);
+conn.exec("rseek-datoms",
+          Map.of("index", "ave",
+                 "c1", ":user/created-at",
+                 "c2", 4102444800000L,
+                 "limit", 5));
 
 // Start at the :user/email position inside entity 101.
-DatalevinInterop.coreInvokeBridge(
-    "seek-datoms",
-    Arrays.asList(db, DatalevinInterop.keyword("eav"),
-                  101, DatalevinInterop.keyword("user/email"))
-);
+conn.exec("seek-datoms",
+          Map.of("index", "eav", "c1", 101, "c2", ":user/email"));
 ```
 
 ```python
@@ -361,7 +331,7 @@ exec_json("seek-datoms", {"conn": conn_handle, "index": "eav",
 
 ```javascript
 // Start a forward scan at :user/age 30 in AVE order.
-await interop().execJson('seek-datoms', {
+await execJson('seek-datoms', {
   conn: connHandle,
   index: 'ave',
   c1: ':user/age',
@@ -370,7 +340,7 @@ await interop().execJson('seek-datoms', {
 });
 
 // Start a reverse scan near the high end of :user/created-at.
-await interop().execJson('rseek-datoms', {
+await execJson('rseek-datoms', {
   conn: connHandle,
   index: 'ave',
   c1: ':user/created-at',
@@ -379,7 +349,7 @@ await interop().execJson('rseek-datoms', {
 });
 
 // Start at the :user/email position inside entity 101.
-await interop().execJson('seek-datoms', {
+await execJson('seek-datoms', {
   conn: connHandle,
   index: 'eav',
   c1: 101,
@@ -410,18 +380,15 @@ bound, upper bound.
 
 ```java
 // Find users with age between 20 and 30, inclusive.
-DatalevinInterop.coreInvokeBridge(
-    "index-range",
-    Arrays.asList(db, DatalevinInterop.keyword("user/age"), 20, 30)
-);
+conn.exec("index-range",
+          Map.of("attr", ":user/age", "start", 20, "end", 30));
 
 // Return just the matching entity ids.
-List<?> datoms = (List<?>) DatalevinInterop.coreInvokeBridge(
+List<?> datoms = (List<?>) conn.exec(
     "index-range",
-    Arrays.asList(db, DatalevinInterop.keyword("user/age"), 20, 30)
-);
+    Map.of("attr", ":user/age", "start", 20, "end", 30));
 List<?> entityIds = datoms.stream()
-    .map(datom -> ((Map<?, ?>) datom).get(DatalevinInterop.keyword("e")))
+    .map(datom -> ((Map<?, ?>) datom).get("e"))
     .toList();
 ```
 
@@ -438,7 +405,7 @@ entity_ids = [datom["e"] for datom in datoms]
 
 ```javascript
 // Find users with age between 20 and 30, inclusive.
-const datoms = await interop().execJson('index-range', {
+const datoms = await execJson('index-range', {
   conn: connHandle,
   attr: ':user/age',
   start: 20,
@@ -454,8 +421,8 @@ const entityIds = datoms.map((datom) => datom.e);
 ### 4.7 Reading Datom Fields
 
 Clojure datoms have dedicated accessors. JSON API results encode datoms as maps
-with `e`, `a`, `v`, `tx`, and `added` fields. Java `coreInvokeBridge` results
-use Java maps whose keys are Clojure keywords such as `:e`, `:a`, and `:v`.
+with `e`, `a`, `v`, `tx`, and `added` fields. Java `conn.exec` returns the same
+bridge-safe maps with string keys such as `"e"`, `"a"`, and `"v"`.
 
 <div class="multi-lang">
 
@@ -467,17 +434,15 @@ use Java maps whose keys are Clojure keywords such as `:e`, `:a`, and `:v`.
 ```
 
 ```java
-List<?> datoms = (List<?>) DatalevinInterop.coreInvokeBridge(
+List<?> datoms = (List<?>) conn.exec(
     "datoms",
-    Arrays.asList(db, DatalevinInterop.keyword("ave"),
-                  DatalevinInterop.keyword("user/age"), 30)
-);
+    Map.of("index", "ave", "c1", ":user/age", "c2", 30));
 
 for (Object item : datoms) {
     Map<?, ?> datom = (Map<?, ?>) item;
-    Object entity = datom.get(DatalevinInterop.keyword("e"));
-    Object attr = datom.get(DatalevinInterop.keyword("a"));
-    Object value = datom.get(DatalevinInterop.keyword("v"));
+    Object entity = datom.get("e");
+    Object attr = datom.get("a");
+    Object value = datom.get("v");
 }
 ```
 
@@ -492,7 +457,7 @@ for datom in datoms:
 ```
 
 ```javascript
-const datoms = await interop().execJson('datoms', {
+const datoms = await execJson('datoms', {
   conn: connHandle,
   index: 'ave',
   c1: ':user/age',

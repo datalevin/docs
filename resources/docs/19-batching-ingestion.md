@@ -26,11 +26,9 @@ LSM-tree while maintaining the read performance of a B+Tree.
 
 ### 1.2 Asynchronous Transactions: `d/transact-async`
 
-The `d/transact-async` function automatically batches multiple transactions
-together. When combined with WAL mode, this provides the highest possible OLTP
-throughput.
-
-<div class="multi-lang">
+In embedded Clojure, the `d/transact-async` function automatically batches
+multiple transactions together. When combined with WAL mode, this provides the
+highest possible OLTP throughput.
 
 ```clojure
 ;; Fire multiple async transactions
@@ -42,38 +40,6 @@ throughput.
 (deref (d/transact-async conn batch-4))
 ```
 
-```java
-// Fire multiple async transactions
-Datalevin.transactAsync(conn, batch1);
-Datalevin.transactAsync(conn, batch2);
-Datalevin.transactAsync(conn, batch3);
-
-// Block on the last one to ensure all are committed
-Datalevin.transactAsync(conn, batch4).get();
-```
-
-```python
-# Fire multiple async transactions
-d.transact_async(conn, batch_1)
-d.transact_async(conn, batch_2)
-d.transact_async(conn, batch_3)
-
-# Block on the last one to ensure all are committed
-d.transact_async(conn, batch_4).result()
-```
-
-```javascript
-// Fire multiple async transactions
-d.transactAsync(conn, batch1);
-d.transactAsync(conn, batch2);
-d.transactAsync(conn, batch3);
-
-// Block on the last one to ensure all are committed
-await d.transactAsync(conn, batch4);
-```
-
-</div>
-
 The batching is **adaptive**: the higher the write load, the bigger the batch
 size. This combines with manual batching for compound performance gains.
 
@@ -82,10 +48,9 @@ management work.
 
 ### 1.3 Sync + Async Combo
 
-For applications that need both good throughput and deterministic commit points,
-use a sequence of async transactions followed by a sync call:
-
-<div class="multi-lang">
+For embedded Clojure applications that need both good throughput and
+deterministic commit points, use a sequence of async transactions followed by a
+sync call:
 
 ```clojure
 ;; Async writes for throughput
@@ -96,38 +61,6 @@ use a sequence of async transactions followed by a sync call:
 ;; Sync commit to ensure all are persisted
 (d/transact! conn [])
 ```
-
-```java
-// Async writes for throughput
-Datalevin.transactAsync(conn, batch1);
-Datalevin.transactAsync(conn, batch2);
-Datalevin.transactAsync(conn, batch3);
-
-// Sync commit to ensure all are persisted
-Datalevin.transact(conn, List.of());
-```
-
-```python
-# Async writes for throughput
-d.transact_async(conn, batch_1)
-d.transact_async(conn, batch_2)
-d.transact_async(conn, batch_3)
-
-# Sync commit to ensure all are persisted
-d.transact(conn, [])
-```
-
-```javascript
-// Async writes for throughput
-d.transactAsync(conn, batch1);
-d.transactAsync(conn, batch2);
-d.transactAsync(conn, batch3);
-
-// Sync commit to ensure all are persisted
-d.transact(conn, []);
-```
-
-</div>
 
 Since async transactions are still committed in order, the last realized future
 indicates all prior calls are already committed.
@@ -195,29 +128,29 @@ Connection conn = Datalevin.getConn("/tmp/import-dl", schema,
 ```
 
 ```python
-import datalevin as d
+from datalevin import connect, open_kv
 
 # Raw KV store for a rebuildable import.
-kv = d.open_kv("/tmp/import-kv",
-    {"flags": [":writemap", ":mapasync"]})
+kv = open_kv("/tmp/import-kv",
+    opts={":flags": [":writemap", ":mapasync"]})
 
 # Datalog connection using the same LMDB flags.
-conn = d.connect("/tmp/import-dl", schema,
-    {"kv-opts": {"flags": [":nometasync"]}},
+conn = connect("/tmp/import-dl", schema=schema,
+    opts={":kv-opts": {":flags": [":nometasync"]}},
     shared=True)
 ```
 
 ```javascript
-import { connect, openKv } from 'datalevin';
+import { connect, openKv } from "datalevin-node";
 
 // Raw KV store for a rebuildable import.
-const kv = await openKv('/tmp/import-kv',
-  { flags: [':writemap', ':mapasync'] });
+const kv = await openKv("/tmp/import-kv",
+  { ":flags": [":writemap", ":mapasync"] });
 
 // Datalog connection using the same LMDB flags.
-const conn = await connect('/tmp/import-dl', {
+const conn = await connect("/tmp/import-dl", {
   schema,
-  opts: { 'kv-opts': { flags: [':nometasync'] } },
+  opts: { ":kv-opts": { ":flags": [":nometasync"] } },
   shared: true
 });
 ```
@@ -265,22 +198,22 @@ datoms *before* they reach the database.
 rawData.sort(Comparator.comparing(m -> (Long) m.get("db/id")));
 List<List<Map>> batches = partition(rawData, 5000);
 for (List<Map> batch : batches) {
-    Datalevin.transact(conn, batch);
+    conn.transact(batch);
 }
 ```
 
 ```python
 # Sort data by Entity, then Attribute
-sorted_datoms = sorted(raw_data, key=lambda x: x["db/id"])
+sorted_datoms = sorted(raw_data, key=lambda x: x[":db/id"])
 for batch in partition_all(sorted_datoms, 5000):
-    d.transact(conn, batch)
+    conn.transact(batch)
 ```
 
 ```javascript
 // Sort data by Entity, then Attribute
-const sortedDatoms = rawData.sort((a, b) => a['db/id'] - b['db/id']);
+const sortedDatoms = rawData.sort((a, b) => a[":db/id"] - b[":db/id"]);
 for (const batch of partitionAll(sortedDatoms, 5000)) {
-  d.transact(conn, batch);
+  await conn.transact(batch);
 }
 ```
 

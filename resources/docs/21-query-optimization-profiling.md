@@ -1,10 +1,10 @@
 ---
-title: "Query Planning, Optimization, and Diagnostics"
+title: "Query Planning, Recursive Evaluation, and Diagnostics"
 chapter: 21
 part: "V — Performance and Operations"
 ---
 
-# Chapter 21: Query Planning, Optimization, and Diagnostics
+# Chapter 21: Query Planning, Recursive Evaluation, and Diagnostics
 
 Datalevin has a novel query optimizer that leverages the unique strengths of
 triple stores in facilitating cardinality estimation, one of the hardest
@@ -12,8 +12,9 @@ problems in databases design. With such, Datalevin is able to handle very
 complex query and return results quickly.
 
 A fast query depends on both the plan Datalevin chooses and the evidence you can
-collect when that plan surprises you. This chapter combines optimizer mechanics
-with the `explain` workflow used to diagnose real query behavior.
+collect when that plan surprises you. This chapter combines optimizer mechanics,
+recursive rule evaluation, and the `explain` workflow used to diagnose real
+query behavior.
 
 ---
 
@@ -163,7 +164,8 @@ The optimizer handles complex clauses in stages:
 1.  **Index access clauses** produce intermediate results first
 2.  **Heuristics and variable dependencies** reorder remaining complex clauses
     (`and`, `or`, `not`, `not-join`, predicates, function bindings)
-3.  **Rules** are executed last (see Chapter 22)
+3.  **Rules** are handled by the specialized bottom-up evaluation machinery
+    described later in this chapter.
 
 `or-join` participates in link planning, and common `not-join` shapes can become
 anti-join steps when their join variables are bound in a single plan component.
@@ -201,7 +203,65 @@ the optimal path.
 
 ---
 
-## 2. Inspecting Query Plans with `explain`
+## 2. Recursive Rules as Specialized Query Evaluation
+
+Datalog rules are still query clauses, but recursive rules need different
+execution machinery from ordinary joins. A non-recursive query can be planned as
+a finite join graph. A recursive rule, such as an ancestor rule, describes a
+process that may discover new facts over many rounds:
+
+```clojure
+[(ancestor ?x ?y) [?x :parent ?y]]
+[(ancestor ?x ?y) [?x :parent ?z] (ancestor ?z ?y)]
+```
+
+A naive evaluator would repeatedly join all known ancestors against all parents.
+That repeats work. In the third round, for example, it may rediscover
+grandparent facts already found in the second round. On large graphs, this
+redundant computation can dominate the query.
+
+Datalevin therefore uses **semi-naive evaluation**, the standard bottom-up
+strategy for recursive Datalog [2]. The key idea is delta tracking: each round
+only uses the *new* tuples discovered in the previous round. Evaluation continues
+until a fixpoint, meaning a round produces no new tuples. For stratified rules,
+strongly connected rule components run in dependency order, so facts needed by a
+later stratum are available before that stratum runs.
+
+This bottom-up model is set-oriented. Joins operate over candidate sets and
+iterators, so the storage layer can use sequential page scans, merge-style
+operations, and bulk filtering rather than tuple-at-a-time random lookup.
+
+Bottom-up evaluation has one obvious risk: it can compute more of the world than
+the user asked for. If a query asks only for Alice's ancestors, the engine should
+not materialize every ancestor relation in the database. Datalevin uses
+**magic-set rewriting**, a classic Datalog transformation for making bottom-up
+evaluation goal-directed [2] [3]. Magic-set rules push bound variables from the
+outer query into the recursive rule, pruning intermediate results to the part of
+the graph relevant to the question.
+
+Datalevin also connects rule evaluation back to the cost-based optimizer:
+
+1.  **Seeding tuples**: Rule evaluation can receive bindings from earlier indexed
+    query clauses. These seeds prevent unnecessary tuple generation and give
+    recursion a warm start.
+2.  **Inlining non-recursive clauses**: Clauses not involved in recursion can be
+    pulled back into the ordinary query plan, where the cost-based optimizer can
+    use indexes and join estimates.
+3.  **Temporal elimination**: Recursive rules that meet T-stratification criteria
+    can keep only the last iteration's results, reducing memory use for long
+    chains.
+4.  **Stratified negation**: `not` and `not-join` in rules are evaluated only
+    after the positive facts they depend on have been computed, giving recursive
+    queries a single well-defined result.
+
+The practical takeaway is that rules are not interpreted as repeated application
+callbacks. They are compiled into set-oriented recursive evaluation, constrained
+by outer query bindings, and integrated with the same storage and planning
+principles used by ordinary Datalog queries.
+
+---
+
+## 3. Inspecting Query Plans with `explain`
 
 While Datalevin's query optimizer is highly intelligent, it is not omniscient.
 Sometimes a query that "should be fast" takes longer than expected. To debug
@@ -393,3 +453,13 @@ Datalevin plans a query and why a query may be slower than expected.
    [Access Path Selection in a Relational Database Management System](https://research.ibm.com/publications/access-path-selection-in-a-relational-database-management-system),
    SIGMOD 1979, pp. 23-34,
    [doi:10.1145/582095.582099](https://doi.org/10.1145/582095.582099).
+
+[2] Todd J. Green, Shan Shan Huang, Boon Thau Loo, and Wenchao Zhou,
+   [Datalog and Recursive Query Processing](https://www.nowpublishers.com/article/Details/DBS-017),
+   Foundations and Trends in Databases, vol. 5, no. 2, pp. 105-195, 2013,
+   [doi:10.1561/1900000017](https://doi.org/10.1561/1900000017).
+
+[3] Francois Bancilhon, David Maier, Yehoshua Sagiv, and Jeffrey D. Ullman,
+   [Magic Sets and Other Strange Ways to Implement Logic Programs](https://doi.org/10.1145/6012.15399),
+   PODS 1986, pp. 1-15,
+   [doi:10.1145/6012.15399](https://doi.org/10.1145/6012.15399).

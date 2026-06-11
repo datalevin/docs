@@ -4,7 +4,7 @@ chapter: 3
 part: "I — Foundations: A Multi-Paradigm Database"
 ---
 
-# Chapter 3: The Datalevin Mental Model: Attributes, Facts, and Relationships
+# Chapter 3: The Datalevin Mental Model: Values, Facts, and Relationships
 
 Transitioning to Datalevin often requires a fundamental shift in how you perceive
 data. If you are coming from a relational (SQL) or document (NoSQL) background,
@@ -123,48 +123,67 @@ Datalevin will assign permanent entity IDs automatically.
 
 ```java
 // The schema defines the behavior of attributes, not the shape of rows.
-Map<String, Object> schema = Map.of(
-    "person/name",   Map.of("db/valueType", "db.type/string"),
-    "person/email",  Map.of("db/valueType", "db.type/string"),
-    "person/school", Map.of("db/valueType", "db.type/ref"),  // A reference to ID of another entity
-    "school/name",   Map.of("db/valueType", "db.type/string"));
+Schema schema = Datalevin.schema()
+    .attr("person/name",
+          Schema.attribute().valueType(Schema.ValueType.STRING))
+    .attr("person/email",
+          Schema.attribute().valueType(Schema.ValueType.STRING))
+    .attr("person/school",
+          Schema.attribute().valueType(Schema.ValueType.REF)) // A reference to ID of another entity
+    .attr("school/name",
+          Schema.attribute().valueType(Schema.ValueType.STRING));
 
 // Data is written as a collection of entities.
 // Notice how 'Alice' and 'MIT' are just sets of attributes.
-Datalevin.transact(conn, List.of(
-    Map.of("db/id", -1, "person/name", "Alice", "person/email", "alice@example.com", "person/school", -10),
-    Map.of("db/id", -10, "school/name", "MIT", "school/country", "USA")));
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity(-1)
+        .put("person/name", "Alice")
+        .put("person/email", "alice@example.com")
+        .put("person/school", -10))
+    .entity(Tx.entity(-10)
+        .put("school/name", "MIT")
+        .put("school/country", "USA")));
 ```
 
 ```python
 # The schema defines the behavior of attributes, not the shape of rows.
 schema = {
-    "person/name":   {"db/valueType": "db.type/string"},
-    "person/email":  {"db/valueType": "db.type/string"},
-    "person/school": {"db/valueType": "db.type/ref"},  # A reference to ID of another entity
-    "school/name":   {"db/valueType": "db.type/string"}}
+    ":person/name":   {":db/valueType": ":db.type/string"},
+    ":person/email":  {":db/valueType": ":db.type/string"},
+    ":person/school": {":db/valueType": ":db.type/ref"},  # A reference to ID of another entity
+    ":school/name":   {":db/valueType": ":db.type/string"}}
 
 # Data is written as a collection of entities.
 # Notice how 'Alice' and 'MIT' are just sets of attributes.
-d.transact(conn, [
-    {"db/id": -1, "person/name": "Alice", "person/email": "alice@example.com", "person/school": -10},
-    {"db/id": -10, "school/name": "MIT", "school/country": "USA"}])
+conn.transact([
+    {":db/id": -1,
+     ":person/name": "Alice",
+     ":person/email": "alice@example.com",
+     ":person/school": -10},
+    {":db/id": -10,
+     ":school/name": "MIT",
+     ":school/country": "USA"}])
 ```
 
 ```javascript
 // The schema defines the behavior of attributes, not the shape of rows.
 const schema = {
-  "person/name":   {"db/valueType": "db.type/string"},
-  "person/email":  {"db/valueType": "db.type/string"},
-  "person/school": {"db/valueType": "db.type/ref"},  // A reference to ID of another entity
-  "school/name":   {"db/valueType": "db.type/string"}
+  ":person/name":   { ":db/valueType": ":db.type/string" },
+  ":person/email":  { ":db/valueType": ":db.type/string" },
+  ":person/school": { ":db/valueType": ":db.type/ref" },  // A reference to ID of another entity
+  ":school/name":   { ":db/valueType": ":db.type/string" }
 };
 
 // Data is written as a collection of entities.
 // Notice how 'Alice' and 'MIT' are just sets of attributes.
-d.transact(conn, [
-  {"db/id": -1, "person/name": "Alice", "person/email": "alice@example.com", "person/school": -10},
-  {"db/id": -10, "school/name": "MIT", "school/country": "USA"}
+await conn.transact([
+  { ":db/id": -1,
+    ":person/name": "Alice",
+    ":person/email": "alice@example.com",
+    ":person/school": -10 },
+  { ":db/id": -10,
+    ":school/name": "MIT",
+    ":school/country": "USA" }
 ]);
 ```
 
@@ -341,30 +360,27 @@ The syntax has a few pieces:
 ```
 
 ```java
-Set<List<Object>> results = Datalevin.q(
+Object results = conn.query(
     "[:find ?email " +
     " :where " +
     " [?e :user/name \"Alice\"] " +
-    " [?e :user/email ?email]]",
-    db);
+    " [?e :user/email ?email]]");
 ```
 
 ```python
-results = d.q("""
+results = conn.query("""
     [:find ?email
      :where
      [?e :user/name "Alice"]
-     [?e :user/email ?email]]""",
-    db)
+     [?e :user/email ?email]]""")
 ```
 
 ```javascript
-const results = d.q(
+const results = await conn.query(
   `[:find ?email
     :where
     [?e :user/name "Alice"]
-    [?e :user/email ?email]]`,
-  db);
+    [?e :user/email ?email]]`);
 ```
 
 </div>
@@ -404,35 +420,32 @@ attribute and value.
 
 ```java
 // A hybrid query combines text search with exact metadata filters.
-Set<List<Object>> results = Datalevin.q(
+Object results = conn.query(
     "[:find ?title " +
     " :where " +
     " [(fulltext $ :doc/body \"clojure\") [[?e _ _]]] " +
     " [?e :doc/status :published] " +
-    " [?e :doc/title ?title]]",
-    db);
+    " [?e :doc/title ?title]]");
 ```
 
 ```python
 # A hybrid query combines text search with exact metadata filters.
-results = d.q("""
+results = conn.query("""
     [:find ?title
      :where
      [(fulltext $ :doc/body "clojure") [[?e _ _]]]
      [?e :doc/status :published]
-     [?e :doc/title ?title]]""",
-    db)
+     [?e :doc/title ?title]]""")
 ```
 
 ```javascript
 // A hybrid query combines text search with exact metadata filters.
-const results = d.q(
+const results = await conn.query(
   `[:find ?title
     :where
     [(fulltext $ :doc/body "clojure") [[?e _ _]]]
     [?e :doc/status :published]
-    [?e :doc/title ?title]]`,
-  db);
+    [?e :doc/title ?title]]`);
 ```
 
 </div>
@@ -513,30 +526,30 @@ The `%` input below supplies the rule set to the query, and `(ancestor 42
 ```
 
 ```java
-Set<List<Object>> ancestors = Datalevin.q(
+Object ancestors = conn.query(
     "[:find [?ancestor ...] " +
     " :in $ % " +
     " :where " +
     " (ancestor 42 ?ancestor)]",
-    db, ancestryRules);
+    ancestryRules);
 ```
 
 ```python
-ancestors = d.q("""
+ancestors = conn.query("""
     [:find [?ancestor ...]
      :in $ %
      :where
      (ancestor 42 ?ancestor)]""",
-    db, ancestry_rules)
+    ancestry_rules)
 ```
 
 ```javascript
-const ancestors = d.q(
+const ancestors = await conn.query(
   `[:find [?ancestor ...]
     :in $ %
     :where
     (ancestor 42 ?ancestor)]`,
-  db, ancestryRules);
+  ancestryRules);
 ```
 
 </div>

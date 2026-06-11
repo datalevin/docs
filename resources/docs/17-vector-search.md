@@ -44,13 +44,17 @@ Vector dimensions and similarity metrics are configured at the domain level (see
 ```
 
 ```java
+Schema schema = Datalevin.schema()
+    .attr("id",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .unique(Schema.Unique.IDENTITY))
+    .attr("embedding",
+          Schema.attribute().valueType(Schema.ValueType.VEC));
+
 Connection conn = Datalevin.createConn(
     "/tmp/mydb",
-    Map.of(
-        "id", Map.of("db/valueType", ":db.type/string",
-                     "db/unique", ":db.unique/identity"),
-        "embedding", Map.of("db/valueType", ":db.type/vec")
-    ),
+    schema,
     Map.of("vector-opts", Map.of(
         "dimensions", 300,
         "metric-type", ":cosine"
@@ -341,18 +345,17 @@ detail.
 ```
 
 ```java
-Map<String, Object> embeddingSchema = Map.of(
-    "doc/id", Map.of(
-        "db/valueType", ":db.type/string",
-        "db/unique", ":db.unique/identity"
-    ),
-    "doc/text", Map.of(
-        "db/valueType", ":db.type/string",
-        "db/embedding", true,
-        "db.embedding/domains", List.of("docs"),
-        "db.embedding/autoDomain", true
-    )
-);
+Schema embeddingSchema = Datalevin.schema()
+    .attr("doc/id",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .unique(Schema.Unique.IDENTITY))
+    .attr("doc/text",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .prop("db/embedding", true)
+              .prop("db.embedding/domains", List.of("docs"))
+              .prop("db.embedding/autoDomain", true));
 
 Connection conn = Datalevin.createConn(
     "/tmp/embedding-db",

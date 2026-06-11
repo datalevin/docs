@@ -223,7 +223,7 @@ permission. This is much cleaner and more maintainable than using a complex
 ## 4. Datalevin as a Reasoner: Forward-Chaining Logic
 
 Because Datalevin's rule engine evaluates rules from the bottom up (see Chapter
-25), it can act as a **forward-chaining reasoner**. In this mode, the database
+21), it can act as a **forward-chaining reasoner**. In this mode, the database
 doesn't just store data; it "reasons" about it to infer new classifications or
 higher-level facts that were never explicitly transacted.
 

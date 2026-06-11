@@ -331,7 +331,7 @@
                            [:a {:href "/docs/21-query-optimization-profiling" :class card-style}
                             [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Performance Optimized"]
                             [:p {:style "color:#9ca3af;font-size:0.875rem"} "WAL and asynchronous transactions + state of the art query optimizer and rule engine."]]
-                           [:a {:href "/docs/24-agent-memory" :class card-style}
+                           [:a {:href "/docs/23-agent-memory" :class card-style}
                             [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "AI Native"]
                             [:p {:style "color:#9ca3af;font-size:0.875rem"} "Built-in MCP server + model inference for embedding, generation and OCR."]]]]
                          ;; Ecosystem

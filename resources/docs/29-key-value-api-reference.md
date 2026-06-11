@@ -1,10 +1,10 @@
 ---
-title: "Key-Value API Reference"
-chapter: 31
+title: "Appendix B: Key-Value API Reference"
+chapter: 29
 part: "VII — Appendices"
 ---
 
-# Chapter 31: Key-Value API Reference
+# Appendix B: Key-Value API Reference
 
 This appendix is a compact reference for public Datalevin KV functions exposed
 from `datalevin.core`. For tutorial examples, see Chapter 6. Search, vector,

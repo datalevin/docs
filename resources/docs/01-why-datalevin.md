@@ -325,7 +325,7 @@ fact.
 (def schema
   {:doc/body {:db/valueType :db.type/string
               :db/fulltext  true}
-   :doc/lang {:db/valueType :db.type/keyword}
+   :doc/lang {:db/valueType :db.type/string}
    :doc/idoc {:db/valueType :db.type/idoc}})
 
 ;; Obtain a DB connection. DB will be at data/ch1 directory
@@ -334,7 +334,7 @@ fact.
 ;; Transact an entity
 (d/transact! conn
   [{:db/id    -1
-    :doc/lang :en
+    :doc/lang "en"
     :doc/body "Datalevin adds idoc indexing and vector search."
     :doc/idoc {:module {:name "search" :status "stable"}}}])
 
@@ -346,104 +346,112 @@ fact.
        ;; [[?e _ _]] destructures the triple: keep entity id, ignore attribute/value.
        [(fulltext $ :doc/body ?term) [[?e _ _]]]
        [(idoc-match $ :doc/idoc {:module {:status "stable"}}) [[?e _ _]]]
-       [?e :doc/lang :en]]
+       [?e :doc/lang "en"]]
      (d/db conn) "vector")
 ```
 
 ```java
-import datalevin.core.*;
-import java.util.*;
+import datalevin.*;
 
 // Datalevin is schema-on-write, so schema is optional, but strongly recommended
-Map<String, Object> schema = Map.of(
-    "doc/body", Map.of("db/valueType", "db.type/string",
-                       "db/fulltext", true),
-    "doc/lang", Map.of("db/valueType", "db.type/keyword"),
-    "doc/idoc", Map.of("db/valueType", "db.type/idoc"));
+Schema schema = Datalevin.schema()
+    .attr("doc/body",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .fulltext(true))
+    .attr("doc/lang",
+          Schema.attribute().valueType(Schema.ValueType.STRING))
+    .attr("doc/idoc",
+          Schema.attribute().valueType(Schema.ValueType.IDOC));
 
 // Obtain a DB connection. DB will be at data/ch1 directory
 Connection conn = Datalevin.getConn("data/ch1", schema);
 
 // Transact an entity
-Datalevin.transact(conn, List.of(
-    Map.of("db/id", -1,
-           "doc/lang", "en",
-           "doc/body", "Datalevin adds idoc indexing and vector search.",
-           "doc/idoc", Map.of("module", Map.of("name", "search", "status", "stable")))));
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity(-1)
+        .put("doc/lang", "en")
+        .put("doc/body", "Datalevin adds idoc indexing and vector search.")
+        .put("doc/idoc",
+             Datalevin.mapOf("module",
+                 Datalevin.mapOf("name", "search", "status", "stable")))));
 
 // Query
-Set<List<Object>> results = Datalevin.q(
+Object results = conn.query(
     "[:find ?e " +
     " :in $ ?term " +
     " :where " +
     " [(fulltext $ :doc/body ?term) [[?e _ _]]] " +
     " [(idoc-match $ :doc/idoc {:module {:status \"stable\"}}) [[?e _ _]]] " +
-    " [?e :doc/lang :en]]",
-    Datalevin.db(conn), "vector");
+    " [?e :doc/lang \"en\"]]",
+    "vector");
 ```
 
 ```python
-import datalevin as d
+from datalevin import connect
 
 # Datalevin is schema-on-write, so schema is optional, but strongly recommended
 schema = {
-    "doc/body": {"db/valueType": "db.type/string",
-                 "db/fulltext": True},
-    "doc/lang": {"db/valueType": "db.type/keyword"},
-    "doc/idoc": {"db/valueType": "db.type/idoc"}}
+    ":doc/body": {":db/valueType": ":db.type/string",
+                  ":db/fulltext": True},
+    ":doc/lang": {":db/valueType": ":db.type/string"},
+    ":doc/idoc": {":db/valueType": ":db.type/idoc"}}
 
-# Obtain a DB connection. DB will be at data/ch1 directory
-conn = d.get_conn("data/ch1", schema)
+# Obtain a DB connection. DB will be at data/ch1 directory.
+with connect("data/ch1", schema=schema) as conn:
+    # Transact an entity.
+    conn.transact([
+        {":db/id": -1,
+         ":doc/lang": "en",
+         ":doc/body": "Datalevin adds idoc indexing and vector search.",
+         ":doc/idoc": {"module": {"name": "search", "status": "stable"}}}])
 
-# Transact an entity
-d.transact(conn, [
-    {"db/id": -1,
-     "doc/lang": "en",
-     "doc/body": "Datalevin adds idoc indexing and vector search.",
-     "doc/idoc": {"module": {"name": "search", "status": "stable"}}}])
-
-# Query
-results = d.q("""
-    [:find ?e
-     :in $ ?term
-     :where
-     [(fulltext $ :doc/body ?term) [[?e _ _]]]
-     [(idoc-match $ :doc/idoc {:module {:status "stable"}}) [[?e _ _]]]
-     [?e :doc/lang :en]]""",
-    d.db(conn), "vector")
+    # Query.
+    results = conn.query("""
+        [:find ?e
+         :in $ ?term
+         :where
+         [(fulltext $ :doc/body ?term) [[?e _ _]]]
+         [(idoc-match $ :doc/idoc {:module {:status "stable"}}) [[?e _ _]]]
+         [?e :doc/lang "en"]]""",
+        "vector")
 ```
 
 ```javascript
-import { Datalevin as d } from 'datalevin';
+import { connect } from "datalevin-node";
 
 // Datalevin is schema-on-write, so schema is optional, but strongly recommended
 const schema = {
-  "doc/body": {"db/valueType": "db.type/string",
-               "db/fulltext": true},
-  "doc/lang": {"db/valueType": "db.type/keyword"},
-  "doc/idoc": {"db/valueType": "db.type/idoc"}
+  ":doc/body": { ":db/valueType": ":db.type/string",
+                 ":db/fulltext": true },
+  ":doc/lang": { ":db/valueType": ":db.type/string" },
+  ":doc/idoc": { ":db/valueType": ":db.type/idoc" }
 };
 
-// Obtain a DB connection. DB will be at data/ch1 directory
-const conn = d.getConn("data/ch1", schema);
+// Obtain a DB connection. DB will be at data/ch1 directory.
+const conn = await connect("data/ch1", { schema });
 
-// Transact an entity
-d.transact(conn, [
-  {"db/id": -1,
-   "doc/lang": "en",
-   "doc/body": "Datalevin adds idoc indexing and vector search.",
-   "doc/idoc": {"module": {"name": "search", "status": "stable"}}}
-]);
+try {
+  // Transact an entity.
+  await conn.transact([
+    { ":db/id": -1,
+      ":doc/lang": "en",
+      ":doc/body": "Datalevin adds idoc indexing and vector search.",
+      ":doc/idoc": { "module": { "name": "search", "status": "stable" } } }
+  ]);
 
-// Query
-const results = d.q(
-  `[:find ?e
-    :in $ ?term
-    :where
-    [(fulltext $ :doc/body ?term) [[?e _ _]]]
-    [(idoc-match $ :doc/idoc {:module {:status "stable"}}) [[?e _ _]]]
-    [?e :doc/lang :en]]`,
-  d.db(conn), "vector");
+  // Query.
+  const results = await conn.query(
+    `[:find ?e
+      :in $ ?term
+      :where
+      [(fulltext $ :doc/body ?term) [[?e _ _]]]
+      [(idoc-match $ :doc/idoc {:module {:status "stable"}}) [[?e _ _]]]
+      [?e :doc/lang "en"]]`,
+    "vector");
+} finally {
+  await conn.close();
+}
 ```
 
 </div>

@@ -212,32 +212,34 @@ the purpose and constraints of an attribute.
 ```
 
 ```java
-Map schema = Map.of(
-    "user/email", Map.of(
-        "db/valueType", "db.type/string",
-        "db/unique", "db.unique/identity",
-        "db/doc", "The primary unique identifier for a user account."),
-    "order/total", Map.of(
-        "db/valueType", "db.type/bigdec",
-        "db/doc", "The total price of the order in USD, including tax."));
+Schema schema = Datalevin.schema()
+    .attr("user/email",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .unique(Schema.Unique.IDENTITY)
+              .doc("The primary unique identifier for a user account."))
+    .attr("order/total",
+          Schema.attribute()
+              .valueType(Schema.ValueType.BIGDEC)
+              .doc("The total price of the order in USD, including tax."));
 ```
 
 ```python
 schema = {
-    "user/email": {"db/valueType": "db.type/string",
-                   "db/unique": "db.unique/identity",
-                   "db/doc": "The primary unique identifier for a user account."},
-    "order/total": {"db/valueType": "db.type/bigdec",
-                    "db/doc": "The total price of the order in USD, including tax."}}
+    ":user/email": {":db/valueType": ":db.type/string",
+                    ":db/unique": ":db.unique/identity",
+                    ":db/doc": "The primary unique identifier for a user account."},
+    ":order/total": {":db/valueType": ":db.type/bigdec",
+                     ":db/doc": "The total price of the order in USD, including tax."}}
 ```
 
 ```javascript
 const schema = {
-    'user/email': {'db/valueType': 'db.type/string',
-                   'db/unique': 'db.unique/identity',
-                   'db/doc': 'The primary unique identifier for a user account.'},
-    'order/total': {'db/valueType': 'db.type/bigdec',
-                    'db/doc': 'The total price of the order in USD, including tax.'}};
+    ":user/email": {":db/valueType": ":db.type/string",
+                    ":db/unique": ":db.unique/identity",
+                    ":db/doc": "The primary unique identifier for a user account."},
+    ":order/total": {":db/valueType": ":db.type/bigdec",
+                     ":db/doc": "The total price of the order in USD, including tax."}};
 ```
 
 </div>
@@ -392,57 +394,82 @@ For an existing SQL application, migrate in this order:
 ```
 
 ```java
-Map ecommerceSchema = Map.ofEntries(
+Schema ecommerceSchema = Datalevin.schema()
     // Noun: Product
-    Map.entry("product/sku", Map.of("db/unique", "db.unique/identity", "db/valueType", "db.type/string")),
-    Map.entry("product/title", Map.of("db/fulltext", true, "db/valueType", "db.type/string")),
-    Map.entry("product/price", Map.of("db/valueType", "db.type/long")),
+    .attr("product/sku",
+          Schema.attribute()
+              .unique(Schema.Unique.IDENTITY)
+              .valueType(Schema.ValueType.STRING))
+    .attr("product/title",
+          Schema.attribute()
+              .fulltext(true)
+              .valueType(Schema.ValueType.STRING))
+    .attr("product/price",
+          Schema.attribute()
+              .valueType(Schema.ValueType.LONG))
     // Noun: Customer
-    Map.entry("customer/id", Map.of("db/unique", "db.unique/identity", "db/valueType", "db.type/string")),
-    Map.entry("customer/email", Map.of("db/unique", "db.unique/identity", "db/valueType", "db.type/string")),
+    .attr("customer/id",
+          Schema.attribute()
+              .unique(Schema.Unique.IDENTITY)
+              .valueType(Schema.ValueType.STRING))
+    .attr("customer/email",
+          Schema.attribute()
+              .unique(Schema.Unique.IDENTITY)
+              .valueType(Schema.ValueType.STRING))
     // Noun: Order
-    Map.entry("order/id", Map.of("db/unique", "db.unique/identity", "db/valueType", "db.type/string")),
-    Map.entry("order/customer", Map.of("db/valueType", "db.type/ref")),
+    .attr("order/id",
+          Schema.attribute()
+              .unique(Schema.Unique.IDENTITY)
+              .valueType(Schema.ValueType.STRING))
+    .attr("order/customer",
+          Schema.attribute()
+              .valueType(Schema.ValueType.REF))
     // Verb/Associative Entity: Line Item (joins Order and Product)
-    Map.entry("line-item/order", Map.of("db/valueType", "db.type/ref")),
-    Map.entry("line-item/product", Map.of("db/valueType", "db.type/ref")),
-    Map.entry("line-item/quantity", Map.of("db/valueType", "db.type/long")));
+    .attr("line-item/order",
+          Schema.attribute()
+              .valueType(Schema.ValueType.REF))
+    .attr("line-item/product",
+          Schema.attribute()
+              .valueType(Schema.ValueType.REF))
+    .attr("line-item/quantity",
+          Schema.attribute()
+              .valueType(Schema.ValueType.LONG));
 ```
 
 ```python
 ecommerce_schema = {
     # Noun: Product
-    "product/sku": {"db/unique": "db.unique/identity", "db/valueType": "db.type/string"},
-    "product/title": {"db/fulltext": True, "db/valueType": "db.type/string"},
-    "product/price": {"db/valueType": "db.type/long"},
+    ":product/sku": {":db/unique": ":db.unique/identity", ":db/valueType": ":db.type/string"},
+    ":product/title": {":db/fulltext": True, ":db/valueType": ":db.type/string"},
+    ":product/price": {":db/valueType": ":db.type/long"},
     # Noun: Customer
-    "customer/id": {"db/unique": "db.unique/identity", "db/valueType": "db.type/string"},
-    "customer/email": {"db/unique": "db.unique/identity", "db/valueType": "db.type/string"},
+    ":customer/id": {":db/unique": ":db.unique/identity", ":db/valueType": ":db.type/string"},
+    ":customer/email": {":db/unique": ":db.unique/identity", ":db/valueType": ":db.type/string"},
     # Noun: Order
-    "order/id": {"db/unique": "db.unique/identity", "db/valueType": "db.type/string"},
-    "order/customer": {"db/valueType": "db.type/ref"},
+    ":order/id": {":db/unique": ":db.unique/identity", ":db/valueType": ":db.type/string"},
+    ":order/customer": {":db/valueType": ":db.type/ref"},
     # Verb/Associative Entity: Line Item (joins Order and Product)
-    "line-item/order": {"db/valueType": "db.type/ref"},
-    "line-item/product": {"db/valueType": "db.type/ref"},
-    "line-item/quantity": {"db/valueType": "db.type/long"}}
+    ":line-item/order": {":db/valueType": ":db.type/ref"},
+    ":line-item/product": {":db/valueType": ":db.type/ref"},
+    ":line-item/quantity": {":db/valueType": ":db.type/long"}}
 ```
 
 ```javascript
 const ecommerceSchema = {
     // Noun: Product
-    'product/sku': {'db/unique': 'db.unique/identity', 'db/valueType': 'db.type/string'},
-    'product/title': {'db/fulltext': true, 'db/valueType': 'db.type/string'},
-    'product/price': {'db/valueType': 'db.type/long'},
+    ":product/sku": {":db/unique": ":db.unique/identity", ":db/valueType": ":db.type/string"},
+    ":product/title": {":db/fulltext": true, ":db/valueType": ":db.type/string"},
+    ":product/price": {":db/valueType": ":db.type/long"},
     // Noun: Customer
-    'customer/id': {'db/unique': 'db.unique/identity', 'db/valueType': 'db.type/string'},
-    'customer/email': {'db/unique': 'db.unique/identity', 'db/valueType': 'db.type/string'},
+    ":customer/id": {":db/unique": ":db.unique/identity", ":db/valueType": ":db.type/string"},
+    ":customer/email": {":db/unique": ":db.unique/identity", ":db/valueType": ":db.type/string"},
     // Noun: Order
-    'order/id': {'db/unique': 'db.unique/identity', 'db/valueType': 'db.type/string'},
-    'order/customer': {'db/valueType': 'db.type/ref'},
+    ":order/id": {":db/unique": ":db.unique/identity", ":db/valueType": ":db.type/string"},
+    ":order/customer": {":db/valueType": ":db.type/ref"},
     // Verb/Associative Entity: Line Item (joins Order and Product)
-    'line-item/order': {'db/valueType': 'db.type/ref'},
-    'line-item/product': {'db/valueType': 'db.type/ref'},
-    'line-item/quantity': {'db/valueType': 'db.type/long'}};
+    ":line-item/order": {":db/valueType": ":db.type/ref"},
+    ":line-item/product": {":db/valueType": ":db.type/ref"},
+    ":line-item/quantity": {":db/valueType": ":db.type/long"}};
 ```
 
 </div>

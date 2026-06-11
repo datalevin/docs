@@ -410,7 +410,7 @@ WAL mode also introduces operational APIs such as `create-snapshot!`,
 `gc-txlog-segments!`, `txlog-watermarks`, and `open-tx-log`. Those functions
 matter for long-running services, replication, and low-level change capture, but
 they are not storage fundamentals. Chapter 19 discusses batching and ingestion,
-Chapter 20 covers storage tuning and durability choices, and Chapter 23 covers
+Chapter 20 covers storage tuning and durability choices, and Chapter 22 covers
 production operations.
 
 ---

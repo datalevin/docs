@@ -564,9 +564,11 @@ This query demonstrates several Datalevin strengths:
 - **Rule composition**: The `%` parameter passes rules into the query
 - **Unified schema**: All entities use the same attribute-based model
 
-On the LDBC-SNB workload, Datalevin outperforms dedicated graph databases like
-Neo4j by **27x to 620x** on short interactive queries (e.g. IS6 latency: Datalevin
-took 1.9ms, Neo4j took 1494.5ms), thanks to:
+In the Datalevin LDBC-SNB SF1 benchmark report, Datalevin is faster than Neo4j
+on all seven Interactive Short queries. The reported average latency is 12.6 ms
+for Datalevin versus 1908.3 ms for Neo4j, about 151x faster. For the IS6 query
+shown above, the reported latency is 1.9 ms for Datalevin versus 1494.5 ms for
+Neo4j, about 787x faster [2]. The main reasons are:
 - **Index locality**: Following refs is a simple B+Tree lookup
 - **Query optimizer**: Creating efficient plan to minimizing wasted computation
 - **Semi-naive evaluation**: Recursive rules don't re-process facts
@@ -599,3 +601,7 @@ traditional relational models.
 Model"](https://ceur-ws.org/Vol-2100/paper26.pdf), *Proceedings of the 12th
 Alberto Mendelzon International Workshop on Foundations of Data Management*,
 CEUR Workshop Proceedings 2100, 2018.
+
+[2] Datalevin project, ["LDBC SNB
+Benchmark"](https://github.com/juji-io/datalevin/tree/master/benchmarks/LDBC-SNB-bench),
+benchmark writeup and implementation.

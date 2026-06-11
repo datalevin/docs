@@ -1,10 +1,10 @@
 ---
 title: "Apperception, Truth Maintenance, and Long-Term State"
-chapter: 27
+chapter: 26
 part: "VI — Datalevin for Intelligent Systems"
 ---
 
-# Chapter 27: Apperception, Truth Maintenance, and Long-Term State
+# Chapter 26: Apperception, Truth Maintenance, and Long-Term State
 
 The previous chapters built the memory substrate and the recall pipeline. This
 chapter covers the next problem: what happens when new information should change
@@ -72,29 +72,29 @@ check for contradictions.
 
 ```java
 // Query to check if a new fact contradicts existing knowledge.
-Collection results = Datalevin.q(
+Object results = conn.query(
     "[:find ?contradiction " +
     " :in $ ?new-fact " +
     " :where [(is-contradictory? $ ?new-fact) ?contradiction]]",
-    db, proposedFact);
+    proposedFact);
 ```
 
 ```python
 # Query to check if a new fact contradicts existing knowledge.
-results = d.q(
+results = conn.query(
     '[:find ?contradiction '
     ' :in $ ?new-fact '
     ' :where [(is-contradictory? $ ?new-fact) ?contradiction]]',
-    db, proposed_fact)
+    proposed_fact)
 ```
 
 ```javascript
 // Query to check if a new fact contradicts existing knowledge.
-const results = d.q(
+const results = await conn.query(
     '[:find ?contradiction ' +
     ' :in $ ?new-fact ' +
     ' :where [(is-contradictory? $ ?new-fact) ?contradiction]]',
-    db, proposedFact);
+    proposedFact);
 ```
 
 </div>
