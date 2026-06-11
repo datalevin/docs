@@ -6,7 +6,7 @@ Part I — Foundations: A Multi-Paradigm Database
 
 1. Why Datalevin: Logic, Graphs, and Key–Value in One Engine
 
-2. Getting Started: Embedded, Server, Native Language Libraries, and Babashka Pod Modes
+2. Getting Started: Embedded, Server, CLI, Babashka, and MCP Modes
 
 3. The Datalevin Mental Model: Values, Facts, and Relationships
 

@@ -1,13 +1,13 @@
 ---
-title: "Getting Started: Embedded, Server, and Command Line Modes"
+title: "Getting Started: Embedded, Server, CLI, Babashka, and MCP Modes"
 chapter: 2
 part: "I — Foundations: A Multi-Paradigm Database"
 ---
 
-# Chapter 2: Getting Started: Embedded, Server, and Command Line Modes
+# Chapter 2: Getting Started: Embedded, Server, CLI, Babashka, and MCP Modes
 
 Datalevin can be used as an embedded database in the form of a library, a
-standalone server, a server with read only replicas, a high availability server
+standalone server, a server with read-only replicas, a high availability server
 cluster, a command-line tool, a Babashka pod, or a local MCP tool server. The
 same core database concepts appear in each mode: a path or URI names the
 database, schema describes attribute behavior, transactions add or retract
@@ -17,11 +17,41 @@ This chapter gives the shortest reliable path into each supported mode.
 
 ---
 
+## Before You Start: Choose a Mode
+
+Most readers should start with embedded mode. It has the fewest moving parts and
+uses the same transactions, schema, and Datalog queries as the other modes.
+Choose another mode when the deployment shape requires it:
+
+| Mode | Start here when | What you need first |
+| :--- | :--- | :--- |
+| Embedded library | One application process owns the database path. | Java 21+ and the language package. |
+| Standalone server | Multiple services or machines need a shared database endpoint. | `dtlv` or the standalone JVM jar. |
+| `dtlv` CLI | You want a REPL, shell scripts, import/export, backup, or maintenance commands. | The `dtlv` executable. |
+| Babashka pod | You write fast Clojure scripts with `bb`. | Babashka and either the pod release or local `dtlv`. |
+| MCP server | An AI client or agent needs local database tools. | `dtlv` and an MCP-compliant client. |
+| Replication or HA | You need read scaling or automatic failover. | Server mode, WAL, and Chapter 23. |
+
+The rest of this chapter follows that order.
+
+---
 
 ## 1. Embedded Mode
 
 Datalevin can serve as a library to be embedded in your applications written in
 Clojure, Java, Python, or Node.js.
+
+Embedded mode gives your application process direct access to the database
+environment. This is the fastest and simplest deployment shape when one
+application owns the database path.
+
+Use the language-specific documentation and package pages below for API details,
+current package metadata, and additional examples:
+
+- **Clojure:** [Clojure API documentation on cljdoc](https://cljdoc.org/d/datalevin/datalevin).
+- **Java:** [JavaDoc](https://javadoc.io/doc/org.datalevin/datalevin-java/latest/datalevin/package-summary.html).
+- **Python:** [PyPI package page for `datalevin`](https://pypi.org/project/datalevin/).
+- **Node.js:** [npm package page for `datalevin-node`](https://www.npmjs.com/package/datalevin-node).
 
 ### 1.1 Runtime Requirements
 
@@ -31,7 +61,7 @@ All the language libraries load a JVM Datalevin runtime, and they require **Java
 - Python: Python 3.10+ and Java 21+
 - Node.js: Node.js 20+ and Java 21+
 
-These JVM flags are also required to be passed to the JVM:
+For Clojure and Java applications, pass these JVM flags to the JVM:
 
 ```console
 --add-opens=java.base/java.nio=ALL-UNNAMED
@@ -39,9 +69,42 @@ These JVM flags are also required to be passed to the JVM:
 --enable-native-access=ALL-UNNAMED
 ```
 
-Python and Node.js bindings add the above open-module flags automatically. On
-Java 24 and newer, `--enable-native-access=ALL-UNNAMED` suppresses native-access
+Python and Node.js bindings add the required JVM flags automatically. On Java 24
+and newer, `--enable-native-access=ALL-UNNAMED` suppresses native-access
 warnings.
+
+For Clojure CLI, put the flags in an alias:
+
+```clojure
+{:aliases
+ {:datalevin/jvm
+  {:jvm-opts ["--add-opens=java.base/java.nio=ALL-UNNAMED"
+              "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
+              "--enable-native-access=ALL-UNNAMED"]}}}
+```
+
+Then run your program or REPL with that alias:
+
+```console
+clojure -M:datalevin/jvm
+```
+
+For Leiningen, add top-level `:jvm-opts` in `project.clj`:
+
+```clojure
+:jvm-opts ["--add-opens=java.base/java.nio=ALL-UNNAMED"
+           "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
+           "--enable-native-access=ALL-UNNAMED"]
+```
+
+For Java launch commands, pass the same options before `-cp` or `-jar`:
+
+```console
+java --add-opens=java.base/java.nio=ALL-UNNAMED \
+     --add-opens=java.base/sun.nio.ch=ALL-UNNAMED \
+     --enable-native-access=ALL-UNNAMED \
+     -cp target/classes:your-dependencies.jar your.main.Class
+```
 
 ### 1.2 Native Dependencies
 
@@ -61,11 +124,11 @@ brew install libomp llvm
 
 ---
 
-Embedded mode gives your application process direct access to the database
-environment. This is the fastest and simplest deployment shape when one
-application owns the database path.
 
 ### 1.3 Add the Dependency
+
+The examples in this chapter use version `0.10.18`. Replace it with the current
+release shown on the language-specific package page when starting a new project.
 
 <div class="multi-lang">
 
@@ -237,13 +300,13 @@ GraalVM native image. For production use, the former is recommended, as a JVM
 process is highly optimized for long running server workload, as HotSpot's JIT
 and advanced garbage collectors will outperform native image over time.
 
-For getting started, we show below how to run Datalevin server as a GraalVM native
-image.
+For getting started, we show below how to run Datalevin server as a GraalVM
+native image.
 
 
 ### 2.1 Install `dtlv`
 
-Datalevin's native image is a command-line program called  `dtlv`. It can query,
+Datalevin's native image is a command-line program called `dtlv`. It can query,
 transact, import, export, back up, compact, and administer Datalevin databases.
 The same executable can also run a server or an interactive Datalevin REPL.
 
@@ -271,6 +334,17 @@ With Docker:
 docker pull huahaiy/datalevin
 ```
 
+The Docker image exposes the same `dtlv` command surface. To start a local
+server from Docker:
+
+```console
+docker run --rm \
+  -p 8898:8898 \
+  -e DATALEVIN_DEFAULT_PASSWORD=secret \
+  -v "$PWD/dtlv-data:/data" \
+  huahaiy/datalevin serv --host 0.0.0.0 -r /data -p 8898
+```
+
 ### 2.2 Start a Server
 
 Start a local server with a root data directory:
@@ -289,6 +363,7 @@ address. Binding to a non-loopback address such as `0.0.0.0` requires
 DATALEVIN_DEFAULT_PASSWORD=secret \
 java --add-opens=java.base/java.nio=ALL-UNNAMED \
      --add-opens=java.base/sun.nio.ch=ALL-UNNAMED \
+     --enable-native-access=ALL-UNNAMED \
      -jar datalevin-0.10.18-standalone.jar serv --host 0.0.0.0 -r /data/dtlv
 ```
 
@@ -336,10 +411,28 @@ dtlv://<user>:<pass>@<host>:<port>/<db-name>?store=datalog|kv
 The `store` parameter defaults to `datalog`; use `store=kv` for the direct
 key-value store. Database names must be unique within a server.
 
-### 2.4 Using the Same API
+### 2.4 Smoke Test the Server
 
 Once connected to a server, the same API for embedded mode can be used to
-transact and query data.
+transact and query data. A quick smoke test with `dtlv exec` is:
+
+```console
+dtlv exec <<'EOF'
+(def conn (get-conn "dtlv://datalevin:secret@localhost:8898/getting-started"))
+(transact! conn [{:user/name "Server Alice"}])
+(q '[:find [?name ...] :where [_ :user/name ?name]] @conn)
+(close conn)
+EOF
+```
+
+The query should return `["Server Alice"]`, possibly with set/vector rendering
+depending on the client surface.
+
+### 2.5 Using the Same API
+
+A remote connection uses the same transaction and query APIs as an embedded
+connection. The main difference is that the database is named by a `dtlv://`
+URI instead of a local filesystem path.
 
 ---
 
@@ -366,13 +459,31 @@ replicas, and HA.
 
 ---
 
-## 4. Running in Scripts
+## 4. Running from the Command Line and Scripts
 
 `dtlv` itself can be used in shell scripting directly, as it supports common
-features (e.g. pipes and heredoc) of standard IO based transaction and query.
+features such as pipes and heredocs for standard I/O based transactions and
+queries. The command-line tool uses the same Clojure-oriented Datalevin API as
+embedded mode.
+
+For a copy-paste local CLI example:
+
+```console
+dtlv exec <<'EOF'
+(def conn (get-conn "/tmp/dtlv-cli"))
+(transact! conn [{:msg "Hello from dtlv"}])
+(q '[:find [?m ...] :where [_ :msg ?m]] @conn)
+(close conn)
+EOF
+```
+
+This creates a local database under `/tmp/dtlv-cli`, writes one fact, queries it,
+and closes the connection.
+
+### 4.1 Babashka Pod
 
 For sophisticated scripting needs, Babashka (bb) is a great command line tool.
-When a database become necessary in your Babashka scripts, Datalevin can serve
+When a database becomes necessary in your Babashka scripts, Datalevin can serve
 as a Babashka pod to support Datalog transaction and query:
 
 ```clojure
@@ -457,7 +568,29 @@ args = ["--allow-writes", "mcp"]
 
 ---
 
-## 6. Next Steps
+## 6. Troubleshooting and Cleanup
+
+If the first examples do not run, check these common issues before moving deeper
+into the book:
+
+- Run `java -version` and confirm Java 21 or newer.
+- For Clojure and Java, make sure the JVM flags in Section 1.1 are actually
+  passed to the process that starts Datalevin.
+- If you see `java.lang.UnsatisfiedLinkError`, revisit the native dependency
+  notes in Section 1.2.
+- Do not repeatedly open the same local database path in the same process
+  without holding on to and closing the connection. Treat connections as
+  stateful resources.
+- If examples use `/tmp/mydb`, `/tmp/dtlv-cli`, `/tmp/bb-db`, or
+  `$PWD/dtlv-data`, remove those directories before rerunning from a clean
+  slate.
+- For server examples, confirm the server process is still running, the port is
+  `8898`, and the password in the URI matches `DATALEVIN_DEFAULT_PASSWORD`.
+- Keep MCP servers read-only until you deliberately need write tools.
+
+---
+
+## 7. Next Steps
 
 Now we have covered the many modes of using Datalevin that serve different use
 cases. The same simple database principles are behind all the operational modes,
