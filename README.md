@@ -115,8 +115,10 @@ clojure -T:build uber
 scripts/start-prod.sh
 ```
 
-Set `ENV=prod` and a real `SESSION_SECRET` before starting. Startup now fails fast if `ENV=prod` and `SESSION_SECRET` is missing.
-In production, startup also fails fast unless outbound email is configured with `MAIL_FROM` and `SMTP_HOST`.
+Set `ENV=prod`, a real `SESSION_SECRET`, and `DATALEVIN_VERSION` before
+starting. Startup fails fast if `ENV=prod` and either `SESSION_SECRET` or
+`DATALEVIN_VERSION` is missing. In production, startup also fails fast unless
+outbound email is configured with `MAIL_FROM` and `SMTP_HOST`.
 
 That wrapper runs the same jar-based startup pattern as the `systemd` unit:
 

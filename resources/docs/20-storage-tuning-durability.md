@@ -25,7 +25,7 @@ environment.
 
 ---
 
-### 1. Durability: The Power of Copy-on-Write (CoW)
+### 1.1 Durability: The Power of Copy-on-Write (CoW)
 
 Traditional databases such as Postgres use a Write-Ahead Log (WAL) with an
 update-in-place storage strategy. If the system crashes before dirty pages are
@@ -45,7 +45,7 @@ Datalevin's storage engine (LMDB) uses a **Copy-on-Write (CoW) B+Tree**.
 
 ---
 
-### 2. Syncing to Disk: `msync` and Durability
+### 1.2 Syncing to Disk: `msync` and Durability
 
 In standard mode (the default for KV stores), the speed of your writes is
 primarily limited by the speed of your disk's **synchronous flush (`msync`)**.
@@ -59,7 +59,7 @@ primarily limited by the speed of your disk's **synchronous flush (`msync`)**.
 
 ---
 
-### 3. Non-Durable Environment Flags
+### 1.3 Non-Durable Environment Flags
 
 Chapter 19 shows the concrete LMDB environment flags for repeatable imports and
 cache rebuilds. From an operations perspective, the rule is simple: every flag
@@ -76,7 +76,7 @@ full flag table, setup examples, and ingestion trade-offs, see Chapter 19.
 
 ---
 
-### 4. WAL-Based Durability: Performance + Safety
+### 1.4 WAL-Based Durability: Performance + Safety
 
 While standard LMDB is extremely safe, it can be limited by disk I/O.
 Datalevin's **Write-Ahead Log (WAL) mode** is an explicit opt-in for local
@@ -85,7 +85,7 @@ replicas, and is forced on for consensus-lease HA. Use WAL when you need higher
 write throughput from concurrent callers, WAL replay, replication, or HA
 behavior.
 
-#### 4.1 The LSN Lifecycle
+#### 1.4.1 The LSN Lifecycle
 
 In WAL mode, every transaction is assigned a **Log Sequence Number (LSN)**. This
 number is the canonical source of truth for the database's progress.
@@ -100,7 +100,7 @@ number is the canonical source of truth for the database's progress.
 By monitoring these watermarks with `txlog-watermarks`, you can precisely track
 the "lag" between application commits and physical disk durability.
 
-#### 4.2 Durability Profiles
+#### 1.4.2 Durability Profiles
 
 - **`:strict`**: The database waits for the WAL to be synced to disk for *every*
   transaction using a standard `fsync`. This is the default for consensus-lease
@@ -119,14 +119,14 @@ for normal reads and writes.
 
 ---
 
-### 5. Maintenance in WAL Mode
+### 1.5 Maintenance in WAL Mode
 
 WAL mode introduces snapshot and retention maintenance. Datalevin can run
 snapshot creation from its built-in scheduler when the WAL-enabled store is
 opened with `:snapshot-scheduler? true`; otherwise, `create-snapshot!` remains
 available for explicit operator-controlled snapshots.
 
-#### 5.1 Snapshots and Checkpoints
+#### 1.5.1 Snapshots and Checkpoints
 
 When the snapshot scheduler is enabled, Datalevin creates snapshots
 automatically according to the configured interval and size/LSN thresholds.
@@ -157,7 +157,7 @@ KV handle or a Datalog connection handle. The high-level Java, Python, and
 JavaScript wrappers do not currently expose dedicated convenience methods for
 these WAL maintenance calls.
 
-#### 5.2 Garbage Collection
+#### 1.5.2 Garbage Collection
 
 Use **`gc-txlog-segments!`** to reclaim disk space by deleting old WAL segments
 that are no longer needed by snapshots, replicas, vector checkpoints, or
@@ -175,7 +175,7 @@ runs.
 
 ---
 
-### 6. Online Snapshots: `d/copy`
+### 1.6 Online Snapshots: `d/copy`
 
 In other databases, backing up a live database can be tricky. If you simply copy
 the file while a write is happening, the copy might be corrupted.
@@ -240,12 +240,12 @@ $ dtlv -d /data/companydb copy /backup/companydb-2024-01-15
 
 ---
 
-### 7. Database Maintenance: Copy, Dump, and Load
+### 1.7 Database Maintenance: Copy, Dump, and Load
 
 Datalevin provides comprehensive command-line and API tools for database
 maintenance, backup, and migration.
 
-#### 7.1 Compacting with `d/copy`
+#### 1.7.1 Compacting with `d/copy`
 
 LMDB's copy functionality can create a compacted copy of the database. This
 reclaims free pages left by deleted data in the destination copy and improves
@@ -262,7 +262,7 @@ B+Tree locality.
 The copy operation can run **regardless of whether the database is currently in
 use**; readers can continue accessing the source while the copy is being made.
 
-#### 7.2 The `dtlv` Command Line Tool
+#### 1.7.2 The `dtlv` Command Line Tool
 
 The `dtlv` CLI tool provides interactive and batch database operations:
 
@@ -291,7 +291,7 @@ Key options:
 - `-g, --datalog`: Dump/load as Datalog database
 - `-n, --nippy`: Use Nippy binary format for faster serialization
 
-#### 7.3 Dump and Load Formats
+#### 1.7.3 Dump and Load Formats
 
 Datalevin supports multiple dump/load formats:
 
@@ -306,7 +306,7 @@ $ dtlv -d /data/newdb -g -n -f ~/backup.nippy load
 
 ---
 
-### 8. Re-Indexing
+### 1.8 Re-Indexing
 
 Datalevin provides a `re-index` function that dumps and reloads data to rebuild
 indexes. This can be useful in recovery scenarios, when changing index options,
@@ -324,13 +324,13 @@ thread or process is accessing the same database.
 
 ---
 
-### 9. Database Upgrades
+### 1.9 Database Upgrades
 
 When upgrading Datalevin to a new minor version, you may need to migrate your
 database. Datalevin provides automatic migration for databases newer than
 version 0.9.27.
 
-#### 9.1 Automatic Migration
+#### 1.9.1 Automatic Migration
 
 For databases created with Datalevin 0.9.27 or later, opening with a newer
 version triggers automatic migration. This process downloads the old version's
@@ -338,7 +338,7 @@ uberjar to dump the data, then loads it with the new version. Automatic
 migration detects Datalog stores by their `datalevin/eav` DBI; if the same file
 also contains extra KV DBIs, dump and load those manually.
 
-#### 9.2 Manual Migration
+#### 1.9.2 Manual Migration
 For older databases, use the command line tool:
 
 ```console
@@ -354,7 +354,7 @@ $ dtlv -d /dest/dir -f dump.edn -g load
 
 ---
 
-### 10. Summary: The Operations Checklist
+### 1.10 Summary: The Operations Checklist
 
 To ensure your data is safe and recoverable, follow this checklist:
 
@@ -396,13 +396,13 @@ parameters for maximum performance and stability.
 
 ---
 
-### 1. The LMDB Map: `:mapsize`
+### 2.1 The LMDB Map: `:mapsize`
 
 The most critical parameter for Datalevin is **`:mapsize`**. This is the
 OS allocated size for the memory mapped database file, which defines the
 maximum size the file can grow to in the address space.
 
-#### 1.1 Virtual Memory vs. Resident Memory
+#### 2.1.1 Virtual Memory vs. Resident Memory
 
 Unlike a traditional Java heap, the `:mapsize` is a **virtual memory**
 reservation. Setting a 1TB mapsize does *not* mean the database will consume 1TB
@@ -451,7 +451,7 @@ const conn = await connect(path, {
 
 ---
 
-### 2. Leveraging the OS Page Cache
+### 2.2 Leveraging the OS Page Cache
 
 Because Datalevin uses **memory-mapped files (`mmap`)**, it does not manage its
 own buffer pool. Instead, it relies on the **Operating System Page Cache**.
@@ -470,7 +470,7 @@ own buffer pool. Instead, it relies on the **Operating System Page Cache**.
 
 ---
 
-### 3. Reader Threads and Locking: `:max-readers`
+### 2.3 Reader Threads and Locking: `:max-readers`
 
 LMDB uses a "lock-free" reader model, but it still needs to track active readers
 to prevent writers from overwriting pages that are still being read.
@@ -514,16 +514,23 @@ const conn = await connect(path, {
 
 ---
 
-### 4. Storage Efficiency: Prefix Compression
+### 2.4 Storage Efficiency: Prefix Compression
 
 Datalevin's storage engine (DLMDB) uses **prefix compression** to minimize the
 on-disk footprint of your indexes.
 
-In a Datalog AVE index, many keys share the same Attribute and Value (e.g.,
-thousands of users in the same city). DLMDB only stores the "difference" between
-consecutive keys, which:
+Prefix compression is most effective when a large portion of neighboring encoded
+keys is identical. Some KV workloads with long structured keys can therefore see
+large savings. Datalevin's Datalog indexes also benefit, but the effect is more
+modest than the largest KV cases because the shared part is usually a portion of
+the encoded 8-byte entity ID in EAV and a portion of the encoded 4-byte
+attribute ID in AVE.
+The `DUPSORT` nesting described in Chapter 15 is the main reason Datalog indexes
+avoid repeating full entity IDs or full `(A, V)` prefixes.
 
-- **Reduces Storage Size**: Often by 30-50% compared to uncompressed B+Trees.
+- **Reduces Storage Size**: Workload dependent; high reductions are possible
+  when key prefixes are substantial, while Datalog index savings are usually
+  smaller because their common prefixes are compact encoded IDs.
 - **Improves Cache Locality**: More keys fit into a single CPU cache line,
   making index scans significantly faster.
 
@@ -534,7 +541,7 @@ materializing them. Those counts feed both direct index APIs, such as
 
 ---
 
-### 5. Summary: The Tuning Checklist
+### 2.5 Summary: The Tuning Checklist
 
 When deploying Datalevin to production, follow this checklist:
 

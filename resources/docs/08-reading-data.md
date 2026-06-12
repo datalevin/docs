@@ -183,6 +183,10 @@ Pull patterns can follow reference attributes. If `:order/customer` has
 `:db/valueType :db.type/ref`, a nested map in the pattern tells Datalevin how to
 shape the referenced entity:
 
+This example uses the schema from Section 1, where `:order/id` is declared
+`:db.unique/identity`. Without that uniqueness declaration, `[:order/id
+"o-1001"]` is just a two-element vector, not a valid lookup ref.
+
 <div class="multi-lang">
 
 ```clojure
@@ -271,6 +275,20 @@ unqualified attribute like `:friend`, the reverse attribute is `:_friend`.
 ;; => {:user/name "Alice",
 ;;     :order/_customer [{:order/id "o-1001"}]}
 ```
+
+As with forward references, a bare reverse attribute returns only small entity
+reference maps:
+
+```clojure
+(d/pull db
+        '[:user/name :order/_customer]
+        [:user/email "alice@example.com"])
+;; => {:user/name "Alice",
+;;     :order/_customer [{:db/id 3}]}
+```
+
+Use a nested reverse pattern when you want attributes from the entities that
+point back to the current entity.
 
 Reverse pull is not a special side table. As Chapter 15 explains, references
 are values in Datalevin's indexes, so reverse reference lookup is an indexed
@@ -380,6 +398,18 @@ for debugging, logging, or exploratory REPL work:
 ;; {:db/id 1,
 ;;  :user/name "Alice",
 ;;  :user/email "alice@example.com"}
+```
+
+`d/touch` realizes the attributes, but it does not turn the entity into a plain
+persistent map. The value is still an entity object. That distinction matters
+with functions such as `merge` that construct maps by conjoining entries:
+
+```clojure
+(def alice-ent (d/touch (d/entity db [:user/email "alice@example.com"])))
+
+;; Do this when ordinary map operations should own the value:
+(merge (into {} alice-ent)
+       {:api/source "profile"})
 ```
 
 For API responses, prefer `d/pull` with an explicit pattern. `d/touch` says

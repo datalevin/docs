@@ -47,15 +47,19 @@ in this book use one convention throughout:
 - Java examples use the high-level `datalevin` package, especially typed schema
   and transaction builders. Attribute names are written as strings such as
   `"person/name"`; the Java wrapper turns them into Datalevin keywords.
-- Python examples use `from datalevin import connect` and connection methods
-  such as `conn.transact`, `conn.query`, and `conn.pull`. Schema and transaction
-  maps use EDN keyword strings such as `":person/name"`.
+- Python Datalog examples use `from datalevin import connect` and connection
+  methods such as `conn.transact`, `conn.query`, and `conn.pull`. Schema and
+  transaction maps use EDN keyword strings such as `":person/name"`. KV,
+  administration, and interop examples import the specific Python helpers they
+  use, such as `open_kv`, `new_client`, `exec_json`, or `interop`.
 - JavaScript examples use `connect` from `datalevin-node`, `await conn.*`
   methods, and the same colon-prefixed keyword strings as Python.
 
 When Java examples must pass a raw option map or UDF descriptor, keyword values
 are still written as colon-prefixed strings such as `":cosine"` or
 `":tx-fn"`, because those maps are normalized by the Java wrapper at runtime.
+Unless a snippet is explicitly labeled as an API sketch, non-Clojure examples
+show the public high-level binding style rather than pseudocode.
 
 <div class="multi-lang">
 

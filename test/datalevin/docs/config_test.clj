@@ -42,3 +42,27 @@
                                 :smtp-user "mailer"
                                 :smtp-pass "secret"
                                 :smtp-tls true})))))
+
+(deftest datalevin-version-behavior
+  (testing "development falls back to the local default"
+    (with-redefs [config/env (fn [_] nil)]
+      (is (= config/default-datalevin-version
+             (config/datalevin-version)))))
+
+  (testing "configured version is trimmed and passed through"
+    (with-redefs [config/env (fn [name]
+                               (case name
+                                 "DATALEVIN_VERSION" "  1.2.3  "
+                                 nil))]
+      (is (= "1.2.3" (config/datalevin-version)))))
+
+  (testing "production requires an explicit Datalevin release version"
+    (with-redefs [config/env (fn [name]
+                               (case name
+                                 "ENV" "prod"
+                                 "DATALEVIN_VERSION" nil
+                                 nil))]
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo
+           #"DATALEVIN_VERSION must be set when ENV=prod"
+           (config/datalevin-version))))))

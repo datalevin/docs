@@ -8,8 +8,8 @@ part: "V — Performance and Operations"
 
 Datalevin has a novel query optimizer that leverages the unique strengths of
 triple stores in facilitating cardinality estimation, one of the hardest
-problems in databases design. With such, Datalevin is able to handle very
-complex query and return results quickly.
+problems in database design. With that foundation, Datalevin can handle very
+complex queries and return results quickly.
 
 A fast query depends on both the plan Datalevin chooses and the evidence you can
 collect when that plan surprises you. This chapter combines optimizer mechanics,
@@ -37,14 +37,14 @@ query.
 
 ---
 
-### 1. The Selinger-Style Optimizer
+### 1.1 The Selinger-Style Optimizer
 
 Datalevin uses a **Selinger-style cost-based query optimizer**, following the
 System R tradition described by Selinger et al. [1], with dynamic programming,
 similar to enterprise-grade relational databases like PostgreSQL, Oracle, and so
 on.
 
-#### 1.1 How it Works
+#### 1.1.1 How it Works
 
 When a query is submitted:
 
@@ -63,13 +63,13 @@ When a query is submitted:
 
 ---
 
-### 2. Accurate Cardinality Estimation
+### 1.2 Accurate Cardinality Estimation
 
 The quality of a query plan depends on accurate cardinality estimates. Datalevin
 excels here because counting is cheap in its nested triple storage. The
 resulting join order is often similar to a hand-written join plan.
 
-#### 2.1 Direct Counting
+#### 1.2.1 Direct Counting
 
 Some counts can be obtained in **O(1) time** directly from the index without
 scanning. For example, `[?e :user/city "London"]` returns an exact count from
@@ -77,7 +77,7 @@ the AVE index.
 
 For range queries, DLMDB's order statistics provide **O(log n)** counting.
 
-#### 2.2 Query-Specific Sampling
+#### 1.2.2 Query-Specific Sampling
 
 For complex joins where counting isn't feasible, Datalevin uses **online
 reservoir sampling** under actual query conditions. It:
@@ -87,7 +87,7 @@ reservoir sampling** under actual query conditions. It:
 3.  Uses empirical-Bayes shrinkage with priors
 4.  Applies skew-aware upper-bound correction for extreme data distributions
 
-#### 2.3 Directional Estimation
+#### 1.2.3 Directional Estimation
 
 Unlike traditional RDBMS that assume attribute independence, Datalevin's
 estimation is **directional**—different join directions produce different
@@ -96,25 +96,25 @@ directional.
 
 ---
 
-### 3. Predicate Push-Down
+### 1.3 Predicate Push-Down
 
 Datalevin rewrites queries to push selection predicates down to index scans.
 
-#### 3.1 Inequality Predicates
+#### 1.3.1 Inequality Predicates
 
 Comparison operators are converted to range boundaries in the index scan:
 ```clojure
 [(> ?age 21)]  ;; Becomes a range scan on :user/age >= 21
 ```
 
-#### 3.2 Constant Parameter Plugging
+#### 1.3.2 Constant Parameter Plugging
 
 Query parameters are plugged directly into the query to avoid expensive joins
 with bound values.
 
 ---
 
-### 4. Merge Scan
+### 1.4 Merge Scan
 
 For star-like queries (multiple attributes on the same entity), Datalevin uses
 **merge scan**—a technique similar to pivot scan.
@@ -125,9 +125,9 @@ execution time** and provides massive speedup.
 
 ---
 
-### 5. Join Methods
+### 1.5 Join Methods
 
-Datalevin considers five join methods and picks the best based on cost estimation:
+Datalevin considers six join methods and picks the best based on cost estimation:
 
 | Method | Use Case |
 |--------|----------|
@@ -138,7 +138,7 @@ Datalevin considers five join methods and picks the best based on cost estimatio
 | **Or-join** `:or-join` | Handles `or-join` clauses with sideway information passing (SIP) |
 | **Not-join** `:not-join` | Optimizes conservative anti-join shapes instead of always deferring negative filters |
 
-#### 5.1 Recency-Based Link Choice
+#### 1.5.1 Recency-Based Link Choice
 
 When multiple paths exist to reach the same node, Datalevin prefers the link
 from the **most recently resolved** node, since recent data distribution is more
@@ -147,7 +147,7 @@ accurate.
 
 ---
 
-### 6. Parallel Processing
+### 1.6 Parallel Processing
 
 Datalevin's query engine uses parallelism at multiple levels:
 
@@ -157,7 +157,7 @@ Datalevin's query engine uses parallelism at multiple levels:
 
 ---
 
-### 7. Complex Clauses and Rules
+### 1.7 Complex Clauses and Rules
 
 The optimizer handles complex clauses in stages:
 
@@ -173,7 +173,7 @@ More complex negative clauses still fall back to late resolution.
 
 ---
 
-### 8. Benchmarks
+### 1.8 Benchmarks
 
 Datalevin's query engine has been validated against industry benchmarks:
 
@@ -186,7 +186,7 @@ Datalevin's query engine has been validated against industry benchmarks:
 
 ---
 
-### 9. Summary: The Optimizer's Principles
+### 1.9 Summary: The Optimizer's Principles
 
 In summary, Datalevin has a sophisticated query optimizer that compiles
 declarative query clauses into optimized execution steps that leverages index
@@ -274,7 +274,7 @@ information to the explain output.
 
 ---
 
-### 1. Plan-Only Explain
+### 3.1 Plan-Only Explain
 
 Use plan-only `explain` when you want to inspect join order, access paths, and
 estimated cardinalities without paying query execution cost.
@@ -335,7 +335,7 @@ join strategies before running it on large data.
 
 ---
 
-### 2. Explain with Execution Measurements
+### 3.2 Explain with Execution Measurements
 
 Use `{:run? true}` when you also need measured execution information. This runs
 the query and augments the explain map with fields such as `:execution-time`,
@@ -371,7 +371,7 @@ against actual sizes and distinguish planning cost from runtime cost.
 
 ---
 
-### 3. Reading the Explain Output
+### 3.3 Reading the Explain Output
 
 Start with the `:plan` section. Each planned component contains `:steps`,
 estimated `:cost`, and estimated `:size`; when `{:run? true}` is used, actual
@@ -385,7 +385,7 @@ Key fields to inspect:
   `{:run? true}` is used
 - **Planning and execution time**: `:prepare-time` versus `:execution-time`
 
-#### 3.1 Identifying Bottlenecks
+#### 3.3.1 Identifying Bottlenecks
 
 A common performance bottleneck is a **"Large Intermediate Result Set."**
 If the first join returns 1,000,000 entities, but the second join filters them
@@ -397,7 +397,7 @@ hide the selective condition from estimation.
 
 ---
 
-### 4. Diagnosing Slow Predicates
+### 3.4 Diagnosing Slow Predicates
 
 If your query uses custom functions (Chapter 9), Datalevin's optimizer treats
 them as black boxes with unknown selectivity.
@@ -412,7 +412,7 @@ before expensive custom predicates run.
 
 ---
 
-### 5. Understanding Join Orders
+### 3.5 Understanding Join Orders
 
 The `:plan` section shows the **join order** chosen by the optimizer.
 
@@ -425,7 +425,7 @@ expect is hidden inside a complex predicate or rule.
 
 ---
 
-### 6. Summary: The Explain Workflow
+### 3.6 Summary: The Explain Workflow
 
 When a query is slow, follow this workflow:
 

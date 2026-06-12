@@ -108,14 +108,15 @@ Datalevin will assign permanent entity IDs automatically.
 ```clojure
 ;; The schema defines the behavior of attributes, not the shape of rows.
 (def schema
-  {:person/name   {:db/valueType :db.type/string}
-   :person/email  {:db/valueType :db.type/string}
-   :person/school {:db/valueType :db.type/ref} ; A reference to ID of another entity
-   :school/name   {:db/valueType :db.type/string}})
+  {:person/name    {:db/valueType :db.type/string}
+   :person/email   {:db/valueType :db.type/string}
+   :person/school  {:db/valueType :db.type/ref} ; A reference to the ID of another entity
+   :school/name    {:db/valueType :db.type/string}
+   :school/country {:db/valueType :db.type/string}})
 
 ;; Data is written as a collection of entities here.
 ;; Notice how 'Alice' and 'MIT' are just sets of attributes.
-;; :db/id is a system attribute for entity ID, temporary IDs are used here
+;; :db/id is a system attribute for entity ID; tempids are used here
 (d/transact! conn
   [{:db/id -1 :person/name "Alice" :person/email "alice@example.com" :person/school -10}
    {:db/id -10 :school/name "MIT" :school/country "USA"}])
@@ -129,8 +130,10 @@ Schema schema = Datalevin.schema()
     .attr("person/email",
           Schema.attribute().valueType(Schema.ValueType.STRING))
     .attr("person/school",
-          Schema.attribute().valueType(Schema.ValueType.REF)) // A reference to ID of another entity
+          Schema.attribute().valueType(Schema.ValueType.REF)) // A reference to the ID of another entity
     .attr("school/name",
+          Schema.attribute().valueType(Schema.ValueType.STRING))
+    .attr("school/country",
           Schema.attribute().valueType(Schema.ValueType.STRING));
 
 // Data is written as a collection of entities.
@@ -148,10 +151,11 @@ conn.transact(Datalevin.tx()
 ```python
 # The schema defines the behavior of attributes, not the shape of rows.
 schema = {
-    ":person/name":   {":db/valueType": ":db.type/string"},
-    ":person/email":  {":db/valueType": ":db.type/string"},
-    ":person/school": {":db/valueType": ":db.type/ref"},  # A reference to ID of another entity
-    ":school/name":   {":db/valueType": ":db.type/string"}}
+    ":person/name":    {":db/valueType": ":db.type/string"},
+    ":person/email":   {":db/valueType": ":db.type/string"},
+    ":person/school":  {":db/valueType": ":db.type/ref"},  # A reference to the ID of another entity
+    ":school/name":    {":db/valueType": ":db.type/string"},
+    ":school/country": {":db/valueType": ":db.type/string"}}
 
 # Data is written as a collection of entities.
 # Notice how 'Alice' and 'MIT' are just sets of attributes.
@@ -168,10 +172,11 @@ conn.transact([
 ```javascript
 // The schema defines the behavior of attributes, not the shape of rows.
 const schema = {
-  ":person/name":   { ":db/valueType": ":db.type/string" },
-  ":person/email":  { ":db/valueType": ":db.type/string" },
-  ":person/school": { ":db/valueType": ":db.type/ref" },  // A reference to ID of another entity
-  ":school/name":   { ":db/valueType": ":db.type/string" }
+  ":person/name":    { ":db/valueType": ":db.type/string" },
+  ":person/email":   { ":db/valueType": ":db.type/string" },
+  ":person/school":  { ":db/valueType": ":db.type/ref" },  // A reference to the ID of another entity
+  ":school/name":    { ":db/valueType": ":db.type/string" },
+  ":school/country": { ":db/valueType": ":db.type/string" }
 };
 
 // Data is written as a collection of entities.

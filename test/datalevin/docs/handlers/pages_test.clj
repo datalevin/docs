@@ -1,6 +1,7 @@
 (ns datalevin.docs.handlers.pages-test
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [datalevin.docs.config :as config]
             [datalevin.docs.handlers.pages :as pages]
             [ring.middleware.anti-forgery :as anti-forgery]))
 
@@ -97,6 +98,35 @@
     (is (str/includes? html "language-java"))
     (is (str/includes? html "language-python"))
     (is (str/includes? html "language-javascript"))))
+
+(deftest substitute-markdown-vars-expands-datalevin-version
+  (with-redefs [config/datalevin-version (constantly "9.9.9")]
+    (is (= "version 9.9.9"
+           (pages/substitute-markdown-vars "version {{datalevin-version}}")))))
+
+(deftest load-doc-substitutes-markdown-vars-before-rendering
+  (pages/clear-all-caches!)
+  (let [dir (doto (java.io.File/createTempFile "pages-doc-vars" "")
+              (.delete)
+              (.mkdir))
+        chapter-file (java.io.File. dir "02-getting-started.md")]
+    (try
+      (spit chapter-file
+            (str "---\n"
+                 "title: Getting Started\n"
+                 "chapter: 2\n"
+                 "---\n"
+                 "Version `{{datalevin-version}}`\n"))
+      (with-redefs [pages/docs-dir (.getAbsolutePath dir)
+                    config/datalevin-version (constantly "9.9.9")]
+        (let [doc (pages/load-doc "02-getting-started")]
+          (is (str/includes? (:html doc) "9.9.9"))
+          (is (not (str/includes? (:html doc) "{{datalevin-version}}")))))
+      (finally
+        (pages/clear-all-caches!)
+        (doseq [file (.listFiles dir)]
+          (.delete file))
+        (.delete dir)))))
 
 (deftest docs-index-renders-cached-html-inside-page-shell
   (binding [anti-forgery/*anti-forgery-token* (delay "test-token")]

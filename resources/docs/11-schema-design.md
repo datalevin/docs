@@ -205,15 +205,14 @@ when it writes the datoms.
 
 - **One-to-One**: Use `:db.type/ref` with `:db.cardinality/one`.
   - Example: A `User` has one `Profile`.
-- **One-to-Many**: Use `:db.type/ref` with `:db.cardinality/many`.
-  - Example: A `Post` has many `Comment`.
+- **One-to-Many**: Usually put a cardinality-one ref on the many side.
+  - Example: A `Comment` has one `Post` through `:comment/post`.
 
-While `:db.cardinality/many` is convenient in many use cases, using
-cardinality-one attributes in reverse, i.e. putting the reference on the many
-side of the relationship, is often a better modeling approach. For the
-one-to-many example above, adding a `:comment/post` reference to each `Comment`
-can be more flexible than storing all comments on the `Post`. More importantly,
-`:db.cardinality/one` attributes have better performance in Datalevin.
+The one-to-many example is worth stating carefully: you do not need a
+`:post/comments` cardinality-many attribute just to find a post's comments.
+Store `:comment/post` on each comment, then query or pull the reverse direction
+when you need the collection. The broader performance rationale for normalized
+relationship facts is covered in the many-to-many discussion below.
 
 ### 2.2 Many-to-Many: Cardinality vs. Join Entities
 
@@ -226,13 +225,20 @@ them.
 2.  **Join Entities**: You can create a third entity that "joins" the other two,
     similar to a join table in SQL.
 
-**Performance Tip: Prefer Join Entities.**
+**Performance Tip: Prefer Normalized Relationship Facts.**
 
 While `:db.cardinality/many` is convenient, Datalevin is highly optimized for
-**normalized data**. In a query, a "join entity" often performs better because
-it allows the query optimizer to make more granular decisions. If you expect a
-single entity to have thousands of references (e.g., a "Public" group with
-millions of members), a join entity is the superior choice for performance.
+**normalized data**: many small relationship facts are usually better than one
+very large collection-valued fact. For one-to-many relationships, this often
+means placing a cardinality-one reference on the many side. For many-to-many
+relationships, it often means creating a join entity.
+
+This shape gives the query optimizer more granular facts to count, join, and
+filter. If you expect a single entity to have thousands of references, such as a
+"Public" group with millions of members, a join entity is the better default
+for performance. It is also the right model when the relationship itself has
+attributes, such as role assignment time, quantity, rank, validity interval, or
+source system.
 
 ```clojure
 ;; Instead of many references in one entity:

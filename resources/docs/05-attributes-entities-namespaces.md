@@ -198,7 +198,7 @@ await conn.transact([
    enable range queries on specific attributes. Chapter 11 covers the
    `update-schema` workflow, including Datalevin's supported migration from
    untyped EDN values to typed values.
-3. **Integrity**: Add `:db/unique/identity` for fields like emails or slugs so
+3. **Integrity**: Add `:db.unique/identity` for fields like emails or slugs so
    you can use them as "lookup refs" (e.g., `[:user/email
    "alice@example.com"]`).
 4. **Relations**: Use `:db.type/ref` to connect entities, forming the graph that

@@ -12,17 +12,16 @@ Ingesting large datasets requires a different strategy than standard interactive
 writes or OLTP. Datalevin provides several infrastructure features to support
 extreme throughput.
 
-### 1.1 WAL Mode with `:relaxed` Durability
+### 1.1 WAL Mode for Ingestion
 
-For the best balance of safety and speed during ingestion, enable **WAL mode**.
-The default WAL mode comes with the **`:relaxed` durability profile**. This
-allows Datalevin to batch disk syncs, achieving the write throughput of an
-LSM-tree while maintaining the read performance of a B+Tree.
+For high-throughput ingestion where data must remain queryable as it arrives,
+enable **WAL mode**. WAL turns write pressure into sequential log appends while
+preserving LMDB's B+Tree read path.
 
 - **Benefit**: Sequential WAL appends are much faster than random B+Tree
   flushes.
-- **Tuning**: Adjust `:wal-group-commit` and `:wal-group-commit-ms` to optimize
-  the trade-off between write speed vs. durability risk tolerance.
+- **Durability policy**: Choose the WAL durability profile using the operational
+  guidance in Chapter 20, Section 1.4.2.
 
 ### 1.2 Asynchronous Transactions: `d/transact-async`
 
@@ -187,14 +186,14 @@ datoms *before* they reach the database.
 <div class="multi-lang">
 
 ```clojure
-;; Sort data by Entity, then Attribute
-(let [sorted-datoms (sort-by (juxt :db/id identity) raw-data)]
+;; Sort data by Entity ID
+(let [sorted-datoms (sort-by :db/id raw-data)]
   (doseq [batch (partition-all 5000 sorted-datoms)]
     (d/transact! conn batch)))
 ```
 
 ```java
-// Sort data by Entity, then Attribute
+// Sort data by Entity ID
 rawData.sort(Comparator.comparing(m -> (Long) m.get("db/id")));
 List<List<Map>> batches = partition(rawData, 5000);
 for (List<Map> batch : batches) {
@@ -203,14 +202,14 @@ for (List<Map> batch : batches) {
 ```
 
 ```python
-# Sort data by Entity, then Attribute
+# Sort data by Entity ID
 sorted_datoms = sorted(raw_data, key=lambda x: x[":db/id"])
 for batch in partition_all(sorted_datoms, 5000):
     conn.transact(batch)
 ```
 
 ```javascript
-// Sort data by Entity, then Attribute
+// Sort data by Entity ID
 const sortedDatoms = rawData.sort((a, b) => a[":db/id"] - b[":db/id"]);
 for (const batch of partitionAll(sortedDatoms, 5000)) {
   await conn.transact(batch);
@@ -231,7 +230,11 @@ overhead entirely using `d/init-db` and `d/fill-db`. Note that these functions
   database
 - **`d/fill-db`**: Bulk load additional datoms into an existing database
 
-<div class="multi-lang">
+The public high-level Java, Python, and JavaScript bindings do not currently
+expose direct wrappers for `init-db` or `fill-db`. From those languages, use the
+batched transaction pattern above unless your deployment exposes a lower-level
+bulk-load bridge. The example below is Clojure-only; a non-Clojure `init-db`
+snippet here would be an API sketch, not a current public binding.
 
 ```clojure
 ;; Prepare datoms with approximate entity IDs (caller's responsibility)
@@ -245,47 +248,6 @@ overhead entirely using `d/init-db` and `d/fill-db`. Note that these functions
 (def db (d/init-db prepared-datoms schema))
 ```
 
-```java
-// Prepare datoms with approximate entity IDs (caller's responsibility)
-List<Object[]> preparedDatoms = List.of(
-    new Object[]{1, "user/name", "Alice"},
-    new Object[]{1, "user/age", 30},
-    new Object[]{2, "user/name", "Bob"},
-    new Object[]{2, "user/age", 25}
-);
-
-// Load into empty database
-Database db = Datalevin.initDb(preparedDatoms, schema);
-```
-
-```python
-# Prepare datoms with approximate entity IDs (caller's responsibility)
-prepared_datoms = [
-    [1, "user/name", "Alice"],
-    [1, "user/age", 30],
-    [2, "user/name", "Bob"],
-    [2, "user/age", 25],
-]
-
-# Load into empty database
-db = d.init_db(prepared_datoms, schema)
-```
-
-```javascript
-// Prepare datoms with approximate entity IDs (caller's responsibility)
-const preparedDatoms = [
-  [1, 'user/name', 'Alice'],
-  [1, 'user/age', 30],
-  [2, 'user/name', 'Bob'],
-  [2, 'user/age', 25],
-];
-
-// Load into empty database
-const db = d.initDb(preparedDatoms, schema);
-```
-
-</div>
-
 > **Note**: These functions skip data integrity checks and temporary entity ID resolution. You must ensure the datoms are correct before calling them.
 
 ---
@@ -294,16 +256,16 @@ const db = d.initDb(preparedDatoms, schema);
 
 When you need to ingest data at scale, follow this checklist:
 
-1.  **Use WAL mode with `:relaxed` durability**: This provides the underlying
-    storage performance needed for high OLTP performance.
+1.  **Use WAL mode when OLTP data must stay queryable**: Choose the durability
+    profile using Chapter 20's operational guidance.
 2.  **Use async transactions**: `d/transact-async` provides adaptive batching
     for orders-of-magnitude throughput improvement.
 3.  **Combine with manual batching**: The effects of auto-batching and manual
     batching compound.
 4.  **Sort your data**: Sort by Entity ID before transacting to minimize B+Tree
     fragmentation.
-5.  **Use `init-db`/`fill-db`** for the fastest possible bulk load into an
-    database for static data set.
+5.  **Use Clojure or pod-level `init-db`/`fill-db`** for the fastest possible
+    bulk load into a database for static data sets.
 6.  **Use non-durable LMDB flags only for rebuildable imports**: `:nometasync`,
     `:nosync`, and `:writemap`/`:mapasync` can improve write speed, but they
     change durability (i.e. crash behavior).

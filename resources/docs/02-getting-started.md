@@ -127,17 +127,18 @@ brew install libomp llvm
 
 ### 1.3 Add the Dependency
 
-The examples in this chapter use version `0.10.18`. Replace it with the current
-release shown on the language-specific package page when starting a new project.
+The examples in this chapter use version `{{datalevin-version}}`. The live docs
+site fills this value from the current release configuration; package pages
+remain the source of truth if you are reading an older copy.
 
 <div class="multi-lang">
 
 ```clojure
 ;; Embedded-only with clj
-{:deps {org.datalevin/datalevin-embedded {:mvn/version "0.10.18"}}}
+{:deps {org.datalevin/datalevin-embedded {:mvn/version "{{datalevin-version}}"}}}
 
 ;; Embedded-only with Leiningen
-:dependencies [[org.datalevin/datalevin-embedded "0.10.18"]]
+:dependencies [[org.datalevin/datalevin-embedded "{{datalevin-version}}"]]
 ```
 
 ```java
@@ -145,7 +146,7 @@ release shown on the language-specific package page when starting a new project.
 <dependency>
   <groupId>org.datalevin</groupId>
   <artifactId>datalevin-java</artifactId>
-  <version>0.10.18</version>
+  <version>{{datalevin-version}}</version>
 </dependency>
 
 // Gradle Kotlin DSL
@@ -154,7 +155,7 @@ repositories {
 }
 
 dependencies {
-    implementation("org.datalevin:datalevin-java:0.10.18")
+    implementation("org.datalevin:datalevin-java:{{datalevin-version}}")
 }
 ```
 
@@ -296,12 +297,11 @@ Server mode is the right choice when multiple clients or services need a shared
 database endpoint.
 
 You can run a Datalevin server either in the form of a JVM standalone jar or a
-GraalVM native image. For production use, the former is recommended, as a JVM
-process is highly optimized for long running server workload, as HotSpot's JIT
-and advanced garbage collectors will outperform native image over time.
+GraalVM native image. For production use, the JVM standalone jar is recommended:
+HotSpot's JIT and mature garbage collectors are well suited to long-running
+server workloads and can outperform a native image over time.
 
-For getting started, we show below how to run Datalevin server as a GraalVM
-native image.
+For getting started, the examples below use the GraalVM native image.
 
 
 ### 2.1 Install `dtlv`
@@ -355,16 +355,18 @@ DATALEVIN_DEFAULT_PASSWORD=secret dtlv serv -r /path/to/data -p 8898
 
 By default the server listens on `127.0.0.1:8898`. Use `--host` to bind another
 address. Binding to a non-loopback address such as `0.0.0.0` requires
-`DATALEVIN_DEFAULT_PASSWORD`, because the built-in administrative user is named
-`datalevin`.
+`DATALEVIN_DEFAULT_PASSWORD`; exposing the server beyond localhost must not rely
+on an implicit or empty administrative credential.
 
+You can start the same server from the standalone JVM jar when you prefer a
+plain Java process:
 
 ```console
 DATALEVIN_DEFAULT_PASSWORD=secret \
 java --add-opens=java.base/java.nio=ALL-UNNAMED \
      --add-opens=java.base/sun.nio.ch=ALL-UNNAMED \
      --enable-native-access=ALL-UNNAMED \
-     -jar datalevin-0.10.18-standalone.jar serv --host 0.0.0.0 -r /data/dtlv
+     -jar datalevin-{{datalevin-version}}-standalone.jar serv --host 0.0.0.0 -r /data/dtlv
 ```
 
 ### 2.3 Connect to a Server
@@ -489,7 +491,7 @@ as a Babashka pod to support Datalog transaction and query:
 ```clojure
 ;; save as script.clj
 (require '[babashka.pods :as pods])
-(pods/load-pod 'huahaiy/datalevin "0.10.18")
+(pods/load-pod 'huahaiy/datalevin "{{datalevin-version}}")
 (require '[pod.huahaiy.datalevin :as d])
 
 (let [conn (d/get-conn "/tmp/bb-db")]
@@ -533,10 +535,8 @@ dtlv --allow-writes mcp
 
 Read-only mode is the default. Write tools must be enabled explicitly. The MCP
 process can open local databases directly or use `dtlv://` URIs behind the local
-`stdio` process.
-
-We will show an example of using Datalevin MCP server from Codex. Other agents
-should be similar.
+`stdio` process. The same `dtlv mcp` command can be launched by any
+MCP-compatible client.
 
 ### 5.1 Using Datalevin MCP from Codex
 
@@ -565,6 +565,31 @@ transactions, configure a separate, explicitly named writable server:
 command = "dtlv"
 args = ["--allow-writes", "mcp"]
 ```
+
+### 5.2 Using Datalevin MCP from Claude Desktop or Claude Code
+
+Claude Desktop uses a JSON `mcpServers` configuration. In the Developer settings,
+edit the Claude Desktop config file and add a server like this:
+
+```json
+{
+  "mcpServers": {
+    "datalevin": {
+      "command": "dtlv",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Claude Code can add the same local stdio server from the command line:
+
+```console
+claude mcp add --transport stdio datalevin -- dtlv mcp
+```
+
+Restart the client, then ask it to inspect a local Datalevin database path or a
+remote `dtlv://` database URI.
 
 ---
 

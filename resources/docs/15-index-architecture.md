@@ -491,7 +491,17 @@ Thinking in terms of traditional database storage models:
 - **EAV is a row store**: Each entity ID (key) maps to a list of attribute-value pairs, analogous to a row where all column values are stored together. Retrieving an entity is a single key lookup.
 - **AVE is a column store**: Each `(A, V)` combination (key) maps to a tightly packed list of entity IDs—the "row IDs" that share that column value. This is ideal for analytical queries that scan a column.
 
-This nested storage eliminates redundant prefixes. In EAV, an entity with 10 attributes stores the entity ID once as the key, with 10 `(A, V)` pairs as values. In AVE, each `(A, V)` combination is stored once as the key, with all matching entity IDs as values—so finding all entities where `:user/age` is `30` is a single key lookup. This results in approximately 20% space reduction, with additional savings from page-based prefix compression in the underlying KV storage.
+This nested storage eliminates redundant prefixes. In EAV, an entity with 10
+attributes stores the entity ID once as the key, with 10 `(A, V)` pairs as
+values. In AVE, each `(A, V)` combination is stored once as the key, with all
+matching entity IDs as values, so finding all entities where `:user/age` is
+`30` is a single key lookup.
+
+The approximate 20% space reduction comes from this `DUPSORT` nesting: repeated
+entity IDs in EAV and repeated `(A, V)` prefixes in AVE are represented once per
+nested key. This is separate from DLMDB's page-level prefix compression, which
+can provide additional savings depending on how much of neighboring encoded keys
+is actually shared.
 
 ---
 

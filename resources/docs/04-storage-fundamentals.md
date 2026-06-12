@@ -149,7 +149,7 @@ and CPU variation.
 | **Complexity** | Simple (no background compaction) | High (compaction, bloom filters) |
 | **Large Values Handling** | Good (little write amplification) | Poor (rewrite data repeatedly during compaction) |
 | **Space Efficiency** | Lower (due to fragmentation) | Higher (compressed on disk) |
-| **Consistency** | Strong and immediate | Often eventual or complex to tune |
+| **Read Amplification / Tuning** | Low and predictable for point and range reads | Can require bloom filters, block cache, and compaction tuning |
 
 **Why Datalevin chose B+Trees:**
 
@@ -365,8 +365,7 @@ chapters. WAL mode can be enabled in these ways:
   options.
 - **Async read replicas**: A non-HA replica requires the primary to have WAL
   enabled so it can bootstrap from a copy and then tail durable records.
-- **HA**: Consensus-lease HA forces WAL on and defaults to the `:strict`
-  durability profile.
+- **HA**: Consensus-lease HA forces WAL on.
 
 ### 7.1 How WAL Mode Works
 
@@ -390,28 +389,19 @@ At a high level, a WAL transaction follows this sequence:
 **Note**: Bulk load operations (like `init-db` and `fill-db`) bypass the WAL for
 maximum performance and will not appear in the transaction log.
 
-### 7.2 Durability Profiles, Replication, and Operations
+### 7.2 Replication and Operations
 
-Datalevin offers three profiles in WAL mode to balance performance and safety:
-
-- **`:strict`**: Waits for a standard `fsync`. This is the default for
-  consensus-lease HA.
-- **`:relaxed`**: Batches multiple transactions before syncing. This is the
-  default when local embedded Datalog or KV stores explicitly opt into WAL
-  without specifying a profile.
-- **`:extra`**: Uses stricter platform-specific durability guarantees where
-  available.
-
-In `:relaxed`, the possible crash-loss window is bounded by `:wal-group-commit`
-and `:wal-group-commit-ms`. Use `:strict` or `:extra` when the main reason for
-enabling WAL is crash durability rather than throughput.
+WAL mode has durability profiles that decide when appended log records are
+forced to storage. Those choices are operational policy, not storage
+fundamentals. Chapter 20 covers `:strict`, `:relaxed`, `:extra`, group commit,
+LSN watermarks, snapshots, and WAL garbage collection.
 
 WAL mode also introduces operational APIs such as `create-snapshot!`,
 `gc-txlog-segments!`, `txlog-watermarks`, and `open-tx-log`. Those functions
 matter for long-running services, replication, and low-level change capture, but
 they are not storage fundamentals. Chapter 19 discusses batching and ingestion,
 Chapter 20 covers storage tuning and durability choices, and Chapter 22 covers
-production operations.
+deployment and production operations.
 
 ---
 

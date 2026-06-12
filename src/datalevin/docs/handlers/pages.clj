@@ -3,6 +3,7 @@
             [clojure.java.io :as jio]
             [clojure.string :as str]
             [datalevin.core :as d]
+            [datalevin.docs.config :as config]
             [datalevin.docs.util :as util]
             [datalevin.docs.views.layout :as layout]
             [hiccup2.core :as h])
@@ -91,6 +92,13 @@
   (let [node (.parse parser* markdown)]
     (.render renderer* node)))
 
+(defn substitute-markdown-vars
+  "Expands render-time variables used in docs Markdown."
+  [markdown]
+  (str/replace (or markdown "")
+               "{{datalevin-version}}"
+               (config/datalevin-version)))
+
 (defn- read-frontmatter
   [file]
   (with-open [reader (java.io.BufferedReader. (jio/reader file))]
@@ -166,7 +174,7 @@
         (when (.exists file)
           (let [content (slurp path)
                 {:keys [frontmatter markdown]} (parse-frontmatter content)
-                html (parse-markdown markdown)
+                html (parse-markdown (substitute-markdown-vars markdown))
                 doc {:title (:title frontmatter)
                      :chapter (:chapter frontmatter)
                      :part (:part frontmatter)

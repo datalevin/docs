@@ -114,9 +114,9 @@ await conn.transact([
 
 This updates the entity with ID 101 to set `:user/active?` to false.
 
-### 2.3 Temporary Entity IDs (Temp Eids)
+### 2.3 Tempids
 
-When creating new entities that will be referenced by other entities in the same transaction, use **temporary entity IDs** (temp eids). These are negative numbers that act as placeholders:
+When creating new entities that will be referenced by other entities in the same transaction, use **tempids**: temporary entity IDs that act as placeholders. Negative numbers are commonly used as tempids:
 
 <div class="multi-lang">
 
@@ -150,7 +150,7 @@ await conn.transact([
 
 </div>
 
-In this example, `-1` references `-2` as a friend. Datalevin resolves these temp eids during the transaction, replacing them with real entity IDs.
+In this example, `-1` references `-2` as a friend. Datalevin resolves these tempids during the transaction, replacing them with real entity IDs.
 
 ### 2.4 Lookup Refs
 
@@ -301,7 +301,7 @@ You can mix all these forms in a single transaction:
 (d/transact! conn
   [{:user/email "new@example.com" :user/name "New User"}  ; upsert
    [:db/add [:user/email "alice@example.com"] :user/status "active"] ; lookup ref
-   {:db/id -1, :user/friend [[:user/email "bob@example.com"]]} ; temp eid + lookup ref
+   {:db/id -1, :user/friend [[:user/email "bob@example.com"]]} ; tempid + lookup ref
    [:db/add -1 :user/notes "Added via datom vector"]]) ; raw datom
 ```
 
@@ -315,7 +315,7 @@ conn.transact(Datalevin.tx()
          "active") // lookup ref
     .entity(Tx.entity(-1)
         .put("user/friend",
-             List.of(List.of("user/email", "bob@example.com")))) // temp eid + lookup ref
+             List.of(List.of("user/email", "bob@example.com")))) // tempid + lookup ref
     .add(-1, "user/notes", "Added via datom vector")); // raw datom
 ```
 
@@ -323,7 +323,7 @@ conn.transact(Datalevin.tx()
 conn.transact([
     {":user/email": "new@example.com", ":user/name": "New User"},  # upsert
     [":db/add", [":user/email", "alice@example.com"], ":user/status", "active"],  # lookup ref
-    {":db/id": -1, ":user/friend": [[":user/email", "bob@example.com"]]},  # temp eid + lookup ref
+    {":db/id": -1, ":user/friend": [[":user/email", "bob@example.com"]]},  # tempid + lookup ref
     [":db/add", -1, ":user/notes", "Added via datom vector"]])  # raw datom
 ```
 
@@ -331,7 +331,7 @@ conn.transact([
 await conn.transact([
   { ":user/email": "new@example.com", ":user/name": "New User" },  // upsert
   [":db/add", [":user/email", "alice@example.com"], ":user/status", "active"],  // lookup ref
-  { ":db/id": -1, ":user/friend": [[":user/email", "bob@example.com"]] },  // temp eid + lookup ref
+  { ":db/id": -1, ":user/friend": [[":user/email", "bob@example.com"]] },  // tempid + lookup ref
   [":db/add", -1, ":user/notes", "Added via datom vector"]  // raw datom
 ]);
 ```
@@ -722,14 +722,12 @@ WAL mode and asynchronous transactions.
 
 ### 5.1 WAL Mode
 
-As discussed in Chapter 4, **WAL (Write-Ahead Log) mode** increases write
-performance, especially for concurrent writers. By writing to a sequential log
-file first, Datalevin can achieve the durability of `msync` with the throughput
-of an LSM-tree.
+As introduced in Chapter 4, **WAL (Write-Ahead Log) mode** increases write
+performance, especially for concurrent writers, by recording transactions in a
+sequential log before applying them to LMDB.
 
-- **Durability Profiles**: Choose `:strict` for standard safety (sync on every
-  commit), `:relaxed` for maximum throughput (batched disk syncs), or `:extra`
-  for even stronger durability guarantees (e.g., `F_FULLSYNC` on macOS).
+- **Durability Policy**: Chapter 20 covers the choice of WAL durability profile,
+  including crash-loss windows, group commit, and operational maintenance.
 - **Bulk Loading**: Note that bulk load operations like `init-db` and `fill-db`
   bypass the WAL for maximum performance and will not appear in the transaction
   log.
@@ -737,9 +735,7 @@ of an LSM-tree.
   significantly higher aggregate throughput than a single thread.
 - **Explicit Opt-In**: Local embedded Datalog stores now default to `:wal?
   false`. Enable WAL with `{:wal? true}` when the workload needs WAL throughput,
-  replay, or replication behavior. Local WAL opt-in defaults to
-  `:wal-durability-profile :relaxed`; consensus-lease HA forces WAL and defaults
-  to `:strict`.
+  replay, or replication behavior.
 
 ### 5.2 Asynchronous Transactions (`transact-async`)
 

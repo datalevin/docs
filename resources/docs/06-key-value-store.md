@@ -26,8 +26,8 @@ list of all public KV functions, see Appendix B.
 
 Opening a KV store is distinct from opening a Datalog connection. You specify a
 directory location when calling `open-kv`, and Datalevin initializes the LMDB
-environment there. The directory needs not to exists already, but the permission
-to create it is needed.
+environment there. The directory does not need to exist already, but the process
+must have permission to create it.
 
 <div class="multi-lang">
 
@@ -135,7 +135,7 @@ times.
 
 There are two types of DBI:
 
-### 3.1 Regular DBI
+### 2.1 Regular DBI
 
 A standard KV mapping where one key points to exactly one value, and this type
 of DBI is opened with `open-dbi`.
@@ -164,10 +164,10 @@ await kv.openDbi("people");
 
 </div>
 
-### 3.2 List DBI
+### 2.2 List DBI
 
 Leverages LMDB's `DUPSORT` feature. A single key can map to **multiple sorted
-values** (i.e. a list). This is effectively a "B+Tree of B+Trees.". This type of
+values** (i.e. a list). This is effectively a "B+Tree of B+Trees." This type of
 DBI is opened with `open-list-dbi`.
 
 <div class="multi-lang">
@@ -305,7 +305,7 @@ for the KV layer:
 
 ---
 
-## 4 Data Types
+## 4. Data Types
 
 While LMDB deals with raw bytes, Datalevin adds a layer of encoded data types to
 ensure correct sorting and efficient storage. These types can be specified as
@@ -322,6 +322,10 @@ ensure correct sorting and efficient storage. These types can be specified as
 | `:int` | `Integer` (32-bit) | Numerically sorted. |
 | `:float` | `Float` (32-bit) | IEEE 754 floating point. |
 | `:double` | `Double` (64-bit) | IEEE 754 floating point. |
+| `:bigint` | `java.math.BigInteger` | Arbitrary-precision integer within Datalevin's encoded range; numerically sorted. |
+| `:bigdec` | `java.math.BigDecimal` | Arbitrary-precision decimal within Datalevin's encoded range; numerically sorted. |
+| `:keyword` | `clojure.lang.Keyword` | EDN keyword, sorted by encoded namespace/name. |
+| `:symbol` | `clojure.lang.Symbol` | EDN symbol, sorted by encoded namespace/name. |
 | `:boolean` | `Boolean` | |
 | `:instant` | `java.util.Date` | Chronologically sorted. |
 | `:uuid` | `java.util.UUID` | |

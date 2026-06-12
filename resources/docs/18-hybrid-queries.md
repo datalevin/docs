@@ -135,6 +135,8 @@ The permission input below is a set of allowed owners.
 
 This example assumes `:doc/content` has `:db/fulltext true` and
 `:db.fulltext/autoDomain true`, and `:doc/embedding` is a vector attribute.
+Both search clauses bind the same `?e`; in Datalog, shared variables are joins,
+so no explicit equality clause is needed.
 
 <div class="multi-lang">
 
@@ -147,9 +149,8 @@ This example assumes `:doc/content` has `:db/fulltext true` and
                        {:top 10 :display :refs+dists})
         [[?e _ _ ?dist]]]
        ;; keyword search
-       [(fulltext $ :doc/content ?query {:top 50}) [[?ft-e _ ?chunk]]]
-       ;; both must match (intersection)
-       [(= ?e ?ft-e)]
+       [(fulltext $ :doc/content ?query {:top 50}) [[?e _ ?chunk]]]
+       ;; reusing ?e makes this an intersection
        ;; permission filter
        [?e :doc/owner ?owner]
        [(contains? ?allowed-owner-set ?owner)]
@@ -162,8 +163,7 @@ conn.query("[:find ?title ?chunk ?dist " +
            " :in $ ?query ?query-vec ?allowed-owner-set " +
            " :where " +
            " [(vec-neighbors $ :doc/embedding ?query-vec {:top 10 :display :refs+dists}) [[?e _ _ ?dist]]] " +
-           " [(fulltext $ :doc/content ?query {:top 50}) [[?ft-e _ ?chunk]]] " +
-           " [(= ?e ?ft-e)] " +
+           " [(fulltext $ :doc/content ?query {:top 50}) [[?e _ ?chunk]]] " +
            " [?e :doc/owner ?owner] " +
            " [(contains? ?allowed-owner-set ?owner)] " +
            " [?e :doc/title ?title]]",
@@ -176,8 +176,7 @@ conn.query(
     ' :in $ ?query ?query-vec ?allowed-owner-set '
     ' :where '
     ' [(vec-neighbors $ :doc/embedding ?query-vec {:top 10 :display :refs+dists}) [[?e _ _ ?dist]]] '
-    ' [(fulltext $ :doc/content ?query {:top 50}) [[?ft-e _ ?chunk]]] '
-    ' [(= ?e ?ft-e)] '
+    ' [(fulltext $ :doc/content ?query {:top 50}) [[?e _ ?chunk]]] '
     ' [?e :doc/owner ?owner] '
     ' [(contains? ?allowed-owner-set ?owner)] '
     ' [?e :doc/title ?title]]',
@@ -193,8 +192,7 @@ await conn.query(
   ' :in $ ?query ?query-vec ?allowed-owner-set ' +
   ' :where ' +
   ' [(vec-neighbors $ :doc/embedding ?query-vec {:top 10 :display :refs+dists}) [[?e _ _ ?dist]]] ' +
-  ' [(fulltext $ :doc/content ?query {:top 50}) [[?ft-e _ ?chunk]]] ' +
-  ' [(= ?e ?ft-e)] ' +
+  ' [(fulltext $ :doc/content ?query {:top 50}) [[?e _ ?chunk]]] ' +
   ' [?e :doc/owner ?owner] ' +
   ' [(contains? ?allowed-owner-set ?owner)] ' +
   ' [?e :doc/title ?title]]',

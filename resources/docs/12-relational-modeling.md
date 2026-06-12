@@ -123,6 +123,9 @@ cardinality, but it does not enforce all ER participation constraints for you.
   application validation, or import checks. The schema documents the model, but
   a missing datom is still possible unless your write path rejects it.
 
+For the performance rationale behind many-side refs and join entities, see
+Chapter 11, Section 2.2.
+
 This distinction matters in Datalevin because absence is a normal fact shape.
 A query for users without an active subscription is a query over missing
 relationship facts. `nil`/ `null` is not a valid value in Datalevin.
@@ -481,8 +484,8 @@ const ecommerceSchema = {
 1.  **Think in singular namespaces**: `:user/email`, not `:users/emails`.
 2.  **Choose stable keys**: Use `:db.unique/identity` for domain identifiers you
     will use in imports, APIs, and lookup refs.
-3.  **Normalize relationships**: Use join entities for many-to-many
-    relationships or whenever the relationship has its own attributes.
+3.  **Normalize relationships**: Prefer many-side refs and join entities for
+    large or directly queried relationships; see Chapter 11, Section 2.2.
 4.  **Model ownership carefully**: Use `:db/isComponent` for true lifecycle
     ownership, not just for convenient nesting.
 5.  **Represent subtypes as facts**: Use enum entities or subtype-specific

@@ -46,8 +46,8 @@ Cognitive science often distinguishes three types of memory:
     Datalevin, this is usually powered by timestamped entities, full-text
     search, embedding/vector search, and links to sessions or tasks.
 
-2.  **Semantic memory** is organized knowledge, the so called facts, about the
-    world. They can often evaluated as true or false. For a person, this is
+2.  **Semantic memory** is organized knowledge, the so-called facts, about the
+    world. They can often be evaluated as true or false. For a person, this is
     knowing that Clojure is a Lisp, or that a release must pass tests before
     deployment. For an agent, it includes user profiles, durable preferences,
     domain facts, concept graphs, policies, and learned relationships. Semantic

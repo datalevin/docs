@@ -58,7 +58,6 @@ the runtime, but they are not part of this built-in table.
 | `>` | Datalevin typed greater-than comparison. |
 | `>=` | Datalevin typed greater-than-or-equal comparison. |
 | `compare` | Clojure-style comparison function. |
-| `-differ?` | Internal-style helper used to test whether paired argument groups differ. |
 | `true?` | True only for the boolean value `true`. |
 | `false?` | True only for the boolean value `false`. |
 | `nil?` | True for `nil`. |
@@ -344,7 +343,7 @@ Custom aggregate functions are also supported with the special aggregate form:
 
 Query functions and predicates:
 
-`!=`, `*`, `+`, `-`, `-differ?`, `/`, `<`, `<=`, `=`, `==`, `>`, `>=`, `and`,
+`!=`, `*`, `+`, `-`, `/`, `<`, `<=`, `=`, `==`, `>`, `>=`, `and`,
 `apply`, `array-map`, `compare`, `complement`, `contains?`, `count`, `dec`,
 `embedding-neighbors`, `empty?`, `even?`, `false?`, `fulltext`, `get`,
 `get-else`, `get-some`, `ground`, `hash-map`, `identical?`, `identity`,

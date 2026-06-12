@@ -4,6 +4,9 @@
 (def ^:const dev-session-secret
   "dev-session-secret-fallback-1234")
 
+(def ^:const default-datalevin-version
+  "0.10.18")
+
 (defn env
   "Returns the value of an environment variable, falling back to system property."
   [name]
@@ -31,6 +34,15 @@
   (when-not (str/blank? value)
     value))
 
+(defn datalevin-version
+  "Returns the Datalevin release version used in rendered documentation snippets."
+  []
+  (or (some-> (env "DATALEVIN_VERSION") str/trim not-empty)
+      (when (= "prod" (env "ENV"))
+        (throw (ex-info "DATALEVIN_VERSION must be set when ENV=prod"
+                        {:env "prod"})))
+      default-datalevin-version))
+
 (defn resolve-env
   "Custom resolver for environment variables"
   [opts]
@@ -44,6 +56,7 @@
    :admin-emails (when-let [s (env "ADMIN_EMAILS")]
                    (into #{} (map str/trim) (str/split s #",")))
    :reindex-secret (env "REINDEX_SECRET")
+   :datalevin-version (datalevin-version)
    :mail-from (env "MAIL_FROM")
    :smtp-host (env "SMTP_HOST")
    :smtp-port (parse-int "SMTP_PORT" (env "SMTP_PORT"))

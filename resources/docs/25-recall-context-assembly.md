@@ -146,7 +146,7 @@ const results = await conn.query(
 </div>
 
 For production RAG, add text, vector, and authorization lenses. Not every query
-must use every lens, the application should instead select the lenses that
+must use every lens; the application should instead select the lenses that
 match the task, then make that retrieval policy explicit.
 
 ---
@@ -155,7 +155,11 @@ match the task, then make that retrieval policy explicit.
 
 In Datalevin, full-text search, vector search, and logical constraints can be
 combined in one `:where` block. The retrieval is semantically precise and fast,
-avoid the need for fragile and slow glue code.
+avoiding the need for fragile and slow glue code.
+
+The score expression below is illustrative. TF-IDF scores and vector distances
+are not naturally on the same scale, so production systems should prefer rank
+fusion, such as the reciprocal-rank fusion pattern in Section 5.
 
 <div class="multi-lang">
 
