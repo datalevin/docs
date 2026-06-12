@@ -441,6 +441,24 @@ schema is passed when opening a connection; later changes go through
 `update-schema` on the open connection. Schema changes are not transacted as
 ordinary datoms.
 
+Use `d/schema` to inspect the current effective schema before and after a
+change:
+
+```clojure
+(d/schema conn)
+```
+
+The returned map includes the schema you supplied, built-in attributes such as
+`:db/ident`, and Datalevin's internal attribute ids. This is useful for checking
+what the database actually knows about an attribute, debugging unexpected value
+encoding or lookup-ref behavior, and verifying that a schema migration did what
+you expected.
+
+Do not confuse `d/schema` with the Java helper `Datalevin.schema()` used in
+multi-language examples. `d/schema` reads schema from an open database
+connection; `Datalevin.schema()` is a host-language builder for constructing a
+schema map before passing it to Datalevin.
+
 Use schema evolution for three common cases:
 
 1.  **Add or refine schema properties** for an attribute your application now

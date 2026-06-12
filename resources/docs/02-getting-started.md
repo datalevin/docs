@@ -369,6 +369,12 @@ java --add-opens=java.base/java.nio=ALL-UNNAMED \
      -jar datalevin-{{datalevin-version}}-standalone.jar serv --host 0.0.0.0 -r /data/dtlv
 ```
 
+In Clojure/JVM applications, server mode can also be embedded in the host
+process with `datalevin.server/create`, `datalevin.server/start`, and
+`datalevin.server/stop`. This lets an application keep local embedded access
+while exposing a `dtlv://` endpoint for tools, workers, or non-JVM clients. See
+Chapter 22 for the lifecycle pattern.
+
 ### 2.3 Connect to a Server
 
 Remote databases use `dtlv://` URIs:

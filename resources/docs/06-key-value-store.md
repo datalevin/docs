@@ -311,6 +311,12 @@ While LMDB deals with raw bytes, Datalevin adds a layer of encoded data types to
 ensure correct sorting and efficient storage. These types can be specified as
 `key-type` or `val-type` in KV operations.
 
+KV type validation is separate from Datalog schema validation. In Datalog,
+`:db/valueType` belongs to an attribute schema. In the KV API, types are passed
+as operation descriptors or DBI options for keys and values. A DBI opened with
+`:validate-data? true` checks KV writes against those key/value types instead
+of checking Datalog attributes.
+
 ### 4.1 Scalar types
 
 | Type Keyword | Clojure/Java Type | Notes |

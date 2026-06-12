@@ -40,6 +40,12 @@ Leave RAM headroom for the OS page cache. On small VMs, a small amount of swap
 can prevent brief memory spikes from killing the process, but Datalevin
 performance still depends on keeping the active working set in memory.
 
+Embedded mode and server mode are not mutually exclusive. A JVM application can
+run Datalevin directly in-process and also start a Datalevin server inside the
+same process. This is useful when the application owns the local database but
+wants to expose a `dtlv://` endpoint for administrative tools, background
+workers, non-JVM clients, or controlled inspection.
+
 ### 1.2 Server Mode
 
 Use server mode when multiple applications need to share a Datalevin instance,
@@ -121,6 +127,33 @@ $ DATALEVIN_DEFAULT_PASSWORD=secret \
        --add-opens=java.base/sun.nio.ch=ALL-UNNAMED \
        -jar datalevin-standalone.jar serv --host 0.0.0.0 -r /data/datalevin
 ```
+
+An embedded Clojure service can also start the same server programmatically and
+tie its lifecycle to the application's lifecycle:
+
+```clojure
+(require '[datalevin.server :as srv])
+
+(defonce datalevin-server (atom nil))
+
+(defn start-datalevin-server! []
+  (let [server (srv/create {:host "127.0.0.1"
+                            :port 8898
+                            :root "/data/datalevin"})]
+    (srv/start server)
+    (reset! datalevin-server server)))
+
+(defn stop-datalevin-server! []
+  (when-let [server @datalevin-server]
+    (srv/stop server)
+    (reset! datalevin-server nil)))
+```
+
+This pattern keeps Datalevin embedded from the application's point of view while
+making databases under the server root reachable to remote clients. Use the same
+security rules as a standalone server: bind to loopback unless remote access is
+intended, set `DATALEVIN_DEFAULT_PASSWORD` before exposing a non-loopback
+address, and shut the server down cleanly with the rest of the application.
 
 Important options:
 

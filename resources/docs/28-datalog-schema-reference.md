@@ -34,10 +34,21 @@ Pass the schema when opening or creating a connection:
 (def conn (d/get-conn "/data/app" schema))
 ```
 
-Use `update-schema` to change schema:
+Read the current effective schema with `d/schema`:
 
 ```clojure
 (d/schema conn)
+```
+
+The result includes application attributes, built-in attributes, and assigned
+internal attribute ids such as `:db/aid`. Use this for inspection, debugging,
+and migration checks. In Java examples, `Datalevin.schema()` is a builder for
+constructing schema input; it is not the same operation as reading the current
+schema from a database.
+
+Use `update-schema` to change schema:
+
+```clojure
 (d/update-schema conn schema-update)
 (d/update-schema conn schema-update #{:old/attr})
 (d/update-schema conn nil nil {:old/name :new/name})
@@ -54,12 +65,38 @@ Use `update-schema` to change schema:
 - Built-in schema includes `:db/ident`, which is unique and keyword-valued. It
   also includes internal/system attributes such as `:db/created-at`,
   `:db/updated-at`, `:db/fn`, and `:db/udf`.
+- `:db/created-at` and `:db/updated-at` are maintained only when a database is
+  opened with `{:auto-entity-time? true}`. They store epoch milliseconds as
+  `:db.type/long` values and represent database mutation time, not domain event
+  time.
 - Use the store option `{:closed-schema? true}` to reject transactions that
   mention attributes not already defined in the schema.
 
 ---
 
-## 3. Attribute Properties
+## 3. Schema-Related Store Options
+
+Some behavior that feels schema-related is controlled by connection or store
+options, not by entries inside the schema map:
+
+| Option | Default | Meaning |
+| :--- | :--- | :--- |
+| `:validate-data?` | `false` | When `true`, transaction values must already match declared `:db/valueType` runtime types. When `false`, Datalevin still uses declared types to coerce or canonicalize values where possible. |
+| `:closed-schema?` | `false` | When `true`, transactions may mention only attributes already present in the schema. When `false`, Datalevin preserves schema-on-write behavior. |
+| `:auto-entity-time?` | `false` | When `true`, Datalevin maintains `:db/created-at` and `:db/updated-at` epoch-millisecond values for entities. |
+
+Pass these options when opening or creating a database:
+
+```clojure
+(d/get-conn "/data/app"
+            schema
+            {:validate-data? true
+             :closed-schema? true})
+```
+
+---
+
+## 4. Attribute Properties
 
 All the acceptable attributes properties are the following:
 
@@ -84,7 +121,7 @@ All the acceptable attributes properties are the following:
 
 ---
 
-## 4. Value Types
+## 5. Value Types
 
 | Value type | Expected values | Notes |
 | :--- | :--- | :--- |
@@ -112,7 +149,7 @@ which is flexible but not as useful for ordered range access.
 
 ---
 
-## 5. Identity and Uniqueness
+## 6. Identity and Uniqueness
 
 `:db.unique/value` means no two entities may have the same value for that
 attribute. Duplicates will be rejected with a transaction error.
@@ -141,7 +178,7 @@ entity instead of creating a duplicate.
 
 ---
 
-## 6. References and Components
+## 7. References and Components
 
 Reference attributes must declare `:db/valueType :db.type/ref`:
 
@@ -158,7 +195,7 @@ Use `:db/isComponent true` only for owned children. Component entities are pulle
 
 ---
 
-## 7. Tuples
+## 8. Tuples
 
 Datalevin supports three tuple forms.
 
@@ -201,7 +238,7 @@ Rules for typed tuples:
 
 ---
 
-## 8. Full-Text Schema Keys
+## 9. Full-Text Schema Keys
 
 Use `:db/fulltext true` for attributes that should participate in full-text search:
 
@@ -223,7 +260,7 @@ Store-level `:search-opts` and `:search-domains` configure search domain options
 
 ---
 
-## 9. Vector and Embedding Schema Keys
+## 10. Vector and Embedding Schema Keys
 
 Use `:db.type/vec` when your application supplies vectors:
 
@@ -259,7 +296,7 @@ Store-level `:embedding-opts`, `:embedding-domains`, and `:embedding-providers` 
 
 ---
 
-## 10. Idoc Schema Keys
+## 11. Idoc Schema Keys
 
 Use `:db.type/idoc` for nested document values that should be indexed by path:
 
@@ -275,7 +312,7 @@ Allowed `:db/idocFormat` values are `:edn`, `:json`, and `:markdown`. The defaul
 
 ---
 
-## 11. Schema Evolution
+## 12. Schema Evolution
 
 Use `d/update-schema` to add, change, delete, or rename schema attributes on an open connection:
 
@@ -303,7 +340,7 @@ Important mutation rules:
 
 ---
 
-## 12. Datomic and DataScript Differences
+## 13. Datomic and DataScript Differences
 
 Datalevin's Datalog model is familiar to Datomic and DataScript users, but the schema mechanics differ:
 
@@ -316,7 +353,7 @@ Datalevin's Datalog model is familiar to Datomic and DataScript users, but the s
 
 ---
 
-## 13. Minimal Production Template
+## 14. Minimal Production Template
 
 ```clojure
 (def schema

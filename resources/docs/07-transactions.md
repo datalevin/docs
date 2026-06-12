@@ -114,7 +114,49 @@ await conn.transact([
 
 This updates the entity with ID 101 to set `:user/active?` to false.
 
-### 2.3 Tempids
+### 2.3 Automatic Entity Timestamps
+
+Many applications want to know when an entity was first created and when it was
+last modified. Datalevin can maintain this information automatically when the
+connection is opened with `:auto-entity-time? true`:
+
+```clojure
+(require '[datalevin.core :as d])
+
+(def conn
+  (d/get-conn
+    "/tmp/entity-time-demo"
+    {:user/email {:db/valueType :db.type/string
+                  :db/unique    :db.unique/identity}}
+    {:auto-entity-time? true}))
+
+(d/transact! conn
+  [{:user/email "alice@example.com"
+    :user/name  "Alice"}])
+
+(d/transact! conn
+  [{:user/email "alice@example.com"
+    :user/name  "Alice Smith"}])
+```
+
+With this option enabled, a newly created entity receives both `:db/created-at`
+and `:db/updated-at`. Later transactions that modify the entity update
+`:db/updated-at` while preserving `:db/created-at`. The values are stored as
+epoch milliseconds using `:db.type/long`.
+
+These attributes describe Datalevin's system-level mutation time. They are not a
+replacement for domain event times. If your application needs to know when an
+order was placed, when an invoice was paid, or when an episode happened, model
+that explicitly with attributes such as `:order/placed-at`,
+`:invoice/paid-at`, or `:episode/timestamp`. Automatic entity timestamps answer
+"when did this entity change in the database?", not "when did the real-world
+event occur?"
+
+Automatic timestamps also store only the current created/updated values. For a
+full audit trail, model audit events explicitly or use transaction-log based
+operations such as the WAL and txlog tools covered in Chapter 20.
+
+### 2.4 Tempids
 
 When creating new entities that will be referenced by other entities in the same transaction, use **tempids**: temporary entity IDs that act as placeholders. Negative numbers are commonly used as tempids:
 
@@ -152,7 +194,7 @@ await conn.transact([
 
 In this example, `-1` references `-2` as a friend. Datalevin resolves these tempids during the transaction, replacing them with real entity IDs.
 
-### 2.4 Lookup Refs
+### 2.5 Lookup Refs
 
 Instead of knowing the entity ID, you can use a **lookup ref** to identify an existing entity by a unique attribute. A lookup ref is a vector `[attribute value]`:
 
@@ -187,7 +229,7 @@ This finds the entity with `:user/email` equal to `"alice@example.com"` and upda
 
 Lookup refs are particularly useful when you only have a unique identifier (like an email) but not the entity ID.
 
-### 2.5 Unique Attributes and Upsert
+### 2.6 Unique Attributes and Upsert
 
 When an attribute is marked as `:db.unique/identity`, Datalevin automatically performs an **upsert**: if an entity with that value exists, it updates that entity; otherwise, it creates a new one:
 
@@ -250,7 +292,7 @@ await conn.transact([
 
 If `"alice@example.com"` already exists, this updates the existing entity. If not, it creates a new one. This eliminates the need to check for existence before transacting.
 
-### 2.6 Raw Datom Vectors
+### 2.7 Raw Datom Vectors
 
 For fine-grained control, you can express changes as raw datom vectors `[op entity attribute value]`:
 
@@ -291,7 +333,60 @@ The operations are:
 - `:db/add` — adds or updates an attribute value
 - `:db/retract` — removes an attribute value
 
-### 2.7 Mixed Forms
+### 2.8 Retracting Attributes and Entities
+
+Use `:db/retract` when you want to remove one attribute value. Use
+`:db.fn/retractAttribute` when you want to remove an entire attribute from an
+entity, regardless of its current value. Use `:db/retractEntity` when you want
+to remove an entity as a logical object.
+
+```clojure
+;; Remove one known value.
+(d/transact! conn
+  [[:db/retract [:user/email "alice@example.com"]
+                :user/status
+                "inactive"]])
+
+;; Remove the whole :user/status attribute from Alice.
+(d/transact! conn
+  [[:db.fn/retractAttribute [:user/email "alice@example.com"]
+                            :user/status]])
+
+;; Remove Alice as an entity.
+(d/transact! conn
+  [[:db/retractEntity [:user/email "alice@example.com"]]])
+```
+
+`retractEntity` accepts an entity id or a lookup ref. It retracts facts where
+the entity is the subject, and it also retracts declared `:db.type/ref` facts
+that point to the entity. If the entity owns child entities through attributes
+declared with `:db/isComponent true`, those component children are retracted
+recursively. This is usually the right operation for deleting an entity that may
+be referenced elsewhere.
+
+For example, with this schema:
+
+```clojure
+{:order/id    {:db/valueType :db.type/string
+               :db/unique    :db.unique/identity}
+ :order/items {:db/valueType   :db.type/ref
+               :db/cardinality :db.cardinality/many
+               :db/isComponent true}
+ :line/sku    {:db/valueType :db.type/string}}
+```
+
+Deleting the order also deletes its owned line-item entities:
+
+```clojure
+(d/transact! conn
+  [[:db/retractEntity [:order/id "o-1001"]]])
+```
+
+Use component relationships only for ownership. If a referenced entity has an
+independent lifecycle, retract the relationship with `:db/retract` instead of
+declaring the relationship as a component.
+
+### 2.9 Mixed Forms
 
 You can mix all these forms in a single transaction:
 
@@ -340,15 +435,24 @@ await conn.transact([
 
 This flexibility allows you to choose the most convenient form for each operation in your transaction.
 
-### 2.8 Strong Typing and Data Type Considerations
+### 2.10 Typed Values, Validation, and Coercion
 
-Datalevin is a **strongly typed** database. It is strongly recommended to give
-every attribute value an explicit type defined in the schema (e.g.,
-`:db.type/long`, `:db.type/string`, `:db.type/boolean`). When you specify a type
-in your schema, Datalevin enforces it. This ensures predictable behavior.
+Datalevin works best when important attributes have explicit value types in the
+schema, such as `:db.type/long`, `:db.type/string`, `:db.type/boolean`,
+`:db.type/uuid`, or `:db.type/instant`. A declared `:db/valueType` tells
+Datalevin how to encode values, compare them, build indexes, and canonicalize
+transaction input.
 
-When you transact data without a data type in schema, Datalevin serializes it as
-an EDN binary blob. It can sometimes behave unexpectedly:
+Strict input validation is controlled separately by `:validate-data?`:
+
+| Configuration | Write Behavior |
+| :--- | :--- |
+| No `:db/valueType` | Values are stored as serialized EDN data. This is flexible, but not ideal for typed range access or predictable cross-language input. |
+| Declared `:db/valueType`, default `:validate-data? false` | Datalevin uses the declared type and coerces or canonicalizes values where possible before encoding. |
+| Declared `:db/valueType` with `{:validate-data? true}` | Datalevin rejects values that do not already match the declared runtime type. |
+
+When you transact data without a value type in schema, Datalevin serializes it
+as an EDN binary blob. It can sometimes behave unexpectedly:
 
 ```clojure
 ;; Transacting with an explicit int
@@ -362,12 +466,19 @@ an EDN binary blob. It can sometimes behave unexpectedly:
 ;;=> ()  ;; Unexpected! No results because (int 42) ≠ 42
 ```
 
-The query returns no results because the value was stored as an integer (32-bit)
-but the query uses a long (64-bit). They are not equal.
+The query returns no results because the value was stored as an integer
+(32-bit), but the query uses a long (64-bit). They are not equal.
 
 However, if you specify a type for `:my-entity/val`, e.g. `:db.type/long`,
 Datalevin does type coercion for you, so your `(int 42)` will be stored as a
-`long` instead.
+`long` instead. If you open the database with `{:validate-data? true}`, the
+same declared schema becomes stricter: malformed input fails before it is
+written instead of being corrected where possible.
+
+Use coercion for trusted internal inputs and imports where convenience matters.
+Use `:validate-data? true` at system boundaries where malformed user, JSON, or
+remote-client data should fail early. Chapter 11 covers schema validation,
+coercion, and schema evolution in more detail.
 
 ---
 

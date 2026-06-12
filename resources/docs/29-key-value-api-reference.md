@@ -55,6 +55,10 @@ per key and list DBIs for sorted multi-values per key.
 Common DBI options include `:key-size`, `:val-size`, `:validate-data?`,
 `:closed-schema?`, and LMDB `:flags`.
 
+In the KV API, `:validate-data?` checks keys and values against the KV type
+descriptors used for a DBI or operation. It is independent of Datalog
+`:db/valueType` schema validation.
+
 ---
 
 ## 3. Writes and Transactions
