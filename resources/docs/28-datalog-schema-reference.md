@@ -46,6 +46,12 @@ and migration checks. In Java examples, `Datalevin.schema()` is a builder for
 constructing schema input; it is not the same operation as reading the current
 schema from a database.
 
+Attribute ids are encoded as 32-bit signed non-negative integers in Datalevin's
+Datalog indexes. This means one database can have at most about 2.1 billion
+distinct attribute ids, including built-in attributes. Normal application
+schemas will not approach this, but unbounded dynamic key spaces should be
+modeled as data rather than as newly minted attributes.
+
 Use `update-schema` to change schema:
 
 ```clojure
@@ -115,7 +121,7 @@ All the acceptable attributes properties are the following:
 | `:db.embedding/autoDomain` | `true`, `false` | Adds an attribute-specific embedding domain using vector-domain naming. |
 | `:db.vec/domains` | sequence of strings | Adds a `:db.type/vec` attribute to explicit vector domains. |
 | `:db/idocFormat` | `:edn`, `:json`, `:markdown` | Format hint for `:db.type/idoc`; defaults to `:edn`. |
-| `:db/tupleAttrs` | non-empty sequence of attribute keywords | Composite tuple derived from other attributes. |
+| `:db/tupleAttrs` | non-empty sequence of attribute keywords | Derived composite index entry maintained from other attributes. |
 | `:db/tupleType` | single non-tuple value type | Homogeneous tuple element type. |
 | `:db/tupleTypes` | sequence of more than one non-tuple value type | Heterogeneous tuple element types. |
 
@@ -138,7 +144,7 @@ All the acceptable attributes properties are the following:
 | `:db.type/instant` | `java.util.Date` / instants | Time values. |
 | `:db.type/uuid` | UUID values | Stable external ids. |
 | `:db.type/bytes` | byte arrays | Binary values. |
-| `:db.type/tuple` | vectors | Composite, homogeneous, or heterogeneous tuple values. |
+| `:db.type/tuple` | vectors | Stored homogeneous or heterogeneous tuple values. Composite indexes use `:db/tupleAttrs` and do not require this value type. |
 | `:db.type/vec` | numeric vectors | Maintains vector similarity indexes. Configure dimensions and metric in store options. |
 | `:db.type/idoc` | nested maps/vectors or supported document payloads | Stored as one datom and indexed by path. |
 
@@ -197,9 +203,15 @@ Use `:db/isComponent true` only for owned children. Component entities are pulle
 
 ## 8. Tuples
 
-Datalevin supports three tuple forms.
+Datalevin has two related tuple features that should not be confused:
 
-Composite tuple derived from other attributes:
+- **Composite indexes** use `:db/tupleAttrs` to derive an index entry from
+  existing attributes. This is not a stored tuple data type and does not create
+  special storage outside the normal Datalog indexes.
+- **Stored tuple values** use `:db.type/tuple` with `:db/tupleType` or
+  `:db/tupleTypes` when the tuple itself is application data.
+
+Composite index derived from other attributes:
 
 ```clojure
 {:order/customer {:db/valueType :db.type/ref}
@@ -216,23 +228,24 @@ Rules for `:db/tupleAttrs`:
 - It cannot depend on another tuple attribute.
 - It cannot depend on a cardinality-many attribute.
 
-Homogeneous tuple:
+Stored homogeneous tuple value:
 
 ```clojure
 {:point/xy {:db/valueType :db.type/tuple
             :db/tupleType :db.type/double}}
 ```
 
-Heterogeneous tuple:
+Stored heterogeneous tuple value:
 
 ```clojure
 {:artist/name+country {:db/valueType  :db.type/tuple
                        :db/tupleTypes [:db.type/string :db.type/ref]}}
 ```
 
-Rules for typed tuples:
+Rules for stored typed tuples:
 
-- `:db.type/tuple` must include one of `:db/tupleAttrs`, `:db/tupleType`, or `:db/tupleTypes`.
+- `:db.type/tuple` must include `:db/tupleType` or `:db/tupleTypes` when the
+  tuple value is stored directly.
 - `:db/tupleType` must be a single non-tuple value type.
 - `:db/tupleTypes` must contain more than one non-tuple value type.
 

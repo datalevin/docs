@@ -183,6 +183,106 @@ await conn.pull(
 
 </div>
 
+### Aside: Ad Hoc Queries over Nested EDN
+
+Sometimes you do not want to persist a nested value at all. You have a map from
+an API response, a fixture, or a one-off data export, and you want Datalog's
+joins and predicates for exploration. Chapter 9 showed that Datalevin can query
+an in-memory sequence of tuples. A small boundary helper can turn a nested
+EDN value into such a relation.
+
+The following Clojure helper walks maps and vectors and emits one tuple for
+each leaf value. By default, the tuple is the path segments followed by the
+leaf value:
+
+```clojure
+(defn leaf-paths
+  "Returns paths to scalar leaves in a nested map/vector."
+  ([root]
+   {:pre [(or (map? root) (vector? root))]}
+   (leaf-paths [] root))
+  ([parent x]
+   (cond
+     (map? x)
+     (mapcat (fn [[k v]]
+               (leaf-paths (conj parent k) v))
+             x)
+
+     (vector? x)
+     (mapcat (fn [[i v]]
+               (leaf-paths (conj parent i) v))
+             (map-indexed vector x))
+
+     :else
+     [parent])))
+
+(defn nested->tuples
+  "Converts nested maps/vectors into tuples queryable by Datalog."
+  ([x]
+   (nested->tuples x nil))
+  ([x {:keys [paths?] :or {paths? false}}]
+   (with-meta
+     (mapv (fn [path]
+             (let [tuple (conj path (get-in x path))]
+               (if paths?
+                 (into [path] tuple)
+                 tuple)))
+           (leaf-paths x))
+     {:datalevin.docs/original x})))
+```
+
+For example:
+
+```clojure
+(def order-doc
+  {:order/id "o-1001"
+   :customer {:email "ada@example.com"
+              :name  "Ada"}
+   :lines    [{:sku "book" :qty 2}
+              {:sku "pen"  :qty 5}]})
+
+(def tuples (nested->tuples order-doc))
+;; => [[:order/id "o-1001"]
+;;     [:customer :email "ada@example.com"]
+;;     [:customer :name "Ada"]
+;;     [:lines 0 :sku "book"]
+;;     [:lines 0 :qty 2]
+;;     [:lines 1 :sku "pen"]
+;;     [:lines 1 :qty 5]]
+```
+
+Now the vector index in the path can be used as a join key:
+
+```clojure
+(d/q '[:find ?sku ?qty
+       :where
+       [:lines ?i :sku ?sku]
+       [:lines ?i :qty ?qty]]
+     tuples)
+;; => #{["book" 2] ["pen" 5]}
+```
+
+When `:paths?` is true, the full path is also carried as the first element of
+each tuple. This is useful when a query result should drive a later `get-in`,
+`assoc-in`, or `update-in`:
+
+```clojure
+(def tuples-with-paths (nested->tuples order-doc {:paths? true}))
+
+(d/q '[:find ?path ?sku
+       :where
+       [?path :lines ?i :sku ?sku]]
+     tuples-with-paths)
+;; => #{[[:lines 0 :sku] "book"]
+;;      [[:lines 1 :sku] "pen"]}
+```
+
+This technique is for ad hoc analysis and local transformation. It does not
+create attributes, schema, indexes, lookup refs, or durable entities. If the
+nested data is part of the application's long-lived domain model, turn it into
+normal Datalevin facts or component entities. If it is flexible document data
+that should be stored and searched by path, use `:db.type/idoc`.
+
 ---
 
 ## 2. Native Indexed Documents with `idoc`

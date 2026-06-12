@@ -218,6 +218,29 @@ for (const batch of partitionAll(sortedDatoms, 5000)) {
 
 </div>
 
+### 2.2 Disable the Datalog Index Cache During Bulk Transactions
+
+Datalevin keeps a small Datalog index cache for normal interactive workloads.
+During a large bulk transaction job, that cache can add memory pressure and cache
+maintenance work without helping much, especially when the import touches a wide
+range of entities and attributes only once. In Clojure, set the cache limit to
+`0` for the import phase, then restore the previous limit:
+
+```clojure
+(let [db             (d/db conn)
+      previous-limit (d/datalog-index-cache-limit db)]
+  (try
+    (d/datalog-index-cache-limit db 0)
+    (doseq [batch (partition-all 5000 sorted-datoms)]
+      (d/transact! conn batch))
+    (finally
+      (d/datalog-index-cache-limit (d/db conn) previous-limit))))
+```
+
+This is a bulk-ingestion tuning knob, not a general query-performance setting.
+Leave the cache enabled for mixed read/write application traffic unless a
+measured workload shows that disabling it helps.
+
 ---
 
 ## 3. Bulk Load: `d/init-db` and `d/fill-db`
@@ -236,19 +259,94 @@ batched transaction pattern above unless your deployment exposes a lower-level
 bulk-load bridge. The example below is Clojure-only; a non-Clojure `init-db`
 snippet here would be an API sketch, not a current public binding.
 
+### 3.1 Assigning Entity IDs for Prepared Datoms
+
+`init-db` and `fill-db` do not accept transaction maps, tempids, lookup refs, or
+upserts. They accept prepared `Datom` values. That means the subject entity id
+and every `:db.type/ref` value must already be the final numeric entity id.
+
+The JOB benchmark uses a simple technique that works well for relational
+imports whose source tables already have integer primary keys: reserve a
+non-overlapping entity-id range for each source table, then convert every
+primary key and foreign key with the same function. For example:
+
 ```clojure
-;; Prepare datoms with approximate entity IDs (caller's responsibility)
+(def schema
+  {:user/id        {:db/valueType :db.type/long
+                   :db/unique    :db.unique/identity}
+   :user/name      {:db/valueType :db.type/string}
+   :order/id       {:db/valueType :db.type/long
+                   :db/unique    :db.unique/identity}
+   :order/customer {:db/valueType :db.type/ref}
+   :order/total    {:db/valueType :db.type/double}})
+
+;; Reserve disjoint numeric ranges. This is the same idea used by the
+;; JOB benchmark, where each imported table has its own eid base.
+(def user-base  1000000)
+(def order-base 2000000)
+
+(defn user-eid [source-id]
+  (+ user-base (parse-long source-id)))
+
+(defn order-eid [source-id]
+  (+ order-base (parse-long source-id)))
+
+(def users
+  [{:id "1" :name "Alice"}
+   {:id "2" :name "Bob"}])
+
+(def orders
+  [{:id "10" :customer-id "1" :total 42.5}
+   {:id "11" :customer-id "2" :total 19.0}])
+
+(defn user-datoms [{:keys [id name]}]
+  (let [eid (user-eid id)]
+    [(d/datom eid :user/id (parse-long id))
+     (d/datom eid :user/name name)]))
+
+(defn order-datoms [{:keys [id customer-id total]}]
+  (let [eid (order-eid id)]
+    [(d/datom eid :order/id (parse-long id))
+     (d/datom eid :order/customer (user-eid customer-id))
+     (d/datom eid :order/total total)]))
+
 (def prepared-datoms
-  [[1 :user/name "Alice"]
-   [1 :user/age 30]
-   [2 :user/name "Bob"]
-   [2 :user/age 25]])
+  (vec (concat (mapcat user-datoms users)
+               (mapcat order-datoms orders))))
 
 ;; Load into empty database
-(def db (d/init-db prepared-datoms schema))
+(def db (d/init-db prepared-datoms "/tmp/import-db" schema))
 ```
 
-> **Note**: These functions skip data integrity checks and temporary entity ID resolution. You must ensure the datoms are correct before calling them.
+The same id functions are used on both sides of the relationship:
+`:order/customer` stores `(user-eid customer-id)`, not the external customer id
+and not a lookup ref. The source ids are also stored as unique identity
+attributes (`:user/id`, `:order/id`) so later normal transactions can use lookup
+refs such as `[:user/id 1]`. Treat Datalevin's numeric entity ids as internal
+implementation ids even when you assign them during a bulk load.
+
+For a large import, it is common to stream one table at a time with `fill-db`,
+using the same id functions:
+
+```clojure
+(def db
+  (-> (d/empty-db "/tmp/import-db" schema {:closed-schema? true})
+      (d/fill-db (mapcat user-datoms users))
+      (d/fill-db (mapcat order-datoms orders))))
+```
+
+If the source does not have dense integer ids, build an `eid-by-key` map first:
+collect stable keys such as `[:user external-id]` and `[:order external-id]`,
+sort or otherwise deterministically order them, assign fresh positive integers,
+and use that map when emitting subject ids and reference values. With
+`fill-db`, any new ids must be greater than the existing `(d/max-eid db)` unless
+you reserved non-overlapping ranges up front.
+
+> **Note**: These functions skip transaction-level data integrity checks and
+> temporary entity ID resolution. You must ensure the datoms are correct before
+> calling them: no duplicate entity-id ranges, no unresolved references, values
+> must match the declared schema, and every item must be a `Datom` created with
+> `d/datom`.
 
 ---
 
@@ -264,9 +362,12 @@ When you need to ingest data at scale, follow this checklist:
     batching compound.
 4.  **Sort your data**: Sort by Entity ID before transacting to minimize B+Tree
     fragmentation.
-5.  **Use Clojure or pod-level `init-db`/`fill-db`** for the fastest possible
+5.  **Disable the Datalog index cache during large bulk transactions**:
+    temporarily set `datalog-index-cache-limit` to `0`, then restore it after
+    the import.
+6.  **Use Clojure or pod-level `init-db`/`fill-db`** for the fastest possible
     bulk load into a database for static data sets.
-6.  **Use non-durable LMDB flags only for rebuildable imports**: `:nometasync`,
+7.  **Use non-durable LMDB flags only for rebuildable imports**: `:nometasync`,
     `:nosync`, and `:writemap`/`:mapasync` can improve write speed, but they
     change durability (i.e. crash behavior).
 

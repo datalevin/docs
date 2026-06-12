@@ -83,6 +83,7 @@ API boundary.
 | `datoms` | You know the target index and a prefix of its sort key. | Scans `:eav` or `:ave` in that index's natural order. |
 | `search-datoms` | You have an `(e, a, v)` pattern with wildcards. | Chooses an efficient index for the supplied components. |
 | `count-datoms` | You only need the number of matching datoms. | Counts the same wildcard pattern without materializing results. |
+| `cardinality` | You need the number of distinct values currently present for one attribute. | Counts unique values for that attribute through the AVE index. |
 | `seek-datoms` | You need a forward cursor starting at a lower bound. | Starts at the first datom greater than or equal to the supplied index key. |
 | `rseek-datoms` | You need a reverse cursor starting near an upper bound. | Same as `seek-datoms`, but walks backward. |
 | `index-range` | You need all values of one attribute between two bounds. | Scans the AVE range for one attribute. |
@@ -274,7 +275,78 @@ await execJson('count-datoms', {
 `count-datoms` is more direct than `(count (search-datoms ...))` because it does
 not have to allocate the matching datoms.
 
-### 4.5 Cursor Scans with `seek-datoms` and `rseek-datoms`
+### 4.5 Cardinality and Size Helpers
+
+Use `cardinality` when you need the number of distinct values currently present
+for one attribute. Do not confuse this with the schema property
+`:db/cardinality`, which says whether an attribute is single-valued or
+multi-valued. `d/cardinality` is a data statistic:
+
+<div class="multi-lang">
+
+```clojure
+;; How many distinct ages exist?
+(d/cardinality db :user/age)
+
+;; How many datoms use :user/age at all?
+(d/count-datoms db nil :user/age nil)
+
+;; How many datoms say :user/age is 30?
+(d/count-datoms db nil :user/age 30)
+```
+
+```java
+// How many distinct ages exist?
+conn.exec("cardinality", Map.of("attr", ":user/age"));
+
+// How many datoms use :user/age at all?
+conn.exec("count-datoms", Map.of("a", ":user/age"));
+
+// How many datoms say :user/age is 30?
+conn.exec("count-datoms", Map.of("a", ":user/age", "v", 30));
+```
+
+```python
+# How many distinct ages exist?
+exec_json("cardinality", {"conn": conn_handle, "attr": ":user/age"})
+
+# How many datoms use :user/age at all?
+exec_json("count-datoms", {"conn": conn_handle, "a": ":user/age"})
+
+# How many datoms say :user/age is 30?
+exec_json("count-datoms", {"conn": conn_handle, "a": ":user/age", "v": 30})
+```
+
+```javascript
+// How many distinct ages exist?
+await execJson('cardinality', { conn: connHandle, attr: ':user/age' });
+
+// How many datoms use :user/age at all?
+await execJson('count-datoms', { conn: connHandle, a: ':user/age' });
+
+// How many datoms say :user/age is 30?
+await execJson('count-datoms', { conn: connHandle, a: ':user/age', v: 30 });
+```
+
+</div>
+
+You may see lower-level names such as `a-size`, `e-size`, `av-size`, `v-size`,
+and `av-range-size` in Datalevin internals or optimizer discussions. Those are
+storage/protocol helpers used by the query planner, not the public
+`datalevin.core` API. From application code, use `count-datoms` for pattern
+counts, `cardinality` for distinct attribute values, and `index-range` when you
+need the matching datoms in a value range.
+
+Datalevin periodically collects planner statistics in the background. When you
+have just bulk-loaded or substantially reshaped data, `analyze` can refresh
+statistics for one attribute or all attributes:
+
+```clojure
+(d/analyze db :user/age)
+(d/analyze db)
+```
+
+### 4.6 Cursor Scans with `seek-datoms` and `rseek-datoms`
 
 Use `seek-datoms` when you want to start at an index key and continue forward.
 If no datom exactly matches the supplied components, Datalevin starts at the
@@ -363,7 +435,7 @@ The JSON API uses `limit` and `offset` for paging sequence results. In Clojure,
 `seek-datoms` and `rseek-datoms` also have an arity that accepts `n` as the
 final argument.
 
-### 4.6 Range Scans with `index-range`
+### 4.7 Range Scans with `index-range`
 
 Use `index-range` for the most common AVE range pattern: one attribute, lower
 bound, upper bound.
@@ -418,7 +490,7 @@ const entityIds = datoms.map((datom) => datom.e);
 
 </div>
 
-### 4.7 Reading Datom Fields
+### 4.8 Reading Datom Fields
 
 Clojure datoms have dedicated accessors. JSON API results encode datoms as maps
 with `e`, `a`, `v`, `tx`, and `added` fields. Java `conn.exec` returns the same
@@ -511,6 +583,9 @@ By making every attribute indexed by default and providing direct API access to 
 
 - **EAV** provides locality for entities and documents.
 - **AVE** provides fast lookups and range scans for values.
-- **Direct Access** gives you `datoms`, `search-datoms`, `count-datoms`, `seek-datoms`, `rseek-datoms`, and `index-range` for custom traversal logic when the access pattern is already known.
+- **Direct Access** gives you `datoms`, `search-datoms`, `count-datoms`,
+  `cardinality`, `seek-datoms`, `rseek-datoms`, `index-range`, and `analyze`
+  for custom traversal and statistics logic when the access pattern is already
+  known.
 
 Understanding these indexes is the first step toward mastering the more specialized capabilities of Datalevin, such as full-text search and vector similarity, which we will explore in the following chapters.

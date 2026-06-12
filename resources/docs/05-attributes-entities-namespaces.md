@@ -106,11 +106,12 @@ Some common Datalog value types for `:db/valueType`:
 | `:db.type/bytes` | Byte arrays. |
 | `:db.type/ref` | Entity references. Required for reverse lookup refs and component relationships. |
 
-Beyond these scalar types, Datalevin offers composite and specialized types:
-`:db.type/tuple` for composite values (Chapter 11), `:db.type/vec` for
+Beyond these scalar types, Datalevin offers specialized value types:
+`:db.type/tuple` for stored tuple values, `:db.type/vec` for
 similarity-indexed vectors (Chapter 17), and `:db.type/idoc` for path-indexed
-nested documents (Chapter 14). For a complete list of acceptable value types,
-please see Appendix A.
+nested documents (Chapter 14). Composite indexes over several attributes use
+`:db/tupleAttrs`, not a special stored data type; Chapter 11 explains that
+pattern. For a complete list of acceptable value types, please see Appendix A.
 
 ---
 
@@ -292,6 +293,15 @@ to the application. You do not need to collapse them into a generic
 `:event/time` attribute just to make the vocabulary look smaller. In Datalevin,
 a larger set of clear, specific attributes is often better than a small set of
 overloaded general attributes.
+
+There is still a practical boundary. Datalevin stores attributes in indexes by
+an internal 32-bit attribute id, exposed in schema inspection as `:db/aid`. A
+database can therefore have at most about 2.1 billion distinct attribute ids,
+including built-in attributes. That ceiling is far above ordinary application
+schemas, but it is a reminder that attributes are schema vocabulary, not an
+unbounded place to put user-generated keys. If a key space can grow without
+control, model the key as data, an enum/value, an idoc path, or a referenced
+entity instead of minting a new Datalevin attribute for every key.
 
 This does not prevent ontology-like modeling when you need it. You can still
 use enum entities, references, rules, and Datalog queries to represent domain

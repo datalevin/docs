@@ -35,6 +35,13 @@ Common `open-kv` options include `:mapsize`, `:max-dbs`, `:max-readers`,
 `:wal-group-commit`, `:wal-group-commit-ms`, `:client-opts`, and
 `:spill-opts`.
 
+`:spill-opts` controls temporary spill-to-disk behavior for eager range
+operations. Direct KV stores receive it at the top level:
+`(d/open-kv dir {:spill-opts {:spill-threshold 100}})`. Embedded Datalog
+connections pass it through the underlying KV options:
+`(d/get-conn dir schema {:kv-opts {:spill-opts {:spill-threshold 100}}})`.
+Setting `:spill-threshold` to `100` disables spill-to-disk.
+
 ---
 
 ## 2. DBI Management
@@ -96,6 +103,12 @@ Public scalar KV types include `:data`, `:string`, `:long`, `:float`,
 `:double`, `:bigint`, `:bigdec`, `:bytes`, `:keyword`, `:symbol`, `:boolean`,
 `:instant`, and `:uuid`. Tuple types are vectors of scalar types, such as
 `[:string :instant]` or `[:long]`.
+
+A DBI can technically contain keys encoded with mixed data types, and Datalevin
+uses that flexibility internally. Application DBIs should normally avoid this:
+range and rank APIs follow encoded byte ordering, so mixed key types can make
+range boundaries surprising. Prefer one consistent key type, or one tuple key
+type, per DBI unless you intentionally design a mixed encoding.
 
 ---
 

@@ -23,8 +23,17 @@ but queries will appear here when they help explain how lookup refs and pull
 work together.
 
 The Java, Python, and JavaScript snippets assume an open connection named
-`conn`. Clojure snippets use `conn` for a connection and `db` for an immutable
-database value, usually obtained with `(d/db conn)` or `@conn`.
+`conn`. Clojure snippets use `conn` for a connection and `db` for a Datalog DB
+object obtained with `(d/db conn)` or `@conn`.
+
+Datalevin's `db` is not a Datomic-style immutable snapshot value. It is a
+mutable DB object/reference used by read APIs. Treat it as a read handle for the
+current operation, not as durable application state.
+
+Call `(d/db conn)` when you need to read the connection's current state. Do not
+save a `db` object or an entity object and expect it to follow later
+transactions; if freshness matters after a write, get a new `db` from the
+connection before reading.
 
 ---
 
@@ -133,7 +142,7 @@ specific attribute read when you need an existence check.
 ## 2. Pull: Fetching a Declared Shape
 
 `d/pull` is the easiest way to fetch a plain data structure for one entity. You
-provide a database value, a **pull pattern**, and an entity id or lookup ref:
+provide a DB object, a **pull pattern**, and an entity id or lookup ref:
 
 <div class="multi-lang">
 
@@ -162,6 +171,18 @@ plain map, not a lazy entity.
 (d/pull db '[:user/name :user/email]
         [:user/email "alice@example.com"])
 ;; => {:user/name "Alice", :user/email "alice@example.com"}
+```
+
+If you already have the numeric entity id, pass it directly to `d/pull` for a
+shaped map or to `d/entity` for lazy navigation. You do not need a Datalog query
+just to retrieve one known entity:
+
+```clojure
+(d/pull db '[:user/name :user/email] 1)
+;; => {:user/name "Alice", :user/email "alice@example.com"}
+
+(:user/name (d/entity db 1))
+;; => "Alice"
 ```
 
 Use `[*]` to fetch all forward attributes of the entity:
@@ -342,12 +363,54 @@ Use `:as` when the external response should use a different key:
 Renaming is a presentation choice. It does not change the stored attributes or
 the schema.
 
+### 4.4 Transforming Pull Values
+
+Use `:xform` when a value should be transformed before it is placed in the pull
+result. The transform may be a Clojure function value or a resolvable symbol,
+such as `vector` or `clojure.string/upper-case`:
+
+```clojure
+(d/pull db
+        '[[:user/name :as :name :xform clojure.string/upper-case]]
+        [:user/email "alice@example.com"])
+;; => {:name "ALICE"}
+```
+
+For pull patterns that cross language or process boundaries, prefer resolvable
+symbols and make sure the runtime can load them. Anonymous functions are
+Clojure values and are best kept to embedded Clojure code.
+
+If an attribute is missing and no default is supplied, the transform receives
+`nil`:
+
+```clojure
+(d/pull db
+        '[[:user/nickname :xform vector]]
+        [:user/email "alice@example.com"])
+;; => {:user/nickname [nil]}
+```
+
+If `:default` is present and the attribute is missing, the default wins and is
+returned as-is:
+
+```clojure
+(d/pull db
+        '[[:user/nickname :default "unknown" :xform vector]]
+        [:user/email "alice@example.com"])
+;; => {:user/nickname "unknown"}
+```
+
+For reference, reverse-reference, and nested pull attributes, `:xform` receives
+the pulled value for that attribute. This is useful for small response-shaping
+steps. For transformations with business rules, error handling, or host-language
+portability requirements, prefer ordinary application code after the pull.
+
 ---
 
 ## 5. Entity API: Lazy Map-Like Navigation
 
-`d/entity` returns an entity object tied to a particular immutable database
-value:
+`d/entity` returns an entity object tied to the Datalog DB object used to create
+it:
 
 ```clojure
 (def alice (d/entity db [:user/email "alice@example.com"]))
@@ -458,10 +521,10 @@ that reference. For non-component references the result is a set. Component
 references can return a single owner because a component has at most one owner
 in a well-formed model.
 
-### 5.3 Entity Values and Database Snapshots
+### 5.3 Entity Values and Stale Reads
 
-An entity is bound to the database value used to create it. If the connection
-later receives a transaction, the old entity still reads from the old snapshot:
+An entity is bound to the DB object used to create it. If the connection later
+receives a transaction, the old entity does not update itself:
 
 ```clojure
 (def db1 (d/db conn))
@@ -477,9 +540,10 @@ later receives a transaction, the old entity still reads from the old snapshot:
 ;; => "Alice A."
 ```
 
-This snapshot behavior is the same idea you saw in Chapter 4: a database value
-is immutable. Reads are stable because they are against a specific value, not a
-moving connection.
+The same rule applies to `db1` itself: it is the DB object that was current when
+`(d/db conn)` was called. For the latest committed state, call `(d/db conn)`
+again after the transaction. Reads are stable because they are against a
+specific DB object, not a moving connection.
 
 ### 5.4 Why Chapter 7 Uses `d/entity`
 
@@ -492,16 +556,70 @@ Chapter 7 used `d/entity` inside a transaction function:
     (throw (ex-info "No user with email" {:email email}))))
 ```
 
-That pattern is common. The transaction function receives a database value,
-uses a lookup ref to find the current entity, reads `:db/id`, and then returns
+That pattern is common. The transaction function receives a DB object, uses a
+lookup ref to find the current entity, reads `:db/id`, and then returns
 ordinary transaction data. It does not need a separate query just to resolve the
 user.
 
-Datalevin entities are also transactable values: `assoc`, `d/add`,
-`d/retract`, and `dissoc` can stage changes on an entity for a later
-transaction. Treat that as a transaction convenience, not as the main reason to
-use entities for reads. For reading, the main benefit is lazy, map-like
-navigation.
+That is a read use of `d/entity`: find an entity, inspect it, and return
+ordinary transaction data. Datalevin also has a transactable Entity feature,
+described next.
+
+### 5.5 Transactable Entities
+
+Datalevin Entity objects are not plain maps, but they do support a small
+staging interface for writes. `assoc`, `update`, `d/add`, `d/retract`, and
+`dissoc` return a new Entity value that carries pending changes. The original
+entity and the DB object it came from are not modified. The staged changes
+become transaction data only when the staged entity is passed to `d/transact!`.
+
+```clojure
+(def db1 (d/db conn))
+(def alice (d/entity db1 [:user/email "alice@example.com"]))
+
+(def staged-alice
+  (-> alice
+      (assoc :user/name "Alice A.")
+      (d/add :user/friends [:user/email "bob@example.com"])))
+
+(:user/name staged-alice)
+;; => "Alice A."
+
+(:user/name alice)
+;; => "Alice"
+```
+
+At this point, only `staged-alice` sees the pending name change. The database
+does not change until the staged entity is transacted:
+
+```clojure
+(d/transact! conn [staged-alice])
+
+(d/pull (d/db conn)
+        '[:user/name {:user/friends [:user/name]}]
+        [:user/email "alice@example.com"])
+;; => {:user/name "Alice A.",
+;;     :user/friends [{:user/name "Bob"}]}
+```
+
+Use `d/add` when adding a value to a cardinality-many attribute. Use
+`d/retract` with a value when removing one value, or `dissoc`/`d/retract`
+without a value when retracting an entire attribute:
+
+```clojure
+(def db2 (d/db conn))
+(def alice2 (d/entity db2 [:user/email "alice@example.com"]))
+(def bob (d/entity db2 [:user/email "bob@example.com"]))
+
+(d/transact! conn
+  [(d/retract alice2 :user/friends bob)])
+```
+
+This feature is useful at the REPL and in small update flows because the code
+can look like ordinary map transformation while still producing normal
+transaction data. For larger workflows, validation-heavy updates, or non-Clojure
+clients, explicit transaction maps and datom vectors are usually easier to audit
+and test.
 
 ---
 
@@ -512,12 +630,14 @@ Use these rules of thumb:
 | Need | Use |
 | :--- | :--- |
 | You know a natural key and need one entity | Lookup ref with `d/pull` or `d/entity` |
+| You know an entity id and need its data | `d/pull` by id, or `d/entity` by id for lazy navigation |
 | You need a stable response map | `d/pull` with an explicit pattern |
 | You need many response maps from known ids | `d/pull-many` |
 | You need to discover matching entities | `d/q` |
 | You need discovered entities in map form | `d/q` with `(pull ?e pattern)` |
 | You are navigating conditionally in Clojure | `d/entity` |
 | You are debugging an entity at the REPL | `d/entity` plus `d/touch` |
+| You want to stage a small Clojure update from an entity | Transactable Entity with `assoc`, `d/add`, `d/retract`, or `dissoc` |
 
 Do not treat `d/pull` as a guaranteed performance shortcut over `d/q`.
 Datalevin's query engine is optimized, and many pull-shaped reads can be
@@ -527,6 +647,8 @@ shape of the problem:
 - `d/q` is for finding facts and entities that satisfy constraints.
 - `d/pull` is for returning a declared nested map for known entities.
 - `d/entity` is for lazy Clojure navigation from one known entity.
+- Transactable Entity is for staging small Clojure-side updates before
+  `d/transact!`.
 
 ---
 
@@ -535,6 +657,7 @@ shape of the problem:
 Datalevin gives you several ways to read the same logical facts. Lookup refs let
 you use domain identifiers instead of internal ids. Pull returns explicit plain
 maps for application boundaries. Entities provide lazy, map-like navigation for
-Clojure code that wants to move through references one step at a time. The APIs
+Clojure code that wants to move through references one step at a time, and
+transactable entities let that same Entity API stage small updates. The APIs
 overlap by design, but they are not redundant: choose the one that matches
-whether you are identifying, shaping, discovering, or navigating data.
+whether you are identifying, shaping, discovering, navigating, or updating data.

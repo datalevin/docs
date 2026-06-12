@@ -29,6 +29,19 @@ directory location when calling `open-kv`, and Datalevin initializes the LMDB
 environment there. The directory does not need to exist already, but the process
 must have permission to create it.
 
+Although you open a directory, the main LMDB data lives in a single
+memory-mapped data file inside that directory, conventionally `data.mdb`.
+Auxiliary files, such as `lock.mdb`, track reader/lock state, and Datalevin may
+create additional support files for features such as WAL. DBIs are named logical
+sub-databases inside the same store; opening more DBIs does not create one data
+file per DBI.
+
+Like a Datalog connection, a KV handle is a stateful resource. A normal
+application should open one KV handle for a local store, share it with the code
+that needs direct KV access, and close it during application shutdown. Do not
+open and close the same local KV store repeatedly for individual operations or
+requests.
+
 <div class="multi-lang">
 
 ```clojure
@@ -96,6 +109,10 @@ Some common options for `open-kv` include:
   exit. It automatically enables `:nosync`, bypassing the `msync` overhead.
 - `:inmemory?`: Set to `true` to create a KV store in memory. There is no file persistence
   and data is lost on close. This is even faster than a `:temp?` store.
+- `:spill-opts`: Control when eager range APIs spill large intermediate results
+  to temporary disk storage. Common keys are `:spill-threshold`, a heap-pressure
+  percentage, and `:spill-root`, the directory for temporary spill files. Set
+  `:spill-threshold` to `100` to disable spill-to-disk.
 
 `:temp?` or `:inmemory?` stores are ideal for ephemeral data like session caches,
 intermediate computation results, or high-speed buffers.
@@ -132,6 +149,15 @@ Datalevin allows multiple KV sub-databases (DBIs) to reside in the same KV
 store. Each DBI requires a unique string name. A DBI needs to be opened
 before use, and DBI opening is idempotent, i.e. it is OK to open a DBI multiple
 times.
+
+A KV transaction is scoped to one store. It may write to several DBIs in that
+store atomically, because they share the same underlying LMDB transaction. It
+cannot span two different KV stores or database files.
+
+The same file can contain Datalevin's Datalog DBIs and application-defined KV
+DBIs. Use distinct names for your KV DBIs and do not write directly to internal
+Datalog DBIs such as `datalevin/eav` or `datalevin/ave`; those are maintained
+by the Datalog engine.
 
 There are two types of DBI:
 
@@ -193,13 +219,14 @@ await kv.openListDbi("tags");
 ```
 
 </div>
+
 ---
 
 ## 3. KV Operations
 
 ### 3.1 Transaction
 
-Data are transacted to a KV store using `transact-kv` function.
+Data is transacted to a KV store using the `transact-kv` function.
 
 <div class="multi-lang">
 
@@ -234,9 +261,9 @@ await kv.transact([
 
 </div>
 
-The transaction data is a sequence of transaction item, which is a vector of
-[operation, DBI name, key, value, key type, and value type]. The operation can
-be `:put` or `:del`.
+The transaction data is a sequence of transaction items. Each item is a vector
+of [operation, DBI name, key, value, key type, and value type]. The operation
+can be `:put` or `:del`.
 
 ### 3.2 Point query
 
@@ -289,6 +316,41 @@ There are many range query functions:
 - `(d/range-filter kv dbi range pred key-type)`: Scans a range and applies a predicate.
 - `(d/range-seq kv dbi range key-type)`: Returns a lazy sequence of the range.
 
+Technically, one DBI can contain keys encoded with different KV data types.
+Datalevin uses that capability internally in several places. For application
+DBIs, avoid mixed key types unless you have a deliberate encoding plan. Range
+queries operate on the encoded byte ordering, so a DBI that mixes strings,
+numbers, keywords, tuples, and raw data can produce ranges that are surprising
+to read and hard to maintain. In most application DBIs, pick one key type, or
+one tuple key type, and use it consistently.
+
+`get-range` and `range-filter` are eager APIs: they try to realize the requested
+range as a result collection. For very large ranges, Datalevin's spillable
+collections can move intermediate data to temporary disk storage under memory
+pressure. Configure this behavior with `:spill-opts` when opening the KV store:
+
+```clojure
+(def kv
+  (d/open-kv "/tmp/my-kv"
+             {:spill-opts {:spill-threshold 100}}))
+```
+
+For a Datalog connection, pass the same setting through `:kv-opts`, because the
+Datalog store owns an underlying KV store:
+
+```clojure
+(def conn
+  (d/get-conn "/tmp/my-db" schema
+              {:kv-opts {:spill-opts {:spill-threshold 100}}}))
+```
+
+Set `:spill-threshold` to `100` to disable spill-to-disk. Use lower values to
+spill earlier under heap pressure. The `:spill-root` option can move temporary
+spill files away from the system temp directory. Spill files are implementation
+storage for large reads; they are not durable application data. If you want to
+process a large range without realizing it eagerly, prefer `range-seq` and close
+the returned sequence when finished.
+
 
 ### 3.4 Other Data Access Functions
 
@@ -302,6 +364,25 @@ for the KV layer:
 | `get-rank` | Find the numerical rank (position) of a key in the sorted order. |
 | `get-by-rank` | Retrieve the key at a specific numerical index. |
 | `sample-kv` | Take a random sample of KV pairs from a DBI. |
+
+`sample-kv` is useful for quick inspection, smoke tests after import, or getting
+representative examples without scanning a whole DBI. By default it returns
+values only. Pass `false` as `ignore-key?` when you want `[key value]` pairs:
+
+```clojure
+(d/open-dbi kv "people")
+
+(d/transact-kv kv
+  [[:put "people" 1 "Alice" :long :string]
+   [:put "people" 2 "Bob" :long :string]
+   [:put "people" 3 "Cara" :long :string]])
+
+(d/sample-kv kv "people" 2 :long :string false)
+;; => [[2 "Bob"] [1 "Alice"]] ; example only, samples are random
+```
+
+If `n` is larger than the number of entries in the DBI, `sample-kv` returns
+`nil`.
 
 ---
 
@@ -445,6 +526,11 @@ This macro ensures that:
 1. All reads and writes inside the block share the same transaction snapshot.
 2. The transaction is automatically committed at the end of the block.
 3. If an exception occurs, the transaction is safely aborted.
+
+Use `with-transaction-kv` for KV-only work. When one atomic operation needs to
+write both Datalog data and custom KV DBIs in the same store, use Datalog
+`with-transaction` and access the transactional KV instance from inside that
+block; Chapter 7 shows the pattern.
 
 ---
 

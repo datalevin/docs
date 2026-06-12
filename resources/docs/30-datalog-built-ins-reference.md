@@ -168,8 +168,8 @@ Examples:
 
 ## 6. Database-Aware Functions
 
-These functions take a database value, usually `$`, or interact with Datalevin
-indexes and runtime facilities.
+These functions take a Datalevin DB object, usually `$`, or interact with
+Datalevin indexes and runtime facilities.
 
 | Function | Purpose |
 | :--- | :--- |
@@ -243,7 +243,9 @@ or aggregates when possible.
 `fulltext` returns `[e a v]` by default. With `{:display :refs+scores}`, bind
 `[e a v score]`; with `:texts`, `:offsets`, or `:texts+offsets`, bind the
 corresponding extra values. Attribute-specific search requires
-`:db.fulltext/autoDomain true` on the attribute.
+`:db.fulltext/autoDomain true` on the attribute. Phrase search and offset
+display require the relevant search domain to be configured with
+`:index-position? true` before indexing.
 
 ### 6.4 Vector and Embedding Search
 

@@ -100,7 +100,126 @@ transact a map with a unique identity that already exists in the database,
 Datalevin will merge the new attributes into the existing entity instead of
 creating a duplicate.
 
-### 1.3 System-Wide Identifiers: `:db/ident`
+### 1.3 Composite Identity with Tuple Attributes
+
+When people ask for a custom index in a Datalevin Datalog database, they often
+mean a composite lookup over several attributes. Datalevin's usual answer is a
+derived tuple attribute: define an attribute with `:db/tupleAttrs`, and
+Datalevin maintains a composite index entry from its component attributes.
+
+This is different from the stored tuple data type. `:db/tupleAttrs` does not
+mean the application stores a special tuple value directly, and it does not
+create a separate storage structure outside the normal Datalog indexes. It is a
+derived composite access path over ordinary attributes. The stored tuple value
+forms are `:db.type/tuple` with `:db/tupleType` or `:db/tupleTypes`, covered in
+Appendix A.
+
+A line item, for example, may be identified by the pair of order id and SKU. The
+application writes `:line-item/order-id` and `:line-item/sku`; Datalevin
+makes `:line-item/order+sku` available as a derived composite lookup.
+
+<div class="multi-lang">
+
+```clojure
+(def schema
+  {:line-item/order-id   {:db/valueType :db.type/string}
+   :line-item/sku        {:db/valueType :db.type/string}
+   :line-item/quantity   {:db/valueType :db.type/long}
+   :line-item/order+sku  {:db/tupleAttrs [:line-item/order-id :line-item/sku]
+                          :db/unique     :db.unique/identity}})
+```
+
+```java
+Schema schema = Datalevin.schema()
+    .attr("line-item/order-id", Schema.attribute()
+        .valueType(Schema.ValueType.STRING))
+    .attr("line-item/sku", Schema.attribute()
+        .valueType(Schema.ValueType.STRING))
+    .attr("line-item/quantity", Schema.attribute()
+        .valueType(Schema.ValueType.LONG))
+    .attr("line-item/order+sku", Schema.attribute()
+        .tupleAttrs("line-item/order-id", "line-item/sku")
+        .unique(Schema.Unique.IDENTITY));
+```
+
+```python
+schema = {
+    ":line-item/order-id": {":db/valueType": ":db.type/string"},
+    ":line-item/sku": {":db/valueType": ":db.type/string"},
+    ":line-item/quantity": {":db/valueType": ":db.type/long"},
+    ":line-item/order+sku": {
+        ":db/tupleAttrs": [":line-item/order-id", ":line-item/sku"],
+        ":db/unique": ":db.unique/identity"}}
+```
+
+```javascript
+const schema = {
+  ":line-item/order-id": {":db/valueType": ":db.type/string"},
+  ":line-item/sku": {":db/valueType": ":db.type/string"},
+  ":line-item/quantity": {":db/valueType": ":db.type/long"},
+  ":line-item/order+sku": {
+    ":db/tupleAttrs": [":line-item/order-id", ":line-item/sku"],
+    ":db/unique": ":db.unique/identity"}
+};
+```
+
+</div>
+
+Now the composite key can be used anywhere a lookup ref can be used:
+
+```clojure
+;; Create or update by component attributes. The tuple is maintained.
+(d/transact! conn
+  [{:line-item/order-id "o-1001"
+    :line-item/sku      "SKU-42"
+    :line-item/quantity 2}])
+
+;; Update the same line item by composite lookup ref.
+(d/transact! conn
+  [[:db/add [:line-item/order+sku ["o-1001" "SKU-42"]]
+            :line-item/quantity
+            3]])
+
+;; Pull by the same composite identity.
+(d/pull (d/db conn)
+        '[:line-item/sku :line-item/quantity]
+        [:line-item/order+sku ["o-1001" "SKU-42"]])
+```
+
+This pattern is useful for user-defined secondary access paths: tenant plus
+external id, account plus date, document plus section number, order plus SKU, or
+student plus course plus term. If the derived tuple attribute is also unique, it
+becomes a composite identity and participates in upsert.
+
+There are a few important rules:
+
+- Write the component attributes, not the derived tuple attribute. Datalevin
+  updates the derived composite index when components change.
+- `:db/tupleAttrs` must name cardinality-one attributes.
+- A derived tuple cannot depend on another derived tuple.
+- If a component is missing, the derived tuple may contain `nil` in that
+  position. Decide whether that is acceptable before making the tuple unique.
+- Composite lookup refs are simplest when the tuple components are scalar
+  identity values such as tenant id, order id, SKU, date, or source-system id.
+  If a component attribute is a reference, the tuple stores the resolved entity
+  id; keep that in mind when constructing tuple lookup values.
+- For ad hoc query-side tuple construction and destructuring, use the built-in
+  `tuple` and `untuple` functions:
+
+```clojure
+(d/q '[:find ?line
+       :where [?line :line-item/order-id ?order-id]
+              [?line :line-item/sku ?sku]
+              [(tuple ?order-id ?sku) ?order+sku]
+              [?line :line-item/order+sku ?order+sku]]
+     (d/db conn))
+```
+
+For homogeneous and heterogeneous tuple values that are not derived from other
+attributes, use `:db/tupleType` or `:db/tupleTypes`; Appendix A summarizes those
+forms.
+
+### 1.4 System-Wide Identifiers: `:db/ident`
 
 While `:db.unique/identity` is used for attributes that uniquely identify a
 domain entity (like a user's email), **`:db/ident`** is a built-in attribute
@@ -562,7 +681,7 @@ Two options are especially important:
 
 One validation rule is always important: Datalevin does **not** store `nil`
 values. In JavaScript and Python client code, this also means application-level
-`null` or `None` must not be used as a database value. A missing value is
+`null` or `None` must not be used as a stored attribute value. A missing value is
 represented by the absence of a datom, not by a stored null marker.
 
 ```clojure

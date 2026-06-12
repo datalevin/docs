@@ -44,6 +44,14 @@ architectural choice. The OS already manages file-backed pages across all
 processes on the machine, and it can evict, prefetch, and share those pages with
 knowledge of the whole system.
 
+Datalevin APIs usually ask for a directory path, but an LMDB environment is not
+a directory full of table files. In the normal directory layout, the durable
+B+tree pages live in one memory-mapped data file, conventionally `data.mdb`. The
+directory may also contain support files, such as LMDB's lock/readers file
+(`lock.mdb`) and Datalevin-managed WAL or snapshot files when those features are
+enabled. Named DBIs are logical key-value spaces inside the same LMDB
+environment; they are not separate data files.
+
 A database-owned buffer pool sees only the database's allocation. It may keep a
 page in its own cache while the OS also keeps the same page in the file-system
 cache, causing "double buffering". It also competes with the rest of the machine
@@ -324,6 +332,13 @@ While Datalog is the primary interface, Datalevin exposes the underlying KV
 store as a first-class citizen. This is a deliberate design choice: the Datalog
 engine is built *on top* of this KV layer, rather than as a separate opaque
 engine.
+
+Datalog and custom KV data can live in the same LMDB file. The Datalog engine
+uses named DBIs for indexes such as EAV and AVE, and application code can use
+other named DBIs in the same store for direct key-value data. Those DBIs share
+the same LMDB environment, durability settings, backup/copy behavior, and
+transaction boundary. Treat Datalevin's internal DBIs as owned by the Datalog
+engine; use separate, application-named DBIs for your own KV structures.
 
 Exposing the KV layer allows developers to bypass the triple model when it isn't
 the best fit, for example when building custom indexes, high-frequency counters,

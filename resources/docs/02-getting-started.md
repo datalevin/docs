@@ -11,7 +11,7 @@ standalone server, a server with read-only replicas, a high availability server
 cluster, a command-line tool, a Babashka pod, or a local MCP tool server. The
 same core database concepts appear in each mode: a path or URI names the
 database, schema describes attribute behavior, transactions add or retract
-facts, and Datalog queries read a database value.
+facts, and Datalog queries read through a current DB object.
 
 This chapter gives the shortest reliable path into each supported mode.
 
@@ -53,7 +53,29 @@ current package metadata, and additional examples:
 - **Python:** [PyPI package page for `datalevin`](https://pypi.org/project/datalevin/).
 - **Node.js:** [npm package page for `datalevin-node`](https://www.npmjs.com/package/datalevin-node).
 
-### 1.1 Runtime Requirements
+### 1.1 Supported Platforms
+
+For local embedded storage, the standalone JVM jar, and pre-built `dtlv`
+command-line/server binaries, Datalevin supports the following host platforms:
+
+| Operating system | Architecture |
+| :--- | :--- |
+| Windows | x86_64 / AMD64 |
+| macOS | ARM64 / AArch64 |
+| Linux | x86_64 / AMD64 |
+| Linux | ARM64 / AArch64 |
+
+The language libraries bundle native Datalevin components for these platforms.
+If your application must run on a different local platform, prefer server mode
+with Datalevin running on a supported host, or build and package the native
+components for that platform yourself.
+
+Core Datalog and KV support is not always the same as support for every optional
+native feature. Vector and embedding search depend on vector-index native code;
+they are supported on Linux x86_64, Linux ARM64, and macOS ARM64, while Windows
+support is experimental.
+
+### 1.2 Runtime Requirements
 
 All the language libraries load a JVM Datalevin runtime, and they require **Java
 21 or newer**. Some language bindings have their own host-runtime requirements:
@@ -106,7 +128,7 @@ java --add-opens=java.base/java.nio=ALL-UNNAMED \
      -cp target/classes:your-dependencies.jar your.main.Class
 ```
 
-### 1.2 Native Dependencies
+### 1.3 Native Dependencies
 
 Datalevin bundles its non-JVM native libraries for the supported platforms. If
 loading fails with `java.lang.UnsatisfiedLinkError`, first confirm that the
@@ -125,7 +147,7 @@ brew install libomp llvm
 ---
 
 
-### 1.3 Add the Dependency
+### 1.4 Add the Dependency
 
 The examples in this chapter use version `{{datalevin-version}}`. The live docs
 site fills this value from the current release configuration; package pages
@@ -172,7 +194,7 @@ npm install datalevin-node
 </div>
 
 
-### 1.4 Your First Transaction and Query
+### 1.5 Your First Transaction and Query
 
 Open a REPL or write a small program to create a database, transact data, and query it.
 
@@ -288,6 +310,39 @@ try {
 ```
 
 </div>
+
+For tests, examples, and scratch work, an embedded Datalog database can be
+opened in memory only:
+
+```clojure
+(def conn
+  (d/create-conn nil schema {:kv-opts {:inmemory? true}}))
+```
+
+This mode does not persist data to disk; closing the connection or ending the
+process loses the database contents. Use a real directory path, as in the first
+example above, when the data must survive process restart. Chapter 6 shows the
+same option for direct KV stores with `open-kv`.
+
+### 1.6 Connection Lifecycle
+
+The examples above close the connection at the end because they are complete
+small programs. A long-running application should normally keep **one shared
+connection per Datalevin database** in a process and pass that connection to the
+parts of the application that need it. Do not open and close a local embedded
+connection for every web request, job, command, or repository call.
+
+Treat a Datalevin connection as a stateful application resource, like a server
+socket or component-system dependency. Create it during application startup,
+reuse it across threads, and close it during application shutdown. In Clojure,
+`d/get-conn` will reuse an existing connection to the same database when one is
+already open.
+
+Short-lived connections are fine for REPL experiments, scripts, tests, and
+single-shot examples. The production pattern is different: hold the connection,
+share it deliberately, and make shutdown responsible for closing it. Remote
+`dtlv://` clients still need normal client lifecycle management, but that is
+separate from repeatedly opening the same local embedded database path.
 
 ---
 
@@ -605,13 +660,12 @@ If the first examples do not run, check these common issues before moving deeper
 into the book:
 
 - Run `java -version` and confirm Java 21 or newer.
-- For Clojure and Java, make sure the JVM flags in Section 1.1 are actually
+- For Clojure and Java, make sure the JVM flags in Section 1.2 are actually
   passed to the process that starts Datalevin.
 - If you see `java.lang.UnsatisfiedLinkError`, revisit the native dependency
-  notes in Section 1.2.
-- Do not repeatedly open the same local database path in the same process
-  without holding on to and closing the connection. Treat connections as
-  stateful resources.
+  notes in Section 1.3.
+- Do not repeatedly open the same local database path in the same process; use
+  the connection lifecycle pattern from Section 1.6.
 - If examples use `/tmp/mydb`, `/tmp/dtlv-cli`, `/tmp/bb-db`, or
   `$PWD/dtlv-data`, remove those directories before rerunning from a clean
   slate.

@@ -27,6 +27,16 @@ underlying **LMDB transaction**.
   (`msync`) before it is confirmed. This guarantees that once a transaction is
   committed, it is durable and will survive a system crash.
 
+Transaction scope is one Datalevin store, i.e. one LMDB environment whose
+primary data lives in one memory-mapped data file. In the default non-WAL mode,
+a Datalog transaction is ultimately a KV transaction over that store. It can
+atomically update the Datalog indexes and any other DBIs that live in the same
+store, but it cannot atomically write to two separately opened Datalevin stores
+or two different LMDB environments. If you need one atomic unit across multiple
+logical datasets, put those datasets in the same store; separate files require
+application-level coordination. WAL mode changes the commit path, but it does
+not turn Datalevin into a cross-file distributed transaction manager.
+
 ### 1.2 Durability Settings
 
 For use cases where maximum write speed is more important than crash-proof
@@ -39,8 +49,17 @@ significantly improve write throughput at the cost of durability.
 ## 2. Transacting Data
 
 The primary function for writing data is `d/transact!`. It takes a connection
-and a vector of transactable entities. Datalevin is flexible in how you can
-express changes.
+and a vector of transaction data. Datalevin is flexible in how you can express
+changes.
+
+Here a **transactable value** means one item in the transaction data collection
+that Datalevin can prepare into datoms. In normal application code this is most
+often an entity map, such as `{:user/name "Alice"}`. Raw datom vectors such as
+`[:db/add eid attr value]`, transaction function calls, and Datalevin's
+transactable Entity objects can also be transaction data. The examples in this
+chapter start with maps because they are the clearest shape for ordinary creates
+and updates, then introduce the lower-level forms when they become useful.
+Chapter 8 covers transactable entities as part of the Entity API.
 
 ### 2.1 Entity Maps
 
@@ -158,7 +177,9 @@ operations such as the WAL and txlog tools covered in Chapter 20.
 
 ### 2.4 Tempids
 
-When creating new entities that will be referenced by other entities in the same transaction, use **tempids**: temporary entity IDs that act as placeholders. Negative numbers are commonly used as tempids:
+When creating new entities that will be referenced by other entities in the
+same transaction, use **tempids**: temporary entity IDs that act as
+placeholders. Negative numbers are commonly used as tempids:
 
 <div class="multi-lang">
 
@@ -192,7 +213,24 @@ await conn.transact([
 
 </div>
 
-In this example, `-1` references `-2` as a friend. Datalevin resolves these tempids during the transaction, replacing them with real entity IDs.
+In this example, `-1` references `-2` as a friend. Datalevin resolves these
+tempids during the transaction, replacing them with real entity IDs.
+
+Tempids are especially useful when the data has cycles. Two new entities can
+refer to each other before either one has a permanent entity ID:
+
+```clojure
+(d/transact! conn
+  [{:db/id -1
+    :user/name "Alice"
+    :user/friend -2}
+   {:db/id -2
+    :user/name "Bob"
+    :user/friend -1}])
+```
+
+Both references are resolved in the same transaction, so the database never
+needs a half-built intermediate state where only one side of the cycle exists.
 
 ### 2.5 Lookup Refs
 
@@ -502,6 +540,49 @@ other concurrent write from interfering. In Java, Python, and JavaScript, prefer
 the conditional transaction forms below, such as `:db/cas` and transaction
 functions, when you need portable read-modify-write behavior.
 
+### 3.1 Mixing Datalog and KV Writes
+
+Because a local Datalog store is built on Datalevin's KV store, embedded
+Clojure code can also use `with-transaction` to update Datalog data and custom
+KV DBIs as one atomic unit. The important point is to use the KV instance inside
+the transactional connection, not a separately opened `open-kv` handle on the
+same directory.
+
+Keep the KV access in a small infrastructure helper:
+
+```clojure
+(defn datalog-kv
+  "Return the KV instance behind a local embedded Datalog connection."
+  [conn]
+  (.-lmdb ^datalevin.storage.Store (:store (d/db conn))))
+```
+
+Then open the application DBI during setup and use the transactional connection
+inside `with-transaction` for both parts of the write:
+
+```clojure
+(let [kv (datalog-kv conn)]
+  ;; DBI opening is idempotent, so this is safe during application startup.
+  (d/open-dbi kv "audit-log")
+
+  (d/with-transaction [tx conn]
+    (let [tx-kv (datalog-kv tx)]
+      (d/transact! tx
+        [{:order/id     "o-1001"
+          :order/status :order.status/paid}])
+
+      (d/transact-kv tx-kv "audit-log"
+        [[:put "o-1001"
+          {:event/type :order/paid
+           :order/id   "o-1001"}]]
+        :string :data))))
+```
+
+If the block returns normally, both the Datalog datoms and the KV entry are
+committed. If the block throws or calls `d/abort-transact`, both parts are
+aborted. This only works for DBIs that live in the same local Datalevin store;
+it is not a cross-file transaction mechanism.
+
 ---
 
 ## 4. Transaction Functions
@@ -509,7 +590,7 @@ functions, when you need portable read-modify-write behavior.
 Datalevin does not use a bare symbolic list form such as `(my-tx-fn arg)` for
 transaction functions. Transaction functions are transaction data vectors that expand to more
 transaction data while the transaction is being prepared. They run against the
-current database value and are committed atomically with the rest of the
+current DB object and are committed atomically with the rest of the
 transaction.
 
 Transaction function can be one of the supported vector forms:
@@ -773,8 +854,8 @@ same UDF implementation before they can execute the transaction function.
 ### 4.3 Inline Transaction Functions
 
 In embedded Clojure, `:db.fn/call` can call a regular Clojure function. The
-function receives the current database value as its first argument and must
-return transaction data.
+function receives the current DB object as its first argument and must return
+transaction data.
 
 ```clojure
 (defn rename-user [db email new-name]

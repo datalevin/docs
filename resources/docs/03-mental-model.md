@@ -351,8 +351,14 @@ The syntax has a few pieces:
 - Reusing the same variable in multiple clauses creates a join by
   **unification**: the engine finds values that make all occurrences of that
   variable agree.
-- `db` is a database value: an immutable view of the database at a point in
-  time.
+- `db` is a Datalevin DB object used as the query input.
+
+Unlike Datomic, Datalevin does not provide "database as a value" semantics. A
+DB object is a mutable database object/reference, not a persistent immutable
+value. In application code, keep and share the connection. When you
+need to read the latest committed state, call `(d/db conn)` and use that DB
+object for the query instead of saving an old `db` object and expecting it to
+stay fresh.
 
 <div class="multi-lang">
 
@@ -395,6 +401,21 @@ them true simultaneously. As mentioned, this is what is called **logic
 programming** in the literature. Because joins are implicit (represented by the
 shared variable `?e`), the complexity of your query doesn't grow with the number
 of joins; it only grows with the logic you want to express.
+
+Attributes are queryable too. In a datom pattern, the entity, attribute, and
+value positions can all be variables. For example, this query asks which
+attributes are present on entities that have a `:person/name`:
+
+```clojure
+(d/q '[:find ?attr
+       :where
+       [?p :person/name]
+       [?p ?attr]]
+     db)
+```
+
+The first pattern finds entities with a `:person/name`; the second pattern binds
+`?attr` to each attribute asserted for those same entities.
 
 ## 6. Unified Retrieval: Plugging into the Datom Flow
 

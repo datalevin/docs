@@ -68,6 +68,56 @@ In this query, you are asking for "entities that have a name of 'Alice' AND a
 city of 'London'". You are not telling the database to "first find people named
 Alice, then filter them by city."
 
+### 1.1 Attribute Positions Can Be Variables
+
+A data pattern is positional: entity, attribute, then value. The attribute
+position is not special syntax that must always be a literal keyword. It can be
+a variable, so you can ask questions about the shape of your data.
+
+Datalevin also allows trailing positions to be omitted when you do not need
+them. The pattern `[?p :person/name]` means "some datom exists for entity `?p`
+and attribute `:person/name`, regardless of value." The pattern `[?p ?attr]`
+means "some datom exists for entity `?p` and attribute `?attr`, regardless of
+value."
+
+<div class="multi-lang">
+
+```clojure
+(d/q '[:find ?attr
+       :where
+       [?p :person/name]
+       [?p ?attr]]
+     db)
+```
+
+```java
+Object attrs = conn.query("[:find ?attr " +
+    ":where [?p :person/name] " +
+    "       [?p ?attr]]");
+```
+
+```python
+attrs = conn.query('[:find ?attr '
+    ':where [?p :person/name] '
+    '       [?p ?attr]]')
+```
+
+```javascript
+const attrs = await conn.query('[:find ?attr ' +
+    ':where [?p :person/name] ' +
+    '       [?p ?attr]]');
+```
+
+</div>
+
+The first clause finds people with a `:person/name`. The second clause reuses
+the same entity variable and binds `?attr` to every attribute asserted for those
+entities. With `:find ?attr`, the result is a one-column relation. Use the
+collection form `:find [?attr ...]` when you want a flat collection of
+attribute keywords.
+If you also need the values, write `[?p ?attr ?value]` and include `?value` in
+`:find`.
+
 ---
 
 ## 2. The `:find` Specification: Shaping Your Results

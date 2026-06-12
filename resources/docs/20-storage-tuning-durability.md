@@ -180,10 +180,11 @@ runs.
 In other databases, backing up a live database can be tricky. If you simply copy
 the file while a write is happening, the copy might be corrupted.
 
-Datalevin's **`d/copy`** function creates a consistent snapshot of a Datalog
-database value or a KV handle. It can run while the database is actively used,
-so readers can continue accessing the source while the copy is being made. In
-the Java, Python, and JavaScript bindings, use the KV-backed copy operation.
+Datalevin's **`d/copy`** function creates a consistent snapshot from a Datalog
+connection or DB object, or from a KV handle. It can run while the database is
+actively used, so readers can continue accessing the source while the copy is
+being made. In the Java, Python, and JavaScript bindings, use the KV-backed copy
+operation.
 
 <div class="multi-lang">
 
