@@ -218,6 +218,53 @@ is an admin over a resource entity, OR has a direct permission, OR has a team
 permission. This is much cleaner and more maintainable than using a complex
 `(or ...)` block in every query.
 
+### 3.1 Expanding One Variable from Multiple Sources
+
+The same pattern is useful when one logical variable can come from several
+places. Datalog does not "append" values into a variable imperatively. A
+variable gets more possible values when the query produces more result tuples.
+Multiple rule definitions with the same head are the idiomatic way to say
+"`?alias` may come from any of these sources."
+
+```clojure
+(def alias-rules
+  '[[(alias-of ?person ?alias)
+     [?person :person/name ?alias]]
+
+    [(alias-of ?person ?alias)
+     [?person :person/legal-name ?alias]]
+
+    [(alias-of ?person ?alias)
+     [?person :person/nickname ?alias]]])
+
+(d/q '[:find ?alias
+       :in $ % ?person-id
+       :where
+       [?person :person/id ?person-id]
+       (alias-of ?person ?alias)]
+     db alias-rules "u-123")
+```
+
+Each implementation contributes rows to the derived relation
+`(alias-of ?person ?alias)`. If the same alias is found through more than one
+branch, normal Datalog set semantics remove the duplicate result.
+
+You can express the same idea locally with `or` or `or-join`:
+
+```clojure
+[:find ?alias
+ :in $ ?person
+ :where
+ (or-join [?person ?alias]
+   [?person :person/name ?alias]
+   [?person :person/legal-name ?alias]
+   [?person :person/nickname ?alias])]
+```
+
+Use `or-join` for one-off branching inside a single query. Use multiple rule
+definitions when the expansion has a name, is reused, or is clearer as part of
+the domain model.
+
 ---
 
 ## 4. Datalevin as a Reasoner: Forward-Chaining Logic

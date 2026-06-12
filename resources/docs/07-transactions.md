@@ -100,6 +100,9 @@ await conn.transact([
 </div>
 
 When you omit `:db/id`, Datalevin assigns a new unique entity ID automatically.
+That entity ID is a Datalevin internal `long`. Do not use `:db/id` for a UUID,
+slug, email address, or external primary key; put application identity in a
+separate unique attribute and address the entity with a lookup ref.
 
 ### 2.2 Updating Existing Entities
 

@@ -37,9 +37,11 @@ unifies multiple access patterns, and where it fits in a modern stack.
 At the Datalog layer, Datalevin represents facts as EAV triples (Entity,
 Attribute, Value). This model is compact, sparse, and composable:
 
-- **Entity (E):** the subject being described. In Datalevin this is normally a
-  stable entity id, such as the id for one user, one order, one document, or one
-  model run.
+- **Entity (E):** the subject being described. In a Datalevin datom, this is a
+  system-assigned internal numeric entity id, valid inside that database.
+  Application identifiers such as user IDs, order IDs, document IDs, UUIDs, and
+  slugs should be stored as ordinary attributes, often with
+  `:db.unique/identity`.
 - **Attribute (A):** the named property being asserted. Attributes are usually
   namespaced keywords such as `:user/email`, `:order/customer`, or
   `:doc/body`.

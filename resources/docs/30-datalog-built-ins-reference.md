@@ -240,12 +240,15 @@ or aggregates when possible.
      db "red fox")
 ```
 
-`fulltext` returns `[e a v]` by default. With `{:display :refs+scores}`, bind
-`[e a v score]`; with `:texts`, `:offsets`, or `:texts+offsets`, bind the
-corresponding extra values. Attribute-specific search requires
+`fulltext` returns document references by default. In Datalog, the document
+reference is the indexed datom itself, so bind `[e a v]`. With
+`{:display :refs+scores}`, bind `[e a v score]`; with `:texts`, `:offsets`, or
+`:texts+offsets`, bind the corresponding extra values. Attribute-specific search requires
 `:db.fulltext/autoDomain true` on the attribute. Phrase search and offset
 display require the relevant search domain to be configured with
-`:index-position? true` before indexing.
+`:index-position? true` before indexing. Text display requires
+`:include-text? true`; full-text indexes store document references by default,
+not a duplicate raw-text copy.
 
 ### 6.4 Vector and Embedding Search
 

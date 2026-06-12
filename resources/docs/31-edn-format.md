@@ -358,14 +358,25 @@ instead of by numeric entity id.
 
 ### 7.5 Datalog Queries
 
-A Datalog query is an EDN vector containing clauses and keywords such as
-`:find`, `:where`, `:in`, `:keys`, and `:limit`:
+A Datalog query is usually written as an EDN vector containing clauses and
+keywords such as `:find`, `:where`, `:in`, `:keys`, and `:limit`:
 
 ```clojure
 [:find ?e ?name
  :where [?e :user/email ?email]
         [?e :user/name ?name]
  :in $ ?email]
+```
+
+Datalevin also accepts the equivalent map form, which is convenient when code
+needs to parameterize options such as `:limit` and `:offset`:
+
+```clojure
+{:find  '[?e ?name]
+ :in    '[$ ?email]
+ :where '[[?e :user/email ?email]
+          [?e :user/name ?name]]
+ :limit limit}
 ```
 
 The query is data. Datalevin interprets that data as a logical query.

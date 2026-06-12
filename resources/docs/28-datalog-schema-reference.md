@@ -269,7 +269,15 @@ attribute-specific domain named by the attribute without the leading colon:
 vector and embedding domains, full-text auto domains keep `/` in namespaced
 attribute names.
 
-Store-level `:search-opts` and `:search-domains` configure search domain options such as `:indexing-mode :async`.
+Store-level `:search-opts` and `:search-domains` configure search domain
+options such as `:indexing-mode :async`, `:index-position? true`, and
+`:include-text? true`. If a custom analyzer uses ngrams, prefer gram sizes of 3
+characters or longer; shorter grams produce many low-selectivity tokens and can
+make the index much larger. Full-text indexes store document references by
+default. In Datalog, the document reference is the indexed datom itself; the
+index does not store a duplicate raw-text copy unless `:include-text? true` opts
+a domain into storing text for `:display :texts`, `:display :texts+offsets`,
+and re-indexing.
 
 ---
 

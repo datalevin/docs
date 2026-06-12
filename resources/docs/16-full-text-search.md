@@ -201,15 +201,36 @@ Available options:
 - `:domains` — list of search domains to query
 - `:doc-filter` — predicate function to filter results
 
-`:refs` returns the reference to the documents, in Datalog store, that's the
-datoms themselves, which can be destructured into `?e`, `?a`, and `?v` component
-variables.
+`:refs` returns document references. In a Datalog store, the document reference
+is the indexed datom itself, so it can be destructured into `?e`, `?a`, and `?v`
+component variables.
 
 `:scores` are the relevant score of the match. `:texts` are the original text.
 
 `:offsets` are the positions of the search terms in the document, which
 requires the search engine has the option `:index-position? true` (default is
 `false`) to be usable.
+
+Full-text domains store document references and the inverted index by default,
+not a second copy of the original document text. Datalog and standalone search
+use the same model: standalone `add-doc` receives an application-supplied
+`doc-ref`, while Datalog uses the indexed datom as the `doc-ref`. The source
+datom remains in the Datalog database, but the full-text index itself stores raw
+text only when the domain option `:include-text? true` is enabled. That option
+is required for `:display :texts`, `:display :texts+offsets`, and search-engine
+re-indexing.
+
+```clojure
+(d/create-conn
+  "/tmp/search-db"
+  schema
+  {:search-opts {:include-text? true}})
+
+(d/create-conn
+  "/tmp/search-db"
+  schema
+  {:search-domains {"public" {:include-text? true}}})
+```
 
 When `:display` is not `:refs`, destructure the extra values in the returned
 tuple. For example, relevance scores use `[e a v score]`:
@@ -544,6 +565,11 @@ For fuzzy or substring-style matching, use ngrams. The example below indexes
 3-character grams, so `"Datalevin"` contributes tokens such as `"dat"`, `"ata"`,
 `"tal"`, and `"ale"`.
 
+In practice, prefer ngrams of 3 characters or longer unless the domain is small
+and tightly controlled. One- and two-character grams generate many short,
+high-frequency tokens, which makes posting lists less selective and can grow the
+full-text index quickly.
+
 ```clojure
 (def trigram-analyzer
   (su/create-analyzer
@@ -624,10 +650,26 @@ embedded Clojure:
 ;=> ([1 (["red" [10 39]])] [2 (["red" [40]])])
 ```
 
-**Document References**: In Datalog's `fulltext`, results are datoms `[e a v]`.
-In standalone mode, the "doc-ref" can be anything—numbers, strings,
+Standalone search engines follow the same rule: by default they store the
+`doc-ref` and the inverted index, assuming the application can recover the
+source document from `doc-ref`. Enable `:include-text? true` when the search
+engine should keep raw text for `:display :texts`, `:display :texts+offsets`, or
+`re-index`:
+
+```clojure
+(def engine
+  (d/new-search-engine
+    lmdb
+    {:include-text? true
+     :index-position? true}))
+```
+
+**Document References**: Full-text search returns document references by
+default. In Datalog's `fulltext`, the document reference is the datom `[e a v]`.
+In standalone mode, the `doc-ref` can be anything—numbers, strings,
 maps—whatever uniquely identifies a document in your application. This
-flexibility lets you index external content without storing it in the database.
+flexibility lets you index external content without storing it in the search
+index.
 
 ---
 
@@ -638,6 +680,7 @@ The search indices are stored in LMDB sub-databases:
 - `terms` — map of term → term-info (id, max-weight, doc-frequency list)
 - `docs` — map of document id → doc reference and norm
 - `positions` — inverted lists for proximity (optional)
+- `rawtext` — original document text (optional, only when `:include-text? true`)
 
 Pre-computed norms load into memory on initialization. Term information loads
 per query. Document frequency lists use compressed bitmaps (Roaring Bitmaps) for

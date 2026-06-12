@@ -738,6 +738,48 @@ const result = await conn.query('[:find ?name ?age ' +
 
 </div>
 
+### 5.5 Query Map Form for Programmatic Queries
+
+Most examples in this book use the compact vector form:
+
+```clojure
+[:find ?name ?age
+ :where [?e :user/name ?name]
+        [?e :user/age ?age]
+ :order-by [?name :asc]
+ :limit 10]
+```
+
+Datalevin also accepts a map form. This is the engine's internal query
+representation, and it is useful when application code needs to build or
+parameterize query options such as `:limit`, `:offset`, or `:order-by`:
+
+```clojure
+(defn page-users
+  [conn {:keys [offset limit]
+         :or   {offset 0
+                limit  50}}]
+  (d/q {:find     '[?name ?age]
+        :in       '[$]
+        :where    '[[?e :user/name ?name]
+                    [?e :user/age ?age]]
+        :order-by '[?name :asc]
+        :limit    limit
+        :offset   offset}
+       (d/db conn)))
+```
+
+In map form, the query clauses are ordinary Clojure data. Quote static query
+fragments such as `:find`, `:in`, `:where`, and `:order-by`, but leave runtime
+values such as `limit` and `offset` unquoted. This avoids string concatenation
+and keeps pagination, sorting, and optional clauses easy to assemble with normal
+Clojure data operations.
+
+The same ordering rules apply in both forms: an `:order-by` variable must appear
+in the query's result columns. When ordering by an aggregate result, use the
+appropriate result-column index in `:order-by`, as shown earlier in this
+section.
+
 ---
 
 ## 6. Logical `or` and `not`

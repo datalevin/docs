@@ -353,6 +353,12 @@ In transaction maps, the system attribute `:db/id` carries the entity ID. To
 add facts to an existing entity, include its ID; to create a new entity, omit
 `:db/id` (or use a tempid, below).
 
+`:db/id` is not a place for application identity. A real entity ID is a
+Datalevin-managed `long`; you cannot assign a UUID, slug, email address, or
+other domain key as the permanent `:db/id`. Store those values in ordinary
+attributes declared with `:db.unique/identity`, then use lookup refs such as
+`[:user/id some-uuid]` or `[:user/email "alice@example.com"]`.
+
 ### 4.2 Tempids
 
 During a transaction, you often use **tempids** (temporary IDs) to express
@@ -395,6 +401,8 @@ A tempid is meaningful only within a single transaction; using `-1` again in a
 later transaction denotes a different new entity. To learn which permanent IDs
 were assigned, inspect the transaction report returned by the transact call:
 its `:tempids` map translates each tempid to the entity ID it received.
+String tempids are also only placeholders; they do not become string-valued
+entity IDs.
 
 ```clojure
 (let [report (d/transact! conn [{:db/id -1 :user/name "Alice"}])]
