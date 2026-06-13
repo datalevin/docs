@@ -198,6 +198,10 @@ npm install datalevin-node
 
 Open a REPL or write a small program to create a database, transact data, and query it.
 
+This is your first Datalog query in the book. Do not worry if the syntax is not
+fully familiar yet: for now, read it as "find the names of users whose age is
+greater than 28." Chapter 3 explains the fact model, and Chapter 8 explains the
+query syntax in detail.
 
 <div class="multi-lang">
 
@@ -322,7 +326,9 @@ opened in memory only:
 This mode does not persist data to disk; closing the connection or ending the
 process loses the database contents. Use a real directory path, as in the first
 example above, when the data must survive process restart. Chapter 10 shows the
-same option for direct KV stores with `open-kv`.
+same option for direct KV stores with `open-kv`. This example uses
+`d/create-conn` because it is constructing a fresh in-memory connection; the
+next section explains how that differs from `d/get-conn`.
 
 ### 1.6 Connection Lifecycle
 
@@ -337,6 +343,20 @@ socket or component-system dependency. Create it during application startup,
 reuse it across threads, and close it during application shutdown. In Clojure,
 `d/get-conn` will reuse an existing connection to the same database when one is
 already open.
+
+`d/get-conn` and `d/create-conn` both open Datalog connections, but they have
+different lifecycle intent:
+
+| Function | Use it when |
+| :--- | :--- |
+| `d/get-conn` | You want the normal application path: create the database if needed, open it if closed, and reuse the already-open connection for the same path or `dtlv://` URI. |
+| `d/create-conn` | You deliberately want a new connection object, such as for an in-memory database, a controlled test fixture, or a specialized construction path. |
+
+For a persistent application database, prefer `d/get-conn` at the application
+boundary and share the returned connection. Java's `Datalevin.createConn`,
+Python's `connect`, and Node.js's `connect` are the corresponding language
+binding entry points; manage their returned connection objects with the same
+"open once, share, close on shutdown" discipline.
 
 Short-lived connections are fine for REPL experiments, scripts, tests, and
 single-shot examples. The production pattern is different: hold the connection,
@@ -479,6 +499,10 @@ key-value store. Database names must be unique within a server.
 Once connected to a server, the same API for embedded mode can be used to
 transact and query data. A quick smoke test with `dtlv exec` is:
 
+The `dtlv exec` snippets use Clojure syntax. In Clojure, `@conn` dereferences
+the connection and returns the current DB object, the same value you would get
+from `(d/db conn)` in namespace-qualified application code.
+
 ```console
 dtlv exec <<'EOF'
 (def conn (get-conn "dtlv://datalevin:secret@localhost:8898/getting-started"))
@@ -509,16 +533,16 @@ primary database must have WAL enabled. The replica bootstraps from the primary
 copy interface, tails durable WAL records, serves normal reads, and rejects user
 writes.
 
-For failover, use consensus-lease HA. In this mode, each database has one write
-leader at a time; followers replicate WAL records and can serve reads. Promotion
-is conservative and uses a Raft-backed control plane, bounded leases, replica
-lag checks, and fencing hooks before a new leader accepts writes. HA databases
-force `:wal? true` and default to the `:strict` WAL durability profile.
-Membership changes are explicit operator actions through
-`datalevin.client/ha-update-membership!`.
+For failover, use consensus-lease HA. Think of it as one writable server at a
+time, with followers keeping copies and serving reads. If the writer fails, a
+follower can be promoted only after coordination confirms that it is safe to
+accept writes. HA databases require WAL, use the `:strict` WAL durability
+profile by default, and treat membership changes as explicit operator actions
+through `datalevin.client/ha-update-membership!`.
 
-Chapter 22 covers details of server behavior, client tuning, async read
-replicas, and HA.
+Chapter 22 covers the details: server behavior, client tuning, async read
+replicas, the Raft-backed control plane, bounded leases, replica lag checks,
+fencing hooks, and HA operations.
 
 ---
 

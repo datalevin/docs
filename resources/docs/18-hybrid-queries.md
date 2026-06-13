@@ -52,6 +52,25 @@ All specialized index functions return datoms for consistent destructuring:
 
 The shared entity ID (`?e`) enables seamless joins across all index types.
 
+Full-text scores and vector distances are different quantities. A full-text
+score is a relevance score where higher is better. A vector distance is a
+metric distance where lower is usually closer. They are not on the same scale,
+so production code should not combine the raw numbers directly. Prefer a
+rank-based method such as reciprocal rank fusion (RRF), or keep one index as the
+candidate generator and use the other as a filter.
+
+RRF fuses ranked lists by rank position instead of raw score. A common formula
+is:
+
+```clojure
+(/ 1.0 (+ 60 rank))
+```
+
+where `rank` is 1 for the first item, 2 for the second item, and so on. The
+constant `60` dampens the effect of any one list. The same entity can appear in
+the full-text list, vector list, and graph list; add its reciprocal-rank
+contributions from each list, then sort by the fused score.
+
 ---
 
 ## 3. Order of Execution: How the Optimizer Thinks
@@ -59,6 +78,11 @@ The shared entity ID (`?e`) enables seamless joins across all index types.
 When you mix different index types, the query optimizer uses cost-based analysis
 for ordinary Datalog clauses and joins the result tuples produced by specialized
 index functions.
+
+A **candidate set** is the intermediate set of entities produced by one clause
+or index function. Specialized functions such as `fulltext`, `vec-neighbors`,
+`embedding-neighbors`, and `idoc-match` create candidate sets from their own
+indexes. Ordinary Datalog clauses then join, filter, or extend those candidates.
 
 - **Selective Retrieval First**: Keep `:top`, domains, and index-specific
   filters tight so specialized functions produce useful candidate sets.
@@ -124,6 +148,17 @@ await conn.query(
 The underlying KV layer is a first-class capability, allowing custom logic and
 specialized indexes.
 
+The example above uses a Datalog function binding: the function receives a value
+from the query and returns another value that the query can bind. In embedded
+Clojure, that function can close over an open KV handle or call application code
+that reads a same-file DBI. Keep such functions deterministic and cheap. If the
+function performs network calls, writes state, or scans a large KV range, it can
+make query behavior surprising and hard to optimize.
+
+When a write must update Datalog datoms and application-owned KV DBIs atomically,
+use the `with-transaction` pattern from Chapter 6. Function bindings are for
+read-time lookup and filtering, not for writing during query evaluation.
+
 ---
 
 ## 5. Practical Pattern: Retrieval-Augmented Generation (RAG)
@@ -137,6 +172,12 @@ This example assumes `:doc/content` has `:db/fulltext true` and
 `:db.fulltext/autoDomain true`, and `:doc/embedding` is a vector attribute.
 Both search clauses bind the same `?e`; in Datalog, shared variables are joins,
 so no explicit equality clause is needed.
+
+The variable `query-embedding` in the examples below is a vector produced by the
+application, often by the same embedding model used to index documents. If the
+document text is stored with `:db/embedding true` instead of a user-supplied
+`:db.type/vec` attribute, use `embedding-neighbors` and pass the query text
+directly.
 
 <div class="multi-lang">
 
@@ -223,6 +264,11 @@ This example finds products that:
 This example assumes `:product/desc` has `:db/fulltext true` and
 `:db.fulltext/autoDomain true`, `:product/embedding` is a vector attribute, and
 `:product/metadata` is an idoc attribute.
+
+Chapter 14 introduced `idoc-match`: it searches inside a path-indexed document
+value. In this example it filters products whose nested metadata says
+`{:discounted true}` without requiring that nested field to become a separate
+Datalog attribute.
 
 <div class="multi-lang">
 
@@ -321,7 +367,8 @@ real-time availability flags, or rollout policy.
 The multi-paradigm nature of Datalevin is about **synergy**:
 
 - **Consistency**: Indexes are synchronous by default, with explicit async modes for expensive secondary indexing
-- **Performance**: Joins happen in-memory with zero-copy efficiency
+- **Performance**: Specialized indexes produce bounded candidate sets that
+  Datalog can join with ordinary facts in the same engine
 - **Simplicity**: One database, one query language, one operational model
 
 By treating every index as a programmable capability, you can answer complex questions that traditional single-paradigm databases cannot express.

@@ -77,3 +77,5 @@ Part VII — Appendices
 30. Appendix C: Datalog Built-In Functions Reference
 
 31. Appendix D: EDN Format
+
+32. Appendix E: Core API Helpers Reference

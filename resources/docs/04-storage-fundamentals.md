@@ -141,14 +141,14 @@ such as Cassandra, RocksDB, and LevelDB use Log-Structured Merge-Trees (LSM) as
 their main storage pattern. The table below summarizes the performance
 characteristics of these two approaches.
 
-A **B+Tree** stores sorted keys in fixed-size pages. A lookup starts at the root,
-walks through internal pages, and ends at a leaf page that contains the target
-key or the place where it would be. Because leaf entries are ordered by key,
-range scans can move through adjacent entries in sorted order. An **LSM-Tree**
-takes a different path: it buffers writes and flushes sorted runs to disk, then
-merges those runs in the background. This can make writes very fast, but reads
-may need to consult several levels, and background compaction can add latency
-and CPU variation.
+A **B+Tree** stores sorted keys in fixed-size pages [3]. A lookup starts at the
+root, walks through internal pages, and ends at a leaf page that contains the
+target key or the place where it would be. Because leaf entries are ordered by
+key, range scans can move through adjacent entries in sorted order. An
+**LSM-Tree** takes a different path: it buffers writes and flushes sorted runs
+to disk, then merges those runs in the background. This can make writes very
+fast, but reads may need to consult several levels, and background compaction
+can add latency and CPU variation.
 
 | Feature | B+Tree (Datalevin/LMDB) | LSM-Tree (RocksDB) |
 | :--- | :--- | :--- |
@@ -182,8 +182,10 @@ two ways that matter directly to query execution:
 
 A standard B+Tree doesn't know how many items are in a range without scanning
 them. DLMDB adds **counted B+Trees**, where each node in the tree stores the
-count of items in its sub-tree. The counted B+Tree gives Datalevin these
-advantages:
+count of items in its sub-tree. `:counted` is the DLMDB DBI flag that enables
+this per-node count metadata; Datalevin uses it for the indexes where fast
+counts, samples, and rank-based access matter. The counted B+Tree gives
+Datalevin these advantages:
 
 - **Instant Counts**: All count/sample operations are O(log n) or O(1). For
   example, `(d/count-datoms db nil :person/age nil)` is an O(log n) operation,
@@ -283,9 +285,10 @@ postings, vector metadata, document path indexes, and internal bookkeeping in on
 transactional storage substrate.
 
 By default, Datalevin updates these indexes synchronously in the same transaction
-as the source datoms, preserving read-your-writes behavior for `fulltext`,
-`vec-neighbors`, `embedding-neighbors`, and `idoc-match`. In other words, the
-secondary indexes are immediately available for query upon commit by default.
+as the source datoms, preserving read-your-writes behavior (new writes are
+immediately visible) for query functions such as `fulltext`, `vec-neighbors`,
+`embedding-neighbors`, and `idoc-match`. In other words, the secondary indexes
+are immediately available for query upon commit by default.
 
 For high throughput data ingestion though, full-text, vector, and embedding
 indexes can also opt into `:indexing-mode :async`. In async mode, the source
@@ -442,3 +445,7 @@ Databaseology Lectures*, Carnegie Mellon University, Fall 2015, YouTube video.
 [2] Chris Okasaki, [*Purely Functional Data
 Structures*](https://doi.org/10.1017/CBO9780511530104), Cambridge University
 Press, 1998.
+
+[3] Rudolf Bayer and Edward M. McCreight, ["Organization and Maintenance of
+Large Ordered Indexes"](https://doi.org/10.1007/BF00288683), *Acta
+Informatica* 1, 173-189, 1972.

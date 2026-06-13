@@ -84,7 +84,10 @@ section 3.
 
 ## 2. Querying with `fulltext`
 
-The `fulltext` function returns matching datoms as `[e a v]` triples, ordered by relevance:
+The `fulltext` function returns matching datoms as `[e a v]` triples, ordered
+by relevance. In a query, `fulltext` behaves like a relation-producing
+function: it takes a database and a search expression, then yields rows that can
+be joined with ordinary Datalog clauses through shared variables such as `?e`.
 
 <div class="multi-lang">
 
@@ -118,6 +121,14 @@ await conn.query('[:find ?e ?a ?v ' +
 ```
 
 </div>
+
+In embedded Clojure, use `fulltext-datoms` when you want matching datoms
+directly instead of joining through a Datalog query:
+
+```clojure
+(d/fulltext-datoms db "red fox" {:top 10})
+;=> (#datalevin/Datom [123 :post/body "The red fox ..."] ...)
+```
 
 ### 2.1 Attribute-Specific Search
 
@@ -205,11 +216,16 @@ Available options:
 is the indexed datom itself, so it can be destructured into `?e`, `?a`, and `?v`
 component variables.
 
-`:scores` are the relevant score of the match. `:texts` are the original text.
+Scores are relevance scores for one full-text query. Higher scores mean a better
+match within that query, but scores are not stable identifiers and should not be
+compared across unrelated queries, domains, analyzers, or ranking modes.
+`:texts` are the original text, available only when the search engine stores raw
+text with `:include-text? true`.
 
-`:offsets` are the positions of the search terms in the document, which
-requires the search engine has the option `:index-position? true` (default is
-`false`) to be usable.
+`:offsets` report where matched terms occur in the original document text. They
+are useful for highlighting snippets. This requires `:index-position? true`
+(default is `false`) because the index must store term positions and character
+offsets at indexing time.
 
 Full-text domains store document references and the inverted index by default,
 not a second copy of the original document text. Datalog and standalone search
@@ -451,7 +467,11 @@ the attribute without the leading colon, such as `"post/title"`.
 ## 4. Search Expressions and Boolean Logic
 
 Datalevin uses Clojure data structures for search expressions, enabling
-arbitrary boolean combinations:
+arbitrary boolean combinations. A string query is analyzed into search terms; a
+structured expression lets you say how those terms should combine. A **term** is
+the normalized token produced by the analyzer, not necessarily the exact word
+typed by the user. For example, a stemming analyzer may turn `"running"` into
+`"run"`.
 
 ```clojure
 [:and "clojure" "database"]              ; both terms
@@ -490,6 +510,11 @@ When you transact a string into a full-text attribute, it passes through an
 Custom analyzers can be provided via the `:analyzer` option when creating a
 search engine. Utility functions for stemming, ngrams, and more are in
 `datalevin.search-utils`.
+
+An analyzer turns text into `[term position offset]` triples. The term is the
+searchable token. The position is the token number inside the document, used for
+phrase and proximity scoring. The offset is the character offset in the original
+text, used for highlighting.
 
 ### 5.1 Analyzer Pipelines with `datalevin.search-utils`
 
@@ -594,9 +619,26 @@ full-text index quickly.
 
 ## 6. Ranking: TF-IDF and T-Wand Algorithm
 
-Datalevin uses the standard **Vector Space Model** and TF-IDF weighting
-described by Manning, Raghavan, and Schütze in *Introduction to Information
-Retrieval* [1], with `lnu.ltn` weighting schema:
+Full-text ranking uses a different kind of vector from Chapter 17's embedding
+vectors. In the full-text **Vector Space Model**, a document is a sparse vector
+whose coordinates are terms. A query is another sparse vector over the same term
+space. Ranking asks: which document vectors are most similar to the query
+vector?
+
+Datalevin uses TF-IDF weighting described by Manning, Raghavan, and Schütze in
+*Introduction to Information Retrieval* [1], with the `lnu.ltn` weighting
+schema. The important ideas are:
+
+- **Term frequency (TF)**: a term that appears more often in a document is more
+  important to that document, with logarithmic damping so repetition does not
+  dominate.
+- **Inverse document frequency (IDF)**: a term that appears in fewer documents
+  is more discriminating than a term that appears almost everywhere.
+- **Normalization**: document length affects ranking, so Datalevin normalizes
+  document vectors to avoid blindly favoring longer documents.
+
+In `lnu.ltn` notation, the document side and query side use different
+weighting:
 
 - **Document vectors**: log-weighted term frequency, no idf, pivoted unique
   normalization
@@ -609,7 +651,9 @@ documents.
 ### 6.1 T-Wand Algorithm
 
 The search uses a novel **Tiered WAND** algorithm, described in the T-Wand blog
-post [2]. It processes documents in tiers by term coverage:
+post [2]. WAND-style algorithms are top-k retrieval algorithms: they avoid
+fully scoring documents that cannot enter the best result set. Datalevin's
+T-Wand variant adds tiers by term coverage:
 
 1. First, documents containing *all* query terms
 2. Then documents with *n-1* terms
@@ -623,11 +667,15 @@ matches.
 
 When `:index-position? true` is enabled, a two-stage ranking applies:
 
-1. TF-IDF scoring produces top `m * k` candidates
-2. Proximity scoring re-ranks the top `k` results
+1. TF-IDF scoring produces top `m * k` candidates.
+2. Proximity scoring re-ranks those candidates and returns the top `k` results.
 
 This reflects the intuition that query terms appearing closer together indicate
-higher relevance.
+higher relevance. Here `k` is the requested result count, normally `:top`.
+`m` is controlled by `:proximity-expansion`; raising it considers more
+candidates before re-ranking, which can improve quality at higher cost.
+`:proximity-max-dist` controls how far apart terms may be while still
+contributing to a proximity span.
 
 ---
 
@@ -671,6 +719,59 @@ maps—whatever uniquely identifies a document in your application. This
 flexibility lets you index external content without storing it in the search
 index.
 
+### 7.1 Document Lifecycle and Bulk Loading
+
+The standalone search engine exposes the normal lifecycle operations you expect
+from a search index:
+
+```clojure
+(d/doc-indexed? engine 1)
+;=> true
+
+(d/doc-count engine)
+;=> 2
+
+(d/remove-doc engine 2)
+
+(d/clear-docs engine)
+```
+
+`add-doc` checks for an existing `doc-ref` by default and updates the index when
+the document is already present. During a trusted initial import, pass `false`
+as the fourth argument to skip that existence check:
+
+```clojure
+(d/add-doc engine doc-ref doc-text false)
+```
+
+For larger embedded-Clojure imports, use `search-index-writer`, `write`, and
+`commit`. The writer batches index changes and flushes final term metadata on
+`commit`, so call `commit` before relying on search results:
+
+```clojure
+(def lmdb (d/open-kv "/tmp/search-db"))
+(def writer
+  (d/search-index-writer
+    lmdb
+    {:domain "docs"
+     :index-position? true
+     :include-text? true}))
+
+(doseq [[doc-ref doc-text] docs]
+  (d/write writer doc-ref doc-text))
+
+(d/commit writer)
+
+(def engine
+  (d/new-search-engine
+    lmdb
+    {:domain "docs"
+     :index-position? true
+     :include-text? true}))
+```
+
+The bulk writer is an embedded API. It is not available in client/server mode.
+
 ---
 
 ## 8. Implementation Details
@@ -682,9 +783,13 @@ The search indices are stored in LMDB sub-databases:
 - `positions` — inverted lists for proximity (optional)
 - `rawtext` — original document text (optional, only when `:include-text? true`)
 
-Pre-computed norms load into memory on initialization. Term information loads
-per query. Document frequency lists use compressed bitmaps (Roaring Bitmaps) for
-efficient intersection/union operations.
+An **inverted index** maps from a term to the documents that contain it. A
+**document frequency list** is the posting list for one term: the set of
+documents where the term appears, plus enough statistics to rank them. A
+**norm** is a precomputed document-length normalization factor used during
+ranking. Datalevin loads norms into memory on initialization and loads term
+information as queries need it. Document frequency lists use compressed bitmaps
+(Roaring Bitmaps) for efficient intersection and union operations.
 
 ---
 
@@ -723,8 +828,9 @@ In async mode, Datalevin commits the source datoms and a durable secondary-index
 job atomically. An in-process worker applies the search index update after
 commit and after DB-open recovery. Queries over that index are eventually
 consistent until the worker catches up. Use `secondary-index-status` or
-`wait-for-secondary-index` when an application needs to observe lag or wait for
-a specific transaction's index work.
+`process-secondary-index-jobs!` to observe or manually process pending work, and
+use `wait-for-secondary-index` when an application needs to wait for a specific
+transaction's index work.
 
 ---
 

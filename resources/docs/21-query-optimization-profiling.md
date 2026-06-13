@@ -61,6 +61,63 @@ When a query is submitted:
     switches to greedy after considering `P(n, 2)` plans, since only the first
     two joins have the most accurate size estimates.
 
+#### 1.1.2 A Concrete Join-Order Example
+
+Join order matters because every join produces an intermediate relation. A bad
+plan can create millions of temporary candidates and then throw almost all of
+them away. A good plan starts with the most selective facts and keeps the
+intermediate relation small.
+
+Suppose an e-commerce database has:
+
+- 10,000,000 orders.
+- 80,000,000 line items.
+- 500,000 products priced above `$100`, stored as `10000` cents.
+- A unique order id, so `:order/id` lookup returns exactly one order.
+- About 12 line items per order.
+
+The logical query is simple: "For one order, find the expensive products in its
+line items."
+
+```clojure
+(d/q '[:find ?sku ?qty
+       :in $ ?order-id
+       :where
+       [?order :order/id ?order-id]
+       [?line :line-item/order ?order]
+       [?line :line-item/product ?product]
+       [?line :line-item/quantity ?qty]
+       [?product :product/sku ?sku]
+       [?product :product/price ?price]
+       [(> ?price 10000)]]
+     db
+     "o-2026-000001")
+```
+
+These clauses have one logical meaning, but the physical join order can be
+wildly different.
+
+| Plan step | Good plan: start from order id | Approx. candidates |
+| :--- | :--- | ---: |
+| 1 | AVE lookup `[:order/id "o-2026-000001"]` | 1 order |
+| 2 | Reverse AVE lookup for `:line-item/order` | 12 line items |
+| 3 | Join each line item to its product | 12 products |
+| 4 | Check each product's price | a few rows |
+
+The good plan does work proportional to one order.
+
+| Plan step | Bad plan: start from product price | Approx. candidates |
+| :--- | :--- | ---: |
+| 1 | AVE range scan for `:product/price > 10000` | 500,000 products |
+| 2 | Find line items for those products | millions of line items |
+| 3 | Join those line items to orders | millions of order links |
+| 4 | Keep only order `"o-2026-000001"` | same final rows |
+
+The result is identical, but the bad plan may process millions of candidates to
+answer a question about one order. This is why Datalevin invests in cardinality
+estimation and join planning. The textual order of `:where` clauses does not
+matter; the optimizer is choosing this physical order for you.
+
 ---
 
 ### 1.2 Accurate Cardinality Estimation

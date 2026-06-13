@@ -87,6 +87,10 @@ This approach allows you to:
 2.  **Optimize Query Execution**: Datalevin's query optimizer can jump to a
     specific membership record faster than scanning a large list of IDs inside a
     single user entity.
+3.  **Avoid Large Many-Valued Properties**: A `:db.cardinality/many` attribute
+    stores each member as a separate datom, not as one compact collection. For
+    large relationship sets, the repeated entity/attribute structure and index
+    entries are real storage overhead.
 
 ---
 
@@ -212,7 +216,7 @@ an identity, or a value.
 | Modeling problem | Prefer | Why |
 | :--- | :--- | :--- |
 | One entity points to one parent | Cardinality-one `:db.type/ref` on the child | Normalized, easy to join, and easy to reverse-pull. |
-| A small owned set of refs or values | `:db.cardinality/many` | Convenient when the set is small and the members have no facts of their own. |
+| A small owned set of refs or values | `:db.cardinality/many` | Convenient when the set is small and the members have no facts of their own; each member is still a separate datom. |
 | A relationship has attributes, lifecycle, uniqueness, or direct queries | Relationship entity | The relationship itself is a thing the domain talks about. |
 | A combination of attributes identifies an entity | Composite tuple attribute with `:db/tupleAttrs` | Datalevin maintains a derived lookup/index entry from ordinary attributes. |
 | A small vector-like value whose elements all have one type | Stored homogeneous tuple with `:db/tupleType` | The tuple is one value, such as a coordinate or numeric interval. |

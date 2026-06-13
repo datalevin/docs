@@ -157,80 +157,71 @@ In Datalevin, full-text search, vector search, and logical constraints can be
 combined in one `:where` block. The retrieval is semantically precise and fast,
 avoiding the need for fragile and slow glue code.
 
-The score expression below is illustrative. TF-IDF scores and vector distances
-are not naturally on the same scale, so production systems should prefer rank
-fusion, such as the reciprocal-rank fusion pattern in Section 5.
-
-<div class="multi-lang">
+The practical pattern is not to subtract a vector distance from a text score.
+Those numbers come from different scoring systems. Instead, run bounded queries
+for each lens, apply the same logical constraints to each candidate set, and
+fuse the resulting ranked lists with reciprocal rank fusion (RRF).
 
 ```clojure
-(d/q '[:find ?content ?combined-score
-       :in $ ?q-text ?q-vec ?user-id
-       :where ;; 1. Keyword search.
-              [(fulltext $ :doc/content ?q-text {:top 50
-                                                  :display :refs+scores})
-               [[?e _ _ ?fts-score]]]
+(def text-hits
+  (d/q '[:find ?e ?content ?score
+         :in $ ?q-text ?user-id
+         :where
+         [(fulltext $ :doc/content ?q-text {:top 50
+                                            :display :refs+scores})
+          [[?e _ ?content ?score]]]
+         [?e :doc/status :published]
+         [?user-id :user/permissions ?e]
+         :order-by [?score :desc]]
+       db
+       "performance tuning"
+       user-id))
 
-              ;; 2. Semantic search.
-              [(vec-neighbors $ :doc/vec ?q-vec {:top 50
-                                                  :display :refs+dists})
-               [[?e _ _ ?vec-dist]]]
+(def vector-hits
+  (d/q '[:find ?e ?content ?dist
+         :in $ ?q-vec ?user-id
+         :where
+         [(vec-neighbors $ :doc/vec ?q-vec {:top 50
+                                            :display :refs+dists})
+          [[?e _ _ ?dist]]]
+         [?e :doc/content ?content]
+         [?e :doc/status :published]
+         [?user-id :user/permissions ?e]
+         :order-by [?dist :asc]]
+       db
+       query-embedding
+       user-id))
 
-              ;; 3. Logical constraints.
-              [?e :doc/content ?content]
-              [?e :doc/status :published]
-              [?user-id :user/permissions ?e]
+(defn rrf-fuse
+  "Fuse ordered result rows. The first column must be the entity id."
+  [ranked-lists]
+  (let [k 60]
+    (->> ranked-lists
+         (mapcat
+           (fn [rows]
+             (map-indexed
+               (fn [idx row]
+                 (let [rank (inc idx)
+                       e    (first row)]
+                   [e (/ 1.0 (+ k rank)) row]))
+               rows)))
+         (reduce
+           (fn [acc [e score row]]
+             (-> acc
+                 (update-in [e :rrf] (fnil + 0.0) score)
+                 (update-in [e :evidence] (fnil conj []) row)))
+           {})
+         (map (fn [[e result]] (assoc result :e e)))
+         (sort-by :rrf >))))
 
-              ;; 4. Combined ranking.
-              ;; Smaller vector distance is better.
-              [(- ?fts-score ?vec-dist) ?combined-score]]
-     db "performance tuning" query-embedding user-id)
+(take 10 (rrf-fuse [text-hits vector-hits]))
 ```
 
-```java
-Object results = conn.query(
-    "[:find ?content ?combined-score " +
-    " :in $ ?q-text ?q-vec ?user-id " +
-    " :where [(fulltext $ :doc/content ?q-text {:top 50 :display :refs+scores}) [[?e _ _ ?fts-score]]]" +
-    "        [(vec-neighbors $ :doc/vec ?q-vec {:top 50 :display :refs+dists}) [[?e _ _ ?vec-dist]]]" +
-    "        [?e :doc/content ?content]" +
-    "        [?e :doc/status :published]" +
-    "        [?user-id :user/permissions ?e]" +
-    "        [(- ?fts-score ?vec-dist) ?combined-score]]",
-    "performance tuning", queryEmbedding, userId);
-```
-
-```python
-results = conn.query(
-    """[:find ?content ?combined-score
-        :in $ ?q-text ?q-vec ?user-id
-        :where [(fulltext $ :doc/content ?q-text {:top 50 :display :refs+scores})
-                [[?e _ _ ?fts-score]]]
-               [(vec-neighbors $ :doc/vec ?q-vec {:top 50 :display :refs+dists})
-                [[?e _ _ ?vec-dist]]]
-               [?e :doc/content ?content]
-               [?e :doc/status :published]
-               [?user-id :user/permissions ?e]
-               [(- ?fts-score ?vec-dist) ?combined-score]]""",
-    "performance tuning", query_embedding, user_id)
-```
-
-```javascript
-const results = await conn.query(
-    `[:find ?content ?combined-score
-      :in $ ?q-text ?q-vec ?user-id
-      :where [(fulltext $ :doc/content ?q-text {:top 50 :display :refs+scores})
-              [[?e _ _ ?fts-score]]]
-             [(vec-neighbors $ :doc/vec ?q-vec {:top 50 :display :refs+dists})
-              [[?e _ _ ?vec-dist]]]
-             [?e :doc/content ?content]
-             [?e :doc/status :published]
-             [?user-id :user/permissions ?e]
-             [(- ?fts-score ?vec-dist) ?combined-score]]`,
-    "performance tuning", queryEmbedding, userId);
-```
-
-</div>
+RRF uses only each candidate's rank in each list. The top full-text hit
+contributes `1 / (60 + 1)`, the second contributes `1 / (60 + 2)`, and so on.
+If the same entity appears in both the full-text and vector lists, its
+contributions are added. This makes RRF robust when lexical scores and vector
+distances have incompatible scales.
 
 When Datalevin owns the text embedding index with `:db/embedding true`, replace
 `vec-neighbors` with `embedding-neighbors`. The query input is text, not a

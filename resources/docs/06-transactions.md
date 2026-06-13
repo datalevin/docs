@@ -24,8 +24,9 @@ underlying **LMDB transaction**.
 - **Atomicity**: All changes within a single `transact!` call are applied as a
   single, atomic unit. They either all succeed or all fail.
 - **Durability**: By default, every transaction is synchronously flushed to disk
-  (`msync`) before it is confirmed. This guarantees that once a transaction is
-  committed, it is durable and will survive a system crash.
+  (`msync`, the OS flush-to-disk call) before it is confirmed. This guarantees
+  that once a transaction is committed, it is durable and will survive a system
+  crash.
 
 Transaction scope is one Datalevin store, i.e. one LMDB environment whose
 primary data lives in one memory-mapped data file. In the default non-WAL mode,
@@ -60,6 +61,27 @@ transactable Entity objects can also be transaction data. The examples in this
 chapter start with maps because they are the clearest shape for ordinary creates
 and updates, then introduce the lower-level forms when they become useful.
 Chapter 7 covers transactable entities as part of the Entity API.
+
+Every successful `transact!` returns a **transaction report**. The report
+contains the database before and after the transaction, the datoms that were
+actually added or retracted, the tempid resolution map, and any transaction
+metadata supplied by the caller:
+
+```clojure
+(def report
+  (d/transact! conn
+    [{:db/id -1
+      :user/email "alice@example.com"
+      :user/name "Alice"}]
+    {:source :signup-form}))
+
+(select-keys report [:tempids :tx-meta])
+;=> {:tempids {-1 101}
+;    :tx-meta {:source :signup-form}}
+```
+
+That report is useful not only as a return value. It is also the shape delivered
+to transaction listeners, covered later in this chapter.
 
 ### 2.1 Entity Maps
 
@@ -523,7 +545,90 @@ coercion, and schema evolution in more detail.
 
 ---
 
-## 3. Atomic Read-Modify-Write with `with-transaction`
+## 3. Observing Committed Transactions with `listen!`
+
+Many applications need to react after a write commits: invalidate a cache,
+notify a UI session, enqueue a background job, update an in-process projection,
+or append an audit record in another system. `listen!` registers an in-process
+callback on a Datalevin connection. After a transaction commits, Datalevin calls
+the callback with the transaction report:
+
+```clojure
+(def listener-key
+  (d/listen!
+    conn
+    :audit-log
+    (fn [{:keys [tx-data tx-meta tempids]}]
+      (println "committed" (count tx-data) "datoms")
+      (println "metadata" tx-meta)
+      (println "tempids" tempids))))
+
+(d/transact!
+  conn
+  [{:db/id -1
+    :user/email "ada@example.com"
+    :user/name "Ada"}]
+  {:request-id "req-123"})
+
+(d/unlisten! conn listener-key)
+```
+
+`listen!` itself returns the listener key. When you pass a key explicitly, as
+`:audit-log` above, that same key is returned and can be passed to `unlisten!`.
+When you call the two-argument form `(d/listen! conn callback)`, Datalevin
+generates and returns a key for you.
+
+The callback receives the same transaction report returned by `transact!`:
+
+| Report key | Value |
+| :--- | :--- |
+| `:db-before` | The Datalog DB object before the transaction. |
+| `:db-after` | The Datalog DB object after the transaction. |
+| `:tx-data` | The full datom objects actually added or retracted by the transaction; Chapter 15 explains their `:e`, `:a`, `:v`, `:tx`, and `:added` fields. |
+| `:tempids` | Map from transaction tempids to assigned entity ids. |
+| `:tx-meta` | The metadata value supplied as the optional third argument to `transact!`, or `nil`. |
+
+The listener key can be any unique value meaningful to the application.
+Registering another listener with the same key replaces the previous callback,
+so listener registration is idempotent:
+
+```clojure
+(d/listen! conn :cache (fn [report] (invalidate-cache! report)))
+(d/listen! conn :cache (fn [report] (enqueue-cache-refresh! report)))
+```
+
+Listeners observe committed transactions; they do not make the listener's side
+effects part of the original transaction. If a callback writes to a log file,
+publishes to a queue, or calls another service, that work can fail separately
+from the Datalevin commit. Keep listener callbacks small and predictable. For
+expensive work, enqueue a lightweight task and let a worker handle it.
+
+For durable domain events, the strongest pattern is to transact the event as
+data in the same Datalevin transaction, then use `listen!` only to wake a
+publisher or projector:
+
+```clojure
+(d/transact!
+  conn
+  [{:user/email "ada@example.com"
+    :user/name "Ada"}
+   {:event/type :event.type/user-created
+    :event/user [:user/email "ada@example.com"]
+    :event/request-id "req-123"}])
+
+(d/listen!
+  conn
+  :event-publisher
+  (fn [_report]
+    (publish-pending-events! conn)))
+```
+
+This keeps the fact that the event happened inside the database transaction,
+while allowing delivery to be retried independently.
+
+---
+
+## 4. Atomic Read-Modify-Write with `with-transaction`
 
 Often, you need to read a value, modify it, and write it back as a single
 atomic operation. This is a classic race condition if not handled carefully.
@@ -543,7 +648,7 @@ other concurrent write from interfering. In Java, Python, and JavaScript, prefer
 the conditional transaction forms below, such as `:db/cas` and transaction
 functions, when you need portable read-modify-write behavior.
 
-### 3.1 Mixing Datalog and KV Writes
+### 4.1 Mixing Datalog and KV Writes
 
 Because a local Datalog store is built on Datalevin's KV store, embedded
 Clojure code can also use `with-transaction` to update Datalog data and custom
@@ -588,7 +693,7 @@ it is not a cross-file transaction mechanism.
 
 ---
 
-## 4. Transaction Functions
+## 5. Transaction Functions
 
 Datalevin does not use a bare symbolic list form such as `(my-tx-fn arg)` for
 transaction functions. Transaction functions are transaction data vectors that expand to more
@@ -606,9 +711,22 @@ Transaction function can be one of the supported vector forms:
   compare-and-swap.
 - `[:db.fn/retractAttribute e a]`, `[:db.fn/retractEntity e]`, and
   `[:db/retractEntity e]` are built-in transaction functions for retraction.
-- `[:db.fn/patchIdoc ...]` patches an idoc value.
+- `[:db.fn/patchIdoc ...]` patches an idoc value; idoc document modeling is
+  covered in Chapter 14.
 
-### 4.1 Compare-and-Swap
+There are two ways to install a named application transaction function. Choose
+based on where the implementation lives:
+
+| Mechanism | Stored attribute | Use when |
+| :--- | :--- | :--- |
+| Descriptor-backed UDF | `:db/udf` | The function must be callable from Java, Python, JavaScript, client/server deployments, or another runtime that resolves descriptors through a registry. |
+| Interpreted Clojure function | `:db/fn` | The function is Clojure code for embedded Clojure-style environments and can be represented with `datalevin.interpret` helpers. |
+
+Both mechanisms install an entity with `:db/ident`, and both can be invoked with
+`[:some/ident arg ...]` or through `:db.fn/call`. The difference is not the call
+shape; it is how the implementation is stored and resolved.
+
+### 5.1 Compare-and-Swap
 
 Use `:db/cas` when the write should succeed only if the current value is what
 you expect. The entity position may be an entity id or a lookup ref.
@@ -656,7 +774,7 @@ await conn.transact([
 If Alice's balance is not currently `100`, the whole transaction fails. This is
 useful for conditional updates that must not silently overwrite newer data.
 
-### 4.2 Transaction UDFs
+### 5.2 Transaction UDFs
 
 For arbitrary user defined functions (UDF), Datalevin allows descriptor-backed
 transaction functions. This works for non-Clojure runtimes and client/server
@@ -854,7 +972,7 @@ Only the descriptor is stored in the database. The implementation comes from the
 runtime registry or resolver, so server processes must be configured with the
 same UDF implementation before they can execute the transaction function.
 
-### 4.3 Inline Transaction Functions
+### 5.3 Inline Transaction Functions
 
 In embedded Clojure, `:db.fn/call` can call a regular Clojure function. The
 function receives the current DB object as its first argument and must return
@@ -876,12 +994,18 @@ transaction data.
 The returned transaction data is prepared and committed as part of the same
 write transaction.
 
-### 4.4 Installed Transaction Functions
+### 5.4 Installed Transaction Functions
 
 For stored transaction functions written in Clojure, install an entity with
 `:db/ident` and `:db/fn`. The function value should be created with
 `datalevin.interpret` helpers such as `inter-fn` or `definterfn`, which keeps it
 usable in native image, server, and Babashka contexts.
+
+Use this mechanism when the transaction logic is naturally Clojure and the
+environment can evaluate Datalevin interpreted functions. If the same installed
+function must be implemented outside Clojure or resolved by different server
+processes and language bindings, use the `:db/udf` descriptor mechanism from
+Section 5.2 instead.
 
 ```clojure
 (require '[datalevin.interpret :as i])
@@ -909,13 +1033,13 @@ You can also call an installed function through `:db.fn/call`:
 
 ---
 
-## 5. High-Throughput: WAL and Asynchronous Transactions
+## 6. High-Throughput: WAL and Asynchronous Transactions
 
 While the default synchronous model is extremely safe, it can limit write
 throughput. For demanding workloads, Datalevin provides two advanced features:
 WAL mode and asynchronous transactions.
 
-### 5.1 WAL Mode
+### 6.1 WAL Mode
 
 As introduced in Chapter 4, **WAL (Write-Ahead Log) mode** increases write
 performance, especially for concurrent writers, by recording transactions in a
@@ -932,7 +1056,7 @@ sequential log before applying them to LMDB.
   false`. Enable WAL with `{:wal? true}` when the workload needs WAL throughput,
   replay, or replication behavior.
 
-### 5.2 Asynchronous Transactions (`transact-async`)
+### 6.2 Asynchronous Transactions (`transact-async`)
 
 For the absolute highest throughput, the embedded Clojure API offers
 `d/transact-async`. Instead of waiting for the transaction to be confirmed, this
@@ -959,5 +1083,6 @@ best-in-class Online Transaction Processing (OLTP) performance.
 
 Datalevin provides a flexible and powerful transaction model that scales from
 simple, safe synchronous writes to high-performance asynchronous batching. By
-using tools like `with-transaction` for atomic updates and `transact-async` for
-high throughput, you can build applications that are both correct and fast.
+using tools like `listen!` for committed-write observation, `with-transaction`
+for atomic updates, and `transact-async` for high throughput, you can build
+applications that are both correct and fast.

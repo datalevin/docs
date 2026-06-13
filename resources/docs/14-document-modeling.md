@@ -308,7 +308,10 @@ Declare an idoc attribute with `:db/valueType :db.type/idoc`. The optional
   {:user/metadata {:db/valueType :db.type/idoc
                    :db/domain    "user_metadata"}
    :user/raw-json {:db/valueType  :db.type/idoc
-                   :db/idocFormat :json}})
+                   :db/idocFormat :json}
+   :doc/title     {:db/valueType :db.type/string}
+   :doc/markdown  {:db/valueType  :db.type/idoc
+                   :db/idocFormat :markdown}})
 ```
 
 ```java
@@ -320,7 +323,14 @@ Schema schema = Datalevin.schema()
     .attr("user/raw-json",
           Schema.attribute()
               .valueType(Schema.ValueType.IDOC)
-              .prop("db/idocFormat", Datalevin.kw("json")));
+              .prop("db/idocFormat", Datalevin.kw("json")))
+    .attr("doc/title",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING))
+    .attr("doc/markdown",
+          Schema.attribute()
+              .valueType(Schema.ValueType.IDOC)
+              .prop("db/idocFormat", Datalevin.kw("markdown")));
 ```
 
 ```python
@@ -332,6 +342,13 @@ schema = {
     ":user/raw-json": {
         ":db/valueType": ":db.type/idoc",
         ":db/idocFormat": ":json"
+    },
+    ":doc/title": {
+        ":db/valueType": ":db.type/string"
+    },
+    ":doc/markdown": {
+        ":db/valueType": ":db.type/idoc",
+        ":db/idocFormat": ":markdown"
     }
 }
 ```
@@ -345,6 +362,13 @@ const schema = {
   ":user/raw-json": {
     ":db/valueType": ":db.type/idoc",
     ":db/idocFormat": ":json"
+  },
+  ":doc/title": {
+    ":db/valueType": ":db.type/string"
+  },
+  ":doc/markdown": {
+    ":db/valueType": ":db.type/idoc",
+    ":db/idocFormat": ":markdown"
   }
 };
 ```
@@ -419,7 +443,71 @@ Document rules:
 - For `:edn` format, string payloads are read as EDN and must yield a map.
 - JSON and Markdown attributes accept string payloads in those formats.
 
-### 2.3 Patching Documents
+### 2.3 Markdown Documents
+
+Markdown idocs are useful when the source data is authored as prose but you
+still want to query by section. Datalevin parses Markdown headings into nested
+map paths and stores the section text as values.
+
+```clojure
+(d/transact! conn
+  [{:db/id 201
+    :doc/title "Search Guide"
+    :doc/markdown
+    "# Guide
+
+## Install
+
+Run `clj -M:dev`.
+
+## Configure Search
+
+Set `:index-position? true` for phrase search."}])
+```
+
+The parsed idoc value is equivalent to:
+
+```clojure
+{:guide {:install "Run clj -M:dev."
+         :configure-search "Set :index-position? true for phrase search."}}
+```
+
+Heading text is normalized to keyword-like paths: case is folded, leading
+numbering is removed, punctuation is dropped, and spaces become hyphens. Inline
+Markdown markup is stripped from the stored text. Content before the first
+heading is rejected, because Datalevin needs a heading path for the text.
+
+You can match a section and extract its text in the same query:
+
+```clojure
+(d/q '[:find ?title ?install
+       :where
+       [?e :doc/title ?title]
+       [(idoc-match $ :doc/markdown
+                    {:guide {:install "Run clj -M:dev."}})
+        [[?e _ ?doc]]]
+       [(idoc-get ?doc :guide :install) ?install]]
+     db)
+```
+
+For Markdown idocs, query paths are normalized too. This means string paths
+that look like headings work:
+
+```clojure
+(d/q '[:find ?e
+       :where
+       [(idoc-match $ :doc/markdown
+                    {"Guide" {"Configure Search"
+                              "Set :index-position? true for phrase search."}})
+        [[?e _ _]]]]
+     db)
+```
+
+Use Markdown idocs for section-level lookup over authored documents. If a
+section needs independent identity, permissions, relationships, or versioning,
+model it as normal component entities instead.
+
+### 2.4 Patching Documents
 
 Use `:db.fn/patchIdoc` for partial updates when you do not want to resend the
 whole document.

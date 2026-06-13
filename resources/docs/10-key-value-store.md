@@ -281,11 +281,12 @@ Heterogeneous tuple descriptors are fixed arity: `[:string :instant]` matches
 `["acct-42" #inst "2026-05-31T00:00:00.000-00:00"]`. Homogeneous descriptors
 have one element type and can encode vectors such as `[2026 5 31]`.
 
-Supported tuple element types are the sortable scalar encodings used by
-`put-buffer`: `:string`, `:long`, `:float`, `:double`, `:bigint`, `:bigdec`,
-`:bytes`, `:keyword`, `:symbol`, `:boolean`, `:instant`, and `:uuid`. Do not use
-`:data` inside a tuple; arbitrary EDN data is not a sortable tuple component.
-For numeric IDs inside tuples, use `:long`.
+Datalevin encodes typed KV keys and values into byte buffers internally. Tuple
+elements must use encodings that preserve the intended sort order in those
+buffers: `:string`, `:long`, `:float`, `:double`, `:bigint`, `:bigdec`,
+`:bytes`, `:keyword`, `:symbol`, `:boolean`, `:instant`, and `:uuid`. Do not
+use `:data` inside a tuple; arbitrary EDN data is not a sortable tuple
+component. For numeric IDs inside tuples, use `:long`.
 
 Tuples sort lexicographically by their encoded elements: first element first,
 then the second element to break ties, and so on. Put the field you most often
@@ -377,6 +378,20 @@ When `key-type` or `value-type` is omitted, Datalevin uses `:data`. That is fine
 for opaque EDN values, but it is usually the wrong choice for keys you plan to
 scan by range. Use explicit sortable types such as `:string`, `:long`,
 `:instant`, or tuple descriptors for range-oriented DBIs.
+
+The optional `flags` slot applies to `:put` operations. It is a set of LMDB
+write flags for specialized cases:
+
+| Flag | Meaning |
+| :--- | :--- |
+| `:append` | Hint that keys are inserted in sorted order. This can speed up bulk loading, but use it only when the input order is correct. |
+| `:appenddup` | Like `:append`, but for sorted duplicate values in a `DUPSORT`/list DBI. |
+| `:nooverwrite` | Do not overwrite an existing key. The write fails if the key already exists. |
+| `:nodupdata` | In a duplicate-sorted DBI, do not add the same key/value pair twice. |
+| `:current`, `:reserve`, `:multiple` | Low-level LMDB flags for cursor replacement, reserved buffers, and batched duplicate values. Most application code should not need them. |
+
+Most transactions should omit `flags`. Reach for them only when you know the
+LMDB write-mode semantics you need, especially for trusted bulk loading.
 
 <div class="multi-lang">
 
@@ -528,7 +543,7 @@ storage for large reads; they are not durable application data. If you want to
 process a large range without realizing it eagerly, prefer `range-seq` and close
 the returned sequence when finished.
 
-### 4.4 Visitor functions and `read-buffer`
+### 4.4 Visitor functions, `read-buffer`, and `put-buffer`
 
 `range-seq` is useful when you want a lazy sequence. Sometimes you do not want a
 sequence at all: you want to stream over a range, update a counter, write to an
@@ -548,7 +563,9 @@ a visitor returns `:datalevin/terminate-visit`, Datalevin stops the scan early.
 By default, visitors run in **raw mode**. A raw `visit` callback receives an
 `IKV` object whose key and value are `java.nio.ByteBuffer`s. Use `d/k` and `d/v`
 to access those buffers, then decode them with `d/read-buffer` and the same KV
-type descriptors used when writing the data.
+type descriptors used when writing the data. When a visitor needs an encoded
+comparison value, use `d/put-buffer` to write a Datalevin-encoded value into a
+`ByteBuffer`.
 
 The raw callback argument depends on the visitor. `visit-key-range` receives a
 key buffer directly. `visit-list` receives a value buffer directly. `visit` and
@@ -603,8 +620,41 @@ available.
 `read-buffer` is the inverse of Datalevin's KV encoding. It reads a value out of
 the current position of a `ByteBuffer` according to the type descriptor you
 provide: `:string`, `:long`, `:instant`, `:data`, a tuple descriptor such as
-`[:string :instant]`, and so on. Read or copy what you need inside the visitor;
-do not retain raw buffers outside the callback.
+`[:string :instant]`, and so on. `put-buffer` goes the other direction: it writes
+an application value into a `ByteBuffer` using the same type descriptor. This is
+useful when a raw visitor or raw range predicate wants to compare encoded values
+without decoding every item.
+
+For example, using the earlier `scores-by-board` list DBI, you can encode a
+score cutoff once and compare raw list values against it. Raw byte comparison is
+meaningful here because both buffers use the same `score-type` descriptor:
+
+```clojure
+(import '[java.nio ByteBuffer])
+
+(def score-type [:double :string])
+
+(def cutoff
+  (doto (ByteBuffer/allocate 64)
+    (d/put-buffer [90.0 ""] score-type)
+    (.flip)))
+
+(d/visit-list kv "scores-by-board"
+  (fn [value-buf]
+    ;; ByteBuffer.compareTo compares the remaining encoded bytes without
+    ;; advancing either buffer's position.
+    (when-not (neg? (.compareTo (.duplicate value-buf)
+                                (.duplicate cutoff)))
+      ;; read-buffer advances position, so decode a duplicate if you also
+      ;; need to keep using the original raw buffer.
+      (println (d/read-buffer (.duplicate value-buf) score-type))))
+  "daily"
+  :string
+  score-type)
+```
+
+Read or copy what you need inside the visitor; do not retain raw buffers outside
+the callback.
 
 Raw mode is the default because it avoids decoding data that the visitor may
 not need. If you prefer a simpler callback and are willing to decode every

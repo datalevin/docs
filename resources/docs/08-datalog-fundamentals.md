@@ -155,6 +155,10 @@ vector, or idoc search functions:
      db)
 ```
 
+`fulltext` is covered in Chapter 16. It appears here only because its return
+binding is a compact example of using `_` to ignore attribute and value
+positions.
+
 When you only want to ignore trailing datom positions, an omitted position is
 often clearer. These two patterns both ask for entities that have an
 `:order/customer` fact:
@@ -291,6 +295,13 @@ variations for aggregation and shaping data.
 
 By default, `:find` returns a **relation**: a set of tuples, where each tuple
 contains the values named in the `:find` clause.
+
+The word **set** matters. If two different internal rows produce the same
+`:find` tuple, the duplicate tuple appears only once in the final relation.
+This is usually what you want for ordinary queries, but it matters for
+aggregates: aggregation works over the distinct tuples that remain in the query
+basis. Section 5.1 explains how `:with` keeps additional variables in that basis
+when you need to count or sum facts that would otherwise collapse.
 
 <div class="multi-lang">
 
@@ -473,6 +484,10 @@ keys.
 
 Datalog supports aggregate functions directly in the `:find` clause, similar to
 SQL's `GROUP BY`.
+
+Grouping is implicit. Any non-aggregate variable in `:find` becomes part of the
+grouping key. For example, `:find ?city (count ?e)` groups by `?city`; there is
+no separate `GROUP BY ?city` clause.
 
 <div class="multi-lang">
 
@@ -716,52 +731,87 @@ const result = await conn.query('[:find ?order-id ?total ' +
 Beyond the core `where` clauses, Datalog provides additional clauses to refine,
 filter, order, and paginate your query results.
 
-### 5.1 `:with`: Introducing Temporary Variables
+### 5.1 `:with`: Preserving Rows for Aggregates
 
-The `:with` clause allows you to introduce variables that are bound in the
-`:where` clause but are not part of the final `:find` result. This is useful for
-intermediate computations or for creating more readable queries.
+Datalog query results have set semantics. Duplicate result tuples collapse. The
+`:with` clause exists for the cases where you need a variable to remain part of
+the intermediate row identity even though it should not be returned.
+
+This most often matters with aggregates. Suppose three orders have amounts `20`,
+`20`, and `15`. If the query only finds `?amount`, the two `20` rows are
+indistinguishable and collapse before `sum` sees them:
 
 <div class="multi-lang">
 
 ```clojure
-;; Find users who are active, but don't return the :user/active? attribute in the result
-(d/q '[:find ?name
-       :with ?is-active
-       :where [?e :user/name ?name]
-              [?e :user/active? ?is-active]
-              [(true? ?is-active)]]
+;; Wrong for revenue: duplicate amount values collapse.
+(d/q '[:find (sum ?amount) .
+       :where [?order :order/amount ?amount]]
      db)
+;; => 35
 ```
 
 ```java
-// Find users who are active, but don't return the :user/active? attribute in the result
-Object result = conn.query("[:find ?name " +
-    ":with ?is-active " +
-    ":where [?e :user/name ?name] " +
-    "       [?e :user/active? ?is-active] " +
-    "       [(true? ?is-active)]]");
+// Wrong for revenue: duplicate amount values collapse.
+Object total = conn.query("[:find (sum ?amount) . " +
+    ":where [?order :order/amount ?amount]]");
 ```
 
 ```python
-# Find users who are active, but don't return the :user/active? attribute in the result
-result = conn.query('[:find ?name '
-    ':with ?is-active '
-    ':where [?e :user/name ?name] '
-    '       [?e :user/active? ?is-active] '
-    '       [(true? ?is-active)]]')
+# Wrong for revenue: duplicate amount values collapse.
+total = conn.query('[:find (sum ?amount) . '
+    ':where [?order :order/amount ?amount]]')
 ```
 
 ```javascript
-// Find users who are active, but don't return the :user/active? attribute in the result
-const result = await conn.query('[:find ?name ' +
-    ':with ?is-active ' +
-    ':where [?e :user/name ?name] ' +
-    '       [?e :user/active? ?is-active] ' +
-    '       [(true? ?is-active)]]');
+// Wrong for revenue: duplicate amount values collapse.
+const total = await conn.query('[:find (sum ?amount) . ' +
+    ':where [?order :order/amount ?amount]]');
 ```
 
 </div>
+
+Add `:with ?order` to keep each order distinct while still returning only the
+aggregate:
+
+<div class="multi-lang">
+
+```clojure
+;; Correct: each order contributes its amount.
+(d/q '[:find (sum ?amount) .
+       :with ?order
+       :where [?order :order/amount ?amount]]
+     db)
+;; => 55
+```
+
+```java
+// Correct: each order contributes its amount.
+Object total = conn.query("[:find (sum ?amount) . " +
+    ":with ?order " +
+    ":where [?order :order/amount ?amount]]");
+```
+
+```python
+# Correct: each order contributes its amount.
+total = conn.query('[:find (sum ?amount) . '
+    ':with ?order '
+    ':where [?order :order/amount ?amount]]')
+```
+
+```javascript
+// Correct: each order contributes its amount.
+const total = await conn.query('[:find (sum ?amount) . ' +
+    ':with ?order ' +
+    ':where [?order :order/amount ?amount]]');
+```
+
+</div>
+
+`:with` does not make a hidden column in the returned result. It only changes
+the set of variables that define distinct intermediate rows for aggregation.
+For a non-aggregate query, adding `:with` often has no observable effect because
+the final `:find` result is still a set.
 
 ### 5.2 `:having`: Filtering Aggregated Results
 

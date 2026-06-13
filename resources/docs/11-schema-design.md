@@ -346,18 +346,25 @@ them.
 
 **Performance Tip: Prefer Normalized Relationship Facts.**
 
-While `:db.cardinality/many` is convenient, Datalevin is highly optimized for
-**normalized data**: many small relationship facts are usually better than one
-very large collection-valued fact. For one-to-many relationships, this often
-means placing a cardinality-one reference on the many side. For many-to-many
+While `:db.cardinality/many` is convenient, it is not a compact array stored
+inside one datom. Each member is a separate datom, logically shaped like
+`[entity attribute value]`, and it participates in the indexes. DUPSORT reduces
+some repeated-prefix cost at the storage layer, but a large many-valued
+attribute still carries real index-entry overhead and repeated entity/attribute
+structure.
+
+Datalevin is highly optimized for **normalized data**: small relationship facts
+whose access paths are explicit. For one-to-many relationships, this often means
+placing a cardinality-one reference on the many side. For many-to-many
 relationships, it often means creating a join entity.
 
 This shape gives the query optimizer more granular facts to count, join, and
-filter. If you expect a single entity to have thousands of references, such as a
-"Public" group with millions of members, a join entity is the better default
-for performance. It is also the right model when the relationship itself has
-attributes, such as role assignment time, quantity, rank, validity interval, or
-source system.
+filter. It also avoids treating a very large relationship set as if it were a
+small property of one entity. If you expect a single entity to have thousands of
+references, such as a "Public" group with millions of members, a join entity is
+the better default for performance and operational clarity. It is also the right
+model when the relationship itself has attributes, such as role assignment time,
+quantity, rank, validity interval, or source system.
 
 ```clojure
 ;; Instead of many references in one entity:

@@ -419,9 +419,9 @@ it:
 ```
 
 The lazy entity object is part of the Clojure API. Java exposes related
-conveniences such as `conn.entityMap(eid)`, which returns a touched map for the
-given id or lookup ref. In Python and JavaScript code, use `pull` when you want
-an explicit map-shaped read.
+conveniences such as `conn.entityMap(eid)`, which returns a fully realized map
+for the given id or lookup ref. In Python and JavaScript code, use `pull` when
+you want an explicit map-shaped read.
 
 An entity behaves like a Clojure map for attribute lookup:
 

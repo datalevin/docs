@@ -117,9 +117,10 @@ pattern. For a complete list of acceptable value types, please see Appendix A.
 
 ## 2. Attribute Properties
 
-While attributes are created automatically, you can provide a schema map to
-`d/create-conn` or `d/update-schema` to define specific behaviors for the
-attributes. The table below lists some example attribute properties.
+While attributes are created automatically, you can provide a schema map when
+opening a connection with `d/get-conn` or `d/create-conn`, or later with
+`d/update-schema`, to define specific behaviors for the attributes. The table
+below lists some example attribute properties.
 
 | Property | Description |
 | :--- | :--- |

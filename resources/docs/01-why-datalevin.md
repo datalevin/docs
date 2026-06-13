@@ -29,6 +29,12 @@ The central idea is simple: keep facts, indexes, documents, search entries, and
 retrieval metadata close enough that they can participate in the same
 transactional and logical model.
 
+That model also gives application code a clean place to observe change.
+Datalevin transaction reports and `listen!` callbacks let an embedded
+application react to committed writes without polling or scattering change
+detection across search, graph, document, and cache subsystems. Chapter 6 covers
+that transaction-observation pattern after introducing transaction reports.
+
 This chapter explains the problem Datalevin addresses, how the architecture
 unifies multiple access patterns, and where it fits in a modern stack.
 
@@ -155,11 +161,12 @@ facts are joined by shared variables. The second feels graph-oriented: entity
 references are followed as edges. In Datalevin both are expressed as logical
 patterns over datoms.
 
-Datalevin uses the Datomic-style EDN form of Datalog pioneered by Datomic. This
-is friendlier to application developers than the older Prolog-like notation
-because queries are ordinary data structures: vectors, keywords, symbols, and
-lists. The underlying idea is still classic Datalog: describe the facts that
-must be true, and let the engine find bindings for the variables.
+Datalevin uses the Datomic-style EDN (Extensible Data Notation) form of Datalog
+pioneered by Datomic. This is friendlier to application developers than the
+older Prolog-like notation because queries are ordinary data structures:
+vectors, keywords, symbols, and lists. The underlying idea is still classic
+Datalog: describe the facts that must be true, and let the engine find bindings
+for the variables.
 
 This matters for larger applications because queries remain close to the
 domain. A clause such as `[?e :doc/lang :en]` says that the same entity `?e`
@@ -171,10 +178,10 @@ join algorithms.
 ### Direct Key-Value Access
 
 The same key-value substrate that persists triples and indexes is also available
-directly as a durable key-value API for EDN values (Extensible Data Notation, a
-Clojure data format similar to JSON but richer: keywords, symbols, sets, tagged
-literals). This low-level API is useful for low-latency state access, caches,
-and simple lookup-oriented components.
+directly as a durable key-value API for EDN values. EDN is a Clojure data format
+similar to JSON but richer: keywords, symbols, sets, tagged literals. This
+low-level API is useful for low-latency state access, caches, and simple
+lookup-oriented components.
 
 Use the key-value API when the access pattern really is "given this key, read
 or update this value." Examples include local application state, checkpoints,
@@ -286,11 +293,12 @@ approximate them.
 
 A triplestore changes the shape of the problem. In Datalevin, a datom is an
 explicit cell: entity, attribute, value. Missing facts are absent rather than
-stored as nullable positions. Attributes are globally scoped. EAV and AVE
-indexes make many counts direct, and larger estimates can be sampled under the
-same query conditions that execution will use. Datalevin still has to optimize
-queries, but it starts from a storage model that exposes the units the optimizer
-needs to count.
+stored as nullable positions. Attributes are globally scoped. EAV
+(Entity-Attribute-Value) and AVE (Attribute-Value-Entity) indexes make many
+counts direct, and larger estimates can be sampled under the same query
+conditions that execution will use. Datalevin still has to optimize queries,
+but it starts from a storage model that exposes the units the optimizer needs to
+count.
 
 This is why adding more features to a SQL database does not fully answer the
 question. Those features may be useful, and for many systems a mature SQL
