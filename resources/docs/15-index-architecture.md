@@ -553,7 +553,7 @@ shape is simple enough that the index order itself is the query plan.
 
 ## 5. Physical Representation and DUPSORT
 
-Physically, these indexes are implemented using LMDB's `DUPSORT` feature (see Chapter 6). This allows Datalevin to store many values for a single key efficiently.
+Physically, these indexes are implemented using LMDB's `DUPSORT` feature (see Chapter 10). This allows Datalevin to store many values for a single key efficiently.
 
 - **In EAV**: The Key is `E`, and the Values are `(A, V)` pairs.
 - **In AVE**: The Key is `(A, V)`, and the Values are `E` (entity IDs).

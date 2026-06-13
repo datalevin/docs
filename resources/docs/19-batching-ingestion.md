@@ -323,7 +323,9 @@ The same id functions are used on both sides of the relationship:
 and not a lookup ref. The source ids are also stored as unique identity
 attributes (`:user/id`, `:order/id`) so later normal transactions can use lookup
 refs such as `[:user/id 1]`. Treat Datalevin's numeric entity ids as internal
-implementation ids even when you assign them during a bulk load.
+implementation ids even when you assign them during a bulk load. They are not a
+durable interchange format: another database loaded from the same source data
+may use different eids, while the unique source-id attributes stay stable.
 
 For a large import, it is common to stream one table at a time with `fill-db`,
 using the same id functions:

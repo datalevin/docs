@@ -194,7 +194,7 @@ semantic memory.
 Sensory data such as chat logs, tool results, and pasted documents is
 low-level. Apperception requires higher-level abstractions.
 
-Datalevin's recursive rules (Chapter 10) allow you to define these abstractions
+Datalevin's recursive rules (Chapter 9) allow you to define these abstractions
 logically:
 
 - **Raw data**: "User Alice asked about Clojure five times this week."

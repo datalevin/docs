@@ -321,7 +321,7 @@ opened in memory only:
 
 This mode does not persist data to disk; closing the connection or ending the
 process loses the database contents. Use a real directory path, as in the first
-example above, when the data must survive process restart. Chapter 6 shows the
+example above, when the data must survive process restart. Chapter 10 shows the
 same option for direct KV stores with `open-kv`.
 
 ### 1.6 Connection Lifecycle

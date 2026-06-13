@@ -76,7 +76,7 @@ while keeping Datalevin's normalized fact representation.
 
 The most powerful feature of a graph database is the ability to traverse paths
 of arbitrary length. In Datalevin, this is achieved using **Recursive Rules**
-(see Chapter 10).
+(see Chapter 9).
 
 Fixed-depth traversals are ordinary joins. To find people followed by the
 people you follow:

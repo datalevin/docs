@@ -1,24 +1,25 @@
 ---
 title: "Datalog Fundamentals"
-chapter: 9
-part: "II — Core APIs: From KV to Datalog"
+chapter: 8
+part: "II — Core APIs: Datalog First, KV When Needed"
 ---
 
-# Chapter 9: Datalog Fundamentals
+# Chapter 8: Datalog Fundamentals
 
 Datalevin's primary query language is Datalog. It is a powerful, **declarative**
-language for finding complex patterns in your data. Unlike SQL, which often
-requires you to think about *how* to get your data, Datalog lets you focus on
-*what* data you want.
+language for finding complex patterns in your data. Unlike SQL, which exposes a
+large table-oriented surface of joins, aliases, grouping forms, subqueries, and
+dialect-specific syntax, Datalog lets you focus on the facts that must be true
+for an answer to exist.
 
 The flavor of Datalog used by Datalevin follows the Datomic-style query form
 that Datomic pioneered and popularized in the Clojure ecosystem [1]. Instead of
 writing Prolog-like rule syntax, you write queries as EDN data: vectors,
-keywords, symbols, lists, and maps. This makes queries easier to compose, pass
-through APIs, quote in Clojure, and read in non-Clojure client languages. The
-surface syntax is more application-friendly, but the underlying concepts are
-still the classic Datalog concepts: variables, unification, conjunction,
-predicates, rules, and recursive derivation.
+keywords, symbols, lists, and maps. This makes queries easier to compose as
+program data, pass through APIs, quote in Clojure, and read in non-Clojure
+client languages. The surface syntax is more application-friendly, but the
+underlying concepts are still the classic Datalog concepts: variables,
+unification, conjunction, predicates, rules, and recursive derivation.
 
 This chapter covers the fundamentals of writing Datalog queries, the role of the
 query optimizer, and best practices for performance.
@@ -117,6 +118,166 @@ collection form `:find [?attr ...]` when you want a flat collection of
 attribute keywords.
 If you also need the values, write `[?p ?attr ?value]` and include `?value` in
 `:find`.
+
+### 1.2 The `_` Placeholder
+
+When a position must exist but you do not care about its value, use `_` as a
+placeholder. It is a non-binding wildcard: Datalevin matches something in that
+position, but the query does not name it, return it, or join on it.
+
+For example, this query asks for all user names. Each matching entity must have
+some entity id, but the query does not need to bind that id:
+
+```clojure
+(d/q '[:find [?name ...]
+       :where [_ :user/name ?name]]
+     db)
+```
+
+Each `_` is independent. In `[?e _ _]`, the first `_` means "some attribute" and
+the second `_` means "some value"; they are not the same variable. If two
+positions need to be the same, or if a value must be reused in another clause,
+give it a normal variable name:
+
+```clojure
+(d/q '[:find ?edge
+       :where [?edge :edge/from ?node]
+              [?edge :edge/to ?node]]
+     db)
+```
+
+The placeholder is also common when destructuring results from full-text,
+vector, or idoc search functions:
+
+```clojure
+(d/q '[:find ?e
+       :where [(fulltext $ :doc/body "clojure") [[?e _ _]]]]
+     db)
+```
+
+When you only want to ignore trailing datom positions, an omitted position is
+often clearer. These two patterns both ask for entities that have an
+`:order/customer` fact:
+
+```clojure
+[?e :order/customer _]
+[?e :order/customer]
+```
+
+Use `_` when the shape requires a position to be present, especially in nested
+bindings. Use omission when the later positions of a data pattern are simply not
+part of the question.
+
+### 1.3 A Worked Query: Joins, Unification, and Projection
+
+Before adding more query features, it is useful to walk through one ordinary
+Datalog query mechanically. Datalog literature distinguishes between the
+**EDB** (extensional database), the base facts supplied as input, and the
+**IDB** (intensional database), relations derived by applying rules [2].
+Datalevin's stored datoms are EDB facts for query evaluation. In this chapter,
+there is no rule-derived IDB relation yet; Chapter 9 introduces IDB tuples when
+it explains rules and recursion.
+
+Assume `:order/customer` is a ref attribute and the database contains these
+facts, shown as `[e a v]` datoms. The names `alice`, `bob`, `cara`, and
+`order-1` are explanatory labels; Datalevin stores numeric entity ids
+internally.
+
+```text
+[[alice   :user/name      "Alice"]
+ [alice   :user/city      "London"]
+ [bob     :user/name      "Bob"]
+ [bob     :user/city      "London"]
+ [cara    :user/name      "Cara"]
+ [cara    :user/city      "Paris"]
+ [order-1 :order/customer alice]
+ [order-1 :order/total    125]
+ [order-2 :order/customer alice]
+ [order-2 :order/total    60]
+ [order-3 :order/customer bob]
+ [order-3 :order/total    200]
+ [order-4 :order/customer cara]
+ [order-4 :order/total    300]]
+```
+
+Now ask for London users with orders over 100:
+
+```clojure
+(d/q '[:find ?name ?total
+       :where
+       [?u :user/city "London"]
+       [?u :user/name ?name]
+       [?o :order/customer ?u]
+       [?o :order/total ?total]
+       [(> ?total 100)]]
+     db)
+;; => #{["Alice" 125] ["Bob" 200]}
+```
+
+Conceptually, read the clauses as constraints over a relation of variable
+bindings. The optimizer may evaluate the physical query in a different order,
+but the logical meaning is the same.
+
+The first clause finds entities whose city is London:
+
+```text
+after [?u :user/city "London"]
+{?u alice}
+{?u bob}
+```
+
+The second clause reuses `?u` and adds `?name`. This reuse is **unification**:
+each occurrence of `?u` must refer to the same entity within a row.
+
+```text
+after [?u :user/name ?name]
+{?u alice, ?name "Alice"}
+{?u bob,   ?name "Bob"}
+```
+
+The third clause finds orders whose customer is the same `?u`. This is the join:
+the `?u` in `[:order/customer ?u]` must agree with the `?u` already bound by
+the user clauses.
+
+```text
+after [?o :order/customer ?u]
+{?u alice, ?name "Alice", ?o order-1}
+{?u alice, ?name "Alice", ?o order-2}
+{?u bob,   ?name "Bob",   ?o order-3}
+```
+
+`order-4` is not present because its customer is `cara`, and `cara` was not in
+the London-user relation.
+
+The fourth clause adds totals for those orders:
+
+```text
+after [?o :order/total ?total]
+{?u alice, ?name "Alice", ?o order-1, ?total 125}
+{?u alice, ?name "Alice", ?o order-2, ?total 60}
+{?u bob,   ?name "Bob",   ?o order-3, ?total 200}
+```
+
+The predicate clause keeps only rows whose total is greater than 100:
+
+```text
+after [(> ?total 100)]
+{?u alice, ?name "Alice", ?o order-1, ?total 125}
+{?u bob,   ?name "Bob",   ?o order-3, ?total 200}
+```
+
+Finally, `:find ?name ?total` projects each surviving binding row down to the
+requested columns. Intermediate variables such as `?u` and `?o` helped express
+the joins, but they are not returned:
+
+```text
+["Alice" 125]
+["Bob"   200]
+```
+
+This is the core Datalog mental model: data patterns create candidate bindings,
+shared variables join those bindings by equality, predicates filter rows, and
+`:find` shapes the surviving values into the result.
 
 ---
 
@@ -368,7 +529,7 @@ columns.
 ### 2.3 Pull Expressions in `:find`
 
 Perhaps the most powerful feature of `:find` is that you can include a **Pull
-expression** (see Chapter 8). This allows you to run a query to *find* a set of
+expression** (see Chapter 7). This allows you to run a query to *find* a set of
 entities and then immediately *pull* their data in a nested shape, all in one
 operation.
 
@@ -1089,3 +1250,7 @@ structures.
 
 [1] Datomic, [Query Reference](https://docs.datomic.com/query/query-data-reference.html),
 Datomic documentation.
+
+[2] Stefano Ceri, Georg Gottlob, and Letizia Tanca, "What you always wanted to
+know about Datalog (and never dared to ask)," *IEEE Transactions on Knowledge
+and Data Engineering*, 1(1):146-166, 1989.

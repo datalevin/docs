@@ -7,7 +7,7 @@ part: "VII — Appendices"
 # Appendix B: Key-Value API Reference
 
 This appendix is a compact reference for public Datalevin KV functions exposed
-from `datalevin.core`. For tutorial examples, see Chapter 6. Search, vector,
+from `datalevin.core`. For tutorial examples, see Chapter 10. Search, vector,
 embedding, and idoc APIs may use KV stores internally, but they are covered in
 their own chapters.
 

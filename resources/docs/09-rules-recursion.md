@@ -1,10 +1,10 @@
 ---
 title: "Rules, Recursion, and Derived Knowledge"
-chapter: 10
-part: "II — Core APIs: From KV to Datalog"
+chapter: 9
+part: "II — Core APIs: Datalog First, KV When Needed"
 ---
 
-# Chapter 10: Rules, Recursion, and Derived Knowledge
+# Chapter 9: Rules, Recursion, and Derived Knowledge
 
 While simple Datalog queries are powerful for finding patterns, real-world
 applications often require complex, reusable logic. You might find yourself
@@ -16,6 +16,13 @@ This is where **Rules** come in. Rules allow you to define named logic that can
 be reused, composed, and even called recursively. They are the "functions" or
 "views" of the Datalog world, enabling you to derive new knowledge from your raw
 facts.
+
+That derivation is query-time derivation. A rule does not transact new datoms
+into the database, and it does not create a stored table. It defines a
+**virtual relation**: a named set of tuples that exists while a query is being
+evaluated. If you query `(is-active? ?e)`, Datalevin computes the entities that
+satisfy that rule for this query. If you need the result to become durable data,
+your application should explicitly transact the derived facts.
 
 The Java, Python, and JavaScript snippets in this chapter assume an open
 connection named `conn`. Calling `conn.query` supplies the connection's current
@@ -30,12 +37,25 @@ sets are EDN data, so non-Clojure snippets use EDN helpers such as
 At its simplest, a rule is a named collection of Datalog clauses. You define a
 rule once and then invoke it by name within your queries.
 
+Another way to understand rules is to look back at an ordinary query. The
+entire `:where` clause can be considered the body of an unnamed rule, and the
+`:find` variables are like the rule head: together they define a temporary
+relation containing the tuples that satisfy those clauses. Named rules give a
+piece of that logic a name, parameter list, and reusable call site.
+
 ### The Anatomy of a Rule
 
 A rule consists of a **Head** and a **Body**:
 
 - **Head**: The rule name and its parameters, e.g., `(is-manager? ?e)`.
+  The name plus the number of parameters is the rule's shape. Keep all
+  definitions of the same rule at the same arity.
 - **Body**: One or more Datalog clauses that must be true for the rule to match.
+
+Read a rule as a definition of a relation. The head names the relation and its
+columns. The body says which tuples belong to that relation. Variables in the
+head are the values that callers can use; variables that appear only in the body
+are local intermediate variables, similar to helper bindings inside a query.
 
 Rules are typically defined as a vector of vectors (a "rule set"):
 
@@ -80,6 +100,11 @@ const userRules = await interop().readEdn('[[(is-active? ?e) ' +
 ```
 
 </div>
+
+The first rule says: an entity belongs to the one-column virtual relation
+`is-active?` when it has status `:active` and `:user/verified?` is true. The
+second rule says: an entity belongs to `is-admin?` when it belongs to
+`is-active?` and has role `:admin`.
 
 > **Key Takeaway**: Rules are your primary tool for **abstraction** and
 > **composition**. Use them to name common patterns and build more complex logic
@@ -150,6 +175,12 @@ const result = await conn.query('[:find ?name ' +
 In this example, `(is-active? ?e)` acts as a filter. For every entity `?e` that
 has a name, the engine checks if that entity also satisfies the clauses defined
 in the `is-active?` rule.
+
+The `%` input is just the rule set for this query. Different queries can pass
+different rule sets, which makes rules useful for application-specific policies,
+tenant-specific logic, tests, and experiments. Rules are data, so you can load
+them from EDN, compose them in ordinary code, or generate them from a small
+domain-specific configuration when that is appropriate.
 
 ---
 
@@ -274,6 +305,16 @@ Because Datalevin's rule engine evaluates rules from the bottom up (see Chapter
 doesn't just store data; it "reasons" about it to infer new classifications or
 higher-level facts that were never explicitly transacted.
 
+In this context, "forward chaining" means that the engine starts from base
+facts and repeatedly applies rules to discover derived tuples until no new
+tuples can be found. This still happens inside a query. Datalevin is not running
+a background job that stores inferred facts unless your application chooses to
+materialize those results.
+
+An "expert system" is a rule-based classifier: domain experts write conditions,
+and the system applies those conditions to facts. In Datalevin, the conditions
+are Datalog rules and the classifications are query-time derived tuples.
+
 ### Example: Automated Classification (Expert Systems)
 
 Imagine an e-commerce system that needs to determine if a user qualifies for
@@ -372,13 +413,39 @@ const reasoningRules = await interop().readEdn('['
 
 </div>
 
+The `ground` function is a built-in that binds a constant into a variable. The
+clause `[(ground :gold) ?tier]` means "bind `?tier` to `:gold`." It is useful in
+rules because rule heads must expose variables, not raw constants.
+
+With data like this:
+
+```clojure
+(d/transact! conn
+  [{:user/id "u1" :user/total-spent 6000 :user/order-count 25}
+   {:user/id "u2" :user/total-spent 6000 :user/order-count 1}
+   {:user/id "u3" :user/total-spent 1    :user/order-count 25}])
+
+(d/q '[:find ?id ?tier
+       :in $ %
+       :where [?u :user/id ?id]
+              (vip-status ?u ?tier)]
+     db reasoning-rules)
+;; => #{["u1" :gold]
+;;      ["u1" :silver]
+;;      ["u2" :silver]
+;;      ["u3" :silver]}
+```
+
 By querying `(vip-status ?u ?tier)`, you are treating Datalevin as an **Expert
 System**. The database takes the base facts (amount spent, order count) and
 "chains" them forward through your rules to derive matching `vip-status` facts.
-This rule set returns every tier a user qualifies for; add an explicit
-precedence rule if your application needs one exclusive tier.
+This rule set returns every tier a user qualifies for. User `u1` appears twice
+because both the gold rule and the silver rule are true. That is normal Datalog
+semantics: overlapping alternatives contribute multiple tuples. Add an explicit
+precedence rule, aggregate, or filter if your application needs one exclusive
+tier.
 
-This approach is far superior to standard database views because:
+This approach is useful because:
 
 1. **Composability**: You can build complex reasoning chains out of simple,
    testable rules.
@@ -477,31 +544,142 @@ const result = await conn.query('[:find ?name ' +
 
 </div>
 
-Now, finding all subordinates of "Alice" is simple, as shown above.
+With a small hierarchy:
+
+```clojure
+(d/transact! conn
+  [{:db/id -1 :employee/name "Alice"}
+   {:db/id -2 :employee/name "Bob"  :employee/manager -1}
+   {:db/id -3 :employee/name "Cara" :employee/manager -2}
+   {:db/id -4 :employee/name "Dee"  :employee/manager -1}
+   {:db/id -5 :employee/name "Eli"  :employee/manager -3}])
+
+(d/q '[:find ?name
+       :in $ % ?boss-name
+       :where [?boss :employee/name ?boss-name]
+              (reports-to ?sub ?boss)
+              [?sub :employee/name ?name]]
+     db org-rules "Alice")
+;; => #{["Bob"] ["Cara"] ["Dee"] ["Eli"]}
+```
+
+Here is the same example worked through as Datalog evaluation.
+
+The stored facts are the **EDB** (extensional database): facts that are directly
+present in Datalevin. Written as `[e a v]` datoms with names instead of entity
+ids, the `:employee/manager` facts are:
+
+```text
+[[bob  :employee/manager alice]
+ [cara :employee/manager bob]
+ [dee  :employee/manager alice]
+ [eli  :employee/manager cara]]
+```
+
+The rule predicate `reports-to` is the **IDB** (intensional database): tuples
+derived by applying rules to EDB facts and to previously derived IDB tuples.
+Before evaluation starts, there are no derived `reports-to` tuples:
+
+```text
+IDB round 0: {}
+```
+
+Round 1 applies the base rule:
+
+```clojure
+[(reports-to ?sub ?boss)
+ [?sub :employee/manager ?boss]]
+```
+
+Every direct manager fact becomes a direct `reports-to` tuple:
+
+```text
+new IDB round 1:
+(reports-to bob  alice)
+(reports-to cara bob)
+(reports-to dee  alice)
+(reports-to eli  cara)
+```
+
+Round 2 applies the recursive rule using the tuples discovered in round 1:
+
+```clojure
+[(reports-to ?sub ?boss)
+ [?sub :employee/manager ?intermediate]
+ (reports-to ?intermediate ?boss)]
+```
+
+This produces the next layer of indirect reports:
+
+```text
+new IDB round 2:
+(reports-to cara alice)  ; [cara :employee/manager bob] + (reports-to bob alice)
+(reports-to eli  bob)    ; [eli :employee/manager cara] + (reports-to cara bob)
+```
+
+Round 3 repeats the recursive step with the new round-2 tuples:
+
+```text
+new IDB round 3:
+(reports-to eli alice)   ; [eli :employee/manager cara] + (reports-to cara alice)
+```
+
+Round 4 produces no new tuples, so evaluation has reached a **fixpoint**. The
+complete derived `reports-to` relation is the union of all IDB rounds:
+
+```text
+(reports-to bob  alice)
+(reports-to cara bob)
+(reports-to dee  alice)
+(reports-to eli  cara)
+(reports-to cara alice)
+(reports-to eli  bob)
+(reports-to eli  alice)
+```
+
+The query asks only for tuples whose boss is Alice, so it returns Bob, Cara,
+Dee, and Eli. Chapter 21 explains how Datalevin evaluates recursive rules
+efficiently; the step-by-step table here is the conceptual model.
 
 Datalevin's Datalog engine handles the recursive expansion and ensures that the
 query terminates (preventing infinite loops even if your data has cycles).
+Termination is not the same as data validity: if your domain requires a strict
+tree, your application or transaction functions should still prevent illegal
+management cycles.
 
 ---
 
 ## 6. Rule Parameters and Binding
 
 Rules are not limited to single variables. They can take multiple parameters,
-and those parameters can be either bound (input) or unbound (output).
+and those parameters may be bound or unbound when the rule is called.
+
+In Datalog, "bound" means a variable already has a value from an input or an
+earlier clause. "Unbound" means the engine is free to discover values that make
+the rule true. Rules are more relational than ordinary functions: a function
+call usually has inputs and a return value, but a rule describes a relation.
+
+There is one important practical nuance. Data patterns are naturally relational:
+the same attribute can be used to find an entity, find a value, or test that an
+entity/value pair exists. Function binding clauses are directional. A clause
+such as `[(+ ?x ?y) ?sum]` computes and binds `?sum`; `?sum` should be unbound
+when that clause runs. To filter on a computed value, compute it into a variable
+first and then add a predicate.
 
 <div class="multi-lang">
 
 ```clojure
-[[(distance-squared ?p1 ?p2 ?d2)
-  [?p1 :point/x ?x1]
-  [?p1 :point/y ?y1]
-  [?p2 :point/x ?x2]
-  [?p2 :point/y ?y2]
-  [(- ?x2 ?x1) ?dx]
-  [(- ?y2 ?y1) ?dy]
-  [(* ?dx ?dx) ?dx2]
-  [(* ?dy ?dy) ?dy2]
-  [(+ ?dx2 ?dy2) ?d2]]]
+(def distance-rules
+  '[[(distance-squared ?p1 ?p2 ?d2)
+     [?p1 :point/x ?x1]
+     [?p1 :point/y ?y1]
+     [?p2 :point/x ?x2]
+     [?p2 :point/y ?y2]
+     [(- ?x2 ?x1) ?dx]
+     [(- ?y2 ?y1) ?dy]
+     [(* ?dx ?dx) ?dx2]
+     [(* ?dy ?dy) ?dy2]
+     [(+ ?dx2 ?dy2) ?d2]]])
 ```
 
 ```java
@@ -547,9 +725,37 @@ const distanceRules = await interop().readEdn('[[(distance-squared ?p1 ?p2 ?d2) 
 
 You can use this rule in different ways:
 
-- **Filter**: `(distance-squared ?a ?b 100)` — Find pairs exactly 10 units apart.
+- **Filter**: compute `?dist2`, then constrain it with a predicate such as
+  `[(= ?dist2 100)]`.
 - **Calculate**: `(distance-squared ?a ?b ?dist2)` — Find pairs and *bind* the
   squared distance to `?dist2`.
+
+For filtering, let the rule compute the squared distance, then test it:
+
+```clojure
+(d/q '[:find ?name-a ?name-b
+       :in $ %
+       :where [?a :point/name ?name-a]
+              [?b :point/name ?name-b]
+              (distance-squared ?a ?b ?dist2)
+              [(= ?dist2 100)]]
+     db distance-rules)
+```
+
+For calculation, leave the distance variable unbound and include it in
+`:find`:
+
+```clojure
+(d/q '[:find ?name ?dist2
+       :in $ %
+       :where [?origin :point/name "origin"]
+              [?p :point/name ?name]
+              (distance-squared ?origin ?p ?dist2)]
+     db distance-rules)
+```
+
+The first query uses the computed third column as a filter. The second query
+returns it as data. The rule body is the same in both cases.
 
 ---
 
@@ -563,43 +769,92 @@ discounts, seasonal sales, and bulk quantities. Instead of putting this logic in
 your application code (which would require multiple round-trips to the database)
 or in every single query, you can encode it as a rule set.
 
-This keeps your queries readable:
+Here is a simplified rule set. It first derives candidate prices: the base
+price, plus one candidate for each applicable discount. The final
+`calculated-price` rule keeps only a candidate for which no better candidate
+exists.
+
+```clojure
+(def pricing-rules
+  '[[(price-candidate ?user ?product ?price)
+     [?product :product/base-price ?price]]
+
+    [(discount-rate ?user ?product ?rate)
+     [?user :user/tier :gold]
+     [(ground 0.20) ?rate]]
+
+    [(discount-rate ?user ?product ?rate)
+     [?product :product/category :clearance]
+     [(ground 0.15) ?rate]]
+
+    [(discount-rate ?user ?product ?rate)
+     [?user :user/bulk-eligible? true]
+     [?product :product/bulk? true]
+     [(ground 0.10) ?rate]]
+
+    [(price-candidate ?user ?product ?price)
+     [?product :product/base-price ?base]
+     (discount-rate ?user ?product ?rate)
+     [(- 1.0 ?rate) ?multiplier]
+     [(* ?base ?multiplier) ?price]]
+
+    [(calculated-price ?user ?product ?price)
+     (price-candidate ?user ?product ?price)
+     (not-join [?user ?product ?price]
+       (price-candidate ?user ?product ?better)
+       [(< ?better ?price)])]])
+```
+
+This example uses floating-point prices to keep the arithmetic readable. In a
+production money model, prefer integer cents or a decimal representation and
+write the rule arithmetic accordingly.
+
+Now the application query stays focused on intent:
 
 <div class="multi-lang">
 
 ```clojure
-(d/q '[:find ?product ?final-price
-       :in $ % ?user
-       :where [?product :product/id]
+(d/q '[:find ?product-id ?final-price
+       :in $ % ?user-id
+       :where [?user :user/id ?user-id]
+              [?product :product/id ?product-id]
               (calculated-price ?user ?product ?final-price)]
-     db pricing-rules user-id)
+     db pricing-rules "u-123")
 ```
 
 ```java
-Object result = conn.query("[:find ?product ?final-price " +
-    ":in $ % ?user " +
-    ":where [?product :product/id] " +
+Object result = conn.query("[:find ?product-id ?final-price " +
+    ":in $ % ?user-id " +
+    ":where [?user :user/id ?user-id] " +
+    "       [?product :product/id ?product-id] " +
     "       (calculated-price ?user ?product ?final-price)]",
-    pricingRules, userId);
+    pricingRules, "u-123");
 ```
 
 ```python
-result = conn.query('[:find ?product ?final-price '
-    ':in $ % ?user '
-    ':where [?product :product/id] '
+result = conn.query('[:find ?product-id ?final-price '
+    ':in $ % ?user-id '
+    ':where [?user :user/id ?user-id] '
+    '       [?product :product/id ?product-id] '
     '       (calculated-price ?user ?product ?final-price)]',
-    pricing_rules, user_id)
+    pricing_rules, 'u-123')
 ```
 
 ```javascript
-const result = await conn.query('[:find ?product ?final-price ' +
-    ':in $ % ?user ' +
-    ':where [?product :product/id] ' +
+const result = await conn.query('[:find ?product-id ?final-price ' +
+    ':in $ % ?user-id ' +
+    ':where [?user :user/id ?user-id] ' +
+    '       [?product :product/id ?product-id] ' +
     '       (calculated-price ?user ?product ?final-price)]',
-    pricingRules, userId);
+    pricingRules, 'u-123');
 ```
 
 </div>
+
+The query does not need to know whether the price came from a gold-tier
+discount, a clearance discount, a bulk discount, or no discount at all. If the
+business adds a new discount rule, you add another `discount-rate` definition
+and keep the query shape stable.
 
 By moving this logic into rules, you gain:
 

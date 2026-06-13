@@ -254,10 +254,20 @@ and used to generate documentation automatically.
 
 ## 5. From Tables to Facts: Migrating SQL Models
 
-Migrating from SQL to Datalevin is not a rejection of relational model,
-it should be thought of as a better representation of relational model:
-instead of storing rows inside table-shaped containers, Datalevin stores facts
-that can be joined, traversed, pulled, and indexed in several ways.
+Migrating from SQL to Datalevin is not a rejection of relational algebra. It is
+a rejection of treating SQL text and table-shaped containers as the only
+reasonable interface to relational data. Datalevin keeps the relational idea
+that facts can be joined by shared values, but represents the data as explicit
+datoms that can be joined, traversed, pulled, counted, sampled, and indexed in
+several ways.
+
+That distinction matters. If a SQL database adds JSON, text search, vector
+indexes, or graph-like extensions, it may reduce the number of services you run,
+but the application is still written against a table-first language and a
+planner that must estimate joins over row or column containers. Datalevin starts
+from facts and uses Datalog as the surface language, so migration is not merely
+a change of syntax; it is a change in what the database exposes as its basic
+unit of reasoning.
 
 ### 5.1 Translate the Vocabulary
 

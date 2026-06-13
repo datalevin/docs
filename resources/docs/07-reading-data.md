@@ -1,10 +1,10 @@
 ---
 title: "Reading Data: Lookup, Pull, and Entity APIs"
-chapter: 8
-part: "II — Core APIs: From KV to Datalog"
+chapter: 7
+part: "II — Core APIs: Datalog First, KV When Needed"
 ---
 
-# Chapter 8: Reading Data: Lookup, Pull, and Entity APIs
+# Chapter 7: Reading Data: Lookup, Pull, and Entity APIs
 
 Once data is in your database, you need a way to retrieve it in the shape your
 application actually uses. Datalevin gives you several read APIs, each with a
@@ -18,7 +18,7 @@ different job:
   conditional navigation.
 - **`d/q`** finds sets of values and entities using Datalog constraints.
 
-This chapter covers the first three. Chapter 9 focuses on Datalog query syntax,
+This chapter covers the first three. Chapter 8 focuses on Datalog query syntax,
 but queries will appear here when they help explain how lookup refs and pull
 work together.
 
@@ -42,7 +42,9 @@ connection before reading.
 Datalevin stores entities internally by numeric entity id. Application code,
 however, usually knows a natural key: a user's email, an account number, a URL
 slug, or an external system id. A **lookup ref** is the bridge between those two
-worlds.
+worlds. Prefer lookup refs and unique identity attributes at application
+boundaries because eids are database-local handles; the same logical entity may
+have different eids in two databases.
 
 A lookup ref is a two-element vector:
 
@@ -545,9 +547,9 @@ The same rule applies to `db1` itself: it is the DB object that was current when
 again after the transaction. Reads are stable because they are against a
 specific DB object, not a moving connection.
 
-### 5.4 Why Chapter 7 Uses `d/entity`
+### 5.4 Why Chapter 6 Uses `d/entity`
 
-Chapter 7 used `d/entity` inside a transaction function:
+Chapter 6 used `d/entity` inside a transaction function:
 
 ```clojure
 (defn rename-user [db email new-name]

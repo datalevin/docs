@@ -20,7 +20,7 @@ query behavior.
 
 ## 1. Query Planning and Optimization
 
-As discussed in Chapter 9, Datalog is **declarative**. You describe *what* you
+As discussed in Chapter 8, Datalog is **declarative**. You describe *what* you
 want, and Datalevin's **Query Optimizer** decides *how* to find it. This
 decoupling is critical for performance because even a simple change in the
 **order of joins** can make a query 1,000x faster or slower, even though the
@@ -399,7 +399,7 @@ hide the selective condition from estimation.
 
 ### 3.4 Diagnosing Slow Predicates
 
-If your query uses custom functions (Chapter 9), Datalevin's optimizer treats
+If your query uses custom functions (Chapter 8), Datalevin's optimizer treats
 them as black boxes with unknown selectivity.
 
 `explain` can show where the predicate lands in the plan, but it does not time

@@ -346,7 +346,7 @@ or large binary blob stores. This "multi-paradigm" approach ensures that you
 aren't forced to fit every data shape into a Datalog triple if a simple key-value
 pair is more efficient.
 
-The details of the KV API and its practical usage are covered in **Chapter 6**.
+The details of the KV API and its practical usage are covered in **Chapter 10**.
 
 ---
 

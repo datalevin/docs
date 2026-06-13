@@ -187,7 +187,7 @@ await conn.pull(
 
 Sometimes you do not want to persist a nested value at all. You have a map from
 an API response, a fixture, or a one-off data export, and you want Datalog's
-joins and predicates for exploration. Chapter 9 showed that Datalevin can query
+joins and predicates for exploration. Chapter 8 showed that Datalevin can query
 an in-memory sequence of tuples. A small boundary helper can turn a nested
 EDN value into such a relation.
 

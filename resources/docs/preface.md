@@ -21,6 +21,14 @@ transactional state can drift apart. Operationally, the system becomes a
 collection of moving parts that must be secured, backed up, observed, upgraded,
 and understood together.
 
+One response is to keep everything in a capable SQL database and add extensions
+as requirements grow. That is often reasonable, but this book's argument is not
+only about reducing the number of services. SQL is a poor query language for
+programs, and table-shaped storage makes cardinality estimation hard for the
+optimizer precisely when queries become complex. Datalevin takes a different
+route: facts are the storage and query substrate, and Datalog is the language
+for composing those facts.
+
 Datalevin starts from a different premise: many of these needs can share one
 small, composable data model.
 
@@ -226,9 +234,10 @@ Part I builds the foundation. It explains why Datalevin exists, how to get
 started, how to think in facts rather than containers, how LMDB shapes the
 storage model, and how attributes, entities, and namespaces work.
 
-Part II covers the core APIs. You will use Datalevin as a key-value store,
-transact data atomically, read with lookup, pull, and entity APIs, and learn
-Datalog fundamentals, rules, recursion, and derived knowledge.
+Part II covers the core APIs. You will transact data atomically, read with
+lookup, pull, and entity APIs, learn Datalog fundamentals, rules, recursion, and
+derived knowledge, and then drop down to the direct key-value API when sorted
+keys or custom storage structures are the right tool.
 
 Part III is about modeling. It shows how relational, graph, and document
 patterns map onto Datalevin's fact-first model, and how to make schema choices

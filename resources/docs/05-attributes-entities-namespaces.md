@@ -185,7 +185,7 @@ for the attribute, but they differ in how a duplicate write is handled:
   address an entity as `[:user/email "alice@example.com"]` anywhere an entity
   ID is expected.
 
-Chapter 7 shows lookup refs and upserts in transactions; Chapter 11 goes deeper
+Chapter 6 shows lookup refs and upserts in transactions; Chapter 11 goes deeper
 into identity modeling.
 
 ---
@@ -414,7 +414,8 @@ entity IDs.
 Entity IDs are assigned by the database and carry no meaning outside it. Avoid
 exposing them in URLs, API payloads, or other systems: data that is exported
 and re-imported, merged from another database, or rebuilt from source may end
-up with different IDs.
+up with different IDs. Two databases can contain the same application data while
+using different eids for the corresponding entities.
 
 For a stable, externally visible identity, give the entity a natural key
 declared as `:db.unique/identity` — an email, a slug, or a UUID. The example

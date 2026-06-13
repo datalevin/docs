@@ -326,7 +326,7 @@ Building stateful AI is about building systems that **accrue value over time**.
   organized view of relevant state.
 - **Apperception and truth maintenance** (Chapter 26) keep long-term knowledge
   coherent as new evidence arrives.
-- **Datalog** (Chapter 9) provides the logic.
+- **Datalog** (Chapter 8) provides the logic.
 - **MCP and tool records** provide a controlled tool surface for AI clients.
 - **Durable task contracts** keep long-running work resumable, auditable, and
   safe to hand off.

@@ -104,8 +104,9 @@ Datalevin will assign permanent entity IDs automatically.
 
 Do not put application identifiers in `:db/id`. A permanent Datalevin entity id
 is a system-managed `long`, not a UUID, email, slug, or external primary key.
-Use a separate unique identity attribute, such as `:user/id` or `:user/email`,
-for application identity.
+It is also local to one database: two databases with the same application data
+may assign different eids. Use a separate unique identity attribute, such as
+`:user/id` or `:user/email`, for application identity.
 
 <div class="multi-lang">
 

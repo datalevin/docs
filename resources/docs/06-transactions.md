@@ -1,10 +1,10 @@
 ---
 title: "Transactions and Atomic Updates"
-chapter: 7
-part: "II — Core APIs: From KV to Datalog"
+chapter: 6
+part: "II — Core APIs: Datalog First, KV When Needed"
 ---
 
-# Chapter 7: Transactions and Atomic Updates
+# Chapter 6: Transactions and Atomic Updates
 
 Every write to a Datalevin database happens within a **transaction**.
 Transactions are the cornerstone of database reliability, ensuring that your
@@ -59,7 +59,7 @@ often an entity map, such as `{:user/name "Alice"}`. Raw datom vectors such as
 transactable Entity objects can also be transaction data. The examples in this
 chapter start with maps because they are the clearest shape for ordinary creates
 and updates, then introduce the lower-level forms when they become useful.
-Chapter 8 covers transactable entities as part of the Entity API.
+Chapter 7 covers transactable entities as part of the Entity API.
 
 ### 2.1 Entity Maps
 

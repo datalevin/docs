@@ -14,17 +14,17 @@ Part I — Foundations: A Multi-Paradigm Database
 
 5. Attributes, Entities and Namespaces
 
-Part II — Core APIs: From KV to Datalog
+Part II — Core APIs: Datalog First, KV When Needed
 
-6. Using Datalevin as a Key–Value Store
+6. Transactions and Atomic Updates
 
-7. Transactions and Atomic Updates
+7. Reading Data: Lookup, Pull, and Entity APIs
 
-8. Reading Data: Lookup, Pull, and Entity APIs
+8. Datalog Fundamentals: Queries as Logic
 
-9. Datalog Fundamentals: Queries as Logic
+9. Rules, Recursion, and Derived Knowledge
 
-10. Rules, Recursion, and Derived Knowledge
+10. Using Datalevin as a Key–Value Store
 
 Part III — Modeling Across Paradigms
 

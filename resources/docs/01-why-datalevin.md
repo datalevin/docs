@@ -39,6 +39,8 @@ Attribute, Value). This model is compact, sparse, and composable:
 
 - **Entity (E):** the subject being described. In a Datalevin datom, this is a
   system-assigned internal numeric entity id, valid inside that database.
+  Entity ids are database-local handles, not stable application identifiers; two
+  databases containing the same application data may assign different eids.
   Application identifiers such as user IDs, order IDs, document IDs, UUIDs, and
   slugs should be stored as ordinary attributes, often with
   `:db.unique/identity`.
@@ -237,7 +239,83 @@ the access pattern that fits the problem without leaving the database model.
 When a task needs both retrieval and exact constraints, composition is already
 available.
 
-## 3. Developer Ergonomics and Deployment Modes
+## 3. Why Not Just SQL?
+
+A fair objection is that modern SQL databases keep adding capabilities:
+JSON columns, full-text search, graph extensions, vector indexes, procedural
+languages, recursive CTEs, and extension ecosystems. If PostgreSQL can do more
+and more of these jobs, why not stay with SQL?
+
+There are two deeper reasons. The first is blunt: SQL is not a good query
+language for programs. It is a large structured-English language designed
+around tables, joins, projections, grouping, subqueries, and dialect-specific
+extensions. It succeeded as a standard, but standardization should not be
+confused with language quality. SQL queries are usually strings assembled by a
+host language, and complex SQL often forces programmers to think in terms of
+table aliases, join syntax, and container-specific mechanics before they can
+express the domain relationship they actually mean.
+
+The ORM and query-builder ecosystem is strong evidence that SQL is a bad
+application programming interface. A whole industry exists to paper over SQL as
+string construction, weak host-language composition, dialect differences, type
+mismatches between query results and application values, table and row
+containers that do not match object graphs, and boilerplate for joins, identity,
+transactions, lazy loading, and migrations. Even tools that reject classic ORM
+behavior, such as query builders, LINQ-style systems, jOOQ, Ecto, and Prisma,
+are still trying to make SQL less like raw SQL and more like host-language data
+or typed expressions.
+
+Datalog gives the programmer a smaller and more uniform surface. A query is
+data, not a string. Clauses say which facts must be true. Joins arise from
+shared variables through unification. Rules name reusable logic. Recursive
+queries use the same logical form as non-recursive queries. The result is not
+less relational; it is a higher-level way to write relational logic. Relational
+algebra remains the substrate, but the user does not have to speak in join
+operators to ask a relational question.
+
+The second reason is query planning. SQL databases are table-first systems:
+data is bundled into row or column containers, and the optimizer must infer how
+many rows will survive predicates and joins over those containers. Real
+application data is skewed and correlated. Traditional estimators therefore
+depend on approximations such as histograms and assumptions such as uniformity
+or independence. The database literature has repeatedly identified cardinality
+estimation as one of the central hard problems in query optimization [3] [4].
+For container-based storage, there is no cheap general answer: the counts the
+planner needs are not directly present in the layout, so the optimizer has to
+approximate them.
+
+A triplestore changes the shape of the problem. In Datalevin, a datom is an
+explicit cell: entity, attribute, value. Missing facts are absent rather than
+stored as nullable positions. Attributes are globally scoped. EAV and AVE
+indexes make many counts direct, and larger estimates can be sampled under the
+same query conditions that execution will use. Datalevin still has to optimize
+queries, but it starts from a storage model that exposes the units the optimizer
+needs to count.
+
+This is why adding more features to a SQL database does not fully answer the
+question. Those features may be useful, and for many systems a mature SQL
+database remains the right choice. But feature accumulation does not fix SQL as
+a query language, and it does not remove the cardinality-estimation burden
+created by table-shaped containers.
+
+There is also an integration difference. SQL databases can add search, vector,
+document, and graph features, but those features often arrive as separate
+extension surfaces with their own indexes, functions, limitations, and planner
+interactions. Datalevin makes these capabilities joinable through one logical
+query model: a full-text hit, an idoc path match, a vector neighbor, and an
+ordinary fact can all bind the same Datalog variable. Likewise, SQL schemas are
+centered on tables, while Datalevin schema is centered on attributes. That
+matters for sparse, evolving, cross-domain data: an attribute can carry its own
+type, uniqueness, cardinality, reference semantics, full-text behavior, or
+embedding behavior wherever that fact appears.
+
+Datalevin's argument is that a fact-first model, paired with Datalog, is a
+better foundation for applications whose data is relational, graph-shaped,
+sparse, evolving, searchable, and increasingly retrieval-driven.
+
+This is the core argument behind Datalevin's Join Order Benchmark work [2].
+
+## 4. Developer Ergonomics and Deployment Modes
 
 Datalevin is designed to run where your application runs:
 
@@ -270,7 +348,7 @@ recognizable as you move from a local prototype to a server deployment or an AI
 tool integration. Operational shape can change later; the conceptual model does
 not have to be redesigned each time.
 
-## 4. Where Datalevin Fits
+## 5. Where Datalevin Fits
 
 Datalevin is a strong fit when you want one operational database system to
 support:
@@ -303,7 +381,7 @@ or a dedicated search cluster may be better served by systems built only for
 those jobs. Datalevin's niche is the application database that also needs to be
 logical, graph-aware, document-friendly, and retrieval-capable.
 
-## 5. A Minimal Unified Query Example
+## 6. A Minimal Unified Query Example
 
 Suppose you are building a documentation assistant. You want to find English
 documents that mention a term in free text, while also requiring a structured
@@ -494,3 +572,17 @@ Datalevin as persistent memory.
 
 [1] Frederick P. Brooks, Jr., *The Mythical Man-Month: Essays on Software
 Engineering*, Anniversary Edition, Addison-Wesley, 1995.
+
+[2] Huahai Yang,
+   [Competing for the JOB with a Triplestore](https://yyhh.org/blog/2024/09/competing-for-the-job-with-a-triplestore/),
+   yyhh.org, 2024.
+
+[3] Viktor Leis, Andrey Gubichev, Atanas Mirchev, Peter Boncz,
+   Alfons Kemper, and Thomas Neumann,
+   [How Good Are Query Optimizers, Really?](https://www.vldb.org/pvldb/vol9/p204-leis.pdf),
+   Proceedings of the VLDB Endowment, vol. 9, no. 3, 2015, pp. 204-215.
+
+[4] Viktor Leis, Bernhard Radke, Andrey Gubichev, Alfons Kemper,
+   and Thomas Neumann,
+   [Cardinality Estimation Done Right: Index-Based Join Sampling](https://www.cidrdb.org/cidr2017/papers/p9-leis-cidr17.pdf),
+   CIDR 2017.
