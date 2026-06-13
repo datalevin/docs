@@ -23,29 +23,38 @@ When modeling a domain, think of your schema as a language.
 
 ### 1.1 Nouns (Entities)
 
-Nouns are the "things" in your system: the **Entities**. In Datalevin, we
-represent these using **Namespaced Keywords**.
+Nouns are the "things" in your system: users, products, orders, invoices,
+courses, enrollments, and so on. In Datalevin, an entity is not represented by
+a table row, but by a set of facts that share one internal entity id. You usually
+describe that entity with a set of namespaced attributes such as `:user/name`,
+`:user/gender`, or `:user/email`.
 
-- **Rule**: Use **singular nouns** for namespaces.
+- **Rule**: Use **singular nouns** for attribute namespaces.
 - **Example**: Use `:user/name`, not `:users/name`. Use `:product/price`, not
   `:products/price`.
+
+The namespace suggests which domain concept the attribute primarily describes.
+It is a modeling **convention**, not a table declaration or a class tag. If an
+entity has `:user/email` and `:user/name`, readers can recognize it as a user;
+Datalevin still stores ordinary datoms.
 
 Singular namespacing makes Datalog queries feel like natural sentences:
 `[?e :user/name ?n]` reads as "the entity `?e` has a user name `?n`."
 
 ### 1.2 Adjectives (Attributes)
 
-Adjectives are the properties that describe a noun. These are your standard
-value-type attributes like strings, longs, and booleans.
+Adjectives are properties that describe an entity. These are the attributes
+already shown above. Attributes have value-type: strings, longs, booleans,
+instants, keywords, and other types.
 
 - **Example**: `:product/color "Red"`, `:order/status :status/pending`.
 
 ### 1.3 Verbs (Relationships)
 
-Verbs describe how nouns interact. In Datalevin, verbs are modeled using
-`:db.type/ref`.
+Verbs describe how entities interact. In Datalevin, relationships are ordinary
+attributes whose value type is `:db.type/ref`.
 
-- **Example**: `:user/follows`, `:order/items`.
+- **Example**: `:user/follows`, `:order/customer`, `:line-item/product`.
 
 ---
 
@@ -194,7 +203,230 @@ authoritative, cached, or a historical snapshot.
 
 ---
 
-## 4. Documenting the Schema: `:db/doc`
+## 4. Choosing Between Similar Shapes
+
+Several Datalevin features can look like solutions to the same modeling
+problem. The right choice depends on whether you are modeling a relationship,
+an identity, or a value.
+
+| Modeling problem | Prefer | Why |
+| :--- | :--- | :--- |
+| One entity points to one parent | Cardinality-one `:db.type/ref` on the child | Normalized, easy to join, and easy to reverse-pull. |
+| A small owned set of refs or values | `:db.cardinality/many` | Convenient when the set is small and the members have no facts of their own. |
+| A relationship has attributes, lifecycle, uniqueness, or direct queries | Relationship entity | The relationship itself is a thing the domain talks about. |
+| A combination of attributes identifies an entity | Composite tuple attribute with `:db/tupleAttrs` | Datalevin maintains a derived lookup/index entry from ordinary attributes. |
+| A small vector-like value whose elements all have one type | Stored homogeneous tuple with `:db/tupleType` | The tuple is one value, such as a coordinate or numeric interval. |
+| A small record-like value with fixed positions of different types | Stored heterogeneous tuple with `:db/tupleTypes` | The tuple is one value with typed positions, such as `[amount currency]`. |
+| Arbitrary nested imported data | `:db.type/idoc` or query-time tuples | Use document modeling when the structure is open-ended or path-oriented. |
+
+### 4.1 Composite Tuple Attributes Are Access Paths
+
+When users ask for a "custom index" in a Datalog database, they often mean:
+"I want to find or upsert an entity by several fields together." That is the
+job of `:db/tupleAttrs`.
+
+```clojure
+{:price/vendor     {:db/valueType :db.type/string}
+ :price/sku        {:db/valueType :db.type/string}
+ :price/region     {:db/valueType :db.type/string}
+ :price/vendor+sku+region
+ {:db/tupleAttrs [:price/vendor :price/sku :price/region]
+  :db/unique     :db.unique/identity}}
+```
+
+The application writes the component attributes. Datalevin derives the tuple
+value and keeps it consistent when components change:
+
+```clojure
+(d/transact! conn
+  [{:price/vendor "acme"
+    :price/sku    "SKU-42"
+    :price/region "us-west"
+    :price/cents  1999}])
+
+(d/pull (d/db conn)
+        '[:price/cents]
+        [:price/vendor+sku+region ["acme" "SKU-42" "us-west"]])
+```
+
+This is not a stored application tuple. It is a derived composite access path
+over separate facts. Use it when the separate facts are meaningful on their
+own and the combination needs identity or lookup behavior. Component attributes
+can be scalar attributes or cardinality-one refs; Datalevin derives the tuple
+from the actual component values.
+
+### 4.2 Stored Tuple Values Are Values
+
+Stored tuple values are different. Use them when the tuple itself is a compact
+value object and its parts are not usually joined independently.
+
+```clojure
+{:place/latlon {:db/valueType :db.type/tuple
+                :db/tupleType :db.type/double}
+
+ :reading/value+unit
+ {:db/valueType  :db.type/tuple
+  :db/tupleTypes [:db.type/double :db.type/keyword]}}
+```
+
+`:place/latlon` is homogeneous: every element is a double. `:reading/value+unit`
+is heterogeneous: the first position is a double and the second is a keyword.
+
+If you frequently ask "which places are north of this latitude?" or "which
+readings use this unit?", model those parts as ordinary attributes instead:
+
+```clojure
+{:place/lat {:db/valueType :db.type/double}
+ :place/lon {:db/valueType :db.type/double}
+
+ :reading/value {:db/valueType :db.type/double}
+ :reading/unit  {:db/valueType :db.type/keyword}}
+```
+
+Separate attributes give the query planner direct facts and indexes for each
+part. A stored tuple is best when the application normally treats the whole
+vector as one value.
+
+### 4.3 A Practical Decision Checklist
+
+Ask these questions before reaching for a tuple:
+
+1.  Is this a relationship between entities? Use refs, and use a relationship
+    entity if the relationship has its own facts.
+2.  Is this a uniqueness or lookup problem over several existing facts? Use
+    `:db/tupleAttrs`.
+3.  Is this one compact value whose components do not have independent domain
+    meaning? Use a stored tuple.
+4.  Are all stored tuple elements the same type? Use `:db/tupleType`.
+5.  Do the stored tuple positions have different types and fixed meanings? Use
+    `:db/tupleTypes`.
+6.  Do you need to query, validate, document, or evolve the parts separately?
+    Prefer separate attributes.
+
+The short version: relationships should remain facts, composite identities
+should be derived from facts, and stored tuples should be reserved for values.
+
+---
+
+## 5. A Worked ER Example: Course Enrollment
+
+Consider a small school registration system. In an ER diagram you would likely
+draw three strong entity types and one associative entity:
+
+- `Student`: identified by a student id.
+- `Course`: identified by a course code.
+- `Term`: identified by an academic term id.
+- `Enrollment`: the fact that a student is enrolled in a course during a term.
+
+`Enrollment` is not just a many-to-many link. It has attributes of its own:
+status, grade, enrollment time, and perhaps the source system that created the
+record. That makes it a proper entity in Datalevin.
+
+```clojure
+(def school-schema
+  {:student/id   {:db/valueType :db.type/string
+                  :db/unique    :db.unique/identity}
+   :student/name {:db/valueType :db.type/string}
+
+   :course/code  {:db/valueType :db.type/string
+                  :db/unique    :db.unique/identity}
+   :course/title {:db/valueType :db.type/string}
+
+   :term/id        {:db/valueType :db.type/string
+                    :db/unique    :db.unique/identity}
+   :term/starts-at {:db/valueType :db.type/instant}
+
+   ;; Refs are the relationship edges used by ordinary joins.
+   :enrollment/student {:db/valueType :db.type/ref}
+   :enrollment/course  {:db/valueType :db.type/ref}
+   :enrollment/term    {:db/valueType :db.type/ref}
+
+   ;; Optional: enforce one enrollment per student/course/term.
+   :enrollment/key         {:db/tupleAttrs [:enrollment/student
+                                            :enrollment/course
+                                            :enrollment/term]
+                            :db/unique     :db.unique/identity}
+
+   :enrollment/status      {:db/valueType :db.type/keyword}
+   :enrollment/grade       {:db/valueType :db.type/string}
+   :enrollment/enrolled-at {:db/valueType :db.type/instant}})
+```
+
+The refs are the relationship model. `?enrollment` points directly to the
+student, course, and term entities, and ordinary joins recover the corresponding
+domain identifiers when needed. There is no need to copy `:student/id`,
+`:course/code`, or `:term/id` onto the enrollment just to make later queries
+convenient. If you need uniqueness for the relationship, derive a composite
+tuple from the refs themselves.
+
+```clojure
+(d/transact! conn
+  [{:student/id "s-100" :student/name "Ada"}
+   {:course/code "CS101" :course/title "Intro to Databases"}
+   {:term/id "2026-fall"}
+
+   {:enrollment/student     [:student/id "s-100"]
+    :enrollment/course      [:course/code "CS101"]
+    :enrollment/term        [:term/id "2026-fall"]
+    :enrollment/status      :enrollment.status/active}])
+```
+
+To update that enrollment later, find the relationship entity by joining through
+the domain identifiers:
+
+```clojure
+(let [enrollment
+      (d/q '[:find ?enrollment .
+             :in $ ?student-id ?course-code ?term-id
+             :where
+             [?student :student/id ?student-id]
+             [?course :course/code ?course-code]
+             [?term :term/id ?term-id]
+             [?enrollment :enrollment/student ?student]
+             [?enrollment :enrollment/course ?course]
+             [?enrollment :enrollment/term ?term]]
+           (d/db conn)
+           "s-100"
+           "CS101"
+           "2026-fall")]
+  (d/transact! conn
+    [[:db/add enrollment :enrollment/grade "A"]]))
+```
+
+The read query uses the same ref edges:
+
+```clojure
+(d/q '[:find ?student-name ?course-title ?status
+       :in $ ?term-id
+       :where
+       [?term :term/id ?term-id]
+       [?enrollment :enrollment/term ?term]
+       [?enrollment :enrollment/student ?student]
+       [?enrollment :enrollment/course ?course]
+       [?enrollment :enrollment/status ?status]
+       [?student :student/name ?student-name]
+       [?course :course/title ?course-title]]
+     (d/db conn)
+     "2026-fall")
+```
+
+This example illustrates the three layers that often appear together in a real
+model:
+
+1.  **Domain entities** such as students, courses, and terms.
+2.  **Relationship entities** such as enrollments, line items, memberships, and
+    assignments.
+3.  **Composite identities** for relationship entities that need upsert,
+    lookup, or import stability.
+
+Use composite identities as constraints and access paths, not as a reason to
+duplicate facts. When the relationship is already expressed by refs, Datalevin's
+joins are the natural way to move from external domain keys to the relationship
+entity.
+
+---
+
+## 6. Documenting the Schema: `:db/doc`
 
 A schema is not just for the database engine; it is for the developers who will
 maintain the system for years to come. Every attribute in your schema should be
@@ -252,7 +484,7 @@ and used to generate documentation automatically.
 
 ---
 
-## 5. From Tables to Facts: Migrating SQL Models
+## 7. From Tables to Facts: Migrating SQL Models
 
 Migrating from SQL to Datalevin is not a rejection of relational algebra. It is
 a rejection of treating SQL text and table-shaped containers as the only
@@ -269,7 +501,7 @@ from facts and uses Datalog as the surface language, so migration is not merely
 a change of syntax; it is a change in what the database exposes as its basic
 unit of reasoning.
 
-### 5.1 Translate the Vocabulary
+### 7.1 Translate the Vocabulary
 
 The familiar SQL concepts still have Datalevin equivalents, but the boundaries
 move from tables to attributes and facts:
@@ -284,7 +516,7 @@ move from tables to attributes and facts:
 | **Join Table** | **Associative entity** | Model the join as its own entity when the relationship is large, queried directly, or has attributes. |
 | **NULL** | **No datom** | Datalevin does not store `nil`/`null`; absence means the fact is not present. |
 
-### 5.2 Decompose Rows into Facts
+### 7.2 Decompose Rows into Facts
 
 In SQL, a row is the unit that receives a full set of column values:
 
@@ -316,7 +548,7 @@ This is why sparse and evolving domains work well in Datalevin. Optional fields
 do not require nullable columns. If a discount code, shipment, or cancellation
 reason is unknown, the corresponding datom is absent.
 
-### 5.3 Recast Joins as Shared Variables
+### 7.3 Recast Joins as Shared Variables
 
 The most visible change for SQL developers is query syntax. SQL names tables and
 join conditions explicitly:
@@ -350,7 +582,7 @@ the non-aggregate variables in `:find`:
  :where [?o :order/status ?status]]
 ```
 
-### 5.4 Model Foreign Keys and Join Tables Deliberately
+### 7.4 Model Foreign Keys and Join Tables Deliberately
 
 One-to-many relationships map directly to a reference on the "many" side, such
 as `:order/customer` or `:comment/post`.
@@ -366,7 +598,7 @@ For SQL migrations, join tables usually become associative entities. A
 `user_groups` table with `user_id`, `group_id`, `role`, and `joined_at` is not
 just a link; it is a membership entity.
 
-### 5.5 Use a Practical Migration Checklist
+### 7.5 Use a Practical Migration Checklist
 
 For an existing SQL application, migrate in this order:
 
@@ -381,7 +613,7 @@ For an existing SQL application, migrate in this order:
 7.  Validate imports by comparing row counts, relationship counts, uniqueness
     constraints, and representative business queries.
 
-### 5.6 Example: A Normalized E-commerce Schema
+### 7.6 Example: A Normalized E-commerce Schema
 
 <div class="multi-lang">
 
@@ -489,7 +721,7 @@ const ecommerceSchema = {
 
 ---
 
-## 6. Summary: Relational Best Practices
+## 8. Summary: Relational Best Practices
 
 1.  **Think in singular namespaces**: `:user/email`, not `:users/emails`.
 2.  **Choose stable keys**: Use `:db.unique/identity` for domain identifiers you
@@ -500,9 +732,11 @@ const ecommerceSchema = {
     ownership, not just for convenient nesting.
 5.  **Represent subtypes as facts**: Use enum entities or subtype-specific
     namespaces rather than inheritance-table patterns.
-6.  **Document as you go**: Use `:db/doc` to encode the "why" behind every
+6.  **Use tuple features deliberately**: Use `:db/tupleAttrs` for composite
+    identity and stored tuple types only for compact value objects.
+7.  **Document as you go**: Use `:db/doc` to encode the "why" behind every
     attribute, especially derived or denormalized facts.
-7.  **Migrate SQL incrementally**: Preserve stable keys, convert foreign keys to
+8.  **Migrate SQL incrementally**: Preserve stable keys, convert foreign keys to
     refs, and validate migrated facts with the business queries the application
     already depends on.
 

@@ -501,11 +501,334 @@ the query.
 
 ---
 
-## 4. Example: Finding the Forum for a Message (LDBC-SNB IS6)
+## 4. More Graph Problem Shapes
 
-The LDBC Social Network Benchmark (SNB) is an industry standard for evaluating
-graph databases. Let's examine a real query from this benchmark to see how
-Datalevin handles graph traversal in practice.
+The previous examples are social-network and hierarchy shaped, but the same
+modeling tools apply to many graph problems. The important step is to identify
+what the nodes are, what the edges mean, and whether the edge needs its own
+facts.
+
+### 4.1 Co-Appearance and Degrees of Separation
+
+The "six degrees of Kevin Bacon" problem is a useful graph example because it
+is not a tree. It is a dense bipartite graph: people connect to movies through
+credits, and two people are adjacent if they worked on the same movie. A
+Datomic article by Andrew Dennis used this problem to show both Datalog joins
+and application-level breadth-first search over database facts [3]. The same
+idea applies naturally to Datalevin.
+
+Model the credit as an entity, not as redundant lists on both actors and
+movies:
+
+```clojure
+(def movie-schema
+  {:person/name   {:db/valueType :db.type/string
+                   :db/unique    :db.unique/identity}
+   :movie/title   {:db/valueType :db.type/string
+                   :db/unique    :db.unique/identity}
+   :movie/year    {:db/valueType :db.type/long}
+   :credit/person {:db/valueType :db.type/ref}
+   :credit/movie  {:db/valueType :db.type/ref}
+   :credit/role   {:db/valueType :db.type/keyword}})
+```
+
+A direct co-appearance query is just a join through `:credit/movie`:
+
+```clojure
+(d/q '[:find ?movie-title
+       :in $ ?name-1 ?name-2
+       :where
+       [?p1 :person/name ?name-1]
+       [?p2 :person/name ?name-2]
+       [?c1 :credit/person ?p1]
+       [?c1 :credit/movie ?movie]
+       [?c2 :credit/person ?p2]
+       [?c2 :credit/movie ?movie]
+       [(not= ?p1 ?p2)]
+       [?movie :movie/title ?movie-title]]
+     db
+     "Kevin Bacon"
+     "John Belushi")
+```
+
+That answers "Bacon number 1" questions. For a fixed small radius, you can add
+more joins or generate bounded rules, as shown earlier in this chapter. For an
+unknown shortest path, use the database to supply neighbors and run a normal
+graph algorithm in the application. Datalevin makes this practical because the
+same database value can be queried repeatedly and refs are indexed.
+
+```clojure
+(defn acted-with
+  "Return [other-person-eid movie-eid] pairs adjacent to actor."
+  [db actor]
+  (d/q '[:find ?other ?movie
+         :in $ ?actor
+         :where
+         [?c1 :credit/person ?actor]
+         [?c1 :credit/movie ?movie]
+         [?c2 :credit/movie ?movie]
+         [?c2 :credit/person ?other]
+         [(not= ?actor ?other)]]
+       db actor))
+
+(defn entity-label [db eid]
+  (let [m (d/pull db '[:person/name :movie/title] eid)]
+    (or (:person/name m)
+        (:movie/title m))))
+
+(defn bacon-path
+  "Return one shortest alternating [actor movie actor ...] path."
+  [db start-name target-name]
+  (let [start  (d/q '[:find ?e .
+                      :in $ ?name
+                      :where [?e :person/name ?name]]
+                    db start-name)
+        target (d/q '[:find ?e .
+                      :in $ ?name
+                      :where [?e :person/name ?name]]
+                    db target-name)
+        edges  (memoize #(acted-with db %))]
+    (loop [queue (conj clojure.lang.PersistentQueue/EMPTY [start])
+           seen  #{start}]
+      (when-let [path (peek queue)]
+        (let [actor (peek path)]
+          (if (= actor target)
+            (mapv (partial entity-label db) path)
+            (let [next-edges (remove #(seen (first %)) (edges actor))]
+              (recur
+                (into (pop queue)
+                      (map (fn [[other movie]]
+                             (conj path movie other))
+                           next-edges))
+                (into seen (map first next-edges))))))))))
+```
+
+This code treats Datalevin as the graph store and keeps shortest-path policy in
+ordinary Clojure. That is often the right split: use Datalog for the local
+neighborhood relation, and use a graph algorithm when the query needs a global
+search strategy.
+
+### 4.2 Dependency and Impact Analysis
+
+Package managers, build systems, data pipelines, and microservice deployments
+often need the reverse of a dependency graph question. If `core` changes, what
+must be rebuilt? If a table changes, which reports are affected?
+
+Model each dependency as an edge from the dependent item to the thing it uses:
+
+```clojure
+{:component/name {:db/valueType :db.type/string
+                  :db/unique    :db.unique/identity}
+ :component/uses {:db/valueType :db.type/ref}}
+```
+
+Then define reachability over `:component/uses`:
+
+```clojure
+(def dependency-rules
+  '[[(depends-on ?component ?dependency)
+     [?component :component/uses ?dependency]]
+
+    [(depends-on ?component ?dependency)
+     [?component :component/uses ?direct]
+     (depends-on ?direct ?dependency)]])
+```
+
+To find everything impacted by a changed component, bind the dependency side
+and ask which components depend on it:
+
+```clojure
+(d/q '[:find ?impacted-name
+       :in $ % ?changed-name
+       :where
+       [?changed :component/name ?changed-name]
+       (depends-on ?impacted ?changed)
+       [?impacted :component/name ?impacted-name]]
+     db dependency-rules "core")
+```
+
+The same pattern works for "which policies inherit this rule?", "which
+dashboards read from this dataset?", and "which generated files depend on this
+source file?"
+
+### 4.3 Weighted Paths and Route Search
+
+Some graph questions are about reachability; others are about optimal paths.
+Route planning, network latency, risk propagation, and cost-based dependency
+planning all attach weights to edges.
+
+Model a weighted edge as an entity:
+
+```clojure
+{:route/from {:db/valueType :db.type/ref}
+ :route/to   {:db/valueType :db.type/ref}
+ :route/km   {:db/valueType :db.type/double}}
+```
+
+Datalog can enumerate bounded path shapes and sum their weights when the bound
+is small:
+
+```clojure
+(d/q '[:find ?mid-name ?km
+       :in $ ?from-name ?to-name
+       :where
+       [?from :place/name ?from-name]
+       [?to :place/name ?to-name]
+       [?r1 :route/from ?from]
+       [?r1 :route/to ?mid]
+       [?r1 :route/km ?km1]
+       [?r2 :route/from ?mid]
+       [?r2 :route/to ?to]
+       [?r2 :route/km ?km2]
+       [(+ ?km1 ?km2) ?km]
+       [?mid :place/name ?mid-name]]
+     db "Paris" "Berlin")
+```
+
+For unbounded weighted shortest path, use Dijkstra, A*, or another application
+algorithm. Let Datalevin answer the indexed neighbor query, but let the
+algorithm own the priority queue and stopping condition. That keeps the
+database model clean and avoids pretending that every graph algorithm should be
+encoded as one Datalog query.
+
+### 4.4 Lineage Through Relationship Nodes
+
+Some graphs are not stored as one obvious edge. The Datalevin math-genealogy
+benchmark models advisor lineage through dissertations: a person advises a
+dissertation, and the dissertation points to the student who authored it [4].
+The logical edge "advisor advised student" is therefore a derived relation,
+not a stored attribute.
+
+```clojure
+{:person/name        {:db/valueType :db.type/string}
+ :person/advised     {:db/valueType   :db.type/ref
+                      :db/cardinality :db.cardinality/many}
+ :dissertation/cid   {:db/valueType :db.type/ref}
+ :dissertation/univ  {:db/valueType :db.type/string}
+ :dissertation/area  {:db/valueType :db.type/string}
+ :dissertation/title {:db/valueType :db.type/string}}
+```
+
+Rules give names to the useful graph relations:
+
+```clojure
+(def academic-rules
+  '[[(author ?dissertation ?person)
+     [?dissertation :dissertation/cid ?person]]
+
+    [(advised ?advisor ?student)
+     [?advisor :person/advised ?dissertation]
+     (author ?dissertation ?student)]
+
+    [(academic-ancestor ?ancestor ?student)
+     (advised ?ancestor ?student)]
+
+    [(academic-ancestor ?ancestor ?student)
+     (advised ?ancestor ?middle)
+     (academic-ancestor ?middle ?student)]])
+```
+
+Now "find all academic ancestors of a person" is a graph traversal over a
+relation that was assembled from several attributes:
+
+```clojure
+(d/q '[:find [?ancestor-name ...]
+       :in $ % ?student-name
+       :where
+       [?student :person/name ?student-name]
+       (academic-ancestor ?ancestor ?student)
+       [?ancestor :person/name ?ancestor-name]]
+     db academic-rules "David Scott Warren")
+```
+
+This is a good pattern when the edge has a first-class domain object behind
+it. The dissertation is not just a join artifact; it has title, institution,
+area, and year facts of its own. Keeping that node visible preserves domain
+meaning while rules recover the convenient graph relation.
+
+### 4.5 Type Graphs and Same-Generation Relations
+
+Graph reasoning is not limited to social links or dependency chains. In the
+OpenRuleBench/LUBM benchmark, entities have concrete `:type` facts, and rules
+derive membership in broader classes such as `:Student`, `:Faculty`, and
+`:Person` [5].
+
+```clojure
+(def university-type-rules
+  '[[(is-a ?x ?class)
+     [?x :type :GraduateStudent]
+     [(ground :Student) ?class]]
+    [(is-a ?x ?class)
+     [?x :type :UndergraduateStudent]
+     [(ground :Student) ?class]]
+    [(is-a ?x ?class)
+     (is-a ?x ?student-class)
+     [(= ?student-class :Student)]
+     [(ground :Person) ?class]]
+
+    [(is-a ?x ?class)
+     [?x :type :FullProfessor]
+     [(ground :Professor) ?class]]
+    [(is-a ?x ?class)
+     [?x :type :AssociateProfessor]
+     [(ground :Professor) ?class]]
+    [(is-a ?x ?class)
+     (is-a ?x ?professor-class)
+     [(= ?professor-class :Professor)]
+     [(ground :Faculty) ?class]]
+    [(is-a ?x ?class)
+     (is-a ?x ?faculty-class)
+     [(= ?faculty-class :Faculty)]
+     [(ground :Person) ?class]]])
+```
+
+A query can then ask at the semantic level it cares about:
+
+```clojure
+(d/q '[:find ?student ?advisor
+       :in $ %
+       :where
+       (is-a ?student ?class)
+       [(= ?class :Student)]
+       [?student :advisor ?advisor]]
+     db university-type-rules)
+```
+
+This does not require Datalevin attributes themselves to become an ontology.
+The class graph is ordinary application data, and the rules describe how that
+application wants to interpret it.
+
+OpenRuleBench also includes a "same generation" problem over a parent graph.
+This is different from reachability: it derives a relation between pairs of
+nodes that occupy the same structural level.
+
+```clojure
+(def same-generation-rules
+  '[[(same-generation ?x ?y)
+     [?x :parent _]
+     [(identity ?x) ?y]]
+
+    [(same-generation ?x ?y)
+     [?a :parent ?x]
+     [?b :parent ?y]
+     (same-generation ?a ?b)]])
+```
+
+The base case says a node that has a parent is in the same generation as
+itself. The recursive case says that parents of same-generation nodes are also
+same-generation. This kind of query is useful for structural comparisons,
+lineage analysis, and rule-engine tests because the derived relation is about
+two moving positions in the graph, not one source-to-target path.
+
+---
+
+## 5. Example: Finding the Forum for a Message (LDBC-SNB IS6)
+
+The LDBC Social Network Benchmark (LDBC-SNB) is an industry standard for
+evaluating graph databases. It models a social network with people, friendships,
+forums, posts, comments, likes, tags, organizations, and places. Let's examine
+one real Interactive Short query from this benchmark to see how Datalevin
+handles graph traversal in practice.
 
 **Query IS6**: Given a Message, find the Forum that contains it and the Person
 who moderates that Forum. Since Comments are not directly contained in Forums,
@@ -570,13 +893,34 @@ for Datalevin versus 1908.3 ms for Neo4j, about 151x faster. For the IS6 query
 shown above, the reported latency is 1.9 ms for Datalevin versus 1494.5 ms for
 Neo4j, about 787x faster [2]. The main reasons are:
 - **Index locality**: Following refs is a simple B+Tree lookup
-- **Query optimizer**: Creating efficient plan to minimizing wasted computation
+- **Query optimizer**: Efficient plans minimize wasted computation
 - **Semi-naive evaluation**: Recursive rules don't re-process facts
 - **Magic-set rewrites**: Constraints push deep into recursive expansion
 
+### 5.1 Other LDBC-SNB Graph Questions
+
+LDBC-SNB contains many graph problems beyond plain traversal:
+
+- **Temporal neighborhoods**: find friends or friends-of-friends who produced
+  activity inside a time window, then exclude activity before that window.
+- **Co-occurrence**: find tags, topics, or forums that co-occur in posts
+  written by a social neighborhood.
+- **Recommendation**: find friends-of-friends who are not direct friends, then
+  rank them by shared interests or interaction evidence.
+- **Referral and expert search**: combine social paths, organizations, places,
+  replies, and tag-class descendants into one query.
+- **Trusted paths**: enumerate bounded social paths and score them by message
+  interactions along each edge.
+
+These examples all use the same Datalevin building blocks: refs for graph
+edges, join entities when an edge has facts, rules for reusable derived
+relations, and `not-join` when one graph shape must exclude another. The
+important modeling lesson is that "graph query" often means a mix of topology,
+time, text, taxonomy, and ranking.
+
 ---
 
-## 5. Summary: Graph Design Principles
+## 6. Summary: Graph Design Principles
 
 1.  **Edges are Refs**: Use `:db.type/ref` for all relationships.
 2.  **Navigate Freely**: Don't be afraid of reverse navigation; it's free.
@@ -590,6 +934,11 @@ Neo4j, about 787x faster [2]. The main reasons are:
 7.  **Nodes for Metadata**: If an edge needs properties, make the edge an entity.
 8.  **Normalize for Depth**: Deep graphs perform best when the nodes are kept
     small and the relationships are explicit.
+9.  **Name Derived Graphs**: Use rules when the useful graph relation is
+    assembled from several lower-level facts.
+10. **Use Algorithms When Needed**: For arbitrary shortest paths, weighted
+    routing, or other global graph algorithms, use Datalevin for indexed
+    neighbor lookup and keep the search policy in application code.
 
 By treating your data as a graph from the beginning, you unlock powerful
 analytical capabilities that are difficult or impossible to achieve with
@@ -605,3 +954,16 @@ CEUR Workshop Proceedings 2100, 2018.
 [2] Datalevin project, ["LDBC SNB
 Benchmark"](https://github.com/juji-io/datalevin/tree/master/benchmarks/LDBC-SNB-bench),
 benchmark writeup and implementation.
+
+[3] Andrew Dennis, ["Using Datomic as a Graph
+Database"](https://hashrocket.com/blog/posts/using-datomic-as-a-graph-database),
+Hashrocket, April 10, 2014.
+
+[4] Datalevin project, ["Math
+Bench"](https://github.com/juji-io/datalevin/tree/master/benchmarks/math-bench),
+benchmark implementation based on the Mathematics Genealogy Project.
+
+[5] Datalevin project,
+["OpenRuleBench"](https://github.com/juji-io/datalevin/tree/master/benchmarks/openrulebench),
+benchmark implementation including transitive closure, same-generation, and
+LUBM-style type inference rules.
