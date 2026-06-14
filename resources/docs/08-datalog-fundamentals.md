@@ -1043,6 +1043,16 @@ const result2 = await conn.query('[:find ?e ' +
 
 </div>
 
+Each branch of `or` or `or-join` is one syntactic alternative. When an
+alternative needs more than one clause, wrap those clauses in `(and ...)`:
+
+```clojure
+(or (and [?e :user/status :pending]
+         [?e :user/priority :high])
+    (and [?e :user/status :flagged]
+         [?e :user/review-required? true]))
+```
+
 ---
 
 ## 7. Subqueries: The Right Way and the Wrong Way

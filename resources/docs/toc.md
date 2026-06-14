@@ -79,3 +79,5 @@ Part VII — Appendices
 31. Appendix D: EDN Format
 
 32. Appendix E: Core API Helpers Reference
+
+33. Appendix F: datalevin.client API Reference

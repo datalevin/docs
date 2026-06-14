@@ -263,6 +263,8 @@ const client = await newClient("dtlv://datalevin:secret@localhost:8898");
 
 </div>
 
+Appendix F lists the public `datalevin.client` administrative API.
+
 ### 2.4 Protocol and Client Tuning
 
 The server protocol uses a TLV-style (type-length-value) message format. Clojure

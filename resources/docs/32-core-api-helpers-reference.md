@@ -219,10 +219,151 @@ resulting facts, episodes, embeddings, or summaries in Datalevin.
 
 ---
 
+## 7. Other Public API Namespaces
+
+Not every public namespace needs its own appendix. The following namespaces are
+public, but narrower than `datalevin.core`, `datalevin.lmdb`, or
+`datalevin.client`.
+
+| Namespace | Main use |
+| :--- | :--- |
+| `datalevin.interpret` | Interpreted functions and code execution for CLI, pods, remote calls, transaction functions, and KV visitor functions. |
+| `datalevin.udf` | Runtime registry and descriptor handling for descriptor-backed user-defined functions. |
+| `datalevin.constants` | Stable defaults, documented tuning vars, and system constants shared by the implementation. |
+| `datalevin.main` | Programmatic support for the `dtlv` command-line tool. |
+
+### 7.1 `datalevin.interpret`
+
+Use `datalevin.interpret` when a function must be represented as data/source
+and later interpreted by Datalevin. Ordinary embedded Clojure code can usually
+use ordinary Clojure functions instead.
+
+| Var | Use |
+| :--- | :--- |
+| `load-edn` | Loads EDN forms from a file in Datalevin's interpreter, often for schema or setup data. |
+| `exec-code` | Executes a string of Datalevin REPL-compatible code and prints results. |
+| `inter-fn` | Creates a serializable interpreted function. |
+| `definterfn` | Defines a named `inter-fn`. |
+| `inter-fn?` | Tests whether a value is an interpreted function. |
+| `inter-fn-from-reader` | Reads a printed interpreted function back into a callable value. |
+
+`inter-fn` is the important one for application code. It appears when an
+installed transaction function, query predicate, or KV visitor function must be
+stored, sent over the wire, or used outside the original Clojure runtime.
+
+```clojure
+(require '[datalevin.interpret :refer [inter-fn]])
+
+(def keep-large-values
+  (inter-fn [k v]
+    (when (> v 1000)
+      [k v])))
+```
+
+### 7.2 `datalevin.udf`
+
+Use `datalevin.udf` for descriptor-backed user-defined functions, especially
+when the function may come from another runtime, a server process, or an
+application registry rather than from embedded Clojure source. Chapter 6 uses
+this mechanism for transaction UDFs; Chapter 8 uses the same idea for query
+UDFs.
+
+A UDF descriptor is a map with these keys:
+
+| Key | Meaning |
+| :--- | :--- |
+| `:udf/lang` | Runtime or language namespace, such as `:java`, `:python`, `:javascript`, or an application-defined keyword. |
+| `:udf/kind` | Function role, such as `:tx-fn`, `:query-fn`, or `:predicate`. |
+| `:udf/id` | Stable function id keyword. |
+| `:udf/version` | Optional keyword, string, or integer version. |
+
+| Function | Use |
+| :--- | :--- |
+| `descriptor?`, `descriptor` | Test or validate descriptor maps. |
+| `create-registry` | Creates a mutable UDF registry atom. |
+| `generation` | Returns the registry generation, which changes after registration updates. |
+| `register!` | Registers a descriptor to a callable value. |
+| `register-resolver!` | Registers a language-level resolver that can materialize functions on demand. |
+| `unregister!`, `registered?`, `registered-descriptor` | Manage or inspect registry entries. |
+| `ensure-kind`, `descriptor-or-registered` | Validate that a descriptor/id is suitable for a query, predicate, or transaction context. |
+| `materialize`, `resolve` | Resolve a descriptor to a callable function. |
+
+```clojure
+(require '[datalevin.udf :as udf])
+
+(def registry (udf/create-registry))
+
+(def lower-desc
+  {:udf/lang :app
+   :udf/kind :query-fn
+   :udf/id   :text/lower})
+
+(udf/register! registry lower-desc clojure.string/lower-case)
+(udf/resolve registry lower-desc)
+```
+
+If the function is embedded Clojure source that should travel with a
+transaction or query, `datalevin.interpret/inter-fn` is usually simpler. If the
+function should be looked up by descriptor in a host application, use
+`datalevin.udf`.
+
+### 7.3 `datalevin.constants`
+
+`datalevin.constants` contains both public defaults and implementation
+constants. Treat it as a place to read documented defaults or bind documented
+tuning vars, not as a catalog of storage internals to persist in application
+data.
+
+| Var | Use |
+| :--- | :--- |
+| `version` | Current Datalevin version string. |
+| `default-env-flags` | Default LMDB environment flags for `open-kv`. |
+| `default-dbi-flags` | Default DBI flags, including `:create`, `:counted`, and `:prefix-compression`. |
+| `default-put-flags` | Default LMDB put flags. |
+| `+max-key-size+` | Maximum LMDB key size in bytes. |
+| `default-spill-threshold`, `default-spill-root`, `tmp-dbi` | Defaults for spill-to-disk temporary storage. |
+| `default-port`, `default-idle-timeout` | Server defaults. |
+| `default-connection-pool-size`, `default-connection-timeout` | Client connection defaults. |
+| `default-username`, `default-password` | Built-in development defaults; production servers should override them. |
+| `default-domain`, `default-top` | Search defaults. |
+| `default-metric-type`, `default-quantization`, `default-connectivity`, `default-expansion-add`, `default-expansion-search`, `default-multi?` | Vector index defaults. |
+| `*datalog-wal?*`, `*datalog-wal-durability-profile*` | Dynamic defaults for new Datalog stores when WAL is enabled. |
+| `*remote-db-last-modified-check-interval-ms*` | Remote freshness-check throttle for client DB checks. |
+| `*wire-compression-threshold*`, `*wire-compression-level*` | Client/server wire compression tuning. |
+
+Many other constants name internal DBIs, type tags, WAL markers, query planner
+costs, and HA control-plane defaults. Prefer documented option maps and API
+functions when possible.
+
+### 7.4 `datalevin.main`
+
+`datalevin.main` backs the `dtlv` command-line tool. Most users should call the
+CLI directly from a shell, or use the higher-level Clojure APIs. The namespace
+is useful when JVM tooling or tests need to invoke CLI behavior in process.
+
+| Function | Use |
+| :--- | :--- |
+| `exec` | Executes Datalevin code supplied as command-line style argument strings. |
+| `copy` | Copies a database directory, optionally compacting while copying. |
+| `drop` | Drops or clears named key-value DBIs in a database directory. |
+| `dump` | Dumps Datalog or key-value database content. |
+| `load` | Loads Datalog or key-value content into a database directory. |
+| `-main` | Entry point for the `dtlv` command. |
+| `default-root-dir` | Default server root directory used by the CLI. |
+
+```clojure
+(require '[datalevin.main :as main])
+
+(main/copy "/data/app-db" "/backup/app-db" true)
+```
+
+---
+
 ## Summary
 
 The central Datalevin API is small: open a connection, transact data, call
 `db`, query, pull, and close the connection. The helpers in this appendix fill
 in the edges: observing transactions, simulating transaction reports, checking
-types, managing async secondary indexes, calling model providers directly, and
-using compatibility utilities when porting code.
+types, managing async secondary indexes, calling model providers directly,
+using compatibility utilities when porting code, and locating narrower public
+namespaces such as `interpret`, `udf`, `constants`, and `main`.

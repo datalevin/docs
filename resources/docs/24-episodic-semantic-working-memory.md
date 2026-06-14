@@ -183,6 +183,9 @@ content:
  :fact/utility        0.5}
 ```
 
+Chapter 26 explains the distinction between confidence and utility and how those
+scores drive long-term maintenance.
+
 Treat these facts as claims about the world, not as the world itself. Multiple
 facts can refer to the same subject, disagree with each other, or describe
 different time periods. The subject reference gives Datalog something stable to

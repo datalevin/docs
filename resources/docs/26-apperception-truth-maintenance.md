@@ -111,6 +111,13 @@ If new data supersedes old data, the engine uses Datalevin's atomic transactions
 to update the state. Because Datalevin is fact-centric, you can retract specific
 old facts while keeping the rest of the model intact.
 
+This is the practical version of a classic AI idea: a **truth-maintenance
+system** (TMS) records beliefs together with the reasons or dependencies that
+support them, then updates the current belief set when assumptions or evidence
+change [2]. In Datalevin, those dependencies can be ordinary facts: source
+episodes, rule identifiers, supersession links, confidence scores, and review
+status.
+
 For agent systems, truth maintenance should usually preserve evidence even when
 the current belief changes. If a user says "my deployment window is Tuesday" and
 later says "move it to Thursday," the current scheduling fact should change, but
@@ -483,3 +490,6 @@ a substrate for coherent long-term state.
 Marek Sergot, ["Making sense of sensory
 input"](https://doi.org/10.1016/j.artint.2020.103438), *Artificial Intelligence*
 293, 2021, article 103438.
+
+[2] Jon Doyle, "A Truth Maintenance System", *Artificial Intelligence* 12(3),
+251-272, 1979.

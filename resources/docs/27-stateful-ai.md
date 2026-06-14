@@ -26,8 +26,10 @@ application, the database is an **Active Environment**.
 - Its "personality" is not a static prompt, but a collection of entities and
   relationships in Datalevin.
 
-An agent runtime also needs a control loop. Perceptors convert external input
-into structured observations. Actuators call tools or services. A central
+An agent runtime also needs a control loop. In the standard agent model, an
+agent receives percepts from its environment, updates internal state, and chooses
+actions [1]. In application terms, perceptors convert external input into
+structured observations, actuators call tools or services, and a central
 controller decides which task, agenda item, or exception should run next. Memory
 keeps the loop from starting over every turn, and plugins extend the loop with
 domain-specific skills.
@@ -37,6 +39,11 @@ The agent can have a main stack for the active task, an agenda queue for planned
 work, an exception queue for urgent interruptions, and an ad-lib queue for
 opportunistic suggestions. These do not need to be separate systems. They can be
 task entities with different state, priority, and scheduling attributes.
+
+These names come from production agent-platform practice [2] rather than from a
+formal requirement of Datalevin. The important modeling point is that each
+control surface is durable, queryable state, regardless of the names your
+application uses.
 
 This is what turns a chatbot into an agent. A chatbot responds to the latest
 message. An agent can be interrupted, handle the interruption, and then resume
@@ -133,7 +140,8 @@ Imagine an AI tutor that helps a student learn Clojure over six months.
     ```
 
     </div>
-The tutor's advice is always **grounded** in the student's actual history.
+
+The tutor's advice is always based on the student's actual history.
 
 ---
 
@@ -335,3 +343,12 @@ By choosing Datalevin, you are not just choosing a place to store data. You are
 choosing a substrate that supports the full spectrum of stateful AI: exact
 logical reasoning, fuzzy semantic understanding, durable task state, controlled
 tool use, and long-term knowledge maintenance.
+
+## References
+
+[1] Stuart Russell and Peter Norvig, [*Artificial Intelligence: A Modern
+Approach*, 4th US ed.](https://aima.cs.berkeley.edu/), Pearson, 2020.
+
+[2] Michelle X. Zhou, Jie Lu, Huahai Yang, and Wenxi Chen,
+*Human-Centered Agentic AI: Fundamentals, Practice, Applications, and Future
+Directions*, ACM Press, in press.
