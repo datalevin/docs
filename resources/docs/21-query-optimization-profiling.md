@@ -296,6 +296,91 @@ evaluation goal-directed [2] [3]. Magic-set rules push bound variables from the
 outer query into the recursive rule, pruning intermediate results to the part of
 the graph relevant to the question.
 
+### 2.1 Worked Semi-Naive Evaluation
+
+Consider a small directed graph, using letters as stand-ins for entity ids:
+
+```text
+[[a :link/to b]
+ [b :link/to c]
+ [b :link/to d]
+ [d :link/to e]
+ [p :link/to q]
+ [q :link/to r]]
+```
+
+The recursive rule says that `?end` is reachable from `?start` if there is a
+direct edge, or if there is an edge to `?mid` and `?end` is reachable from
+`?mid`:
+
+```clojure
+[(reachable ?start ?end)
+ [?start :link/to ?end]]
+
+[(reachable ?start ?end)
+ [?start :link/to ?mid]
+ (reachable ?mid ?end)]
+```
+
+Semi-naive evaluation tracks a **delta**, the new tuples from the previous
+round, and joins only against that delta in the recursive step. For this graph:
+
+| Round | New `reachable` tuples |
+| :--- | :--- |
+| 1 | `(reachable a b)`, `(reachable b c)`, `(reachable b d)`, `(reachable d e)`, `(reachable p q)`, `(reachable q r)` |
+| 2 | `(reachable a c)`, `(reachable a d)`, `(reachable b e)`, `(reachable p r)` |
+| 3 | `(reachable a e)` |
+| 4 | No new tuples; fixpoint reached. |
+
+A naive bottom-up evaluator would keep rejoining all known `reachable` tuples
+in every round, rediscovering many results it already had. Semi-naive evaluation
+uses only the previous round's delta to produce the next delta, then unions the
+deltas into the final relation. Chapter 9 shows the same idea with a longer
+`reports-to` example and explicit EDB/IDB terminology.
+
+### 2.2 Worked Magic-Set Rewrite
+
+Now suppose the query asks only for nodes reachable from `a`:
+
+```clojure
+[:find ?end
+ :where (reachable a ?end)]
+```
+
+Plain bottom-up evaluation of `reachable` would also derive the disconnected
+`p -> q -> r` portion of the graph, even though it cannot affect the answer.
+A magic-set rewrite makes the bound start node explicit. Conceptually, the
+engine adds a seed relation and threads it through the recursive rule:
+
+```text
+;; Seed fact from the query binding.
+(magic-reachable a)
+
+;; Propagate the seed to starts that can matter for this query.
+[(magic-reachable ?mid)
+ (magic-reachable ?start)
+ [?start :link/to ?mid]]
+
+;; Original base rule, guarded by the magic predicate.
+[(reachable ?start ?end)
+ (magic-reachable ?start)
+ [?start :link/to ?end]]
+
+;; Original recursive rule, also guarded.
+[(reachable ?start ?end)
+ (magic-reachable ?start)
+ [?start :link/to ?mid]
+ (reachable ?mid ?end)]
+```
+
+This is a conceptual rewrite, not Datalevin's literal internal representation.
+The effect is the important part: the query seed `(magic-reachable a)` expands
+only through nodes reachable from `a`. The disconnected `p`, `q`, and `r`
+component is never seeded, so recursive evaluation does not spend work deriving
+answers that cannot contribute to `[:find ?end :where (reachable a ?end)]`.
+For the graph above, the seeded starts are `a`, `b`, `c`, `d`, and `e`, and the
+answers are `b`, `c`, `d`, and `e`.
+
 Datalevin also connects rule evaluation back to the cost-based optimizer:
 
 1.  **Seeding tuples**: Rule evaluation can receive bindings from earlier indexed

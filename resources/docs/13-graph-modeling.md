@@ -93,8 +93,9 @@ people you follow:
 
 ### Deep Traversal: Transitive Closure
 
-Finding all connections at *any* distance (e.g., finding all reachable nodes in
-a network):
+Transitive closure means the full set of nodes reachable by following the same
+edge relation zero or more times. In practical terms, it is how you find all
+connections at *any* distance, such as all reachable nodes in a network:
 
 ```clojure
 (def reachability-rules
@@ -190,6 +191,11 @@ const result = await conn.query('[:find ?country-name ' +
 ```
 
 </div>
+
+The base case uses `[(ground ?place) ?country]` as an identity binding: after
+`?place` is known to be a country, the rule copies that entity id into
+`?country`. In other words, a country is its own country for the purpose of this
+rule, while non-country places recurse through `:place/isPartOf`.
 
 This rule works for both direct and indirect containment. If `Paris` is part of
 `France`, and `France` is part of `Europe`, the rule stops at the first ancestor
@@ -411,8 +417,10 @@ intermediate friend, `or-join` can be used to cover the alternatives:
 Use `or-join` when the alternatives bind the same logical result through
 different graph patterns. The join variables, here `?start` and `?person`, tell
 the query engine which values must be shared between the branch and the rest of
-the query. This is especially useful before aggregating over messages, forums,
-tags, or memberships reached through several allowed path shapes.
+the query. Each `or-join` branch that contains more than one clause is wrapped
+in `(and ...)`, because the branch itself must be one syntactic alternative.
+This is especially useful before aggregating over messages, forums, tags, or
+memberships reached through several allowed path shapes.
 
 ### Excluding Graph Shapes with `not-join`
 
@@ -511,9 +519,10 @@ facts.
 ### 4.1 Co-Appearance and Degrees of Separation
 
 The "six degrees of Kevin Bacon" problem is a useful graph example because it
-is not a tree. It is a dense bipartite graph: people connect to movies through
-credits, and two people are adjacent if they worked on the same movie. A
-Datomic article by Andrew Dennis used this problem to show both Datalog joins
+is not a tree. It is a dense bipartite graph: two kinds of nodes, people and
+movies, with many connections between the two sets. People connect to movies
+through credits, and two people are adjacent if they worked on the same movie.
+A Datomic article by Andrew Dennis used this problem to show both Datalog joins
 and application-level breadth-first search over database facts [3]. The same
 idea applies naturally to Datalevin.
 
@@ -806,7 +815,7 @@ nodes that occupy the same structural level.
 (def same-generation-rules
   '[[(same-generation ?x ?y)
      [?x :parent _]
-     [(identity ?x) ?y]]
+     [(ground ?x) ?y]]
 
     [(same-generation ?x ?y)
      [?a :parent ?x]
@@ -841,7 +850,7 @@ First, define a recursive rule to find the root post of any message:
   '[;; base case
     [(root-post ?m ?post)
      [?m :message/containerOf _]
-     [(ground ?m) ?post]] ; ground=identity
+     [(ground ?m) ?post]] ; copy the root message id into ?post
 
     ;; recursive case
     [(root-post ?m ?post)
@@ -894,8 +903,10 @@ shown above, the reported latency is 1.9 ms for Datalevin versus 1494.5 ms for
 Neo4j, about 787x faster [2]. The main reasons are:
 - **Index locality**: Following refs is a simple B+Tree lookup
 - **Query optimizer**: Efficient plans minimize wasted computation
-- **Semi-naive evaluation**: Recursive rules don't re-process facts
-- **Magic-set rewrites**: Constraints push deep into recursive expansion
+- **Semi-naive evaluation**: Recursive rules don't re-process facts; see
+  Chapter 21.
+- **Magic-set rewrites**: Constraints push deep into recursive expansion; see
+  Chapter 21.
 
 ### 5.1 Other LDBC-SNB Graph Questions
 

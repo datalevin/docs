@@ -482,12 +482,11 @@ keys.
 
 ### 2.2 Aggregation
 
-Datalog supports aggregate functions directly in the `:find` clause, similar to
-SQL's `GROUP BY`.
-
-Grouping is implicit. Any non-aggregate variable in `:find` becomes part of the
-grouping key. For example, `:find ?city (count ?e)` groups by `?city`; there is
-no separate `GROUP BY ?city` clause.
+Datalog supports aggregate functions directly in the `:find` clause. SQL uses a
+separate `GROUP BY` clause; Datalog groups by the non-aggregate variables in
+`:find`. The grouping key is implicit. For example, `:find ?city (count ?e)`
+groups by `?city`; there is no separate `GROUP BY ?city` clause. If `:find` has
+only aggregate expressions, the whole result is one group.
 
 <div class="multi-lang">
 

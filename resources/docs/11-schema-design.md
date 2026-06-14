@@ -207,11 +207,18 @@ There are a few important rules:
   `tuple` and `untuple` functions:
 
 ```clojure
+;; Build a tuple in the query and match it against the derived attribute.
 (d/q '[:find ?line
        :where [?line :line-item/order-id ?order-id]
               [?line :line-item/sku ?sku]
               [(tuple ?order-id ?sku) ?order+sku]
               [?line :line-item/order+sku ?order+sku]]
+     (d/db conn))
+
+;; Destructure a tuple value back into its components.
+(d/q '[:find ?line ?order-id ?sku
+       :where [?line :line-item/order+sku ?order+sku]
+              [(untuple ?order+sku) [?order-id ?sku]]]
      (d/db conn))
 ```
 

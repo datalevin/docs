@@ -413,9 +413,12 @@ const reasoningRules = await interop().readEdn('['
 
 </div>
 
-The `ground` function is a built-in that binds a constant into a variable. The
-clause `[(ground :gold) ?tier]` means "bind `?tier` to `:gold`." It is useful in
-rules because rule heads must expose variables, not raw constants.
+The `ground` function is a built-in identity function used in binding clauses.
+It can bind a constant into a variable, or copy an already-bound value into a
+new variable. The clause `[(ground :gold) ?tier]` means "bind `?tier` to
+`:gold`." A clause such as `[(ground ?x) ?y]`, after `?x` is bound, means "bind
+`?y` to the same value as `?x`." This is useful in rules because rule heads must
+expose variables, not raw constants.
 
 With data like this:
 
