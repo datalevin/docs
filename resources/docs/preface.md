@@ -328,6 +328,37 @@ and intelligent systems can maintain state over time.
 
 Datalevin is one concrete way to build on that idea.
 
+## Acknowledgments
+
+Datalevin stands on a line of ideas and software that made this project
+possible. I am grateful to the authors of Datomic, whose EDN-based Datalog
+flavor showed how logic queries could become a practical application
+programming interface; to Nikita Prokopov, whose DataScript code was the
+starting point for Datalevin; and to Howard Chu, whose LMDB code became the
+storage foundation on which Datalevin is built.
+
+I also want to thank the Datalevin users in the Clojure community. Their
+questions, bug reports, feature requests, examples, and production experience
+have shaped the project in ways that are hard to separate from the code itself.
+Thanks also to everyone who contributed code, filed issues, wrote about their
+use cases, or supported the work through GitHub Sponsors.
+
+Datalevin was originally motivated by needs at Juji, where intelligent
+applications required persistent memory, fast retrieval, and a more flexible
+way to represent user and agent state. I am grateful to the people at Juji whose
+work made those needs concrete and whose applications kept the project grounded
+in real systems.
+
+This book has already benefited from volunteer reviewers who read draft
+chapters, ran examples, questioned unclear explanations, found inconsistent
+terminology, and pointed out places where the book assumed too much background.
+Technical books get better when careful readers push back before publication;
+many of the clarifications, examples, and cross-references in this draft came
+from that kind of review.
+
+Specific names of reviewers, contributors, sponsors, and Juji colleagues will be
+added here before publication.
+
 ## Notes
 
 Datalevin builds on LMDB, an abbreviation of Lightning Memory-Mapped Database, a
