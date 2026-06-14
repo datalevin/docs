@@ -223,7 +223,6 @@
     (apply str
            "<div class=\"max-w-3xl mx-auto px-4 py-8\">"
            "<h1 class=\"text-3xl font-bold mb-8\" style=\"color:var(--text-primary, #e5e7eb)\"><i>Datalevin: The Definitive Guide</i></h1>"
-           "<p class=\"mb-6\"><a href=\"/pdf\" class=\"dl-btn\">Download PDF</a></p>"
            (concat
             (for [group grouped
                   :let [part (:part (first group))]]

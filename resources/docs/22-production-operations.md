@@ -1,19 +1,260 @@
 ---
-title: "Deployment and Production Operations"
+title: "Testing, Deployment, and Production Operations"
 chapter: 22
 part: "V — Performance and Operations"
 ---
 
-# Chapter 22: Deployment and Production Operations
+# Chapter 22: Testing, Deployment, and Production Operations
 
 Chapter 20 covered durability, snapshots, copy, dump/load, and storage tuning.
-This chapter focuses on the next layer: how to choose a deployment shape, run
-Datalevin as a server when needed, secure remote access, operate replicas or HA,
-and monitor a production system.
+This chapter covers the operational lifecycle around that storage: how to test
+an application against Datalevin, choose a deployment shape, run a server when
+needed, secure remote access, operate replicas or HA, and monitor a production
+system.
+
+It begins with testing, because the cheapest place to catch a modeling, schema,
+or query mistake is in a test, long before deployment.
 
 ---
 
-## 1. Choose a Deployment Mode
+## 1. Testing Datalevin Applications
+
+Datalevin is easy to test because the same library that runs in production can
+run entirely inside a test process. There is no separate test server to manage
+and no external service to mock. Most application logic can be exercised against
+a real Datalevin database that is created and discarded inside a single test.
+
+Three levels of test are useful, from fastest to most realistic:
+
+1. **Pure logic tests** over in-memory tuples, with no database at all.
+2. **In-memory database tests** that exercise schema, transactions, indexes,
+   search, and queries against a real but ephemeral store.
+3. **Temporary on-disk tests** for behavior that depends on files, persistence,
+   or WAL.
+
+Start at the cheapest level that can fail for the reason you care about, and move
+to a more realistic level only when the test needs it.
+
+### 1.1 Pure Logic Tests Over Tuples
+
+Chapter 8 showed that the query engine accepts any sequence of `[e a v]` tuples
+as a data source. This is the fastest way to unit-test query and rule logic,
+because there is no store to open, transact, or clean up. The fixture data sits
+in the test itself.
+
+```clojure
+(ns my-app.query-test
+  (:require [clojure.test :refer [deftest is]]
+            [datalevin.core :as d]))
+
+(def people
+  [[1 :user/name "Alice"] [1 :user/age 30]
+   [2 :user/name "Bob"]   [2 :user/age 25]])
+
+(deftest adults-are-selected
+  (is (= #{["Alice"]}
+         (d/q '[:find ?name
+                :in $ ?min
+                :where [?e :user/name ?name]
+                       [?e :user/age ?age]
+                       [(>= ?age ?min)]]
+              people 28))))
+```
+
+Rules are data too, so a rule set can be passed straight into a tuple-backed
+query as the `%` input. Use this level for query shape, rule composition,
+predicates, and aggregation logic. It does not exercise schema, indexes, upsert,
+or search; those need a real store.
+
+### 1.2 In-Memory Database Tests
+
+When a test needs schema, transactions, indexes, or search, open a real
+in-memory connection. An in-memory database uses the same API as a persistent
+one, but keeps nothing on disk and is discarded when the connection closes
+(Chapter 2). Each test gets a fresh, isolated database with no cleanup step.
+
+```clojure
+(deftest upsert-updates-existing-user
+  (let [schema {:user/email {:db/valueType :db.type/string
+                             :db/unique    :db.unique/identity}
+                :user/name  {:db/valueType :db.type/string}}
+        conn   (d/create-conn nil schema {:kv-opts {:inmemory? true}})]
+    (try
+      (d/transact! conn [{:user/email "ada@example.com" :user/name "Ada"}])
+      (d/transact! conn [{:user/email "ada@example.com" :user/name "Ada L."}])
+      (is (= "Ada L."
+             (d/q '[:find ?name .
+                    :where [?e :user/email "ada@example.com"]
+                           [?e :user/name ?name]]
+                  (d/db conn))))
+      (finally
+        (d/close conn)))))
+```
+
+Because in-memory stores are cheap to create, the simplest isolation strategy is
+one fresh store per test. A `clojure.test` fixture removes the repeated setup and
+teardown:
+
+```clojure
+(def ^:dynamic *conn* nil)
+
+(defn with-fresh-db [f]
+  (let [conn (d/create-conn nil test-schema {:kv-opts {:inmemory? true}})]
+    (binding [*conn* conn]
+      (try (f) (finally (d/close conn))))))
+
+(use-fixtures :each with-fresh-db)
+```
+
+Each test then reads `*conn*` and starts from an empty database. Prefer
+`:each` over `:once` so one test cannot leave state that another test depends on.
+
+### 1.3 Temporary On-Disk Tests
+
+Some behavior only appears on disk: persistence across reopen, WAL replay,
+snapshots, compaction, or `copy`/`dump`/`load`. For those, open a database in a
+unique temporary directory and delete it afterward. The `with-conn` macro opens
+the connection, runs the body, and closes it, so only the directory needs
+explicit cleanup:
+
+```clojure
+(ns my-app.persistence-test
+  (:require [clojure.test :refer [deftest is]]
+            [datalevin.core :as d]
+            [datalevin.util :as u]))
+
+(deftest data-survives-reopen
+  (let [dir (u/tmp-dir (str "test-" (random-uuid)))]
+    (try
+      (d/with-conn [conn dir test-schema]
+        (d/transact! conn [{:user/email "ada@example.com"}]))
+      ;; Reopen the same path; the fact should still be there.
+      (d/with-conn [conn dir test-schema]
+        (is (some? (d/entity (d/db conn) [:user/email "ada@example.com"]))))
+      (finally
+        (u/delete-files dir)))))
+```
+
+`datalevin.util/tmp-dir` returns a platform-neutral temporary path, and
+`delete-files` removes the directory tree; both are utility helpers used by
+Datalevin's own test suite. Adding a `random-uuid` keeps parallel test runs from
+colliding on the same path.
+
+### 1.4 Make Tests Strict to Catch Typos
+
+Schema-on-write is convenient in production but unhelpful in a test: a misspelled
+attribute such as `:user/emial` is silently accepted as a new attribute, and the
+assertion simply fails to find the data (Chapter 5). Tests are the right place to
+turn that leniency off. Open test connections with `:validate-data?` and
+`:closed-schema?` so unknown attributes and ill-typed values fail loudly:
+
+```clojure
+(d/create-conn nil schema
+  {:kv-opts        {:inmemory? true}
+   :validate-data? true
+   :closed-schema? true})
+```
+
+With these options, a transaction that mentions an undeclared attribute or writes
+a value that does not match its declared `:db/valueType` throws instead of
+quietly storing surprising data. This converts a class of modeling bugs into
+test failures (Chapter 11).
+
+### 1.5 Dry-Run Transactions With `tx-data->simulated-report`
+
+To test how transaction data resolves — tempids, upserts, the datoms that would
+be added or retracted — without mutating the database, use
+`tx-data->simulated-report`. It returns the same transaction-report shape as
+`transact!` but leaves the connection untouched (Appendix E):
+
+```clojure
+(deftest signup-adds-email-datom
+  (let [conn   (d/create-conn nil test-schema {:kv-opts {:inmemory? true}})
+        report (d/tx-data->simulated-report
+                 (d/db conn)
+                 [{:user/email "ada@example.com" :user/name "Ada"}])]
+    (try
+      ;; The report shows the datoms that *would* be written ...
+      (is (some #(and (= :user/email (d/datom-a %))
+                      (= "ada@example.com" (d/datom-v %)))
+                (:tx-data report)))
+      ;; ... but the database itself is left untouched.
+      (is (nil? (d/entity (d/db conn) [:user/email "ada@example.com"])))
+      (finally
+        (d/close conn)))))
+```
+
+This is useful for unit-testing transaction-function output and validation logic,
+where you care about the datoms a transaction would produce rather than
+committing them.
+
+### 1.6 Testing Search, Vectors, and Async Indexing
+
+Full-text, idoc, and vector indexes are maintained synchronously by default
+(Chapters 16–17), so an in-memory database is enough to test them:
+read-your-writes holds, and a `fulltext`, `idoc-match`, or `vec-neighbors` query
+sees data committed earlier in the same test.
+
+Two pitfalls are worth avoiding:
+
+- **Keep vector tests deterministic.** Prefer `:db.type/vec` with literal vectors
+  and `vec-neighbors` rather than depending on a remote embedding provider in a
+  unit test. A network call to an embedding API makes the test slow,
+  nondeterministic, and dependent on credentials. Reserve provider-backed
+  `:db/embedding` tests for a small, clearly separated integration suite.
+- **Wait for async indexing before asserting.** If a domain opts into
+  `:indexing-mode :async`, the source datoms commit before the secondary index
+  catches up, so an immediate search may miss them. Call
+  `wait-for-secondary-index` (or `process-secondary-index-jobs!`) before the
+  assertion (Appendix E):
+
+```clojure
+(d/transact! conn [{:doc/content "vector search guide"}])
+(d/wait-for-secondary-index conn)
+(is (seq (d/q '[:find [?e ...]
+                :where [(fulltext $ :doc/content "vector") [[?e _ _]]]]
+              (d/db conn))))
+```
+
+### 1.7 Testing From Other Language Bindings
+
+The helpers in this section that are Clojure APIs — `with-conn`, the
+`clojure.test` fixtures, and `tx-data->simulated-report` — do not have direct
+equivalents in the Java, Python, and JavaScript bindings. From those languages,
+test with your usual test runner and two portable techniques:
+
+- **Tuple-based logic tests** (Section 1.1) work everywhere, because passing an
+  EAV tuple sequence to `query` needs no database.
+- **Per-test temporary databases** give realistic coverage. Use the test
+  runner's own temporary-directory facility for isolation and cleanup — for
+  example, pytest's `tmp_path` fixture in Python — and open a normal connection
+  on that path:
+
+```python
+def test_upsert_updates_existing_user(tmp_path):
+    from datalevin import connect
+
+    schema = {
+        ":user/email": {":db/valueType": ":db.type/string",
+                        ":db/unique": ":db.unique/identity"},
+        ":user/name": {":db/valueType": ":db.type/string"},
+    }
+    with connect(str(tmp_path / "db"), schema=schema) as conn:
+        conn.transact([{":user/email": "ada@example.com", ":user/name": "Ada"}])
+        conn.transact([{":user/email": "ada@example.com", ":user/name": "Ada L."}])
+        assert conn.query(
+            '[:find ?name . '
+            ' :where [?e :user/email "ada@example.com"] '
+            '        [?e :user/name ?name]]') == "Ada L."
+```
+
+The `with` form closes the connection at the end of the test, and the runner
+deletes the temporary directory. This is the pattern Datalevin's own Python test
+suite uses.
+
+---
+
+## 2. Choose a Deployment Mode
 
 Datalevin can run as an embedded library, a TCP server, a read-replica topology,
 a consensus-lease HA cluster, an MCP tool process, or a Babashka pod. The data
@@ -32,7 +273,7 @@ In HA discussions, **fencing** means preventing a stale or deposed writer from
 continuing to accept writes after another node has been allowed to lead. It is
 the safety mechanism that keeps failover from becoming split-brain.
 
-### 1.1 Embedded Mode
+### 2.1 Embedded Mode
 
 Embedded mode is the default choice when one application owns the database path.
 It keeps the application and Datalevin in the same process, so reads use the OS
@@ -50,14 +291,14 @@ same process. This is useful when the application owns the local database but
 wants to expose a `dtlv://` endpoint for administrative tools, background
 workers, non-JVM clients, or controlled inspection.
 
-### 1.2 Server Mode
+### 2.2 Server Mode
 
 Use server mode when multiple applications need to share a Datalevin instance,
 when non-JVM clients need a remote database, or when you need server-side RBAC.
 The server exposes Datalog and KV APIs over `dtlv://` URIs and also provides a
 JSON command surface used by MCP and other adapters.
 
-### 1.3 Read Replicas and HA
+### 2.3 Read Replicas and HA
 
 Async read replicas and consensus HA both depend on WAL records, but they solve
 different problems:
@@ -71,7 +312,7 @@ different problems:
 Choose async replicas when stale-by-lag reads are acceptable. Choose HA only
 when automatic failover is worth the extra operational surface.
 
-### 1.4 Tooling Modes
+### 2.4 Tooling Modes
 
 `dtlv mcp` runs a local MCP server over `stdio`. It can open local databases or
 remote `dtlv://` targets. Read-only tools are the default; write tools require
@@ -80,7 +321,7 @@ starting MCP with write access enabled.
 The Babashka pod is useful for fast scripts, maintenance jobs, and ad hoc data
 tasks. It runs as a separate process and communicates with Babashka over IPC.
 
-### 1.5 Native Language Libraries
+### 2.5 Native Language Libraries
 
 Datalevin publishes libraries for several host languages:
 
@@ -93,7 +334,7 @@ Datalevin publishes libraries for several host languages:
 These libraries can open embedded databases. They can also connect to remote
 Datalevin servers where the wrapper supports remote `dtlv://` connections.
 
-### 1.6 High-Density Multi-Tenancy
+### 2.6 High-Density Multi-Tenancy
 
 A useful Datalevin pattern is one database file per tenant, workspace, or user.
 This is common in personal knowledge management and local-first systems.
@@ -110,12 +351,12 @@ retention automation for many small databases instead of one large database.
 
 ---
 
-## 2. Run a Datalevin Server
+## 3. Run a Datalevin Server
 
 The server is a non-blocking network service that exposes Datalevin APIs over a
 TCP connection. It listens on `127.0.0.1:8898` by default.
 
-### 2.1 Start the Server
+### 3.1 Start the Server
 
 Use the native `dtlv` binary for lightweight deployments. Use the JVM standalone
 jar for highly concurrent or long-running server workloads where normal JVM
@@ -176,7 +417,7 @@ Run the server under the platform's service manager, such as `systemd`,
 `launchd`, or `sc.exe`, and make sure the service account has read/write access
 to the data root.
 
-### 2.2 Connect to a Remote Database
+### 3.2 Connect to a Remote Database
 
 Remote Datalog and KV databases use this URI shape:
 
@@ -227,7 +468,7 @@ const result = await conn.query("[:find ?e . :where [?e _ _]]");
 
 </div>
 
-### 2.3 Use the Admin Client
+### 3.3 Use the Admin Client
 
 Administrative operations use `datalevin.client/new-client` in Clojure and the
 corresponding wrapper client in other host languages.
@@ -265,7 +506,7 @@ const client = await newClient("dtlv://datalevin:secret@localhost:8898");
 
 Appendix F lists the public `datalevin.client` administrative API.
 
-### 2.4 Protocol and Client Tuning
+### 3.4 Protocol and Client Tuning
 
 The server protocol uses a TLV-style (type-length-value) message format. Clojure
 clients use Nippy serialization by default; language-neutral adapters use
@@ -293,7 +534,7 @@ For network-heavy workloads, prefer fewer larger requests. Batch writes with
 small entity lookups, and keep `:find` clauses specific so large unused result
 sets are not serialized over the wire.
 
-### 2.5 Runtime UDFs in Server Mode
+### 3.5 Runtime UDFs in Server Mode
 
 Descriptor-backed `:db/udf` functions resolve where the query or transaction
 executes. Embedded databases can receive a runtime registry in store options.
@@ -307,12 +548,12 @@ runtime.
 
 ---
 
-## 3. Security and Access Control
+## 4. Security and Access Control
 
 Security has two separate layers: physical protection of database files and
 server authorization for remote access.
 
-### 3.1 Default Admin Account
+### 4.1 Default Admin Account
 
 Every server has a built-in administrative user:
 
@@ -324,7 +565,7 @@ binding to a non-loopback address and should be treated as mandatory in
 production. Leave the `datalevin` user for administration and create separate
 application users with narrower roles.
 
-### 3.2 RBAC Model
+### 4.2 RBAC Model
 
 Server permissions are granted to roles, then roles are assigned to users. Every
 user also has a private role named `:datalevin.role/<username>`.
@@ -341,7 +582,7 @@ Each permission has three parts:
 The actions are hierarchical: `:alter` includes read access, `:create` includes
 lower actions, and `:control` is administrative control.
 
-### 3.3 Create a Least-Privilege User
+### 4.3 Create a Least-Privilege User
 
 This example creates a user, creates a role, grants read-only access to one
 database, and assigns the role to the user.
@@ -402,7 +643,7 @@ await client.assignRole("app.role/analyst", "alice");
 
 </div>
 
-### 3.4 Encryption at Rest
+### 4.4 Encryption at Rest
 
 Datalevin does not currently provide database-level transparent data encryption.
 Use encryption at the layer where it is easiest to operate and audit:
@@ -420,12 +661,12 @@ terminology and lifecycle concerns [3].
 
 ---
 
-## 4. Replication and High Availability
+## 5. Replication and High Availability
 
 Replication and HA are server-mode features. Chapter 20 covers WAL durability
 and snapshots; this section covers the operational shape.
 
-### 4.1 Non-HA Async Read Replicas
+### 5.1 Non-HA Async Read Replicas
 
 Use an async read replica when you want one primary writer and one or more
 read-only servers. The primary must have WAL enabled. A strict WAL durability
@@ -488,7 +729,7 @@ The returned map includes `:replica-applied-lsn`,
 `:replica-lag-lsn`, `:replica-last-sync-ms`,
 `:replica-degraded-reason`, and `:replica-last-error`.
 
-### 4.2 Consensus-Lease HA
+### 5.2 Consensus-Lease HA
 
 Consensus HA gives each HA database exactly one write leader at a time.
 Followers replicate from the leader using WAL records and snapshots and can
@@ -517,7 +758,7 @@ For follower reads, connect to a follower endpoint with the normal APIs:
 Use RBAC to enforce read-only access. Grant only `:datalevin.server/view` to
 users that should read from followers.
 
-### 4.3 HA Membership Updates
+### 5.3 HA Membership Updates
 
 Consensus HA membership is operator managed. Datalevin does not discover data
 nodes automatically. Update the authoritative membership for an open HA database
@@ -567,13 +808,13 @@ mismatch is resolved.
 
 ---
 
-## 5. Monitoring and Diagnostics
+## 6. Monitoring and Diagnostics
 
 Datalevin relies heavily on the operating system for memory mapping and disk
 I/O. Production monitoring should combine host metrics with Datalevin-specific
 checks.
 
-### 5.1 Host Metrics
+### 6.1 Host Metrics
 
 Watch these first:
 
@@ -589,7 +830,7 @@ Watch these first:
   resident in RAM. A large virtual mapping reflects `:mapsize`; it is not the
   same as resident memory.
 
-### 5.2 Database Statistics
+### 6.2 Database Statistics
 
 Use `stat` to inspect LMDB B+Tree statistics. In Clojure, `stat` operates on a
 KV handle. For a Datalog database directory, the `dtlv stat` command opens the
@@ -627,7 +868,7 @@ Useful fields include `:branch-pages`, `:leaf-pages`, `:overflow-pages`, and
 After large deletions, use the compact-copy workflow from Chapter 20 during
 controlled maintenance.
 
-### 5.3 Query and Write Diagnostics
+### 6.3 Query and Write Diagnostics
 
 - Use `explain` from Chapter 21 to inspect query plans and, with `{:run? true}`,
   compare estimates with actual result sizes.
@@ -638,7 +879,7 @@ controlled maintenance.
 - Log transaction latency, query latency, and result sizes at the application
   boundary. Datalevin cannot know which latency budget matters to your service.
 
-### 5.4 Replication and HA Checks
+### 6.4 Replication and HA Checks
 
 For async replicas, monitor `datalevin.client/replica-status`, especially
 `:replica-lag-lsn`, `:replica-degraded-reason`, and `:replica-last-error`.
@@ -647,7 +888,7 @@ For HA clusters, monitor leader identity, follower lag, membership hash
 agreement, clock skew, and fencing health. Keep each node's `:ha-members` and
 promotable control-plane voters aligned with the authoritative membership hash.
 
-### 5.5 Health Checks
+### 6.5 Health Checks
 
 A service health check should prove that the application can reach the database
 path it depends on. For a Datalog database, use a scalar probe:
@@ -665,10 +906,13 @@ or a small write in a dedicated health database for write-path checks.
 
 ---
 
-## 6. Production Checklist
+## 7. Production Checklist
 
 Use this as a final review before production:
 
+- Cover schema, queries, rules, and transaction logic with tests against
+  in-memory or temporary Datalevin databases, and run tests with
+  `:validate-data?` and `:closed-schema?` enabled (Section 1).
 - Choose the simplest deployment mode that satisfies the availability and access
   requirements.
 - Run the server under a service manager with a dedicated data directory and

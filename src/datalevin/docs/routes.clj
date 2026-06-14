@@ -8,7 +8,6 @@
             [datalevin.docs.handlers.auth :as auth]
             [datalevin.docs.handlers.examples :as examples]
             [datalevin.docs.handlers.admin :as admin]
-            [datalevin.docs.tasks.pdf :as pdf]
             [datalevin.docs.views.auth :as auth-view]
             [datalevin.docs.views.layout :as layout]
             [reitit.ring :as ring]
@@ -261,7 +260,6 @@
                      ["/examples/form" {:get {:handler new-example-fragment}}]
                      ["/examples/:id" {:get {:handler examples/view-example-handler}}]
                      ["/users/:username" {:get {:handler examples/user-profile-handler}}]
-                     ["/pdf" {:get {:handler pdf/pdf-handler}}]
 
                      ;; Admin routes
                      ["/admin/examples" {:get {:handler (-> admin/admin-examples-handler

@@ -53,8 +53,7 @@
    :book/title {:db/valueType :db.type/string}
    :book/subtitle {:db/valueType :db.type/string}
    :book/author {:db/valueType :db.type/string}
-   :book/version {:db/valueType :db.type/string}
-   :book/pdf-generated-at {:db/valueType :db.type/instant}})
+   :book/version {:db/valueType :db.type/string}})
 
 (defn- select-schema
   "Select schema entries by namespace prefix."

@@ -54,7 +54,7 @@ Part V — Performance and Operations
 
 21. Query Planning, Recursive Evaluation, and Diagnostics
 
-22. Deployment and Production Operations
+22. Testing, Deployment, and Production Operations
 
 Part VI — Datalevin for Intelligent Systems
 

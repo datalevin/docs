@@ -42,10 +42,6 @@
                :class "hidden dark:block"}
          [:circle {:cx "12" :cy "12" :r "4"}]
          [:path {:d "M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"}]]]
-       [:a {:href "/pdf"
-            :class "text-sm hover:text-cyan-300"
-            :style "color:var(--text-link, #22d3ee);"}
-        "PDF"]
        (if user
          [:div {:class "flex items-center gap-3"}
           [:span {:class "text-sm" :style "color:var(--text-secondary, #9ca3af)"} (:user/username user)]

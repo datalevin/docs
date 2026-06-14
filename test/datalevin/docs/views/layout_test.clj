@@ -33,10 +33,10 @@
       (is (str/includes? html "/js/hljs-javascript.min.js?v="))
       (is (str/includes? html "/js/code-highlight.js?v=")))))
 
-(deftest anonymous-header-keeps-pdf-public-and-removes-gated-copy
+(deftest anonymous-header-does-not-advertise-pdf-download
   (let [html (str (h/html {:mode :html :escape? false}
                           (layout/header nil)))]
-    (is (str/includes? html "href=\"/pdf\""))
+    (is (not (str/includes? html "href=\"/pdf\"")))
     (is (str/includes? html "title=\"Sign in to post examples\""))
     (is (not (str/includes? html "download the book")))))
 
