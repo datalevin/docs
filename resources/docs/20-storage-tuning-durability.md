@@ -486,7 +486,7 @@ Datalevin also tracks cached reader transactions and the owning thread so reader
 slots can be released when threads disappear. This reduces the common LMDB
 failure mode where abandoned thread pools exhaust reader slots. Virtual-thread
 handling is hardened by disabling thread-local read reuse for short-lived
-virtual threads.
+virtual threads, the lightweight JVM threads introduced by Project Loom.
 
 <div class="multi-lang">
 

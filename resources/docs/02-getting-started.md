@@ -542,7 +542,7 @@ through `datalevin.client/ha-update-membership!`.
 
 Chapter 22 covers the details: server behavior, client tuning, async read
 replicas, the Raft-backed control plane, bounded leases, replica lag checks,
-fencing hooks, and HA operations.
+fencing hooks that stop stale leaders from accepting writes, and HA operations.
 
 ---
 

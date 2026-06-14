@@ -41,8 +41,17 @@ The implementation of datom is a richer Datom object. A full Datom has five fiel
 | `:e` | Entity id. This is Datalevin's internal numeric entity id. |
 | `:a` | Attribute. Usually a namespaced keyword such as `:user/email`. |
 | `:v` | Value. The value asserted for that entity and attribute. |
-| `:tx` | Transaction id associated with the datom. |
+| `:tx` | Transaction id associated with the datom in transaction-report contexts. |
 | `:added` | `true` for an assertion, `false` for a retraction. |
+
+The `:tx` value is Datalevin's internal numeric transaction id for the
+transaction report. Datalevin maintains the latest transaction counter as store
+metadata (`max-tx`), but per-datom transaction ids are not stored in the
+persistent EAV/AVE indexes. A transaction id is also not a Datomic-style
+reified transaction entity with automatically stored attributes. The optional
+`tx-meta` argument to `transact!` is returned in the transaction report and sent
+to listeners, but it is not stored as queryable transaction-entity metadata
+unless your application explicitly transacts its own audit facts.
 
 The printed form emphasizes the logical triple:
 
@@ -51,10 +60,11 @@ The printed form emphasizes the logical triple:
 ;=> #datalevin/Datom [101 :user/email "alice@example.com"]
 ```
 
-The transaction fields are still available:
+In a transaction report, the transaction fields are available on `:tx-data`:
 
 ```clojure
-(let [datom (first (d/datoms db :ave :user/email "alice@example.com"))]
+(let [report (d/transact! conn [{:user/email "alice@example.com"}])
+      datom  (first (:tx-data report))]
   {:e     (d/datom-e datom)
    :a     (d/datom-a datom)
    :v     (d/datom-v datom)
@@ -64,14 +74,56 @@ The transaction fields are still available:
 ```
 
 Datalevin's current database indexes expose current facts, so datoms returned
-from `datoms`, `search-datoms`, and `index-range` are normally assertions.
-Transaction reports are where `:added false` most often matters: a report's
+from `datoms`, `search-datoms`, and `index-range` should be treated as current
+`[e a v]` facts, not as historical records keyed by transaction. Transaction
+reports are where `:tx` and `:added false` most often matter: a report's
 `:tx-data` can include datoms that were retracted by the transaction.
 
 This distinction explains a recurring convention in the book: `[e a v]` means
 "the logical fact used by a query or index key"; the full Datom object carries
 the extra transaction metadata needed by lower-level APIs and transaction
 reports.
+
+The connection to database history is direct. One way to support
+database-as-value history is to store the transaction dimension with every
+datom: keep each assertion and retraction with its transaction id, then
+reconstruct an old database value by selecting the datoms whose transaction ids
+are visible at that point in time. Datalevin deliberately does not make that
+per-datom transaction dimension part of the persistent EAV/AVE indexes.
+
+**Why not database-as-value history?** Datalevin is designed first as an OLTP
+database: an operational store for current application state. For that workload,
+the ordinary developer mental model is that a database represents mutable state:
+users update profiles, orders change status, jobs move through queues, and the
+application asks questions about the current world. Automatically retaining every
+historical datom would make that model harder to explain and would make every
+application pay for a history feature that many operational systems do not need.
+
+Keeping full transaction history is not free. It increases storage, widens the
+indexes the system must maintain, and makes reads and writes account for old
+states as well as current state. That tradeoff can be right for domains such as
+financial ledgers, audit stores, event logs, or analytical systems where history
+is the product. It is a poor default for a small embedded or operational
+database whose common path is "store the latest state and query it quickly."
+
+This point matters especially for the agent-memory use cases in Part VI. A
+useful agent memory is not an append-only transcript. It needs deletion, expiry,
+consolidation, summarization, and retraction. Human memory research treats
+forgetting as an adaptive feature of cognition: transience can reduce
+interference, support abstraction, and help a system stay responsive when the
+world changes [3]. An agent that can only accumulate memories will eventually
+retrieve stale, irrelevant, or harmful context. Datalevin's current-state model
+makes forgetting a normal database operation rather than an exception to the
+model.
+
+When applications need temporal or provenance-aware data, the requirements are
+usually richer than "keep every transaction forever": valid time, bitemporal
+time, source confidence, derivation, user/process provenance, and
+semiring-style annotations are domain models, not just storage history [2].
+Datalevin's direction is to support that kind of explicit provenance rather than
+treating transaction history as the one built-in answer. In the meantime, model
+audit and provenance facts explicitly when the domain needs them, and keep the
+core indexes optimized for current OLTP state.
 
 ### 1.2 Why Sorted Indexes Speed Up Queries
 
@@ -166,13 +218,17 @@ One of the most powerful features of Datalevin is that it exposes these indexes
 directly to the developer. You are not limited to the Datalog query engine; you
 can treat the indexes as **programmable capabilities**.
 
-The Clojure examples below use `datalevin.core` as `d`. Java examples assume a
-high-level `Connection conn` and call the supported `conn.exec(...)` escape
-hatch for connection-scoped JSON operations. Python examples use `exec_json`
-from `datalevin`; JavaScript examples use `execJson` from `datalevin-node`.
-For Python and JavaScript, `conn_handle` is the handle returned by the JSON API
-`create-conn` operation. Colon-prefixed attribute strings are decoded as
-keywords by the JSON API.
+Most non-Clojure examples earlier in the book use high-level convenience
+methods such as `conn.query`, `conn.transact`, and `conn.pull`. Direct index
+access is lower-level, so the non-Clojure bindings expose a JSON operation API:
+pass an operation name such as `"datoms"` plus a data map of arguments, and get
+JSON-shaped values back. The Clojure examples below use `datalevin.core` as
+`d`. Java examples assume a high-level `Connection conn` and call the supported
+`conn.exec(...)` escape hatch for connection-scoped JSON operations. Python
+examples use `exec_json` from `datalevin`; JavaScript examples use `execJson`
+from `datalevin-node`. For Python and JavaScript, `conn_handle` is the handle
+returned by the JSON API `create-conn` operation. Colon-prefixed attribute
+strings are decoded as keywords by the JSON API.
 
 Direct index APIs return datoms in index order. They are best for simple, known
 access paths where you want the index itself, not the Datalog planner, to be the
@@ -705,11 +761,12 @@ values. In AVE, each `(A, V)` combination is stored once as the key, with all
 matching entity IDs as values, so finding all entities where `:user/age` is
 `30` is a single key lookup.
 
-The approximate 20% space reduction comes from this `DUPSORT` nesting: repeated
-entity IDs in EAV and repeated `(A, V)` prefixes in AVE are represented once per
-nested key. This is separate from DLMDB's page-level prefix compression, which
-can provide additional savings depending on how much of neighboring encoded keys
-is actually shared.
+In the Join Order Benchmark database, this `DUPSORT` nesting reduced index space
+by roughly 20%. Treat that number as an anecdotal workload observation, not a
+general guarantee: the savings depend on the number of repeated entity IDs in
+EAV and repeated `(A, V)` prefixes in AVE. This is separate from DLMDB's
+page-level prefix compression, which can provide additional savings depending on
+how much of neighboring encoded keys is actually shared.
 
 ---
 
@@ -735,3 +792,11 @@ similarity, which we will explore in the following chapters.
 [1] Douglas Comer, ["The Ubiquitous
 B-Tree"](https://doi.org/10.1145/356770.356776), *ACM Computing Surveys* 11(2),
 121-137, 1979.
+
+[2] Camille Bourgaux, Pierre Bourhis, Liat Peterfreund, and Michael Thomazo,
+["Revisiting Semiring Provenance for
+Datalog"](https://arxiv.org/abs/2202.10766), arXiv:2202.10766, 2022.
+
+[3] Blake A. Richards and Paul W. Frankland, ["The Persistence and Transience
+of Memory"](https://doi.org/10.1016/j.neuron.2017.04.037), *Neuron* 94(6),
+1071-1084, 2017.

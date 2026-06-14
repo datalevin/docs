@@ -28,6 +28,10 @@ model and storage format stay the same; the operational boundary changes.
 | MCP | AI tools that need controlled Datalevin access | Tool-call boundary; writes disabled unless explicitly allowed |
 | Babashka pod | Scripts and maintenance tasks | IPC boundary; convenient but not the zero-copy embedded path |
 
+In HA discussions, **fencing** means preventing a stale or deposed writer from
+continuing to accept writes after another node has been allowed to lead. It is
+the safety mechanism that keeps failover from becoming split-brain.
+
 ### 1.1 Embedded Mode
 
 Embedded mode is the default choice when one application owns the database path.
@@ -61,7 +65,8 @@ different problems:
 - **Async read replicas** scale or isolate reads behind one primary writer. They
   do not elect a leader, fence writes, or promote automatically.
 - **Consensus-lease HA** keeps one write leader per database, uses a Raft-backed
-  control plane for leases and membership, and lets followers serve reads.
+  control plane for leases and membership, and lets followers serve reads. Raft
+  is a replicated-consensus algorithm for agreeing on cluster state [1].
 
 Choose async replicas when stale-by-lag reads are acceptable. Choose HA only
 when automatic failover is worth the extra operational surface.
@@ -260,9 +265,10 @@ const client = await newClient("dtlv://datalevin:secret@localhost:8898");
 
 ### 2.4 Protocol and Client Tuning
 
-The server protocol uses a TLV-style message format. Clojure clients use Nippy
-serialization by default; language-neutral adapters use Transit/JSON or the JSON
-command API.
+The server protocol uses a TLV-style (type-length-value) message format. Clojure
+clients use Nippy serialization by default; language-neutral adapters use
+Transit/JSON, Cognitect's data interchange format encoded over JSON [2], or the
+JSON command API.
 
 Most deployments should start with defaults. Tune only when a measured workload
 needs it:
@@ -405,8 +411,10 @@ Use encryption at the layer where it is easiest to operate and audit:
 - Application-level encryption for sensitive fields such as PII or secrets.
 
 For SaaS systems, envelope encryption is usually an application concern: keep
-tenant keys in a managed KMS and encrypt sensitive values before transacting
-them into Datalevin.
+tenant keys in a managed KMS (Key Management Service), wrap data-encryption keys
+with KMS-managed keys, and encrypt sensitive values before transacting them into
+Datalevin. NIST SP 800-57 is a useful general reference for key-management
+terminology and lifecycle concerns [3].
 
 ---
 
@@ -567,16 +575,17 @@ checks.
 
 Watch these first:
 
-- **Disk latency and `iowait`**: Durable direct-LMDB commits are bounded by
-  synchronous flush latency. WAL commit latency depends on the chosen durability
-  profile.
+- **Disk latency and `iowait`**: `iowait` is CPU time spent waiting for storage
+  I/O. Durable direct-LMDB commits are bounded by synchronous flush latency. WAL
+  commit latency depends on the chosen durability profile.
 - **Free disk space**: LMDB copy-on-write and WAL files need enough room for
   new pages, snapshots, and retained WAL segments.
 - **Page cache and major page faults**: Datalevin's effective buffer pool is the
   OS page cache. Major page faults indicate that the active working set is not
   resident.
-- **RSS vs virtual size**: A large virtual mapping reflects `:mapsize`; it is
-  not the same as resident memory.
+- **RSS vs virtual size**: RSS is resident set size, the memory pages actually
+  resident in RAM. A large virtual mapping reflects `:mapsize`; it is not the
+  same as resident memory.
 
 ### 5.2 Database Statistics
 
@@ -682,3 +691,14 @@ Datalevin is operationally quiet when the deployment boundary is chosen
 correctly. Most production issues come from choosing a topology that is more
 complex than the application needs, starving the OS page cache, or failing to
 test backup and restore paths.
+
+## References
+
+[1] Diego Ongaro and John Ousterhout, ["In Search of an Understandable Consensus
+Algorithm"](https://raft.github.io/raft.pdf), USENIX ATC 2014.
+
+[2] Cognitect, ["Transit Format"](https://github.com/cognitect/transit-format).
+
+[3] Elaine Barker, ["Recommendation for Key Management: Part 1 -
+General"](https://doi.org/10.6028/NIST.SP.800-57pt1r5), NIST Special Publication
+800-57 Part 1 Revision 5, 2020.

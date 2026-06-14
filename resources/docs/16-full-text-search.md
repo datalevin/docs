@@ -133,7 +133,9 @@ directly instead of joining through a Datalog query:
 ### 2.1 Attribute-Specific Search
 
 To search within a specific attribute, that attribute must have
-`:db.fulltext/autoDomain true` in the schema:
+`:db.fulltext/autoDomain true` in the schema. An auto domain is a separate
+per-attribute full-text index, so `:post/title` can be searched without also
+searching `:post/content`; section 3 explains domains in detail.
 
 <div class="multi-lang">
 

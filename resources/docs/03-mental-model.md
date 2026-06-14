@@ -88,11 +88,45 @@ entity's set of values. Uniqueness is a separate concern: it prevents two
 entities from claiming the same unique value and lets you look up an entity by a
 domain value such as an email address.
 
-A **transaction** is a single atomic write to the database: all changes in the
-transaction succeed together, or none are applied. In the example below, one
-transaction creates two entities and relates them. A **reference** attribute,
-declared with `:db.type/ref`, stores the entity id of another entity. This is
-how Datalevin represents graph edges.
+This fluidity allows your data model to evolve alongside your application. You
+never have to worry about "breaking the schema" by adding a new attribute to an
+existing entity, because there is no rigid "row" to break. Entity types are
+conventions you create by naming your attributes (e.g., using the `person/`
+namespace, the part before `/` in `:person/name`), not constraints enforced by
+the storage engine.
+
+## 3. Transactions: Controlled Change
+
+A database is not only a place to read facts. It is also a system for changing
+facts without leaving the application in a half-updated state. A
+**transaction** is a single atomic unit of change: all changes in the
+transaction succeed together, or none are applied. Transaction processing is the
+database discipline of making those changes atomic, isolated, and durable while
+many users or programs read and write concurrently [2].
+
+Jim Gray's deeper motivation for transactions is that a database acts as a
+surrogate for the part of the external world your application cares about [2].
+Real-world events do not happen halfway. A customer either placed an order or
+did not. A payment either settled or did not. A job either moved from pending to
+running or it did not. The database may need several internal writes to record
+one such event, but the application wants the event itself to appear as one
+coherent change.
+
+This is the core workload of **Online Transaction Processing (OLTP)** systems:
+applications record orders, messages, jobs, profile edits, tool results, and
+other current operational state. OLTP databases are usually optimized for many
+small concurrent reads and writes over current state, not for large historical
+scans or immutable log analysis.
+
+In Datalevin, a transaction is the boundary around assertions and retractions.
+An assertion adds a fact; a retraction removes a fact. One transaction can
+create entities, update cardinality-one attributes, add cardinality-many values,
+retract facts, and update custom key-value data in the same Datalevin store.
+After the transaction commits, readers see a consistent database state.
+
+In the example below, one transaction creates two entities and relates them. A
+**reference** attribute, declared with `:db.type/ref`, stores the entity id of
+another entity. This is how Datalevin represents graph edges.
 
 When a transaction creates several related entities at once, you can use
 temporary entity IDs, or **tempids**, so the new entities can refer to one
@@ -107,6 +141,11 @@ is a system-managed `long`, not a UUID, email, slug, or external primary key.
 It is also local to one database: two databases with the same application data
 may assign different eids. Use a separate unique identity attribute, such as
 `:user/id` or `:user/email`, for application identity.
+
+Chapter 6 covers transaction data shapes, transaction reports, listeners,
+transaction functions, and durability settings in detail. For now, the important
+mental model is simple: Datalevin changes the database in coherent committed
+steps, not by mutating one fact at a time in isolation.
 
 <div class="multi-lang">
 
@@ -199,14 +238,7 @@ await conn.transact([
 
 </div>
 
-This fluidity allows your data model to evolve alongside your application. You
-never have to worry about "breaking the schema" by adding a new attribute to an
-existing entity, because there is no rigid "row" to break. Entity types are
-conventions you create by naming your attributes (e.g., using the `person/`
-namespace, the part before `/` in `:person/name`), not constraints enforced by
-the storage engine.
-
-## 3. Store Each Fact Once, Then Link Entities
+## 4. Store Each Fact Once, Then Link Entities
 
 Once you start thinking in datoms, the next modeling habit is simple: store each
 durable fact in one place, then connect entities with references. Suppose a
@@ -273,7 +305,7 @@ For a deeper dive into how this approach often beats traditional relational
 engines in query performance, see the discussion on the [Join Order
 Benchmark](https://yyhh.org/blog/2024/09/competing-for-the-job-with-a-triplestore/).
 
-## 4. Three Views of the Same Database
+## 5. Three Views of the Same Database
 
 It is useful to separate three views of Datalevin: the logical view you model
 with, the storage view the engine persists, and the query view that connects the
@@ -335,11 +367,11 @@ handles joins, filtering, recursion, and lookup order.
 +------------------------------------------------------------+
 ```
 
-## 5. Datalog: Querying as Logic Programming
+## 6. Datalog: Querying as Logic Programming
 
 If SQL is like giving the database a set of instructions on how to assemble a
 table, Datalog is like giving the database a **description** of the answer you
-want. That declarative style comes from logic programming [2]:
+want. That declarative style comes from logic programming [3]:
 programs are expressed as logical clauses, and evaluation searches for values
 that make those clauses true.
 
@@ -422,7 +454,7 @@ attributes are present on entities that have a `:person/name`:
 The first pattern finds entities with a `:person/name`; the second pattern binds
 `?attr` to each attribute asserted for those same entities.
 
-## 6. Unified Retrieval: Plugging into the Datom Flow
+## 7. Unified Retrieval: Plugging into the Datom Flow
 
 One of the most powerful aspects of the Datalevin mental model is that
 "special" features like full-text search, vector similarity, and document
@@ -486,7 +518,7 @@ your database with an external search engine. Your search results are always
 transactionally consistent with your data: they reflect the same committed
 database state as the ordinary datoms in the query.
 
-## 7. Rules: Teaching the Database New Tricks
+## 8. Rules: Teaching the Database New Tricks
 
 Rules are how you encapsulate and reuse logic in Datalevin. A **rule** is a
 named Datalog pattern. Query clauses can call the rule by name, and Datalevin
@@ -594,6 +626,7 @@ The Datalevin mental model is about moving from "data-in-boxes" to "data-as-fact
 
 - **Datoms** are the atoms of truth.
 - **Attributes** define how facts behave.
+- **Transactions** move the database from one coherent state to the next.
 - **Storing each fact once and linking entities** keeps the model clean and the
   engine fast.
 - **Datalog** allows you to query by describing the logic of your answer.
@@ -609,6 +642,9 @@ IBM Research Report RJ909, August 31, 1971. Republished in Randall J. Rustin,
 ed., *Data Base Systems: Courant Computer Science Symposia Series 6*,
 Prentice-Hall, 1972.
 
-[2] Robert A. Kowalski, ["Predicate Logic as Programming
+[2] Jim Gray and Andreas Reuter, *Transaction Processing: Concepts and
+Techniques*, Morgan Kaufmann, 1993.
+
+[3] Robert A. Kowalski, ["Predicate Logic as Programming
 Language"](https://www.doc.ic.ac.uk/~rak/papers/IFIP74.pdf), IFIP Congress,
 1974, pp. 569-574.

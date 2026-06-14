@@ -171,7 +171,11 @@ WAL mode with async transactions and tune durability there instead.
 
 A B+Tree performs best when keys are inserted in **sorted order**. If you insert
 random Entity IDs and random Values, the engine must "jump around" the B+Tree,
-leading to frequent cache misses and page splits.
+leading to frequent cache misses and page splits. A **page split** happens when
+a B+Tree page becomes full and must be divided into two pages, with parent pages
+updated to point at the new key ranges. Random insert order causes more of this
+rebalancing work; sorted input lets the tree append and fill pages more
+predictably.
 
 ### 2.1 Pre-Sorting Your Data
 
@@ -265,10 +269,10 @@ snippet here would be an API sketch, not a current public binding.
 upserts. They accept prepared `Datom` values. That means the subject entity id
 and every `:db.type/ref` value must already be the final numeric entity id.
 
-The JOB benchmark uses a simple technique that works well for relational
-imports whose source tables already have integer primary keys: reserve a
-non-overlapping entity-id range for each source table, then convert every
-primary key and foreign key with the same function. For example:
+The Join Order Benchmark (JOB) uses a simple technique that works well for
+relational imports whose source tables already have integer primary keys:
+reserve a non-overlapping entity-id range for each source table, then convert
+every primary key and foreign key with the same function [1] [2]. For example:
 
 ```clojure
 (def schema
@@ -378,3 +382,14 @@ For the full durability discussion and maintenance implications, see Chapter
 
 By following these patterns, you can achieve extreme write throughput with
 Datalevin.
+
+## References
+
+[1] Huahai Yang,
+   [Competing for the JOB with a Triplestore](https://yyhh.org/blog/2024/09/competing-for-the-job-with-a-triplestore/),
+   yyhh.org, 2024.
+
+[2] Viktor Leis, Andrey Gubichev, Atanas Mirchev, Peter Boncz, Alfons Kemper,
+   and Thomas Neumann,
+   [How Good Are Query Optimizers, Really?](https://www.vldb.org/pvldb/vol9/p204-leis.pdf),
+   Proceedings of the VLDB Endowment, vol. 9, no. 3, 2015, pp. 204-215.

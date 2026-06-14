@@ -51,8 +51,8 @@ When a query is submitted:
 1.  **Parsing**: The engine breaks down the `:where` clauses into individual
     constraints.
 2.  **Query Graph Simplification**: Star-like attributes (multiple attributes on
-    the same entity) are handled via merge scan, reducing the graph to chains
-    between stars.
+    the same entity) are handled via merge scan, defined in section 1.4,
+    reducing the graph to chains between stars.
 3.  **Cardinality Estimation**: The engine uses DLMDB's order statistics to
     estimate how many results each clause will produce.
 4.  **Join Planning**: It explores possible join orders using dynamic
@@ -60,6 +60,18 @@ When a query is submitted:
 5.  **Dynamic Search Policy**: The planner starts with exhaustive search but
     switches to greedy after considering `P(n, 2)` plans, since only the first
     two joins have the most accurate size estimates.
+
+A **left-deep join tree** is a plan shape where each step joins one new base
+relation into the intermediate result built so far. The alternative is a bushy
+tree, where two independently built subplans are joined together. Datalevin uses
+left-deep plans because its join methods are index-scan oriented: keeping one
+side as a base relation preserves accurate counts and keeps planning cost
+bounded [4] [5].
+
+`P(n, 2)` is permutation notation. It means the number of ordered ways to choose
+the first two join steps from `n` candidates: `n * (n - 1)`. Datalevin searches
+that early space carefully, then uses greedier choices later because later
+estimates are more dependent on previously chosen intermediates.
 
 #### 1.1.2 A Concrete Join-Order Example
 
@@ -144,6 +156,14 @@ reservoir sampling** under actual query conditions. It:
 3.  Uses empirical-Bayes shrinkage with priors
 4.  Applies skew-aware upper-bound correction for extreme data distributions
 
+The last two steps are statistical guardrails. **Empirical-Bayes shrinkage**
+means the planner does not trust a small or noisy sample completely; it pulls the
+sample estimate toward a prior expectation so a few sampled entities do not
+dominate the whole plan [6]. **Skew-aware upper-bound correction** means the
+planner treats heavy-tailed distributions cautiously. If a few values are much
+more frequent than average, the estimate is adjusted upward so the optimizer
+does not choose a plan that only works for the average case [7].
+
 #### 1.2.3 Directional Estimation
 
 Unlike traditional RDBMS that assume attribute independence, Datalevin's
@@ -174,11 +194,13 @@ with bound values.
 ### 1.4 Merge Scan
 
 For star-like queries (multiple attributes on the same entity), Datalevin uses
-**merge scan**—a technique similar to pivot scan.
+**merge scan**—a technique similar to pivot scan [9].
 
 Instead of joining each attribute separately, a single index scan on the EAV
-index retrieves all matching attributes at once. This is the **bulk of query
-execution time** and provides massive speedup.
+index retrieves all matching attributes at once. The optimizer can then plan
+over a simplified query graph whose nodes are star-shaped groups and whose edges
+are links between those groups, reducing the join search space [10] [11] [12].
+This is the **bulk of query execution time** and provides massive speedup.
 
 ---
 
@@ -192,8 +214,14 @@ Datalevin considers six join methods and picks the best based on cost estimation
 | **Reverse ref** `:_ref` | `[?f :user/_friend ?e]` — scans AVE then retrieves entities |
 | **Value equality** `:val-eq` | When variables unify via attribute values |
 | **Hash join** `:hash-join` | Large non-selective joins, chooses build/probe side adaptively |
-| **Or-join** `:or-join` | Handles `or-join` clauses with sideway information passing (SIP) |
+| **Or-join** `:or-join` | Handles `or-join` clauses with sideways information passing (SIP) |
 | **Not-join** `:not-join` | Optimizes conservative anti-join shapes instead of always deferring negative filters |
+
+In hash-join terminology, the **build side** is the input used to construct an
+in-memory hash table, and the **probe side** is the input scanned to look up
+matches in that table. Building on the smaller side usually saves memory and
+work. Datalevin chooses that side from actual input sizes when possible, so a
+hash join can be robust when earlier cardinality estimates are imperfect.
 
 #### 1.5.1 Recency-Based Link Choice
 
@@ -281,7 +309,10 @@ Datalevin therefore uses **semi-naive evaluation**, the standard bottom-up
 strategy for recursive Datalog [2]. The key idea is delta tracking: each round
 only uses the *new* tuples discovered in the previous round. Evaluation continues
 until a fixpoint, meaning a round produces no new tuples. For stratified rules,
-strongly connected rule components run in dependency order, so facts needed by a
+the engine divides rules into **strata**: layers evaluated in dependency order
+so recursion and negation have one well-defined result. A later stratum can use
+facts computed by an earlier stratum, but not the other way around. Strongly
+connected rule components run in this dependency order, so facts needed by a
 later stratum are available before that stratum runs.
 
 This bottom-up model is set-oriented. Joins operate over candidate sets and
@@ -389,9 +420,9 @@ Datalevin also connects rule evaluation back to the cost-based optimizer:
 2.  **Inlining non-recursive clauses**: Clauses not involved in recursion can be
     pulled back into the ordinary query plan, where the cost-based optimizer can
     use indexes and join estimates.
-3.  **Temporal elimination**: Recursive rules that meet T-stratification criteria
-    can keep only the last iteration's results, reducing memory use for long
-    chains.
+3.  **Temporal elimination**: Recursive rules that meet T-stratification
+    criteria, a time-aware form of the stratum ordering above, can keep only the
+    last iteration's results, reducing memory use for long chains [8].
 4.  **Stratified negation**: `not` and `not-join` in rules are evaluated only
     after the positive facts they depend on have been computed, giving recursive
     queries a single well-defined result.
@@ -605,3 +636,31 @@ Datalevin plans a query and why a query may be slower than expected.
    [Magic Sets and Other Strange Ways to Implement Logic Programs](https://doi.org/10.1145/6012.15399),
    PODS 1986, pp. 1-15,
    [doi:10.1145/6012.15399](https://doi.org/10.1145/6012.15399).
+
+[4] Guido Moerkotte and Thomas Neumann, "Dynamic Programming Strikes Back",
+   SIGMOD 2008, pp. 539-552.
+
+[5] Hongjun Lan, Zhifeng Bao, and Yuwei Peng, "A Survey on Advancing the DBMS
+   Query Optimizer: Cardinality Estimation, Cost Model, and Plan Enumeration",
+   *Data Science and Engineering*, 2021.
+
+[6] Max Heimel, Volker Markl, and Kartik Murthy, "A Bayesian Approach to
+   Estimating the Selectivity of Conjunctive Predicates", DBIS 2009.
+
+[7] Peter J. Haas and Arun N. Swami, "Sampling-Based Selectivity Estimation for
+   Joins Using Augmented Frequent Value Statistics", ICDE 1995.
+
+[8] Amir Shaikhha et al., "Optimizing Nested Recursive Queries", *Proceedings of
+   the ACM on Management of Data* 2(1), SIGMOD 2024, pp. 1-27.
+
+[9] Andre Brodt, Olaf Schiller, and Bernhard Mitschang, "Efficient Resource
+   Attribute Retrieval in RDF Triple Stores", CIKM 2011.
+
+[10] Andrey Gubichev and Thomas Neumann, "Exploiting the Query Structure for
+   Efficient Join Ordering in SPARQL Queries", EDBT 2014.
+
+[11] Marios Meimaris et al., "Extended Characteristic Sets: Graph Indexing for
+   SPARQL Query Optimization", ICDE 2017.
+
+[12] Thomas Neumann and Guido Moerkotte, "Characteristic Sets: Accurate
+   Cardinality Estimation for RDF Queries with Multiple Joins", ICDE 2011.

@@ -212,7 +212,7 @@ spec or an operating envelope. This gives the agent a durable object model
 without forcing every prompt-facing detail into schema.
 
 The rest of Part VI expands this sketch in the order an agent uses it. Chapter
-25 defines the concrete memory records: episodes, semantic facts, working-memory
+24 defines the concrete memory records: episodes, semantic facts, working-memory
 slots, and session documents. Chapter 25 explains how those records are
 retrieved, ranked, and assembled into a prompt. Chapter 26 covers the harder
 problem of keeping long-term state coherent as new evidence arrives.
