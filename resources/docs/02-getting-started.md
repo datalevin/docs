@@ -151,7 +151,8 @@ brew install libomp llvm
 
 The examples in this chapter use version `{{datalevin-version}}`. The live docs
 site fills this value from the current release configuration; package pages
-remain the source of truth if you are reading an older copy.
+remain the source of truth if you are reading an older copy. Chapter 22 explains
+the book-wide version target and API-stability expectations.
 
 <div class="multi-lang">
 
@@ -235,7 +236,7 @@ import datalevin.DatalogQuery;
 import datalevin.Schema;
 import datalevin.Tx;
 
-try (Connection conn = Datalevin.createConn(
+try (Connection conn = Datalevin.getConn(
         "/tmp/mydb",
         Datalevin.schema()
             .attr("user/name",
@@ -353,10 +354,12 @@ different lifecycle intent:
 | `d/create-conn` | You deliberately want a new connection object, such as for an in-memory database, a controlled test fixture, or a specialized construction path. |
 
 For a persistent application database, prefer `d/get-conn` at the application
-boundary and share the returned connection. Java's `Datalevin.createConn`,
-Python's `connect`, and Node.js's `connect` are the corresponding language
-binding entry points; manage their returned connection objects with the same
-"open once, share, close on shutdown" discipline.
+boundary and share the returned connection. Java's `Datalevin.getConn` is the
+corresponding path-addressed entry point. `Datalevin.createConn` is available
+when Java code deliberately wants a fresh connection object, such as for a test
+fixture or in-memory database. Python's `connect` and Node.js's `connect`
+return connection objects that should be managed with the same "open once,
+share, close on shutdown" discipline.
 
 Short-lived connections are fine for REPL experiments, scripts, tests, and
 single-shot examples. The production pattern is different: hold the connection,

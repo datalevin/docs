@@ -11,13 +11,15 @@ chapter covers the next problem: what happens when new information should change
 the agent's long-term model?
 
 Memory is about storage and retrieval. **Apperception** is about integrating new
-information into a coherent internal model of the world [1]. An AI agent with
-apperception does not just record events; it understands how those events change
-its current beliefs, goal hierarchy, operating envelope, and future behavior.
+information into a coherent internal model of the world [1]. In an AI
+application, the apperception layer does not just record events; it applies
+rules, model outputs, review policy, and domain logic to decide how those events
+should change current beliefs, goal hierarchy, operating envelope, and future
+behavior.
 
-Datalevin is suited for this layer because it combines Datalog's logical rigor,
-graph relationships, full-text and vector evidence, and transactional updates in
-one engine.
+Datalevin is suited for storing and checking the state behind this layer because
+it combines Datalog's logical rigor, graph relationships, full-text and vector
+evidence, and transactional updates in one engine.
 
 ---
 
@@ -25,7 +27,7 @@ one engine.
 
 In philosophy, apperception is the process of perceiving new things through the
 lens of past experience to form a unified sense of self. In AI architecture, an
-apperception engine is a layer that:
+apperception engine is application code that:
 
 1. **Validates**: Ensures new information is logically consistent with what is
    already known.
@@ -37,6 +39,9 @@ apperception engine is a layer that:
 This chapter deliberately comes after recall and context assembly. A retrieval
 pipeline can decide what to show the LLM for this turn. Apperception decides
 what should become part of long-term state after the turn.
+
+Datalevin does not ship this engine. It supplies the transaction boundary,
+indexes, query language, and constraints that the engine uses.
 
 The term is also useful because of recent AI work on the Apperception Engine,
 which frames "making sense" as constructing an interpretable symbolic theory
@@ -51,7 +56,7 @@ inspectable model rather than left as disconnected prompt fragments.
 
 A major challenge in AI is hallucination or drift. An agent may accept
 contradictory information, over-promote a temporary user statement, or let old
-facts linger after they have been superseded. In an apperception engine, use
+facts linger after they have been superseded. In this application layer, use
 Datalevin constraints, Datalog checks, and explicit evidence records to keep the
 world model coherent.
 
@@ -107,9 +112,9 @@ check is explicit and repeatable. Do not rely on a prompt instruction such as
 
 ### 2.2 Truth Maintenance
 
-If new data supersedes old data, the engine uses Datalevin's atomic transactions
-to update the state. Because Datalevin is fact-centric, you can retract specific
-old facts while keeping the rest of the model intact.
+If new data supersedes old data, application code can use Datalevin's atomic
+transactions to update the state. Because Datalevin is fact-centric, you can
+retract or replace specific old facts while keeping the rest of the model intact.
 
 This is the practical version of a classic AI idea: a **truth-maintenance
 system** (TMS) records beliefs together with the reasons or dependencies that
@@ -130,7 +135,7 @@ A practical pattern is to separate evidence from current assertions:
 ```clojure
 {:episode/id      #uuid "00000000-0000-0000-0000-000000000701"
  :episode/summary "Alice moved the deployment window from Tuesday to Thursday."
- :episode/time    #inst "2026-06-09T11:00:00Z"}
+ :episode/timestamp #inst "2026-06-09T11:00:00Z"}
 
 {:fact/id             #uuid "00000000-0000-0000-0000-000000000702"
  :fact/subject        [:user/id "alice"]
@@ -144,6 +149,84 @@ A practical pattern is to separate evidence from current assertions:
 The older fact can be marked superseded rather than deleted. Retrieval can then
 prefer current facts while audit and explanation paths can still follow the
 evidence chain.
+
+Here is a small runnable helper using the Chapter 23 schema. The policy decision
+to accept a fact remains outside Datalevin; this function only makes the state
+transition atomic and inspectable:
+
+```clojure
+(defn current-fact-ids
+  [db user-id kind]
+  (d/q '[:find [?fact-id ...]
+         :in $ ?user-id ?kind
+         :where [?user :user/id ?user-id]
+                [?fact :fact/subject ?user]
+                [?fact :fact/kind ?kind]
+                [?fact :fact/status :fact.status/current]
+                [?fact :fact/id ?fact-id]]
+       db user-id kind))
+
+(defn accept-current-fact!
+  [conn {:keys [user-id source-episode-id kind content confidence]}]
+  (let [fact-id (random-uuid)
+        now     (java.util.Date.)]
+    (d/with-transaction [tx conn]
+      (let [old-ids (current-fact-ids @tx user-id kind)
+            retired (mapv (fn [old-id]
+                             {:fact/id old-id
+                              :fact/status :fact.status/superseded})
+                           old-ids)
+            current (cond-> {:fact/id fact-id
+                              :fact/subject [:user/id user-id]
+                              :fact/kind kind
+                              :fact/content content
+                              :fact/source-episode [:episode/id source-episode-id]
+                              :fact/status :fact.status/current
+                              :fact/confidence confidence
+                              :fact/created-at now}
+                      (seq old-ids)
+                      (assoc :fact/supersedes
+                             (mapv (fn [old-id] [:fact/id old-id]) old-ids)))]
+        (d/transact! tx (conj retired current))))
+    fact-id))
+
+(let [old-episode-id (random-uuid)
+      new-episode-id (random-uuid)]
+  (d/transact! conn
+    [{:episode/id old-episode-id
+      :episode/user [:user/id "alice"]
+      :episode/session [:session/id "release-standup"]
+      :episode/timestamp #inst "2026-06-08T10:00:00Z"
+      :episode/summary "Alice said her deployment window is Tuesday."}
+     {:episode/id new-episode-id
+      :episode/user [:user/id "alice"]
+      :episode/session [:session/id "release-standup"]
+      :episode/timestamp #inst "2026-06-09T11:00:00Z"
+      :episode/summary "Alice moved the deployment window to Thursday."}])
+
+  (accept-current-fact!
+    conn
+    {:user-id "alice"
+     :source-episode-id old-episode-id
+     :kind :preference/deployment-window
+     :content "Alice's deployment window is Tuesday."
+     :confidence 0.8})
+
+  (accept-current-fact!
+    conn
+    {:user-id "alice"
+     :source-episode-id new-episode-id
+     :kind :preference/deployment-window
+     :content "Alice's deployment window is Thursday."
+     :confidence 0.9}))
+
+(d/q '[:find ?status ?content
+       :in $ ?kind
+       :where [?fact :fact/kind ?kind]
+              [?fact :fact/status ?status]
+              [?fact :fact/content ?content]]
+     @conn :preference/deployment-window)
+```
 
 ---
 
@@ -208,7 +291,7 @@ logically:
 - **Derived fact**: "Alice is an active Clojure learner."
 - **Inference**: "The tutor should prioritize advanced Clojure resources."
 
-By running these rules periodically or during ingestion, the apperception engine
+By running these rules periodically or during ingestion, the application
 compresses many episodic memories into a smaller set of high-value semantic
 facts.
 
@@ -310,11 +393,11 @@ stable model of itself.
 - **Goal hierarchy**: a graph of active, pending, blocked, superseded, and
   completed goals.
 
-Unlike a static config file, this state is dynamic. As the agent apperceives its
-own performance, it can update strategy entities in Datalevin to improve over
-time. That does not mean the model should rewrite its own policy at will. It
-means the application can record evidence about strategy performance, then use
-rules, review workflows, or explicit approvals to update the long-term agent
+Unlike a static config file, this state is dynamic. As the application reviews
+the agent's performance, it can update strategy entities in Datalevin to improve
+over time. That does not mean the model should rewrite its own policy at will.
+It means the application can record evidence about strategy performance, then
+use rules, review workflows, or explicit approvals to update the long-term agent
 configuration.
 
 ### 5.1 Example: Updating an Agent Strategy
@@ -470,8 +553,9 @@ and task state shape what the agent perceives as relevant.
 
 ## Summary
 
-An apperception engine transforms a database from a passive archive into an
-active participant in the agent's intelligence.
+An apperception layer is application code that turns stored memory into
+maintained long-term state. Datalevin supplies the durable facts, indexes,
+constraints, and transaction boundary that make that layer auditable.
 
 - **Consistency**: Datalog checks keep the model logically sound.
 - **Inference**: Rules derive knowledge that is not explicitly stated.
@@ -481,8 +565,9 @@ active participant in the agent's intelligence.
 - **Policy**: Operating envelopes keep behavioral constraints inspectable and
   separate from prompt text.
 
-By building on Datalevin, you provide the AI with more than memory. You give it
-a substrate for coherent long-term state.
+By building this layer on Datalevin, you give the AI application a substrate for
+coherent long-term state without hiding the maintenance policy inside prompt
+text.
 
 ## References
 

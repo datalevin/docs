@@ -476,7 +476,7 @@ attribute and value.
 (d/q '[:find ?title
        :where
        [(fulltext $ :doc/body "clojure") [[?e _ _]]] ; Keep entity id from returned datoms
-       [?e :doc/status :published]                   ; Standard datom join
+       [?e :doc/status "published"]                  ; Standard datom join
        [?e :doc/title ?title]]                       ; Retrieve the title
      db)
 ```
@@ -487,7 +487,7 @@ Object results = conn.query(
     "[:find ?title " +
     " :where " +
     " [(fulltext $ :doc/body \"clojure\") [[?e _ _]]] " +
-    " [?e :doc/status :published] " +
+    " [?e :doc/status \"published\"] " +
     " [?e :doc/title ?title]]");
 ```
 
@@ -497,7 +497,7 @@ results = conn.query("""
     [:find ?title
      :where
      [(fulltext $ :doc/body "clojure") [[?e _ _]]]
-     [?e :doc/status :published]
+     [?e :doc/status "published"]
      [?e :doc/title ?title]]""")
 ```
 
@@ -507,7 +507,7 @@ const results = await conn.query(
   `[:find ?title
     :where
     [(fulltext $ :doc/body "clojure") [[?e _ _]]]
-    [?e :doc/status :published]
+    [?e :doc/status "published"]
     [?e :doc/title ?title]]`);
 ```
 

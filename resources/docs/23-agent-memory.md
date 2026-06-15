@@ -18,6 +18,98 @@ logical reasoning.
 
 ---
 
+## Part VI Contract: What Datalevin Provides
+
+Part VI is about application architecture on top of Datalevin. It is not a
+description of a bundled agent framework. Datalevin gives you the database
+capabilities needed to build durable agent memory:
+
+- ACID transactions over facts, documents, indexes, and task state.
+- Datalog queries, rules, lookup refs, schema, and graph traversal.
+- Full-text search, vector search, embedding indexes, and idoc fields.
+- Transaction reports, listeners, WAL, replication, server access, and MCP
+  tooling for operational integration.
+
+You build the agent-specific machinery:
+
+- The ingestion loop that turns messages, tool calls, and observations into
+  episode records.
+- The consolidation job that extracts candidate facts from episodes.
+- The working-memory refresh policy, slot scoring, and eviction rules.
+- The apperception or truth-maintenance layer that decides which facts become
+  current, superseded, rejected, or pending review.
+- The operating envelope, tool authorization checks, budgets, and model-calling
+  policy.
+
+The examples in this part model those pieces as ordinary entities, references,
+attributes, and idocs. When a snippet demonstrates a basic Datalevin API call,
+it may use the same multi-language style as earlier chapters. When a snippet
+shows an end-to-end application loop, it is Clojure-first so the control flow,
+transactions, and data shapes stay runnable in one place. The same model can be
+implemented from Java, Python, JavaScript, or over the server API by composing
+the same `transact`, `query`, `pull`, full-text, vector, and embedding
+operations shown earlier in the book.
+
+Many of the patterns in Part VI were informed by Xia, a separate open-source
+personal AI assistant project [3]. Xia is a reference implementation for these
+agent-memory ideas: long-term memory, scoped task state, local tool boundaries,
+scheduled work, and persistent assistant state. It is not part of Datalevin and
+does not change what Datalevin provides; it shows how an application can build
+the agent-specific machinery on top of ordinary database capabilities.
+
+The following minimal in-memory setup is enough to run many of the Clojure
+examples in Part VI:
+
+```clojure
+(require '[datalevin.core :as d])
+
+(def memory-schema
+  {:user/id          {:db/valueType :db.type/string
+                     :db/unique    :db.unique/identity}
+   :session/id       {:db/valueType :db.type/string
+                     :db/unique    :db.unique/identity}
+   :session/user     {:db/valueType :db.type/ref}
+   :episode/id       {:db/valueType :db.type/uuid
+                     :db/unique    :db.unique/identity}
+   :episode/user     {:db/valueType :db.type/ref}
+   :episode/session  {:db/valueType :db.type/ref}
+   :episode/timestamp {:db/valueType :db.type/instant}
+   :episode/summary  {:db/valueType :db.type/string
+                     :db/fulltext  true}
+   :fact/id          {:db/valueType :db.type/uuid
+                     :db/unique    :db.unique/identity}
+   :fact/subject     {:db/valueType :db.type/ref}
+   :fact/kind        {:db/valueType :db.type/keyword}
+   :fact/source-episode {:db/valueType :db.type/ref}
+   :fact/supersedes  {:db/valueType :db.type/ref
+                     :db/cardinality :db.cardinality/many}
+   :fact/status      {:db/valueType :db.type/keyword}
+   :fact/content     {:db/valueType :db.type/string
+                     :db/fulltext  true}
+   :fact/confidence  {:db/valueType :db.type/double}
+   :fact/created-at  {:db/valueType :db.type/instant}
+   :task/id          {:db/valueType :db.type/uuid
+                     :db/unique    :db.unique/identity}
+   :task/state       {:db/valueType :db.type/keyword}
+   :task/contract    {:db/valueType :db.type/idoc}
+   :wm/id            {:db/valueType :db.type/uuid
+                     :db/unique    :db.unique/identity}
+   :wm/session       {:db/valueType :db.type/ref}
+   :wm.slot/wm       {:db/valueType :db.type/ref}
+   :wm.slot/entity   {:db/valueType :db.type/ref}
+   :wm.slot/relevance {:db/valueType :db.type/double}
+   :wm.slot/reason   {:db/valueType :db.type/string}
+   :wm.slot/pinned?  {:db/valueType :db.type/boolean}})
+
+(def conn
+  (d/create-conn nil memory-schema {:kv-opts {:inmemory? true}}))
+
+(d/transact! conn
+  [{:user/id "alice"}
+   {:session/id "release-standup"
+    :session/user [:user/id "alice"]}])
+```
+
 ## 1. The Human Memory Analogy
 
 When people say "memory" in ordinary conversation, they often mean one thing:
@@ -119,9 +211,11 @@ SQL DB (for state). This "polyglot" approach creates significant friction:
 
 **The Datalevin Advantage**: In Datalevin, the text description, optional
 user-supplied vector, automatic embedding index, and logical facts about an
-experience all live under the same transaction boundary, so there is no risk of
-introducing data inconsistency. At retrieval time, a single Datalog query can
-get relevant pieces of information in one semantically coherent fashion.
+experience can live under the same transaction boundary. That removes a common
+source of inconsistency between separately updated stores. It does not decide
+what an experience means; your ingestion and consolidation code does that. At
+retrieval time, a Datalog query can combine the relevant pieces of information
+in one semantically coherent fashion.
 
 ```clojure
 ;; An "Experience" entity in Datalevin
@@ -150,9 +244,10 @@ Graph**.
 - **Edges**: How these things relate (e.g., "Goal A was superseded by Goal B",
   "User X is an expert in Topic Y").
 
-Because Datalevin supports recursive graph traversal (Chapter 13), an agent can
-navigate this graph to find non-obvious connections in its memory—mimicking the
-"associative" nature of human thought.
+Because Datalevin supports recursive graph traversal (Chapter 13), application
+code can navigate this graph to find non-obvious connections in stored memory.
+The graph supplies explainable associations; the agent runtime decides how those
+associations affect a turn.
 
 ---
 
@@ -221,10 +316,11 @@ problem of keeping long-term state coherent as new evidence arrives.
 
 ## Summary
 
-Datalevin is not just a database for AI; it is a **memory substrate**. By
-consolidating episodic, semantic, scoped task state, and working-memory
-projections into a single engine, you reduce the impedance mismatch between the
-LLM and its data, enabling agents that learn and remember across time.
+Datalevin is a database substrate for AI memory, not an agent runtime. By
+consolidating episodic records, semantic facts, scoped task state, and
+working-memory projections into a single engine, you reduce the impedance
+mismatch between the LLM-facing application and its durable state. Learning,
+review, consolidation, and action selection remain application responsibilities.
 
 ## References
 
@@ -233,3 +329,5 @@ Academic Press, 1972, pp. 381-403.
 
 [2] Alan D. Baddeley and Graham Hitch, "Working Memory," in *Psychology of
 Learning and Motivation*, vol. 8, Academic Press, 1974, pp. 47-89.
+
+[3] Huahai Yang, [Xia](https://github.com/huahaiy/xia), GitHub repository.

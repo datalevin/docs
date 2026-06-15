@@ -12,6 +12,8 @@ data moves from one consistent state to another, even in the face of concurrent
 operations or system crashes. Datalevin provides ACID (Atomicity, Consistency,
 Isolation, Durability) guarantees, and this chapter explores how.
 
+![The transaction lifecycle: input data, resolution and validation, datom changes, index updates, and the resulting report](/images/diagrams/transaction-lifecycle.svg)
+
 ---
 
 ## 1. The Transaction Model
@@ -648,6 +650,12 @@ other concurrent write from interfering. In Java, Python, and JavaScript, prefer
 the conditional transaction forms below, such as `:db/cas` and transaction
 functions, when you need portable read-modify-write behavior.
 
+`with-transaction` is a serialization tool, not a general retry loop. If the
+body throws, the transaction aborts. Datalevin retries its own safe internal
+map-resize condition, but logical failures such as CAS mismatch, lookup-ref
+miss, validation failure, or unique conflict are returned to the caller. Chapter
+22 pulls those cases together into a production retry and error-handling policy.
+
 ### 4.1 Mixing Datalog and KV Writes
 
 Because a local Datalog store is built on Datalevin's KV store, embedded
@@ -656,25 +664,25 @@ KV DBIs as one atomic unit. The important point is to use the KV instance inside
 the transactional connection, not a separately opened `open-kv` handle on the
 same directory.
 
-Keep the KV access in a small infrastructure helper:
+Use the public `d/datalog-kv` helper to get the KV handle that belongs to a
+Datalog connection or DB:
 
 ```clojure
-(defn datalog-kv
-  "Return the KV instance behind a local embedded Datalog connection."
-  [conn]
-  (.-lmdb ^datalevin.storage.Store (:store (d/db conn))))
+(def kv (d/datalog-kv conn))
 ```
 
-Then open the application DBI during setup and use the transactional connection
-inside `with-transaction` for both parts of the write:
+The returned KV handle is owned by the Datalog connection. Do not close it
+separately; close the Datalog connection instead. Open application DBIs during
+setup, then use the transaction-bound connection inside `with-transaction` for
+both parts of the write:
 
 ```clojure
-(let [kv (datalog-kv conn)]
+(let [kv (d/datalog-kv conn)]
   ;; DBI opening is idempotent, so this is safe during application startup.
   (d/open-dbi kv "audit-log")
 
   (d/with-transaction [tx conn]
-    (let [tx-kv (datalog-kv tx)]
+    (let [tx-kv (d/datalog-kv tx)]
       (d/transact! tx
         [{:order/id     "o-1001"
           :order/status :order.status/paid}])
@@ -772,7 +780,9 @@ await conn.transact([
 </div>
 
 If Alice's balance is not currently `100`, the whole transaction fails. This is
-useful for conditional updates that must not silently overwrite newer data.
+useful for conditional updates that must not silently overwrite newer data. A
+CAS failure is a logical conflict, not an automatic retry signal; Chapter 22
+shows how to re-read and retry when that is the correct application behavior.
 
 ### 5.2 Transaction UDFs
 

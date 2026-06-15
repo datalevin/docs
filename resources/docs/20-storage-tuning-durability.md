@@ -448,7 +448,9 @@ const conn = await connect(path, {
 > **Note**: Datalevin will automatically grow the mapsize if it runs out of
 > space, but this is an expensive operation that causes a significant
 > performance spike. Setting an appropriately large mapsize upfront avoids this
-> overhead.
+> overhead. Chapter 22 explains how this internal resize path differs from
+> application-level transaction failures such as validation, lookup-ref, unique,
+> and CAS errors.
 
 ---
 

@@ -72,7 +72,7 @@
         success])]))
 
 (def ^:private default-image-path
-  "/images/unified.jpg")
+  "/images/diagrams/unified-data-model.svg")
 
 (defn- split-page-opts
   [body]

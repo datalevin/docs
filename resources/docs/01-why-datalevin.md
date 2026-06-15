@@ -169,7 +169,7 @@ Datalog: describe the facts that must be true, and let the engine find bindings
 for the variables.
 
 This matters for larger applications because queries remain close to the
-domain. A clause such as `[?e :doc/lang :en]` says that the same entity `?e`
+domain. A clause such as `[?e :doc/lang "en"]` says that the same entity `?e`
 must have an English language fact. A clause such as
 `[?e :order/customer ?customer]` says that the order entity relates to a
 customer entity. Joins emerge from repeated variables, not from manually naming
@@ -550,7 +550,7 @@ What happens in this query:
    term `"vector"`.
 2. `idoc-match` narrows candidates to documents whose nested idoc metadata has
    `{:module {:status "stable"}}`.
-3. The Datalog clause `[?e :doc/lang :en]` applies an exact metadata constraint.
+3. The Datalog clause `[?e :doc/lang "en"]` applies an exact metadata constraint.
 
 The key point here is composition: lexical retrieval,
 structure-aware filtering, and exact logical predicates are executed in one

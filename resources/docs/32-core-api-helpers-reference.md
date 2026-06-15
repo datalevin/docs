@@ -27,6 +27,7 @@ specialized construction.
 | `db` | Returns the current Datalog DB object behind a connection. Call it again after writes. |
 | `opts` | Returns the option map of the Datalog DB. |
 | `schema` | Returns the current effective schema. |
+| `datalog-kv` | Returns the KV handle backing a Datalog connection or DB. Use this when custom KV DBIs must live in the same store as Datalog data. |
 | `close` | Closes a Datalog connection. |
 | `close-db` | Closes a raw Datalog DB object. Usually `close` is what application code needs. |
 | `conn-from-db` | Wraps an existing DB object in a mutable connection. |
@@ -44,6 +45,12 @@ specialized construction.
 `conn-from-db`, `conn-from-datoms`, and `reset-conn!` are specialist tools.
 They are useful for tests, import pipelines, and migration utilities, but they
 are not the normal way to open an application database.
+
+`datalog-kv` is the supported bridge from a Datalog connection to the
+underlying KV APIs. The returned handle is owned by the Datalog connection; do
+not close it separately. Chapter 6 shows how to use it inside
+`with-transaction` when one atomic operation needs both Datalog datoms and
+custom KV writes.
 
 ---
 

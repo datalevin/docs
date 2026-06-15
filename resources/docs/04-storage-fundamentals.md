@@ -216,6 +216,8 @@ Datalevin stores the primary Datalog indexes in two orders:
 - **AVE** (Attribute-Value-Entity): optimized for finding entities that have a
   particular attribute/value pair, and for range scans over attribute values.
 
+![From a datom to indexed access in the EAV and AVE orders](/images/diagrams/datom-eav-ave.svg)
+
 ### 4.1 Leveraging DUPSORT
 
 Instead of storing every triple as a completely separate flat key, Datalevin uses

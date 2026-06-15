@@ -18,13 +18,16 @@ truth maintenance, and application-level task control.
 
 ## 1. Pattern: The "Database-as-Environment"
 
-In most applications, the database is a passive storage layer. In a Stateful AI
-application, the database is an **Active Environment**.
+In most applications, the database is treated as a passive storage layer. In a
+Stateful AI application, a better pattern is **database-as-environment-state**:
+the runtime treats durable database facts as the inspectable state of the
+application environment.
 
-- The agent "lives" in the database.
-- Every interaction updates its world model.
-- Its "personality" is not a static prompt, but a collection of entities and
-  relationships in Datalevin.
+- The agent runtime reads and writes durable environment state in Datalevin.
+- Every interaction can update episode records, task state, audit records, or
+  semantic facts.
+- Persona, strategy, permissions, and style are entities interpreted by
+  application code, not hidden prompt text.
 
 An agent runtime also needs a control loop. In the standard agent model, an
 agent receives percepts from its environment, updates internal state, and chooses
@@ -45,9 +48,10 @@ formal requirement of Datalevin. The important modeling point is that each
 control surface is durable, queryable state, regardless of the names your
 application uses.
 
-This is what turns a chatbot into an agent. A chatbot responds to the latest
-message. An agent can be interrupted, handle the interruption, and then resume
-the original agenda because the agenda and boundary state were durable.
+This is one important difference between a chatbot and an agentic application.
+A chatbot responds to the latest message. An agentic application can be
+interrupted, handle the interruption, and then resume the original agenda
+because the agenda and boundary state were durable.
 
 ---
 
@@ -77,6 +81,50 @@ In application code, this loop is also where policy enforcement belongs. The
 model can propose an action, but the system should check the operating envelope,
 tool permissions, budgets, and task state before executing it. The database is
 the shared environment that makes the loop resumable and inspectable.
+
+A minimal turn boundary can reuse the helper functions introduced in Chapters
+24 and 25. This does not call a model; it shows the durable state transition
+around one observed turn:
+
+```clojure
+(defn memory-turn!
+  [conn {:keys [user-id session-id summary fact-kind fact-content confidence]}]
+  (let [{episode-id :episode/id
+         fact-id    :fact/id}
+        (record-episode-and-candidate-fact!
+          conn
+          {:user-id user-id
+           :session-id session-id
+           :summary summary
+           :fact-kind fact-kind
+           :fact-content fact-content
+           :confidence confidence})
+
+        wm-id
+        (materialize-working-memory!
+          conn
+          session-id
+          [{:fact-id fact-id
+            :relevance 1.0
+            :reason "Newly observed fact from this turn."
+            :pinned? false}])]
+    {:episode/id episode-id
+     :fact/id fact-id
+     :wm/id wm-id}))
+
+(memory-turn!
+  conn
+  {:user-id "alice"
+   :session-id "release-standup"
+   :summary "Alice asked for release notes to emphasize migration risk."
+   :fact-kind :preference/release-notes
+   :fact-content "Alice prefers release notes that call out migration risk."
+   :confidence 0.74})
+```
+
+The application still decides when a candidate fact is promoted, rejected, or
+sent for review. Datalevin stores the records, links, and working-memory
+projection that make that decision auditable.
 
 ---
 
@@ -322,7 +370,322 @@ without storing prompt text or secret-bearing tool payloads.
 
 ---
 
-## 9. Summary: The Path to Machine Intelligence
+## 9. Capstone: A Documentation Feedback Memory Loop
+
+The examples above are patterns. This capstone ties them together in one small,
+runnable Clojure program. It is not the Datalevin documentation site's
+production code, and it does not call an LLM. Instead, it models the same
+application shape in miniature: readers search the docs, leave feedback, a
+background job detects a documentation gap, and the system creates a reviewable
+task with working memory.
+
+The important boundary remains the same as in Chapter 23. Datalevin stores the
+episodes, facts, task state, and working-memory projection. The application
+implements the extraction policy, thresholds, review workflow, and publication
+rules.
+
+```clojure
+(require '[clojure.string :as str])
+(require '[datalevin.core :as d])
+
+(def capstone-schema
+  {:user/id          {:db/valueType :db.type/string
+                     :db/unique    :db.unique/identity}
+   :session/id       {:db/valueType :db.type/string
+                     :db/unique    :db.unique/identity}
+   :session/user     {:db/valueType :db.type/ref}
+
+   :episode/id       {:db/valueType :db.type/uuid
+                     :db/unique    :db.unique/identity}
+   :episode/user     {:db/valueType :db.type/ref}
+   :episode/session  {:db/valueType :db.type/ref}
+   :episode/type     {:db/valueType :db.type/keyword}
+   :episode/query    {:db/valueType :db.type/string
+                     :db/fulltext  true}
+   :episode/page     {:db/valueType :db.type/string}
+   :episode/helpful? {:db/valueType :db.type/boolean}
+   :episode/summary  {:db/valueType :db.type/string
+                     :db/fulltext  true}
+   :episode/timestamp {:db/valueType :db.type/instant}
+
+   :fact/id          {:db/valueType :db.type/uuid
+                     :db/unique    :db.unique/identity}
+   :fact/kind        {:db/valueType :db.type/keyword}
+   :fact/subject     {:db/valueType :db.type/string}
+   :fact/content     {:db/valueType :db.type/string
+                     :db/fulltext  true}
+   :fact/status      {:db/valueType :db.type/keyword}
+   :fact/confidence  {:db/valueType :db.type/double}
+   :fact/evidence    {:db/valueType :db.type/ref
+                     :db/cardinality :db.cardinality/many}
+   :fact/supersedes  {:db/valueType :db.type/ref
+                     :db/cardinality :db.cardinality/many}
+   :fact/created-at  {:db/valueType :db.type/instant}
+
+   :task/id          {:db/valueType :db.type/uuid
+                     :db/unique    :db.unique/identity}
+   :task/type        {:db/valueType :db.type/keyword}
+   :task/state       {:db/valueType :db.type/keyword}
+   :task/title       {:db/valueType :db.type/string}
+   :task/fact        {:db/valueType :db.type/ref}
+   :task/contract    {:db/valueType :db.type/idoc}
+   :task/created-at  {:db/valueType :db.type/instant}
+
+   :wm/id            {:db/valueType :db.type/uuid
+                     :db/unique    :db.unique/identity}
+   :wm/task          {:db/valueType :db.type/ref}
+   :wm.slot/wm       {:db/valueType :db.type/ref}
+   :wm.slot/entity   {:db/valueType :db.type/ref}
+   :wm.slot/relevance {:db/valueType :db.type/double}
+   :wm.slot/reason   {:db/valueType :db.type/string}})
+
+(def conn
+  (d/create-conn nil capstone-schema {:kv-opts {:inmemory? true}}))
+
+(d/transact! conn
+  [{:user/id "reader-1"}
+   {:session/id "docs-session-1"
+    :session/user [:user/id "reader-1"]}])
+
+(defn record-feedback!
+  [conn {:keys [user-id session-id query page helpful?]}]
+  (let [episode-id (random-uuid)
+        summary    (format "Search for '%s' opened %s and was marked %s."
+                           query
+                           page
+                           (if helpful? "helpful" "not helpful"))]
+    (d/transact! conn
+      [{:episode/id        episode-id
+        :episode/user      [:user/id user-id]
+        :episode/session   [:session/id session-id]
+        :episode/type      :episode.type/search-feedback
+        :episode/query     query
+        :episode/page      page
+        :episode/helpful?  helpful?
+        :episode/summary   summary
+        :episode/timestamp (java.util.Date.)}])
+    episode-id))
+
+(def feedback-events
+  [{:query "datalevin backup restore"
+    :page "/docs/20-storage-tuning-durability"
+    :helpful? false}
+   {:query "backup verification"
+    :page "/docs/22-production-operations"
+    :helpful? false}
+   {:query "restore backup wal"
+    :page "/docs/20-storage-tuning-durability"
+    :helpful? false}
+   {:query "datalog recursion"
+    :page "/docs/09-rules-recursion"
+    :helpful? true}])
+
+(doseq [event feedback-events]
+  (record-feedback!
+    conn
+    (assoc event
+           :user-id "reader-1"
+           :session-id "docs-session-1")))
+
+(defn failed-searches
+  [db]
+  (d/q '[:find ?episode-id ?query ?page
+         :where [?e :episode/type :episode.type/search-feedback]
+                [?e :episode/helpful? false]
+                [?e :episode/id ?episode-id]
+                [?e :episode/query ?query]
+                [?e :episode/page ?page]]
+       db))
+
+(defn gap-topic
+  [query]
+  (let [q (str/lower-case query)]
+    (cond
+      (re-find #"backup|restore|wal" q) "backup and restore"
+      :else q)))
+
+(defn candidate-gaps
+  [db]
+  (->> (failed-searches db)
+       (map (fn [[episode-id query page]]
+              {:topic (gap-topic query)
+               :episode-id episode-id
+               :query query
+               :page page}))
+       (group-by :topic)
+       (keep (fn [[topic rows]]
+               (when (>= (count rows) 2)
+                 {:topic topic
+                  :count (count rows)
+                  :evidence (mapv :episode-id rows)
+                  :pages (vec (distinct (map :page rows)))})))
+       vec))
+
+(defn current-gap-fact-ids
+  [db topic]
+  (d/q '[:find [?fact-id ...]
+         :in $ ?topic
+         :where [?f :fact/kind :fact.kind/docs-gap]
+                [?f :fact/subject ?topic]
+                [?f :fact/status :fact.status/current]
+                [?f :fact/id ?fact-id]]
+       db topic))
+
+(defn accept-gap-fact!
+  [conn {:keys [topic count evidence pages]}]
+  (let [fact-id    (random-uuid)
+        confidence (min 0.95 (+ 0.55 (* 0.1 count)))
+        content    (format "Readers are struggling to find documentation about %s."
+                           topic)]
+    (d/with-transaction [tx conn]
+      (let [old-ids (current-gap-fact-ids @tx topic)
+            retired (mapv (fn [old-id]
+                             {:fact/id old-id
+                              :fact/status :fact.status/superseded})
+                           old-ids)
+            current (cond-> {:fact/id fact-id
+                              :fact/kind :fact.kind/docs-gap
+                              :fact/subject topic
+                              :fact/content content
+                              :fact/status :fact.status/current
+                              :fact/confidence confidence
+                              :fact/evidence (mapv (fn [episode-id]
+                                                     [:episode/id episode-id])
+                                                   evidence)
+                              :fact/created-at (java.util.Date.)}
+                      (seq old-ids)
+                      (assoc :fact/supersedes
+                             (mapv (fn [old-id] [:fact/id old-id])
+                                   old-ids)))]
+        (d/transact! tx (conj retired current))))
+    fact-id))
+
+(defn recall-gap-context
+  [db topic]
+  (d/q '[:find ?query ?page ?summary
+         :in $ ?topic
+         :where [?f :fact/kind :fact.kind/docs-gap]
+                [?f :fact/subject ?topic]
+                [?f :fact/status :fact.status/current]
+                [?f :fact/evidence ?episode]
+                [?episode :episode/query ?query]
+                [?episode :episode/page ?page]
+                [?episode :episode/summary ?summary]]
+       db topic))
+
+(defn create-doc-review-task!
+  [conn fact-id]
+  (let [db           @conn
+        topic        (d/q '[:find ?topic .
+                            :in $ ?fact-id
+                            :where [?f :fact/id ?fact-id]
+                                   [?f :fact/subject ?topic]]
+                          db fact-id)
+        evidence-ids (d/q '[:find [?episode-id ...]
+                            :in $ ?fact-id
+                            :where [?fact :fact/id ?fact-id]
+                                   [?fact :fact/evidence ?episode]
+                                   [?episode :episode/id ?episode-id]]
+                          db fact-id)
+        task-id      (random-uuid)
+        wm-id        (random-uuid)
+        task         {:task/id task-id
+                      :task/type :task.type/docs-gap-review
+                      :task/state :task.state/ready
+                      :task/title (str "Review documentation gap: " topic)
+                      :task/fact [:fact/id fact-id]
+                      :task/created-at (java.util.Date.)
+                      :task/contract {:kind :docs-gap-review
+                                      :topic topic
+                                      :publish? false
+                                      :steps [{:id :inspect-evidence
+                                               :kind :human-review}
+                                              {:id :draft-change
+                                               :kind :llm-assisted
+                                               :depends-on :inspect-evidence}
+                                              {:id :approve
+                                               :kind :human-approval
+                                               :depends-on :draft-change}]}}
+        wm           {:wm/id wm-id
+                      :wm/task [:task/id task-id]}
+        fact-slot    {:wm.slot/wm [:wm/id wm-id]
+                      :wm.slot/entity [:fact/id fact-id]
+                      :wm.slot/relevance 1.0
+                      :wm.slot/reason "Current documentation-gap fact."}
+        evidence-slots
+        (map-indexed
+          (fn [idx episode-id]
+            {:wm.slot/wm [:wm/id wm-id]
+             :wm.slot/entity [:episode/id episode-id]
+             :wm.slot/relevance (- 0.9 (* idx 0.05))
+             :wm.slot/reason "Failed-search evidence for the review task."})
+          evidence-ids)]
+    (d/transact! conn (into [task wm fact-slot] evidence-slots))
+    {:task/id task-id
+     :wm/id wm-id}))
+
+(def candidate (first (candidate-gaps @conn)))
+(def fact-id (accept-gap-fact! conn candidate))
+(def task-ref (create-doc-review-task! conn fact-id))
+
+(def results
+  {;; Semantic memory: current documentation-gap fact.
+   :semantic-memory
+   (d/q '[:find ?status ?content ?confidence
+          :where [?f :fact/kind :fact.kind/docs-gap]
+                 [?f :fact/status ?status]
+                 [?f :fact/content ?content]
+                 [?f :fact/confidence ?confidence]]
+        @conn)
+
+   ;; Recall: evidence that explains why the fact exists.
+   :recall-context
+   (recall-gap-context @conn "backup and restore")
+
+   ;; Task state: reviewable work item, not an automatic publication.
+   :task-state
+   (d/q '[:find ?title ?state ?contract
+          :where [?task :task/type :task.type/docs-gap-review]
+                 [?task :task/title ?title]
+                 [?task :task/state ?state]
+                 [?task :task/contract ?contract]]
+        @conn)
+
+   ;; Working memory: bounded context selected for this task.
+   :working-memory
+   (d/q '[:find ?reason ?summary
+          :where [?wm :wm/id _]
+                 [?slot :wm.slot/wm ?wm]
+                 [?slot :wm.slot/reason ?reason]
+                 [?slot :wm.slot/entity ?entity]
+                 [?entity :episode/summary ?summary]]
+        @conn)})
+
+(d/close conn)
+
+results
+```
+
+The example covers the whole Part VI arc in one place:
+
+- **Episodes** preserve the raw feedback events.
+- **Consolidation** groups failed searches into a candidate documentation-gap
+  fact.
+- **Truth maintenance** marks any older current fact for the same topic as
+  superseded before accepting a new current fact.
+- **Recall** follows the evidence links from the current fact back to the
+  episodes that justify it.
+- **Working memory** records a bounded context for the review task.
+- **Task state** creates a contract that requires review and approval before
+  publication.
+
+Replacing the pure `gap-topic` function with an LLM extractor would not change
+the database model. It would only change the application policy that decides
+which candidate facts deserve review.
+
+---
+
+## 10. Summary: The Path to Machine Intelligence
 
 Building stateful AI is about building systems that **accrue value over time**.
 
@@ -339,10 +702,11 @@ Building stateful AI is about building systems that **accrue value over time**.
 - **Durable task contracts** keep long-running work resumable, auditable, and
   safe to hand off.
 
-By choosing Datalevin, you are not just choosing a place to store data. You are
-choosing a substrate that supports the full spectrum of stateful AI: exact
-logical reasoning, fuzzy semantic understanding, durable task state, controlled
-tool use, and long-term knowledge maintenance.
+By choosing Datalevin, you are choosing a database substrate for stateful AI
+applications: exact logical reasoning, fuzzy semantic retrieval, durable task
+state, controlled tool use, and long-term knowledge maintenance. The agent
+policies and control loops remain application code built on top of those
+database capabilities.
 
 ## References
 

@@ -258,6 +258,44 @@ practical pipeline looks like this:
 The important design choice is the boundary: the model should receive the final
 curated context, not every intermediate hit from every index.
 
+Once deterministic retrieval has selected the best references, materialize that
+selection as ordinary working-memory entities. The database does not decide the
+ranking policy; it stores the result so later prompt assembly, audit, and
+refresh logic can inspect it.
+
+```clojure
+(defn materialize-working-memory!
+  [conn session-id selected-facts]
+  (let [wm-id (random-uuid)]
+    (d/transact! conn
+      (into
+        [{:wm/id      wm-id
+          :wm/session [:session/id session-id]}]
+        (map (fn [{:keys [fact-id relevance reason pinned?]}]
+               {:wm.slot/wm        [:wm/id wm-id]
+                :wm.slot/entity    [:fact/id fact-id]
+                :wm.slot/relevance relevance
+                :wm.slot/reason    reason
+                :wm.slot/pinned?   (boolean pinned?)}))
+        selected-facts))
+    wm-id))
+
+(materialize-working-memory!
+  conn
+  "release-standup"
+  [{:fact-id (d/q '[:find ?id .
+                    :where [?f :fact/status :fact.status/pending]
+                           [?f :fact/id ?id]]
+                  @conn)
+    :relevance 0.91
+    :reason "The current task asks for release-note guidance."
+    :pinned? true}])
+```
+
+In production code, `selected-facts` would come from the fused and filtered
+retrieval results. The example is deliberately small: it shows the boundary
+between retrieval policy and durable state.
+
 This is especially important when the agent can call tools repeatedly. If every
 full-text hit, embedding neighbor, and document chunk enters the transcript, the
 model spends its context budget sorting retrieval artifacts instead of solving

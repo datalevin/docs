@@ -321,6 +321,51 @@ working memory until they are reinforced by later evidence or reviewed by a
 human. Datalevin makes that easy because raw episodes, candidate facts, review
 state, and working-memory slots can live in the same database.
 
+Here is a minimal consolidation step using the Chapter 23 in-memory schema. The
+function records one episode and one candidate fact atomically. The extraction
+policy is passed in as data; Datalevin only commits the records and keeps the
+links queryable.
+
+```clojure
+(defn record-episode-and-candidate-fact!
+  [conn {:keys [user-id session-id summary fact-kind fact-content confidence]}]
+  (let [episode-id (random-uuid)
+        fact-id    (random-uuid)
+        now        (java.util.Date.)]
+    (d/transact! conn
+      [{:episode/id      episode-id
+        :episode/user    [:user/id user-id]
+        :episode/session [:session/id session-id]
+        :episode/timestamp now
+        :episode/summary summary}
+
+       {:fact/id             fact-id
+        :fact/subject        [:user/id user-id]
+        :fact/kind           fact-kind
+        :fact/source-episode [:episode/id episode-id]
+        :fact/status         :fact.status/pending
+        :fact/content        fact-content
+        :fact/confidence     confidence
+        :fact/created-at     now}])
+    {:episode/id episode-id
+     :fact/id    fact-id}))
+
+(record-episode-and-candidate-fact!
+  conn
+  {:user-id "alice"
+   :session-id "release-standup"
+   :summary "Alice asked for release notes to emphasize migration risk."
+   :fact-kind :preference/release-notes
+   :fact-content "Alice prefers release notes that call out migration risk."
+   :confidence 0.74})
+
+(d/q '[:find ?content ?confidence
+       :where [?f :fact/status :fact.status/pending]
+              [?f :fact/content ?content]
+              [?f :fact/confidence ?confidence]]
+     @conn)
+```
+
 ### 5.1 Example: Consolidating Episodes into a Knowledge Graph
 
 Suppose an agent records three release-planning episodes:

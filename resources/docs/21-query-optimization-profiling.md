@@ -260,24 +260,45 @@ More complex negative clauses still fall back to late resolution.
 
 ### 1.8 Benchmarks
 
-Datalevin's query engine has been validated against industry benchmarks:
+Datalevin's query engine has been tested against standard benchmark workloads,
+but the published comparisons are Datalevin project benchmarks, not independent
+third-party certifications. Treat the numbers as reproducible workload
+observations: useful for understanding design tradeoffs, but not a substitute
+for testing your own schema, data distribution, hardware, and database
+configuration.
 
 - **Join Order Benchmark (JOB)**: 113 complex SQL queries ported to Datalog.
-  Datalevin averages **2X faster** than PostgreSQL with more consistent
-  performance.
-- **LDBC SNB**: Industry graph database benchmark. Datalevin is orders of
-  magnitude faster on Short Interactive queries, often faster on Complex
-  Interactive, than Neo4j.
+  In the Datalevin JOB benchmark [13], the reported run used a November 2023
+  16-inch MacBook Pro with an Apple M3 Pro, 36GB RAM, and a 1TB SSD. PostgreSQL
+  was Homebrew PostgreSQL@18, Datalevin was the repository version under test,
+  and all systems used default configuration without tuning. Each system was run
+  once for warmup and once for the reported timing. Under that setup, Datalevin
+  finished the 113-query workload in 71 seconds versus 171 seconds for
+  PostgreSQL, about 2.4x faster overall.
+- **LDBC SNB**: The Datalevin LDBC-SNB benchmark [14] is an unofficial
+  implementation of the Interactive workload for Datalevin and Neo4j. The
+  reported run used scale factor 1, about 3.2M entities and 17.3M edges, on a
+  2023 Apple M2 Max machine with 12 cores, 32GB RAM, a 1TB SSD, macOS 15.2,
+  OpenJDK 21, and Clojure 1.12.4. Queries were run twice and the second run was
+  reported. In that setup, Datalevin was much faster on the Interactive Short
+  queries and about 13% faster on average across the Interactive Complex
+  queries, while Neo4j was faster on several individual complex queries.
+
+Benchmark ratios are especially sensitive to scale factor, cache state, data
+modeling choices, query parameters, JVM settings, memory settings, and indexes.
+Use these results as evidence that Datalevin's optimizer is competitive on
+these workloads, not as a guarantee that Datalevin will be 2x or 100x faster in
+another deployment.
 
 ---
 
 ### 1.9 Summary: The Optimizer's Principles
 
 In summary, Datalevin has a sophisticated query optimizer that compiles
-declarative query clauses into optimized execution steps that leverages index
-scans as much as possible, utilizes cheap counts of the triple storage, and
-generate plans similar to a hand written one. Users can trust the engine to find
-the optimal path.
+declarative query clauses into execution steps that use index scans where they
+help, take advantage of cheap counts from triple storage, and often produce
+plans similar to a hand-written one. Users can usually write the logical query
+first, then use `explain` when a specific workload needs inspection or tuning.
 
 - **Order Doesn't Matter**: The physical order of `:where` clauses has no
   impact.
@@ -664,3 +685,11 @@ Datalevin plans a query and why a query may be slower than expected.
 
 [12] Thomas Neumann and Guido Moerkotte, "Characteristic Sets: Accurate
    Cardinality Estimation for RDF Queries with Multiple Joins", ICDE 2011.
+
+[13] Datalevin project,
+   [Join Order Benchmark](https://github.com/juji-io/datalevin/tree/master/benchmarks/JOB-bench),
+   benchmark writeup and implementation.
+
+[14] Datalevin project,
+   [LDBC Social Network Benchmark](https://github.com/juji-io/datalevin/tree/master/benchmarks/LDBC-SNB-bench),
+   benchmark writeup and implementation.

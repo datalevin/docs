@@ -39,7 +39,7 @@ search, and logical rules. The important idea is not that every workload looks
 the same. The important idea is that these workloads can cooperate inside one
 transactional engine instead of being bolted together after the fact.
 
-![Datalevin unified data model](/images/unified.jpg)
+![Datalevin unified data model](/images/diagrams/unified-data-model.svg)
 
 Datalevin is built on LMDB, a fast memory-mapped key-value store,
 but it is not only a key-value wrapper. It exposes KV APIs when direct sorted
@@ -203,11 +203,11 @@ applications.
 
 ## Why This Book Exists
 
-Datalevin is compact, but it is not a toy. It can be embedded in an application,
-run as a server, used from scripts, accessed from multiple language clients, and
-deployed as part of production systems. It also supports a style of modeling
-that is unfamiliar to many engineers who come from table-first, document-first,
-or service-first architectures.
+Datalevin is a compact production database system. It can be embedded in an
+application, run as a server, used from scripts, accessed from multiple language
+clients, and deployed as part of production systems. It also supports a style of
+modeling that is unfamiliar to many engineers who come from table-first,
+document-first, or service-first architectures.
 
 This book exists to make that style practical.
 
@@ -331,33 +331,31 @@ Datalevin is one concrete way to build on that idea.
 ## Acknowledgments
 
 Datalevin stands on a line of ideas and software that made this project
-possible. I am grateful to the authors of Datomic, whose EDN-based Datalog
-flavor showed how logic queries could become a practical application
-programming interface; to Nikita Prokopov, whose DataScript code was the
+possible. I am grateful to Rich Hickey, whose EDN-based Datalog flavor in
+Datomic [2] showed how logic queries could become a practical application
+programming interface; to Nikita Prokopov, whose DataScript [3] code was the
 starting point for Datalevin; and to Howard Chu, whose LMDB code became the
-storage foundation on which Datalevin is built.
+storage foundation on which Datalevin is built [4].
 
 I also want to thank the Datalevin users in the Clojure community. Their
 questions, bug reports, feature requests, examples, and production experience
 have shaped the project in ways that are hard to separate from the code itself.
-Thanks also to everyone who contributed code, filed issues, wrote about their
-use cases, or supported the work through GitHub Sponsors.
+Thanks also to everyone who contributed code, wrote about Datalevin,
+or supported the work through GitHub Sponsors: Dennis Heihoff, Anders Murphy,
+Aleksandr Bogdanov, Nils Grünwald, Christophe Grand, Garrett Hopper, Daniel
+Vingo, Samuel Ludwig, itonomi, Amar Mehta, Ryan Domigan, Lars Rune Nøstdal, Clay
+Hopperdietzel, Isaac Ballone, and many others that I have missed.
 
-Datalevin was originally motivated by needs at Juji, where intelligent
+Datalevin was originally motivated by needs at Juji [5], where intelligent
 applications required persistent memory, fast retrieval, and a more flexible
-way to represent user and agent state. I am grateful to the people at Juji whose
-work made those needs concrete and whose applications kept the project grounded
-in real systems.
+way to represent user and agent state. I am grateful to Michelle Zhou, Wenxi
+Chen, and other great people at Juji, whose work made those needs concrete and
+whose applications kept the project grounded in real systems.
 
 This book has already benefited from volunteer reviewers who read draft
 chapters, ran examples, questioned unclear explanations, found inconsistent
-terminology, and pointed out places where the book assumed too much background.
-Technical books get better when careful readers push back before publication;
-many of the clarifications, examples, and cross-references in this draft came
-from that kind of review.
-
-Specific names of reviewers, contributors, sponsors, and Juji colleagues will be
-added here before publication.
+terminology, and pointed out places where the book assumed too much background:
+[insert reviewer names here]. I am grateful for the contributions!
 
 ## Notes
 
@@ -371,3 +369,12 @@ old English word for lightning.
 Know About Datalog (And Never Dared to
 Ask)"](https://hdl.handle.net/11311/665510), *IEEE Transactions on Knowledge and
 Data Engineering* 1, no. 1, 1989, pp. 146-166.
+
+[2] Cognitect, [Datomic](https://www.datomic.com/).
+
+[3] Nikita Prokopov, [DataScript](https://github.com/tonsky/datascript).
+
+[4] Howard Chu, [Lightning Memory-Mapped Database
+(LMDB)](https://www.lmdb.tech/doc/).
+
+[5] [Juji Inc.](https://juji.io/).

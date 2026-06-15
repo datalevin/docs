@@ -13,7 +13,41 @@ needed, secure remote access, operate replicas or HA, and monitor a production
 system.
 
 It begins with testing, because the cheapest place to catch a modeling, schema,
-or query mistake is in a test, long before deployment.
+or query mistake is in a test, long before deployment. It also pulls together
+Datalevin's concurrency and failure model, because production code needs a
+clear policy for which transaction failures are data bugs, which are logical
+conflicts, and which are transient operational conditions.
+
+---
+
+## Version Target and API Stability
+
+The rendered version of this book targets Datalevin `{{datalevin-version}}`.
+If you are reading a local checkout, older generated copy, or printed edition,
+check your installed Datalevin version against the version shown here and the
+package metadata for your language binding.
+
+Datalevin follows the common Clojure library practice of keeping public APIs
+stable and evolving them mostly by accumulation. Core APIs such as schema,
+transactions, Datalog queries, pull, entity navigation, rules, key-value access,
+and ordinary connection management should be expected to remain stable across
+normal upgrades. Breaking changes should be rare and called out in release
+notes, especially when they affect on-disk data formats, server protocols, or
+public function signatures.
+
+Some parts of the surface area are newer or more operationally sensitive than
+the core database API. WAL, replication, consensus high availability, idoc
+indexes, embedding and vector indexes, asynchronous indexing, MCP tooling, and
+language bindings may gain options, commands, or operational guidance as the
+project evolves. Unless this book marks a feature as experimental, the API
+described here is intended to be usable in the targeted release, but production
+deployments should still pin a Datalevin version, read the release notes before
+upgrading, and verify behavior in staging.
+
+Platform support can also differ by feature. For example, the core Datalog and
+KV APIs may be available on a platform where optional vector or embedding
+support is still experimental. Chapter 2 calls out current platform and runtime
+requirements.
 
 ---
 
@@ -906,7 +940,176 @@ or a small write in a dedicated health database for write-path checks.
 
 ---
 
-## 7. Production Checklist
+## 7. Concurrency and Failure Handling
+
+Datalevin's normal transaction examples focus on successful writes. Production
+code also needs a failure policy. Separate failures into three groups:
+
+1. **Semantic transaction failures**: the transaction data is invalid for the
+   current database state or schema.
+2. **Logical conflicts**: the transaction was well-formed, but a condition such
+   as `:db/cas` did not hold.
+3. **Operational failures**: the local store, WAL, remote server, or HA topology
+   could not complete the write.
+
+Handle those groups differently. Retrying a validation error just repeats a
+bug. Retrying a CAS conflict can be correct if the operation re-reads current
+state on every attempt. Retrying an operational failure is only safe when the
+application operation is idempotent or has an idempotency key.
+
+### 7.1 The Write Serialization Model
+
+Datalevin inherits LMDB's MVCC read model: readers do not block writers, and
+writers do not block readers. A reader sees a stable snapshot. A writer commits
+a new version that later readers can observe.
+
+Writes are different. For a single Datalevin store, the durable B+Tree commit
+path has one writer at a time. In embedded Clojure, `transact!` serializes
+writes through the connection and the underlying LMDB write transaction. WAL mode
+can queue and batch concurrent callers, but the committed writes still have a
+single order. The caller either receives a transaction report or an exception.
+
+`with-transaction` opens one read/write transaction around its body. Reads and
+writes inside the body observe the same write transaction, so no other write can
+interleave between the read and the write within that store. If the body throws,
+the transaction is aborted. `with-transaction` does not retry logical conflicts
+such as CAS failures or unique-constraint violations. It only retries Datalevin's
+internal map-resize condition, where the LMDB map was grown and the write can be
+replayed safely.
+
+Normal Datalevin writes should serialize rather than deadlock. If a write path
+appears stuck, look for a long-running transaction function, application locks
+held around database calls, callbacks that synchronously wait on other writes,
+slow storage flushes, or HA/network waits. Keep transaction functions small and
+side-effect-free, and perform external side effects after the transaction
+commits.
+
+### 7.2 Common Transaction Failures
+
+Most Datalevin-originated transaction failures are
+`clojure.lang.ExceptionInfo`. When Datalevin supplies structured `ex-data`, use
+that for application branching and treat the message as human diagnostics.
+Native storage and remote failures may wrap lower-level exceptions, so log the
+full exception and its cause chain at the service boundary.
+
+| Failure | When it happens | Typical `ex-data` | Retry policy |
+| :--- | :--- | :--- | :--- |
+| Unique constraint violation | A transaction adds a value already present for a `:db.unique/value` attribute, or creates an inconsistent unique assertion. `:db.unique/identity` normally upserts when used as identity. | `{:error :transact/unique, :attribute attr, ...}` | Do not retry blindly. Return a conflict or use identity upsert intentionally. |
+| Closed schema or type validation | `:closed-schema?` rejects an undeclared attribute, or `:validate-data?` rejects a value that does not match `:db/valueType`. | Often `:transact/syntax` for syntax errors; type and closed-schema checks may only include input context. | Do not retry. Fix schema, data, or caller validation. |
+| Lookup-ref syntax or non-unique attribute | A lookup ref is not `[attr value]`, or `attr` is not unique. | `:lookup-ref/syntax` or `:lookup-ref/unique` | Do not retry. Fix the transaction shape or schema. |
+| Lookup-ref miss in a transaction | A transaction form requires an existing entity and `[attr value]` resolves to nothing. | `{:error :entity-id/missing, :entity-id [...]}` | Usually do not retry. Create the referenced entity first, use identity upsert, or treat it as a domain conflict. |
+| `:db/cas` or `:db.fn/cas` failure | The current value is not the expected old value. | `{:error :transact/cas, :old old, :expected old-value, :new new-value}` | Retry only by re-reading current state and recomputing the new transaction. |
+| Upsert conflict | Multiple identity assertions in one entity resolve to different existing entities. | `{:error :transact/upsert, ...}` | Do not retry. The input identifies two different entities. |
+| Transaction function failure | An installed transaction function or descriptor-backed UDF throws, cannot be resolved, or returns invalid transaction data. | Depends on the function or UDF validation. | Depends on the function. Keep transaction functions deterministic and side-effect-free. |
+| LMDB map full / map resize | The write exceeds the current memory map size. | Normally handled internally as `"DB resized"` with `{:resized true}` and retried. | Usually no application action. If it happens often, set a larger `:mapsize` up front. |
+| WAL, remote, or HA write failure | WAL sync fails or times out, a remote server returns an error, or HA rejects a write because leadership or fencing changed. | Often `:type :txlog/...` or `:error :ha/...` | Retry only if the operation is idempotent and the topology is healthy. For HA, use the HA retry settings and still design writes to be replay-safe. |
+
+The important distinction is that Datalevin does not turn logical conflicts into
+transparent retries. If the old value for `:db/cas` is wrong, the transaction
+fails because the caller's premise is false. The application must decide whether
+to report the conflict or compute a new transaction against current state.
+
+### 7.3 Recommended Retry Patterns
+
+In embedded Clojure, prefer `with-transaction` for read-modify-write logic that
+must be atomic within one store:
+
+```clojure
+(defn increment-counter! [conn counter-id]
+  (d/with-transaction [tx conn]
+    (let [db  @tx
+          n   (or (d/q '[:find ?n .
+                         :in $ ?id
+                         :where [?e :counter/id ?id]
+                                [?e :counter/value ?n]]
+                       db counter-id)
+                  0)]
+      (d/transact! tx
+        [{:counter/id counter-id
+          :counter/value (inc n)}]))))
+```
+
+This pattern does not need a CAS retry loop because the read and write happen
+inside the same write transaction. Use it only for short critical sections. Do
+not perform HTTP calls, file uploads, email delivery, or long CPU work inside
+the transaction body.
+
+When a write is intentionally optimistic, use CAS and retry at the application
+operation boundary. Re-read inside every attempt:
+
+```clojure
+(defn cas-conflict?
+  [e]
+  (= :transact/cas (:error (ex-data e))))
+
+(defn retry-cas
+  [f]
+  (loop [attempt 1]
+    (let [result (try
+                   {:ok? true :value (f)}
+                   (catch clojure.lang.ExceptionInfo e
+                     {:ok? false :error e}))]
+      (if (:ok? result)
+        (:value result)
+        (let [e (:error result)]
+          (if (and (cas-conflict? e) (< attempt 5))
+            (do
+              (Thread/sleep (* 25 attempt))
+              (recur (inc attempt)))
+            (throw e)))))))
+
+(defn deposit! [conn email amount]
+  (retry-cas
+    #(let [db      @conn
+           balance (or (d/q '[:find ?balance .
+                              :in $ ?email
+                              :where [?e :account/email ?email]
+                                     [?e :account/balance ?balance]]
+                            db email)
+                       0)]
+       (d/transact! conn
+         [[:db/cas [:account/email email]
+           :account/balance balance (+ balance amount)]]))))
+```
+
+The retry wrapper does not retry unique, lookup-ref, schema, or validation
+failures. It retries only CAS conflicts, and each retry re-reads the balance
+from a fresh database value before preparing a new transaction.
+
+For operational retries, apply the same rule at a higher level:
+
+- Retry whole application operations, not half-built transaction data.
+- Make every retried operation idempotent. Use a request id, event id, or
+  unique identity attribute so a replay updates the same logical fact instead of
+  creating a duplicate.
+- Keep external side effects outside the transaction, and make listeners
+  idempotent because they observe committed transactions after the write.
+- Use bounded retries with backoff. Infinite retries can hide a broken schema,
+  a missing entity, full disk, or an HA cluster that cannot safely accept writes.
+
+### 7.4 Production Policy
+
+A useful HTTP or job-worker policy is:
+
+- Return `400` for transaction syntax, closed-schema, and type-validation
+  failures.
+- Return `404` or `409` for lookup-ref misses, depending on whether the missing
+  entity is a resource path or a domain precondition.
+- Return `409` for unique conflicts and CAS conflicts unless the operation has a
+  specific retry loop.
+- Return `503` for operational storage, remote, WAL, or HA failures that may
+  clear after repair or failover.
+- Log the exception class, message, `ex-data`, and cause chain. Do not log full
+  transaction data if it can contain secrets.
+
+This policy gives production readers a consistent mental model: Datalevin
+serializes writes for a store, exposes logical conflicts as exceptions, retries
+only safe internal resize events, and leaves application-level retries to the
+code that understands the business operation.
+
+---
+
+## 8. Production Checklist
 
 Use this as a final review before production:
 
@@ -924,6 +1127,9 @@ Use this as a final review before production:
   encryption for sensitive fields.
 - Follow Chapter 20 for `:mapsize`, `:max-readers`, WAL, durability profile,
   copy, dump/load, snapshots, and compaction.
+- Define an application retry policy for CAS conflicts, uniqueness conflicts,
+  validation failures, lookup-ref misses, and operational write failures
+  (Section 7).
 - Automate transactionally consistent backups and test restores.
 - Monitor disk latency, free space, page-cache behavior, query latency, write
   latency, and result sizes.
