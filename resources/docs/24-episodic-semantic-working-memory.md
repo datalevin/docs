@@ -26,6 +26,8 @@ joined and checked with Datalog. Working-memory slots can point back to the
 entities they came from, so a prompt can carry provenance instead of anonymous
 text.
 
+![Agent memory architecture: episodic memory holds timestamped events, a consolidation step extracts candidate facts into semantic memory, and working memory is a bounded projection retrieved from both stores and assembled into the next model call](/images/diagrams/agent-memory-types.svg)
+
 ---
 
 ## 1. Episodic Memory: The Stream of Experience

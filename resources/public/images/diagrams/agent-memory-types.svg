@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="660" viewBox="0 0 1000 660" role="img" aria-labelledby="title desc">
+  <title id="title">Agent memory architecture: episodic, semantic, and working memory</title>
+  <desc id="desc">Three memory stores and a consolidation flow. Episodic memory is the chronological stream of timestamped events, full-text and embedding indexed; for example, at 17:20 M184 changes the write path, at 07:40 a backup check is requested, and at 08:10 CI passed but the work is still blocked. A consolidation step extracts candidate facts from those episodes into semantic memory, the graph of accepted facts: M184 changes write-path, M184 requires backup-check, M184 blocked-by backup-check, each Datalog-joinable and carrying a source episode and confidence. Working memory is a bounded, session-scoped projection over both stores, holding only the current relevant slots such as migrations at relevance 0.82, release readiness pinned, and backup-check at relevance 0.71, decaying each turn and limited by a maximum slot count. The episodic and semantic stores are retrieved, ranked, and projected into working memory, which is then assembled into the next model call.</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .box-ep { fill: #ecfeff; stroke: #0891b2; stroke-width: 2.5; }
+      .box-se { fill: #f0fdfa; stroke: #0f766e; stroke-width: 2.5; }
+      .box-wm { fill: #f1f5f9; stroke: #64748b; stroke-width: 2.5; }
+      .ul-ep { stroke: #a5d8e6; stroke-width: 2; }
+      .ul-se { stroke: #99e6d6; stroke-width: 2; }
+      .ul-wm { stroke: #cbd5e1; stroke-width: 2; }
+      .flow { fill: none; stroke: #64748b; stroke-width: 2.8; }
+      .flow-c { fill: none; stroke: #0f766e; stroke-width: 3.5; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 30px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 20px; font-weight: 450; }
+      .h-ep { fill: #0e7490; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 23px; font-weight: 720; }
+      .h-se { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 23px; font-weight: 720; }
+      .h-wm { fill: #334155; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 23px; font-weight: 720; }
+      .sub { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; font-weight: 500; }
+      .item { fill: #334155; font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 15px; font-weight: 450; }
+      .foot { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; font-style: italic; font-weight: 450; }
+      .alabel { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 17px; font-weight: 650; }
+      .alabel-c { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 18px; font-weight: 700; }
+      .asub { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; font-weight: 450; }
+      .mark-ep { fill: #0891b2; }
+      .check-se { fill: none; stroke: #0f766e; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+      .mark-wm { fill: #64748b; }
+      .pill { fill: #0f766e; }
+      .pill-tx { fill: #ffffff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 18px; font-weight: 650; }
+    </style>
+    <marker id="arrow" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrowt" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#0f766e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Figure card (transparent corners adapt to light/dark page) -->
+  <rect class="card" x="2" y="2" width="996" height="656" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+
+  <text class="title" x="500" y="46" text-anchor="middle">Agent Memory Architecture</text>
+  <text class="caption" x="500" y="78" text-anchor="middle">Events consolidate into facts; working memory projects the bounded current slice.</text>
+
+  <!-- ===== Consolidation flow (episodic -> semantic) ===== -->
+  <path class="flow-c" d="M416 200 H584" marker-end="url(#arrowt)"/>
+  <text class="alabel-c" x="500" y="178" text-anchor="middle">Consolidation</text>
+  <text class="asub" x="500" y="232" text-anchor="middle">&#8594; candidate facts</text>
+
+  <!-- ===== Episodic memory ===== -->
+  <rect class="box-ep" x="36" y="100" width="380" height="200" rx="14"/>
+  <text class="h-ep" x="58" y="140">Episodic memory</text>
+  <text class="sub" x="58" y="162">the stream of events</text>
+  <line class="ul-ep" x1="48" y1="176" x2="404" y2="176"/>
+  <circle class="mark-ep" cx="62" cy="201" r="4.5"/>
+  <text class="item" x="76" y="206">17:20 &#183; M184 changes write path</text>
+  <circle class="mark-ep" cx="62" cy="233" r="4.5"/>
+  <text class="item" x="76" y="238">07:40 &#183; backup check requested</text>
+  <circle class="mark-ep" cx="62" cy="265" r="4.5"/>
+  <text class="item" x="76" y="270">08:10 &#183; CI passed, still blocked</text>
+  <text class="foot" x="58" y="291">timestamped &#183; full-text + embedding indexed</text>
+
+  <!-- ===== Semantic memory ===== -->
+  <rect class="box-se" x="584" y="100" width="380" height="200" rx="14"/>
+  <text class="h-se" x="606" y="140">Semantic memory</text>
+  <text class="sub" x="606" y="162">the graph of accepted facts</text>
+  <line class="ul-se" x1="596" y1="176" x2="952" y2="176"/>
+  <path class="check-se" d="M606 200 l4 5 l8 -10"/>
+  <text class="item" x="626" y="206">M184 &#183; changes &#183; write-path</text>
+  <path class="check-se" d="M606 232 l4 5 l8 -10"/>
+  <text class="item" x="626" y="238">M184 &#183; requires &#183; backup-check</text>
+  <path class="check-se" d="M606 264 l4 5 l8 -10"/>
+  <text class="item" x="626" y="270">M184 &#183; blocked-by &#183; backup-check</text>
+  <text class="foot" x="606" y="291">Datalog-joinable &#183; source-episode &#183; confidence</text>
+
+  <!-- ===== Retrieve / project flows into working memory ===== -->
+  <path class="flow" d="M180 300 C 180 345, 300 360, 380 378" marker-end="url(#arrow)"/>
+  <path class="flow" d="M820 300 C 820 345, 700 360, 620 378" marker-end="url(#arrow)"/>
+  <text class="alabel" x="500" y="340" text-anchor="middle">retrieve &#183; rank &#183; project</text>
+  <text class="asub" x="500" y="360" text-anchor="middle">bounded by relevance + recency</text>
+
+  <!-- ===== Working memory ===== -->
+  <rect class="box-wm" x="210" y="378" width="580" height="200" rx="14"/>
+  <text class="h-wm" x="232" y="418">Working memory</text>
+  <text class="sub" x="232" y="440">the bounded current projection</text>
+  <line class="ul-wm" x1="222" y1="454" x2="778" y2="454"/>
+  <rect class="mark-wm" x="232" y="473" width="10" height="10" rx="2"/>
+  <text class="item" x="252" y="483">migrations &#183; relevance 0.82</text>
+  <rect class="mark-wm" x="232" y="505" width="10" height="10" rx="2"/>
+  <text class="item" x="252" y="515">release readiness &#183; pinned</text>
+  <rect class="mark-wm" x="232" y="537" width="10" height="10" rx="2"/>
+  <text class="item" x="252" y="547">backup-check &#183; relevance 0.71</text>
+  <text class="foot" x="232" y="569">session-scoped &#183; &#8804; max-slots &#183; decays each turn</text>
+
+  <!-- ===== Output to model call ===== -->
+  <path class="flow" d="M500 578 V598" marker-end="url(#arrow)"/>
+  <rect class="pill" x="320" y="600" width="360" height="44" rx="22"/>
+  <text class="pill-tx" x="500" y="628" text-anchor="middle">Assembled into the next model call</text>
+</svg>

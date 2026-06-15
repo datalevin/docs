@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560" role="img" aria-labelledby="title desc">
+  <title id="title">HNSW multi-layer graph search</title>
+  <desc id="desc">An HNSW index is a stack of graph layers; each circle is an indexed vector. Layer 2 at the top is sparse with long-range links for fast skipping; it holds only a couple of nodes. Layer 1 in the middle has more nodes and medium-range links. Layer 0 at the bottom holds every vector with short-range links for precision. A vector can appear in several layers at the same horizontal position. The query is not an indexed node; it is shown as a separate star marker. Search starts at the entry point in the top layer, greedily hops to the neighbor closest to the query, then descends one layer at that node and repeats, zooming in until it reaches the indexed vector nearest the query in Layer 0, which is ringed. A legend distinguishes an indexed vector, a visited node, the nearest neighbor, and the query.</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .band { fill: #f6fbfd; stroke: #d7e7ee; stroke-width: 1.6; }
+      .blabel { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; font-weight: 600; }
+      .elink { fill: none; stroke: #cbd5e1; stroke-width: 1.8; }
+      .epath { fill: none; stroke: #0f766e; stroke-width: 3.2; }
+      .edesc { fill: none; stroke: #0f766e; stroke-width: 2.8; stroke-dasharray: 3 6; stroke-linecap: round; }
+      .node { fill: #ffffff; stroke: #94a3b8; stroke-width: 2; }
+      .pnode { fill: #0f766e; stroke: #0f766e; stroke-width: 2; }
+      .enode { fill: #0891b2; stroke: #0e7490; stroke-width: 2; }
+      .ring { fill: none; stroke: #0f766e; stroke-width: 2.5; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 30px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 18px; font-weight: 450; }
+      .anno { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; font-weight: 650; }
+      .anno-d { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; font-weight: 450; }
+      .dirlabel { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; font-weight: 700; }
+      .star { fill: #f59e0b; stroke: #b45309; stroke-width: 0.12; }
+      .qlink { fill: none; stroke: #d97706; stroke-width: 1.8; stroke-dasharray: 3 4; stroke-linecap: round; }
+      .qlabel { fill: #b45309; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; font-weight: 700; }
+      .leg { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; font-weight: 500; }
+    </style>
+    <marker id="arrowt" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#0f766e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Figure card (transparent corners adapt to light/dark page) -->
+  <rect class="card" x="2" y="2" width="996" height="556" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+
+  <text class="title" x="500" y="44" text-anchor="middle">HNSW &#8212; Searching a Multi-Layer Graph</text>
+  <text class="caption" x="500" y="72" text-anchor="middle">Search starts in the sparse top layer and zooms in through denser layers to the nearest vector.</text>
+
+  <!-- ===== Layer bands ===== -->
+  <rect class="band" x="96" y="100" width="724" height="80" rx="12"/>
+  <rect class="band" x="96" y="222" width="724" height="80" rx="12"/>
+  <rect class="band" x="96" y="344" width="724" height="104" rx="12"/>
+  <text class="blabel" x="112" y="122">Layer 2 &#183; long-range links</text>
+  <text class="blabel" x="112" y="244">Layer 1 &#183; medium-range links</text>
+  <text class="blabel" x="112" y="366">Layer 0 &#183; all vectors, short-range links</text>
+
+  <!-- ===== Within-layer links ===== -->
+  <!-- L0 -->
+  <path class="elink" d="M170 400 H250 H330 H410 H490 H570 H650 H730 H810"/>
+  <path class="elink" d="M250 400 Q330 372 410 400"/>
+  <path class="elink" d="M490 400 Q570 372 650 400"/>
+  <!-- L1 -->
+  <path class="elink" d="M250 268 H410 H570 H650"/>
+  <path class="elink" d="M250 268 Q410 244 570 268"/>
+  <!-- L2 -->
+  <path class="elink" d="M250 146 H570"/>
+
+  <!-- ===== Descent of the search path ===== -->
+  <path class="edesc" d="M570 168 V246" marker-end="url(#arrowt)"/>
+  <path class="edesc" d="M650 290 V378" marker-end="url(#arrowt)"/>
+
+  <!-- ===== Search path within layers ===== -->
+  <path class="epath" d="M262 146 H558" marker-end="url(#arrowt)"/>
+  <path class="epath" d="M582 268 H638" marker-end="url(#arrowt)"/>
+  <path class="epath" d="M662 400 H710" marker-end="url(#arrowt)"/>
+
+  <!-- ===== L0 nodes ===== -->
+  <circle class="node" cx="170" cy="400" r="11"/>
+  <circle class="node" cx="250" cy="400" r="11"/>
+  <circle class="node" cx="330" cy="400" r="11"/>
+  <circle class="node" cx="410" cy="400" r="11"/>
+  <circle class="node" cx="490" cy="400" r="11"/>
+  <circle class="node" cx="570" cy="400" r="11"/>
+  <circle class="pnode" cx="650" cy="400" r="12"/>
+  <circle class="ring" cx="730" cy="400" r="18"/>
+  <circle class="pnode" cx="730" cy="400" r="12"/>
+  <circle class="node" cx="810" cy="400" r="11"/>
+
+  <!-- ===== L1 nodes ===== -->
+  <circle class="node" cx="250" cy="268" r="11"/>
+  <circle class="node" cx="410" cy="268" r="11"/>
+  <circle class="pnode" cx="570" cy="268" r="12"/>
+  <circle class="pnode" cx="650" cy="268" r="12"/>
+
+  <!-- ===== L2 nodes ===== -->
+  <circle class="enode" cx="250" cy="146" r="12"/>
+  <circle class="pnode" cx="570" cy="146" r="12"/>
+
+  <!-- ===== Query marker (an external vector, not an indexed node) ===== -->
+  <path class="qlink" d="M742 414 L753 426"/>
+  <path class="star" transform="translate(760 434) scale(11)" d="M0,-1 L0.2245,-0.309 L0.951,-0.309 L0.363,0.118 L0.588,0.809 L0,0.382 L-0.588,0.809 L-0.363,0.118 L-0.951,-0.309 L-0.2245,-0.309 Z"/>
+  <text class="qlabel" x="778" y="439" text-anchor="start">query q</text>
+
+  <!-- ===== Inline label for the entry point ===== -->
+  <text class="anno" x="250" y="172" text-anchor="middle">entry point</text>
+
+  <!-- ===== Direction guide ===== -->
+  <path class="edesc" d="M868 120 V428" marker-end="url(#arrowt)"/>
+  <text class="dirlabel" x="900" y="274" text-anchor="middle" transform="rotate(90 900 274)">start at top &#183; zoom in</text>
+
+  <!-- ===== Legend ===== -->
+  <circle class="node" cx="170" cy="512" r="9"/>
+  <text class="leg" x="186" y="517">indexed vector</text>
+  <circle class="pnode" cx="330" cy="512" r="9"/>
+  <text class="leg" x="346" y="517">visited</text>
+  <circle class="ring" cx="436" cy="512" r="13"/>
+  <circle class="pnode" cx="436" cy="512" r="9"/>
+  <text class="leg" x="456" y="517">nearest neighbor</text>
+  <path class="star" transform="translate(626 512) scale(9)" d="M0,-1 L0.2245,-0.309 L0.951,-0.309 L0.363,0.118 L0.588,0.809 L0,0.382 L-0.588,0.809 L-0.363,0.118 L-0.951,-0.309 L-0.2245,-0.309 Z"/>
+  <text class="leg" x="642" y="517">query q (input)</text>
+</svg>

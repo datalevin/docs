@@ -574,6 +574,10 @@ staging interface for writes. `assoc`, `update`, `d/add`, `d/retract`, and
 `dissoc` return a new Entity value that carries pending changes. The original
 entity and the DB object it came from are not modified. The staged changes
 become transaction data only when the staged entity is passed to `d/transact!`.
+This staged mutation interface is Clojure-only. Java, Python, and JavaScript
+entity wrappers are for lazy reads and materialization; write updates from
+those languages as explicit transaction maps/forms or binding transaction
+builders.
 
 ```clojure
 (def db1 (d/db conn))

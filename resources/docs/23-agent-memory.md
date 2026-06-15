@@ -41,6 +41,8 @@ You build the agent-specific machinery:
 - The operating envelope, tool authorization checks, budgets, and model-calling
   policy.
 
+![The Datalevin/application boundary: Datalevin provides ACID transactions, Datalog and graph, search indexes, and operations, while your application code builds the ingestion loop, consolidation, working memory, truth maintenance, and policy](/images/diagrams/agent-memory-boundary.svg)
+
 The examples in this part model those pieces as ordinary entities, references,
 attributes, and idocs. When a snippet demonstrates a basic Datalevin API call,
 it may use the same multi-language style as earlier chapters. When a snippet
@@ -48,7 +50,10 @@ shows an end-to-end application loop, it is Clojure-first so the control flow,
 transactions, and data shapes stay runnable in one place. The same model can be
 implemented from Java, Python, JavaScript, or over the server API by composing
 the same `transact`, `query`, `pull`, full-text, vector, and embedding
-operations shown earlier in the book.
+operations shown earlier in the book. For exact language coverage, use the
+compatibility matrix linked in Chapter 2. The notable gaps for Part VI examples
+are the same as elsewhere: JavaScript does not expose a Datalog transaction
+callback, and staged mutation of existing Entity objects is Clojure-only.
 
 Many of the patterns in Part VI were informed by Xia, a separate open-source
 personal AI assistant project [3]. Xia is a reference implementation for these

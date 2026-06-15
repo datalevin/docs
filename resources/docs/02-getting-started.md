@@ -53,6 +53,19 @@ current package metadata, and additional examples:
 - **Python:** [PyPI package page for `datalevin`](https://pypi.org/project/datalevin/).
 - **Node.js:** [npm package page for `datalevin-node`](https://www.npmjs.com/package/datalevin-node).
 
+For the current cross-language API surface, use Datalevin's
+[language compatibility matrix](https://github.com/huahaiy/datalevin/blob/master/doc/language-compatibility.md)
+as the source of truth. This book does not reproduce that matrix. The notable
+gaps to keep in mind while reading are:
+
+- JavaScript does not expose the Datalog transaction callback API
+  (`with-transaction` / `withTransaction`). Use a single `conn.transact(...)`,
+  `conn.transactAsync(...)`, KV transaction APIs, or move the callback logic
+  into a transaction function or application command.
+- Existing entity objects are transactable only in Clojure. Java, Python, and
+  JavaScript support lazy entity reads, but staged entity-object mutation should
+  be written as transaction maps, datom forms, or binding transaction builders.
+
 ### 1.1 Supported Platforms
 
 For local embedded storage, the standalone JVM jar, and pre-built `dtlv`

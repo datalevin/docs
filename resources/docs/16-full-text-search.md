@@ -764,9 +764,11 @@ as the fourth argument to skip that existence check:
 (d/add-doc engine doc-ref doc-text false)
 ```
 
-For larger embedded-Clojure imports, use `search-index-writer`, `write`, and
-`commit`. The writer batches index changes and flushes final term metadata on
-`commit`, so call `commit` before relying on search results:
+For larger embedded imports, use `search-index-writer`, `write`, and `commit`.
+The Java, Python, and JavaScript bindings expose the same standalone search
+writer as `SearchIndexWriter` / `search_index_writer` / `searchIndexWriter`.
+The writer batches index changes and flushes final term metadata on `commit`,
+so call `commit` before relying on search results:
 
 ```clojure
 (def lmdb (d/open-kv "/tmp/search-db"))
@@ -790,7 +792,9 @@ For larger embedded-Clojure imports, use `search-index-writer`, `write`, and
      :include-text? true}))
 ```
 
-The bulk writer is an embedded API. It is not available in client/server mode.
+The bulk writer is an embedded local API. It is not available through the
+Datalevin client/server API; use Datalog full-text attributes and normal
+transactions there, or run the writer in a local indexing process.
 
 ---
 

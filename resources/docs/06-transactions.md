@@ -62,7 +62,11 @@ often an entity map, such as `{:user/name "Alice"}`. Raw datom vectors such as
 transactable Entity objects can also be transaction data. The examples in this
 chapter start with maps because they are the clearest shape for ordinary creates
 and updates, then introduce the lower-level forms when they become useful.
-Chapter 7 covers transactable entities as part of the Entity API.
+Transactable Entity objects are a Clojure-side staging convenience; the Java,
+Python, and JavaScript entity wrappers are read/navigation wrappers, so
+non-Clojure code should use explicit entity maps, `:db/add` vectors, and
+binding helper builders. Chapter 7 covers transactable entities as part of the
+Entity API.
 
 Every successful `transact!` returns a **transaction report**. The report
 contains the database before and after the transaction, the datoms that were
@@ -646,9 +650,13 @@ purpose:
 
 The `with-transaction` macro ensures that the reads (e.g., `d/q`) and the write
 (`d/transact!`) happen within the same isolated transaction, preventing any
-other concurrent write from interfering. In Java, Python, and JavaScript, prefer
-the conditional transaction forms below, such as `:db/cas` and transaction
-functions, when you need portable read-modify-write behavior.
+other concurrent write from interfering. Java and Python expose the same
+embedded pattern as `conn.withTransaction(...)` and `conn.with_transaction(...)`.
+JavaScript does not expose a Datalog transaction callback because of JVM bridge
+re-entry constraints; use conditional transaction forms such as `:db/cas`,
+transaction functions, a single `conn.transact(...)`, or an application command
+running inside the Datalevin-hosting process when the read-modify-write logic
+must be serialized.
 
 `with-transaction` is a serialization tool, not a general retry loop. If the
 body throws, the transaction aborts. Datalevin retries its own safe internal

@@ -132,6 +132,12 @@ answer a question about one order. This is why Datalevin invests in cardinality
 estimation and join planning. The textual order of `:where` clauses does not
 matter; the optimizer is choosing this physical order for you.
 
+The good plan is a left-deep tree: the optimizer starts from the single order,
+then folds in one base relation at a time, keeping the intermediate result small
+at every step.
+
+![The good plan as a left-deep join tree: the order leaf (AVE :order/id, one order) joins the line-item leaf (:line-item/order, 12 rows), and that 12-row intermediate joins the product leaf (:line-item/product, price > 10000) to yield a few rows; every right child is a base relation, unlike a bushy tree](/images/diagrams/left-deep-join-tree.svg)
+
 ---
 
 ### 1.2 Accurate Cardinality Estimation

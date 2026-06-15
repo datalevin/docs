@@ -16,6 +16,8 @@ that should guide the next model call. Datalevin helps because symbolic
 constraints, full-text matching, vector similarity, graph expansion, and task
 state all live in the same queryable substrate.
 
+![The recall pipeline: scoped state feeds candidate retrieval across lenses, then permission and provenance filtering, ranking with reciprocal rank fusion, and finally assembly into a labeled context packet for the next model call](/images/diagrams/recall-pipeline.svg)
+
 ---
 
 ## 1. Recall Is a Control Problem

@@ -350,24 +350,7 @@ This view is what lets you stay focused on the shape of the answer instead of
 manual traversal. You describe the relationships that must hold, and the engine
 handles joins, filtering, recursion, and lookup order.
 
-```text
-+------------------------------------------------------------+
-| Logical view                                                |
-| Datoms and schema: [101 :user/email "alice@example.com"]    |
-+----------------------------+-------------------------------+
-                             |
-                             v
-+------------------------------------------------------------+
-| Query view                                                  |
-| Datalog planner and evaluator: clauses -> index lookups     |
-+----------------------------+-------------------------------+
-                             |
-                             v
-+------------------------------------------------------------+
-| Storage view                                                |
-| DLMDB indexes: sorted keys and range scans                  |
-+------------------------------------------------------------+
-```
+![The three views of a Datalevin database: a query resolves from the logical view (datoms and schema), through the query view (the Datalog planner and evaluator), down to the storage view (DLMDB indexes of sorted keys read with range scans)](/images/diagrams/mental-model-views.svg)
 
 ## 6. Datalog: Querying as Logic Programming
 

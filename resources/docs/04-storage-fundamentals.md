@@ -230,14 +230,7 @@ have to be repeated for every matching datom.
 
 **Conceptual EAV Layout:**
 
-```text
-Key: 101 -> Values: [(:person/name, "Alice"),
-                     (:person/age, 30),
-                     (:person/email, "alice@example.com")]
-
-Key: 102 -> Values: [(:person/name, "Bob"),
-                     (:person/age, 31)]
-```
+![EAV DUPSORT nesting: the entity id is the key, and its sorted attribute/value pairs are stored as nested duplicate values, so the entity id is not repeated for every datom](/images/diagrams/dupsort-eav.svg)
 
 In EAV, the entity id is the key. The duplicate values under that key are sorted
 attribute/value pairs. This makes "what facts do we know about entity 101?" a
@@ -245,10 +238,7 @@ single key lookup followed by a sequential read of that entity's facts.
 
 **Conceptual AVE Layout:**
 
-```text
-Key: (:person/age, 30) -> Values: [101, 102, 105, 200, ...] (Entity IDs)
-Key: (:person/age, 31) -> Values: [103, 104, 201, ...]
-```
+![AVE DUPSORT nesting: the attribute/value pair is the key, and the matching entity ids are stored as a sorted list of nested duplicate values](/images/diagrams/dupsort-ave.svg)
 
 In this layout, the Attribute and Value form the **Key**, and all the Entities
 that share that value are stored in a sorted **Duplicate List**. This makes

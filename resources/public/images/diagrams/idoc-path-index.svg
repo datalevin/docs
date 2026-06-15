@@ -34,10 +34,10 @@
   <text class="box-title" x="60" y="150">idoc value · entity 101</text>
   <line class="line" x1="60" y1="162" x2="440" y2="162" stroke="#cbd5e1" stroke-width="1.5"/>
   <text class="code" x="60" y="198">{:theme "dark"</text>
-  <text class="code" x="60" y="228"> :profile {:age 30</text>
-  <text class="code" x="60" y="258">           :name "Alice"}</text>
-  <text class="code" x="60" y="288"> :tags ["beta" "admin"]</text>
-  <text class="code" x="60" y="318"> :contact {:email "alice@…"}}</text>
+  <text class="code" x="72" y="228">:profile {:age 30</text>
+  <text class="code" x="192" y="258">:name "Alice"}</text>
+  <text class="code" x="72" y="288">:tags ["beta" "admin"]</text>
+  <text class="code" x="72" y="318">:contact {:email "alice@…"}}</text>
   <text class="sub" x="60" y="372">stored as one datom value</text>
 
   <!-- ===== Transform arrow ===== -->

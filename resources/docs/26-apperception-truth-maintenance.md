@@ -130,6 +130,8 @@ the old episode remains historically true. This distinction matters when the
 agent explains a decision, audits a mistake, or reconstructs why a task was
 scheduled at a particular time.
 
+![Truth maintenance: an observation is extracted into a candidate fact, accepted into a current fact, and superseded by newer evidence, while source-episode evidence links are preserved through every status change](/images/diagrams/truth-maintenance.svg)
+
 A practical pattern is to separate evidence from current assertions:
 
 ```clojure

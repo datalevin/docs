@@ -90,6 +90,8 @@ behavior.
 In WAL mode, every transaction is assigned a **Log Sequence Number (LSN)**. This
 number is the canonical source of truth for the database's progress.
 
+![The WAL LSN lifecycle: a transaction advances from committed to durable to applied (the three watermarks read with txlog-watermarks), then is checkpointed by create-snapshot! and finally reclaimed by gc-txlog-segments!](/images/diagrams/wal-lsn-lifecycle.svg)
+
 - **`:last-committed-lsn`**: The latest transaction that has been successfully
   committed in the database.
 - **`:last-durable-lsn`**: The latest transaction that has been safely synced to
@@ -386,6 +388,12 @@ thread or process is accessing the same database.
 (def reindexed-conn
   (d/re-index conn new-schema {:backup? true}))
 ```
+
+The embedded Java, Python, and JavaScript bindings expose the same operation as
+`conn.reIndex(...)`, `conn.re_index(...)`, and `conn.reIndex(...)`. KV stores
+and standalone search engines expose corresponding `reIndex` / `re_index`
+methods. Client/server users should schedule re-indexing as an operator task on
+the host that owns the local database files.
 
 ---
 

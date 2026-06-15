@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="420" viewBox="0 0 1000 420" role="img" aria-labelledby="title desc">
+  <title id="title">The three views of a Datalevin database</title>
+  <desc id="desc">One database is understood through three stacked views, and a query resolves downward through them. The logical view is datoms and schema, for example the datom 101 user/email alice@example.com. It resolves down into the query view, the Datalog planner and evaluator, which turns clauses into index lookups. That resolves down into the storage view, the DLMDB indexes, which are sorted keys read with range scans.</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .row { fill: #ecfeff; stroke: #0891b2; stroke-width: 2.5; }
+      .line { fill: none; stroke: #64748b; stroke-width: 2.5; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 30px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 19px; font-weight: 450; }
+      .row-title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 23px; font-weight: 700; }
+      .row-detail { fill: #334155; font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 16px; font-weight: 450; }
+    </style>
+    <marker id="arrow" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Figure card (transparent corners adapt to light/dark page) -->
+  <rect class="card" x="2" y="2" width="996" height="416" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+
+  <text class="title" x="500" y="44" text-anchor="middle">The Three Views</text>
+  <text class="caption" x="500" y="76" text-anchor="middle">A query resolves from the logical model, through the planner, down to physical indexes.</text>
+
+  <!-- ===== Spine arrows ===== -->
+  <path class="line" d="M500 182 V212" marker-end="url(#arrow)"/>
+  <path class="line" d="M500 294 V324" marker-end="url(#arrow)"/>
+
+  <!-- ===== Views ===== -->
+  <rect class="row" x="170" y="100" width="660" height="82" rx="14"/>
+  <text class="row-title" x="200" y="134">Logical view</text>
+  <text class="row-detail" x="200" y="164">datoms &amp; schema &#183; [101 :user/email "alice@example.com"]</text>
+
+  <rect class="row" x="170" y="212" width="660" height="82" rx="14"/>
+  <text class="row-title" x="200" y="246">Query view</text>
+  <text class="row-detail" x="200" y="276">Datalog planner &amp; evaluator &#183; clauses &#8594; index lookups</text>
+
+  <rect class="row" x="170" y="324" width="660" height="82" rx="14"/>
+  <text class="row-title" x="200" y="358">Storage view</text>
+  <text class="row-detail" x="200" y="388">DLMDB indexes &#183; sorted keys &amp; range scans</text>
+</svg>

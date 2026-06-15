@@ -735,6 +735,8 @@ HNSW builds a multi-layer graph where each node is a vector:
 Search starts at the top layer and "zooms in" through descending layers to find
 nearest neighbors.
 
+![HNSW multi-layer graph search: the sparse top layer has long-range links for fast skipping and the dense bottom layer holds every vector with short-range links; search starts at the entry point and descends layer by layer, hopping to closer nodes until it reaches the nearest neighbor in Layer 0](/images/diagrams/hnsw-layers.svg)
+
 ### 5.2 Performance Trade-offs
 
 - **`:connectivity`** (M) — Higher = better recall, more memory

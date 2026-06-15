@@ -291,6 +291,8 @@ An `idoc` stores a nested document as one datom value, while Datalevin maintains
 an index for paths inside the document. This gives you document-database style
 path queries without giving up Datalog joins or transactions.
 
+![Indexed documents: a nested idoc value is flattened to a path-to-value index whose leaf paths are queried with idoc-match and idoc-get](/images/diagrams/idoc-path-index.svg)
+
 Idoc indexes are orthogonal to full-text and vector indexes. The same entity can
 have structured facts, full-text fields, embeddings, and idoc metadata, and a
 single Datalog query can combine all of those constraints.

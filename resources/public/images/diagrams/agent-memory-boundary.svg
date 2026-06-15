@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560" role="img" aria-labelledby="title desc">
+  <title id="title">The Datalevin / application boundary for agent memory</title>
+  <desc id="desc">A boundary diagram with two panels separated by one transactional API. The left panel, Datalevin provides, is the durable substrate: ACID transactions over facts, documents, indexes, and task state; Datalog and graph with rules, lookup refs, schema, and traversal; search indexes for full-text, vector, embeddings, and idoc fields; and operations such as transaction reports, listeners, WAL, replication, and MCP. The right panel, You build, is the agent machinery written in application code: an ingestion loop that turns messages and tool calls into episodes; a consolidation job that extracts candidate facts; a working-memory policy for refresh, scoring, and eviction; a truth-maintenance layer that marks facts current, superseded, or rejected; and the policy and operating envelope covering tool authorization, budgets, and model calls. Datalevin stores and query-indexes durable state; your code implements consolidation, policies, prompts, tools, and review loops.</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .panel-l { fill: #ecfeff; stroke: #0891b2; stroke-width: 2.5; }
+      .panel-r { fill: #f1f5f9; stroke: #64748b; stroke-width: 2.5; }
+      .divider { fill: none; stroke: #94a3b8; stroke-width: 2.5; stroke-dasharray: 2 8; stroke-linecap: round; }
+      .ul-l { stroke: #a5d8e6; stroke-width: 2; }
+      .ul-r { stroke: #cbd5e1; stroke-width: 2; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 30px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 21px; font-weight: 450; }
+      .phead-l { fill: #0e7490; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 24px; font-weight: 720; }
+      .phead-r { fill: #334155; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 24px; font-weight: 720; }
+      .psub { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 500; }
+      .label { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 20px; font-weight: 680; }
+      .detail { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 450; }
+      .mark-l { fill: #0891b2; }
+      .mark-r { fill: #64748b; }
+      .boundary { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 17px; font-weight: 650; letter-spacing: 0.5px; }
+    </style>
+  </defs>
+
+  <!-- Figure card (transparent corners adapt to light/dark page) -->
+  <rect class="card" x="2" y="2" width="996" height="556" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+
+  <text class="title" x="500" y="44" text-anchor="middle">What Datalevin Provides vs. What You Build</text>
+  <text class="caption" x="500" y="76" text-anchor="middle">Datalevin stores and indexes durable state; your code is the agent.</text>
+
+  <!-- ===== Center boundary ===== -->
+  <path class="divider" d="M500 110 V238"/>
+  <path class="divider" d="M500 414 V534"/>
+  <text class="boundary" x="500" y="326" text-anchor="middle" transform="rotate(-90 500 326)">one transactional API</text>
+
+  <!-- ================= Left panel: Datalevin provides ================= -->
+  <rect class="panel-l" x="28" y="98" width="450" height="446" rx="14"/>
+  <text class="phead-l" x="52" y="136">Datalevin provides</text>
+  <text class="psub" x="52" y="160">durable substrate &#8212; the database engine</text>
+  <line class="ul-l" x1="44" y1="178" x2="462" y2="178"/>
+
+  <rect class="mark-l" x="48" y="209" width="15" height="15" rx="3"/>
+  <text class="label" x="74" y="222">ACID transactions</text>
+  <text class="detail" x="74" y="247">facts, documents, indexes, task state</text>
+
+  <rect class="mark-l" x="48" y="289" width="15" height="15" rx="3"/>
+  <text class="label" x="74" y="302">Datalog &amp; graph</text>
+  <text class="detail" x="74" y="327">rules, lookup refs, schema, traversal</text>
+
+  <rect class="mark-l" x="48" y="369" width="15" height="15" rx="3"/>
+  <text class="label" x="74" y="382">Search indexes</text>
+  <text class="detail" x="74" y="407">full-text, vector, embeddings, idoc</text>
+
+  <rect class="mark-l" x="48" y="449" width="15" height="15" rx="3"/>
+  <text class="label" x="74" y="462">Operations</text>
+  <text class="detail" x="74" y="487">tx reports, listeners, WAL, replication, MCP</text>
+
+  <!-- ================= Right panel: You build ================= -->
+  <rect class="panel-r" x="522" y="98" width="450" height="446" rx="14"/>
+  <text class="phead-r" x="546" y="136">You build</text>
+  <text class="psub" x="546" y="160">agent machinery &#8212; your application code</text>
+  <line class="ul-r" x1="538" y1="178" x2="956" y2="178"/>
+
+  <rect class="mark-r" x="542" y="200" width="15" height="15" rx="3"/>
+  <text class="label" x="568" y="213">Ingestion loop</text>
+  <text class="detail" x="568" y="237">messages &amp; tool calls &#8594; episodes</text>
+
+  <rect class="mark-r" x="542" y="264" width="15" height="15" rx="3"/>
+  <text class="label" x="568" y="277">Consolidation</text>
+  <text class="detail" x="568" y="301">extract candidate facts from episodes</text>
+
+  <rect class="mark-r" x="542" y="328" width="15" height="15" rx="3"/>
+  <text class="label" x="568" y="341">Working memory</text>
+  <text class="detail" x="568" y="365">refresh policy, slot scoring, eviction</text>
+
+  <rect class="mark-r" x="542" y="392" width="15" height="15" rx="3"/>
+  <text class="label" x="568" y="405">Truth maintenance</text>
+  <text class="detail" x="568" y="429">current &#183; superseded &#183; rejected &#183; review</text>
+
+  <rect class="mark-r" x="542" y="456" width="15" height="15" rx="3"/>
+  <text class="label" x="568" y="469">Policy &amp; envelope</text>
+  <text class="detail" x="568" y="493">tool auth, budgets, model-calling policy</text>
+</svg>
