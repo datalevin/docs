@@ -220,15 +220,11 @@ can treat the indexes as **programmable capabilities**.
 
 Most non-Clojure examples earlier in the book use high-level convenience
 methods such as `conn.query`, `conn.transact`, and `conn.pull`. Direct index
-access is lower-level, so the non-Clojure bindings expose a JSON operation API:
-pass an operation name such as `"datoms"` plus a data map of arguments, and get
-JSON-shaped values back. The Clojure examples below use `datalevin.core` as
-`d`. Java examples assume a high-level `Connection conn` and call the supported
-`conn.exec(...)` escape hatch for connection-scoped JSON operations. Python
-examples use `exec_json` from `datalevin`; JavaScript examples use `execJson`
-from `datalevin-node`. For Python and JavaScript, `conn_handle` is the handle
-returned by the JSON API `create-conn` operation. Colon-prefixed attribute
-strings are decoded as keywords by the JSON API.
+access is lower-level, but the Java, Python, and JavaScript bindings now expose
+the common index reads as high-level connection methods too. The Clojure
+examples below use `datalevin.core` as `d`; Java examples assume a
+`Connection conn`; Python examples assume a `Connection conn`; JavaScript
+examples assume an async `Connection conn`.
 
 Direct index APIs return datoms in index order. They are best for simple, known
 access paths where you want the index itself, not the Datalog planner, to be the
@@ -269,49 +265,35 @@ or value-local (`:ave`).
 
 ```java
 // All datoms for entity 101, ordered by attribute and value.
-conn.exec("datoms", Map.of("index", "eav", "c1", 101));
+conn.datoms(":eav", 101);
 
 // A single attribute on entity 101.
-conn.exec("datoms",
-          Map.of("index", "eav", "c1", 101, "c2", ":user/email"));
+conn.datoms(":eav", 101, ":user/email");
 
 // All entities whose :user/age value is 30.
-conn.exec("datoms",
-          Map.of("index", "ave", "c1", ":user/age", "c2", 30));
+conn.datoms(":ave", ":user/age", 30);
 ```
 
 ```python
 # All datoms for entity 101, ordered by attribute and value.
-exec_json("datoms", {"conn": conn_handle, "index": "eav", "c1": 101})
+conn.datoms(":eav", 101)
 
 # A single attribute on entity 101.
-exec_json("datoms", {"conn": conn_handle, "index": "eav",
-                     "c1": 101, "c2": ":user/email"})
+conn.datoms(":eav", 101, ":user/email")
 
 # All entities whose :user/age value is 30.
-exec_json("datoms", {"conn": conn_handle, "index": "ave",
-                     "c1": ":user/age", "c2": 30})
+conn.datoms(":ave", ":user/age", 30)
 ```
 
 ```javascript
 // All datoms for entity 101, ordered by attribute and value.
-await execJson('datoms', { conn: connHandle, index: 'eav', c1: 101 });
+await conn.datoms(':eav', { c1: 101 });
 
 // A single attribute on entity 101.
-await execJson('datoms', {
-  conn: connHandle,
-  index: 'eav',
-  c1: 101,
-  c2: ':user/email'
-});
+await conn.datoms(':eav', { c1: 101, c2: ':user/email' });
 
 // All entities whose :user/age value is 30.
-await execJson('datoms', {
-  conn: connHandle,
-  index: 'ave',
-  c1: ':user/age',
-  c2: 30
-});
+await conn.datoms(':ave', { c1: ':user/age', c2: 30 });
 ```
 
 </div>
@@ -319,8 +301,9 @@ await execJson('datoms', {
 ### 4.3 Wildcard Lookup with `search-datoms`
 
 Use `search-datoms` when you want to describe the logical datom pattern as `(e,
-a, v)` and let Datalevin choose the index. A `nil` component is a wildcard. In
-Java and JSON API calls, omit a wildcard key from the argument map.
+a, v)` and let Datalevin choose the index. A `nil` / `None` / `null` component
+is a wildcard. In JavaScript calls, omit a wildcard key from the argument
+object or leave it `null`.
 
 <div class="multi-lang">
 
@@ -337,49 +320,38 @@ Java and JSON API calls, omit a wildcard key from the argument map.
 
 ```java
 // All attributes and values for entity 101.
-conn.exec("search-datoms", Map.of("e", 101));
+conn.searchDatoms(101, null, null);
 
 // All entities whose :user/age value is 30.
-conn.exec("search-datoms", Map.of("a", ":user/age", "v", 30));
+conn.searchDatoms(null, ":user/age", 30);
 
 // The exact datom, if present.
-conn.exec("search-datoms",
-          Map.of("e", 101, "a", ":user/email", "v", "ada@example.com"));
+conn.searchDatoms(101, ":user/email", "ada@example.com");
 ```
 
 ```python
 # All attributes and values for entity 101.
-exec_json("search-datoms", {"conn": conn_handle, "e": 101})
+conn.search_datoms(e=101)
 
 # All entities whose :user/age value is 30.
-exec_json("search-datoms", {"conn": conn_handle, "a": ":user/age", "v": 30})
+conn.search_datoms(attr=":user/age", value=30)
 
 # The exact datom, if present.
-exec_json("search-datoms", {
-    "conn": conn_handle,
-    "e": 101,
-    "a": ":user/email",
-    "v": "ada@example.com"
-})
+conn.search_datoms(e=101, attr=":user/email", value="ada@example.com")
 ```
 
 ```javascript
 // All attributes and values for entity 101.
-await execJson('search-datoms', { conn: connHandle, e: 101 });
+await conn.searchDatoms({ e: 101 });
 
 // All entities whose :user/age value is 30.
-await execJson('search-datoms', {
-  conn: connHandle,
-  a: ':user/age',
-  v: 30
-});
+await conn.searchDatoms({ attr: ':user/age', value: 30 });
 
 // The exact datom, if present.
-await execJson('search-datoms', {
-  conn: connHandle,
+await conn.searchDatoms({
   e: 101,
-  a: ':user/email',
-  v: 'ada@example.com'
+  attr: ':user/email',
+  value: 'ada@example.com'
 });
 ```
 
@@ -402,30 +374,26 @@ cheap existence check.
 
 ```java
 // How many datoms are attached to entity 101?
-conn.exec("count-datoms", Map.of("e", 101));
+conn.countDatoms(101, null, null);
 
 // How many users have age 30?
-conn.exec("count-datoms", Map.of("a", ":user/age", "v", 30));
+conn.countDatoms(null, ":user/age", 30);
 ```
 
 ```python
 # How many datoms are attached to entity 101?
-exec_json("count-datoms", {"conn": conn_handle, "e": 101})
+conn.count_datoms(101, None, None)
 
 # How many users have age 30?
-exec_json("count-datoms", {"conn": conn_handle, "a": ":user/age", "v": 30})
+conn.count_datoms(None, ":user/age", 30)
 ```
 
 ```javascript
 // How many datoms are attached to entity 101?
-await execJson('count-datoms', { conn: connHandle, e: 101 });
+await conn.countDatoms({ e: 101 });
 
 // How many users have age 30?
-await execJson('count-datoms', {
-  conn: connHandle,
-  a: ':user/age',
-  v: 30
-});
+await conn.countDatoms({ attr: ':user/age', value: 30 });
 ```
 
 </div>
@@ -439,6 +407,13 @@ Use `cardinality` when you need the number of distinct values currently present
 for one attribute. Do not confuse this with the schema property
 `:db/cardinality`, which says whether an attribute is single-valued or
 multi-valued. `d/cardinality` is a data statistic:
+
+The common pattern counts use high-level connection methods in every binding.
+For the less commonly used `cardinality` statistic, use the connection-scoped
+operation escape hatch outside Clojure: Java `conn.exec`, Python `exec_json`,
+and JavaScript `execJson`. Python and JavaScript can pass the connection object
+itself; the binding converts it to the raw handle needed by the operation
+bridge.
 
 <div class="multi-lang">
 
@@ -454,36 +429,42 @@ multi-valued. `d/cardinality` is a data statistic:
 ```
 
 ```java
+import java.util.Map;
+
 // How many distinct ages exist?
 conn.exec("cardinality", Map.of("attr", ":user/age"));
 
 // How many datoms use :user/age at all?
-conn.exec("count-datoms", Map.of("a", ":user/age"));
+conn.countDatoms(null, ":user/age", null);
 
 // How many datoms say :user/age is 30?
-conn.exec("count-datoms", Map.of("a", ":user/age", "v", 30));
+conn.countDatoms(null, ":user/age", 30);
 ```
 
 ```python
+from datalevin import exec_json
+
 # How many distinct ages exist?
-exec_json("cardinality", {"conn": conn_handle, "attr": ":user/age"})
+exec_json("cardinality", {"conn": conn, "attr": ":user/age"})
 
 # How many datoms use :user/age at all?
-exec_json("count-datoms", {"conn": conn_handle, "a": ":user/age"})
+conn.count_datoms(None, ":user/age", None)
 
 # How many datoms say :user/age is 30?
-exec_json("count-datoms", {"conn": conn_handle, "a": ":user/age", "v": 30})
+conn.count_datoms(None, ":user/age", 30)
 ```
 
 ```javascript
+import { execJson } from "datalevin-node";
+
 // How many distinct ages exist?
-await execJson('cardinality', { conn: connHandle, attr: ':user/age' });
+await execJson('cardinality', { conn, attr: ':user/age' });
 
 // How many datoms use :user/age at all?
-await execJson('count-datoms', { conn: connHandle, a: ':user/age' });
+await conn.countDatoms({ attr: ':user/age' });
 
 // How many datoms say :user/age is 30?
-await execJson('count-datoms', { conn: connHandle, a: ':user/age', v: 30 });
+await conn.countDatoms({ attr: ':user/age', value: 30 });
 ```
 
 </div>
@@ -528,70 +509,50 @@ the scan must stay inside one logical range.
 
 ```java
 // Start a forward scan at :user/age 30 in AVE order.
-conn.exec("seek-datoms",
-          Map.of("index", "ave", "c1", ":user/age", "c2", 30, "limit", 10));
+conn.seekDatoms(":ave", ":user/age", 30, null, 10);
 
 // Start a reverse scan near the high end of :user/created-at.
-conn.exec("rseek-datoms",
-          Map.of("index", "ave",
-                 "c1", ":user/created-at",
-                 "c2", 4102444800000L,
-                 "limit", 5));
+conn.rseekDatoms(":ave", ":user/created-at", 4102444800000L, null, 5);
 
 // Start at the :user/email position inside entity 101.
-conn.exec("seek-datoms",
-          Map.of("index", "eav", "c1", 101, "c2", ":user/email"));
+conn.seekDatoms(":eav", 101, ":user/email");
 ```
 
 ```python
 # Start a forward scan at :user/age 30 in AVE order.
-exec_json("seek-datoms", {"conn": conn_handle, "index": "ave",
-                          "c1": ":user/age", "c2": 30, "limit": 10})
+conn.seek_datoms(":ave", ":user/age", 30, limit=10)
 
 # Start a reverse scan near the high end of :user/created-at.
-exec_json("rseek-datoms", {"conn": conn_handle, "index": "ave",
-                           "c1": ":user/created-at",
-                           "c2": 4102444800000,
-                           "limit": 5})
+conn.rseek_datoms(":ave", ":user/created-at", 4102444800000, limit=5)
 
 # Start at the :user/email position inside entity 101.
-exec_json("seek-datoms", {"conn": conn_handle, "index": "eav",
-                          "c1": 101, "c2": ":user/email"})
+conn.seek_datoms(":eav", 101, ":user/email")
 ```
 
 ```javascript
 // Start a forward scan at :user/age 30 in AVE order.
-await execJson('seek-datoms', {
-  conn: connHandle,
-  index: 'ave',
+await conn.seekDatoms(':ave', {
   c1: ':user/age',
   c2: 30,
   limit: 10
 });
 
 // Start a reverse scan near the high end of :user/created-at.
-await execJson('rseek-datoms', {
-  conn: connHandle,
-  index: 'ave',
+await conn.rseekDatoms(':ave', {
   c1: ':user/created-at',
   c2: 4102444800000,
   limit: 5
 });
 
 // Start at the :user/email position inside entity 101.
-await execJson('seek-datoms', {
-  conn: connHandle,
-  index: 'eav',
-  c1: 101,
-  c2: ':user/email'
-});
+await conn.seekDatoms(':eav', { c1: 101, c2: ':user/email' });
 ```
 
 </div>
 
-The JSON API uses `limit` and `offset` for paging sequence results. In Clojure,
-`seek-datoms` and `rseek-datoms` also have an arity that accepts `n` as the
-final argument:
+The JavaScript and Python connection methods use `limit` and `offset` for
+paging sequence results. In Clojure, `seek-datoms` and `rseek-datoms` also have
+an arity that accepts `n` as the final argument:
 
 ```clojure
 (d/seek-datoms db index c1 c2 c3 n)
@@ -628,40 +589,26 @@ bound, upper bound.
 
 ```java
 // Find users with age between 20 and 30, inclusive.
-conn.exec("index-range",
-          Map.of("attr", ":user/age", "start", 20, "end", 30));
+conn.indexRange(":user/age", 20, 30);
 
 // Return just the matching entity ids.
-List<?> datoms = (List<?>) conn.exec(
-    "index-range",
-    Map.of("attr", ":user/age", "start", 20, "end", 30));
-List<?> entityIds = datoms.stream()
-    .map(datom -> ((Map<?, ?>) datom).get("e"))
-    .toList();
+List<?> datoms = conn.indexRange(":user/age", 20, 30);
 ```
 
 ```python
 # Find users with age between 20 and 30, inclusive.
-datoms = exec_json("index-range", {"conn": conn_handle,
-                                   "attr": ":user/age",
-                                   "start": 20,
-                                   "end": 30})
+datoms = conn.index_range(":user/age", 20, 30)
 
 # Return just the matching entity ids.
-entity_ids = [datom["e"] for datom in datoms]
+entity_ids = [datom[":e"] for datom in datoms]
 ```
 
 ```javascript
 // Find users with age between 20 and 30, inclusive.
-const datoms = await execJson('index-range', {
-  conn: connHandle,
-  attr: ':user/age',
-  start: 20,
-  end: 30
-});
+const datoms = await conn.indexRange(':user/age', 20, 30);
 
 // Return just the matching entity ids.
-const entityIds = datoms.map((datom) => datom.e);
+const entityIds = datoms.map((datom) => datom[':e']);
 ```
 
 </div>
@@ -669,10 +616,11 @@ const entityIds = datoms.map((datom) => datom.e);
 ### 4.8 Reading Datom Fields
 
 Clojure datoms have dedicated accessors for the logical triple and keyword
-lookup for transaction metadata. JSON API results encode datoms as maps with
-`e`, `a`, `v`, `tx`, and `added` fields. Java `conn.exec` returns the same
-bridge-safe maps with string keys such as `"e"`, `"a"`, `"v"`, `"tx"`, and
-`"added"`.
+lookup for transaction metadata. Python and JavaScript convert datoms to maps
+with keyword-string keys such as `":e"`, `":a"`, `":v"`, `":tx"`, and
+`":added"`. Java returns the bridge value directly; for most Java application
+code, prefer `pull`, `query`, or typed query helpers when you need shaped
+results.
 
 <div class="multi-lang">
 
@@ -686,46 +634,29 @@ bridge-safe maps with string keys such as `"e"`, `"a"`, `"v"`, `"tx"`, and
 ```
 
 ```java
-List<?> datoms = (List<?>) conn.exec(
-    "datoms",
-    Map.of("index", "ave", "c1", ":user/age", "c2", 30));
-
-for (Object item : datoms) {
-    Map<?, ?> datom = (Map<?, ?>) item;
-    Object entity = datom.get("e");
-    Object attr = datom.get("a");
-    Object value = datom.get("v");
-    Object tx = datom.get("tx");
-    Object added = datom.get("added");
-}
+List<?> datoms = conn.datoms(":ave", ":user/age", 30);
 ```
 
 ```python
-datoms = exec_json("datoms", {"conn": conn_handle, "index": "ave",
-                              "c1": ":user/age", "c2": 30})
+datoms = conn.datoms(":ave", ":user/age", 30)
 
 for datom in datoms:
-    entity = datom["e"]
-    attr = datom["a"]
-    value = datom["v"]
-    tx = datom["tx"]
-    added = datom["added"]
+    entity = datom[":e"]
+    attr = datom[":a"]
+    value = datom[":v"]
+    tx = datom[":tx"]
+    added = datom[":added"]
 ```
 
 ```javascript
-const datoms = await execJson('datoms', {
-  conn: connHandle,
-  index: 'ave',
-  c1: ':user/age',
-  c2: 30
-});
+const datoms = await conn.datoms(':ave', { c1: ':user/age', c2: 30 });
 
 for (const datom of datoms) {
-  const entity = datom.e;
-  const attr = datom.a;
-  const value = datom.v;
-  const tx = datom.tx;
-  const added = datom.added;
+  const entity = datom[':e'];
+  const attr = datom[':a'];
+  const value = datom[':v'];
+  const tx = datom[':tx'];
+  const added = datom[':added'];
 }
 ```
 

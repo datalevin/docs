@@ -1,10 +1,10 @@
 ---
-title: "Full-Text Search: Analyzers, Vector Space Model and Boolean Search Expression"
+title: "Full-Text Search: Queries and Ranking"
 chapter: 16
 part: "IV — Indexes as Capabilities"
 ---
 
-# Chapter 16: Full-Text Search: Analyzers, Vector Space Model and Boolean Search Expression
+# Chapter 16: Full-Text Search: Queries and Ranking
 
 Most databases require a separate engine like Lucene, Elasticsearch or Solr for
 full-text search. Datalevin includes a high-performance, integrated search
@@ -122,13 +122,31 @@ await conn.query('[:find ?e ?a ?v ' +
 
 </div>
 
-In embedded Clojure, use `fulltext-datoms` when you want matching datoms
-directly instead of joining through a Datalog query:
+Use `fulltext-datoms` / `fulltextDatoms` / `fulltext_datoms` when you want
+matching datoms directly instead of joining through a Datalog query:
+
+<div class="multi-lang">
 
 ```clojure
 (d/fulltext-datoms db "red fox" {:top 10})
 ;=> (#datalevin/Datom [123 :post/body "The red fox ..."] ...)
 ```
+
+```java
+import java.util.Map;
+
+conn.fulltextDatoms("red fox", Map.of(":top", 10));
+```
+
+```python
+conn.fulltext_datoms("red fox", opts={":top": 10})
+```
+
+```javascript
+await conn.fulltextDatoms("red fox", { opts: { ":top": 10 } });
+```
+
+</div>
 
 ### 2.1 Attribute-Specific Search
 

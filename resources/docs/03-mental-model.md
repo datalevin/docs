@@ -48,6 +48,8 @@ To add a new piece of information, like her preferred language, you
 don't need to "alter a table." You just add another datom:
 `[101 :user/preferred-language "en"]`.
 
+![One entity as many datoms: a row or document is really the set of datoms that share an entity id](/images/diagrams/entity-as-datoms.svg)
+
 
 ## 2. Attributes Over Tables: The Fluid Entity
 

@@ -672,9 +672,14 @@ Datalog connection or DB:
 ```
 
 The returned KV handle is owned by the Datalog connection. Do not close it
-separately; close the Datalog connection instead. Open application DBIs during
-setup, then use the transaction-bound connection inside `with-transaction` for
-both parts of the write:
+separately; close the Datalog connection instead. Java, Python, and JavaScript
+expose the same borrowed handle as `conn.datalogKV()`, `conn.datalog_kv()`, and
+`await conn.datalogKv()` for setup and direct same-store KV operations. The
+transaction-bound mixed-write pattern below is Clojure-specific; in other
+runtimes, use a transaction function or an application command on the server
+side if the Datalog and KV updates must commit atomically. Open application DBIs
+during setup, then use the transaction-bound connection inside
+`with-transaction` for both parts of the write:
 
 ```clojure
 (let [kv (d/datalog-kv conn)]
@@ -1068,9 +1073,10 @@ sequential log before applying them to LMDB.
 
 ### 6.2 Asynchronous Transactions (`transact-async`)
 
-For the absolute highest throughput, the embedded Clojure API offers
-`d/transact-async`. Instead of waiting for the transaction to be confirmed, this
-function returns a `Future` immediately.
+For the absolute highest throughput, use the async transaction API:
+`d/transact-async` in Clojure, `transactAsync` in Java and JavaScript, and
+`transact_async` in Python. Instead of waiting for the transaction to be
+confirmed, these calls return a future or promise immediately.
 
 ```clojure
 (let [fut (d/transact-async conn [{:user/name "Charlie"}])]
@@ -1085,7 +1091,8 @@ allowing Datalevin to achieve both high throughput during busy periods and low
 latency when the system is quiet.
 
 WAL mode and asynchronous transactions can be used together to achieve
-best-in-class Online Transaction Processing (OLTP) performance.
+best-in-class Online Transaction Processing (OLTP) performance. Chapter 19
+shows the ingestion patterns in all four bindings.
 
 ---
 

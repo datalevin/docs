@@ -40,7 +40,7 @@ Part IV — Indexes as Capabilities
 
 15. Core Index Architecture: EAV and AVE
 
-16. Full-Text Search: Analyzers, Vector Space Model and Boolean Search Expression
+16. Full-Text Search: Queries and Ranking
 
 17. Vector Search: Embeddings and Similarity Queries
 

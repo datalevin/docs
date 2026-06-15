@@ -23,33 +23,69 @@ preserving LMDB's B+Tree read path.
 - **Durability policy**: Choose the WAL durability profile using the operational
   guidance in Chapter 20, Section 1.4.2.
 
-### 1.2 Asynchronous Transactions: `d/transact-async`
+### 1.2 Asynchronous Transactions
 
-In embedded Clojure, the `d/transact-async` function automatically batches
-multiple transactions together. When combined with WAL mode, this provides the
+The async transaction API automatically batches multiple transactions together:
+`d/transact-async` in Clojure, `transactAsync` in Java and JavaScript, and
+`transact_async` in Python. When combined with WAL mode, this provides the
 highest possible OLTP throughput.
+
+<div class="multi-lang">
 
 ```clojure
 ;; Fire multiple async transactions
-(d/transact-async conn batch-1)
-(d/transact-async conn batch-2)
-(d/transact-async conn batch-3)
+(def f1 (d/transact-async conn batch-1))
+(def f2 (d/transact-async conn batch-2))
+(def f3 (d/transact-async conn batch-3))
 
 ;; Block on the last one to ensure all are committed
-(deref (d/transact-async conn batch-4))
+@f3
 ```
+
+```java
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+
+CompletableFuture<Map<?, ?>> f1 = conn.transactAsync(batch1);
+CompletableFuture<Map<?, ?>> f2 = conn.transactAsync(batch2);
+CompletableFuture<Map<?, ?>> f3 = conn.transactAsync(batch3);
+
+// Block on the last one to ensure all are committed.
+f3.join();
+```
+
+```python
+future1 = conn.transact_async(batch_1)
+future2 = conn.transact_async(batch_2)
+future3 = conn.transact_async(batch_3)
+
+# Block on the last one to ensure all are committed.
+future3.result(timeout=30)
+```
+
+```javascript
+const p1 = conn.transactAsync(batch1);
+const p2 = conn.transactAsync(batch2);
+const p3 = conn.transactAsync(batch3);
+
+// Block on the last one to ensure all are committed.
+await p3;
+```
+
+</div>
 
 The batching is **adaptive**: the higher the write load, the bigger the batch
 size. This combines with manual batching for compound performance gains.
 
-An asynchronous transaction returns a future that requires some programmatic
-management work.
+An asynchronous transaction returns a future or promise that requires some
+programmatic management work.
 
 ### 1.3 Sync + Async Combo
 
-For embedded Clojure applications that need both good throughput and
-deterministic commit points, use a sequence of async transactions followed by a
-sync call:
+For embedded applications that need both good throughput and deterministic
+commit points, use a sequence of async transactions followed by a sync call:
+
+<div class="multi-lang">
 
 ```clojure
 ;; Async writes for throughput
@@ -60,6 +96,40 @@ sync call:
 ;; Sync commit to ensure all are persisted
 (d/transact! conn [])
 ```
+
+```java
+import java.util.List;
+
+// Async writes for throughput.
+conn.transactAsync(batch1);
+conn.transactAsync(batch2);
+conn.transactAsync(batch3);
+
+// Sync commit to ensure all are persisted.
+conn.transact(List.of());
+```
+
+```python
+# Async writes for throughput.
+conn.transact_async(batch_1)
+conn.transact_async(batch_2)
+conn.transact_async(batch_3)
+
+# Sync commit to ensure all are persisted.
+conn.transact([])
+```
+
+```javascript
+// Async writes for throughput.
+conn.transactAsync(batch1);
+conn.transactAsync(batch2);
+conn.transactAsync(batch3);
+
+// Sync commit to ensure all are persisted.
+await conn.transact([]);
+```
+
+</div>
 
 Since async transactions are still committed in order, the last realized future
 indicates all prior calls are already committed.
@@ -257,11 +327,11 @@ overhead entirely using `d/init-db` and `d/fill-db`. Note that these functions
   database
 - **`d/fill-db`**: Bulk load additional datoms into an existing database
 
-The public high-level Java, Python, and JavaScript bindings do not currently
-expose direct wrappers for `init-db` or `fill-db`. From those languages, use the
-batched transaction pattern above unless your deployment exposes a lower-level
-bulk-load bridge. The example below is Clojure-only; a non-Clojure `init-db`
-snippet here would be an API sketch, not a current public binding.
+The same bulk-load path is exposed in the Java, Python, and JavaScript
+bindings: `Datalevin.initDb` / `fillDb`, `init_db` / `fill_db`, and `initDb` /
+`fillDb`, respectively. Use normal transactions instead when you need tempids,
+lookup refs, upserts, transaction functions, or transaction-level integrity
+checks.
 
 ### 3.1 Assigning Entity IDs for Prepared Datoms
 
@@ -322,6 +392,71 @@ every primary key and foreign key with the same function [1] [2]. For example:
 (def db (d/init-db prepared-datoms "/tmp/import-db" schema))
 ```
 
+The other bindings use the same prepared-datom shape. They accept compact
+`[entity-id attribute value]` data, and each binding also provides a `datom`
+helper for clarity:
+
+<div class="multi-lang">
+
+```java
+import datalevin.*;
+import java.util.List;
+
+List<?> preparedDatoms = Datalevin.listOf(
+    Datalevin.datom(userEid("1"), ":user/id", 1L),
+    Datalevin.datom(userEid("1"), ":user/name", "Alice"));
+
+try (Connection conn =
+         Datalevin.initDb(preparedDatoms, "/tmp/import-db", schema)) {
+    conn.fillDb(Datalevin.listOf(
+        Datalevin.datom(orderEid("10"), ":order/id", 10L),
+        Datalevin.datom(orderEid("10"), ":order/customer", userEid("1")),
+        Datalevin.datom(orderEid("10"), ":order/total", 42.5)));
+}
+```
+
+```python
+from datalevin import datom, fill_db, init_db
+
+prepared_datoms = [
+    datom(user_eid("1"), ":user/id", 1),
+    datom(user_eid("1"), ":user/name", "Alice"),
+]
+
+with init_db(prepared_datoms, dir="/tmp/import-db", schema=schema) as conn:
+    fill_db(conn, [
+        datom(order_eid("10"), ":order/id", 10),
+        datom(order_eid("10"), ":order/customer", user_eid("1")),
+        datom(order_eid("10"), ":order/total", 42.5),
+    ])
+```
+
+```javascript
+import { datom, fillDb, initDb } from "datalevin-node";
+
+const preparedDatoms = [
+  datom(userEid("1"), ":user/id", 1),
+  datom(userEid("1"), ":user/name", "Alice")
+];
+
+const conn = await initDb(preparedDatoms, {
+  dir: "/tmp/import-db",
+  schema
+});
+
+try {
+  await fillDb(conn, [
+    datom(orderEid("10"), ":order/id", 10),
+    datom(orderEid("10"), ":order/customer", userEid("1")),
+    datom(orderEid("10"), ":order/total", 42.5)
+  ]);
+} finally {
+  await conn.close();
+}
+```
+
+</div>
+
 The same id functions are used on both sides of the relationship:
 `:order/customer` stores `(user-eid customer-id)`, not the external customer id
 and not a lookup ref. The source ids are also stored as unique identity
@@ -340,6 +475,10 @@ using the same id functions:
       (d/fill-db (mapcat user-datoms users))
       (d/fill-db (mapcat order-datoms orders))))
 ```
+
+In Java, Python, and JavaScript, keep the connection returned by `initDb` /
+`init_db` / `initDb` open and call the binding's `fillDb` / `fill_db` /
+`fillDb` method or top-level helper for each streamed chunk.
 
 If the source does not have dense integer ids, build an `eid-by-key` map first:
 collect stable keys such as `[:user external-id]` and `[:order external-id]`,
@@ -371,8 +510,8 @@ When you need to ingest data at scale, follow this checklist:
 5.  **Disable the Datalog index cache during large bulk transactions**:
     temporarily set `datalog-index-cache-limit` to `0`, then restore it after
     the import.
-6.  **Use Clojure or pod-level `init-db`/`fill-db`** for the fastest possible
-    bulk load into a database for static data sets.
+6.  **Use `init-db`/`fill-db` and their binding equivalents** for the fastest
+    possible bulk load into a database for static data sets.
 7.  **Use non-durable LMDB flags only for rebuildable imports**: `:nometasync`,
     `:nosync`, and `:writemap`/`:mapasync` can improve write speed, but they
     change durability (i.e. crash behavior).

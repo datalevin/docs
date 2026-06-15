@@ -151,11 +151,57 @@ by WAL retention.
 (d/create-snapshot! kv)
 ```
 
-The JSON API also exposes `txlog-watermarks`, `create-snapshot!`,
-`list-snapshots`, and `gc-txlog-segments!`; those operations can target either a
-KV handle or a Datalog connection handle. The high-level Java, Python, and
-JavaScript wrappers do not currently expose dedicated convenience methods for
-these WAL maintenance calls.
+The Java, Python, and JavaScript bindings expose the same WAL maintenance
+helpers directly on local KV handles and Datalog connections:
+
+<div class="multi-lang">
+
+```java
+import datalevin.*;
+import java.util.Map;
+
+try (KV kv = Datalevin.openKV("/data/app-kv",
+         Map.of(":wal?", true, ":snapshot-scheduler?", true))) {
+    kv.txLogWatermarks();
+    kv.listSnapshots();
+
+    // Optional: force an on-demand snapshot now.
+    kv.createSnapshot();
+}
+```
+
+```python
+from datalevin import open_kv
+
+with open_kv("/data/app-kv",
+             opts={":wal?": True, ":snapshot-scheduler?": True}) as kv:
+    kv.tx_log_watermarks()
+    kv.list_snapshots()
+
+    # Optional: force an on-demand snapshot now.
+    kv.create_snapshot()
+```
+
+```javascript
+import { openKv } from "datalevin-node";
+
+const kv = await openKv("/data/app-kv", {
+  ":wal?": true,
+  ":snapshot-scheduler?": true
+});
+
+try {
+  await kv.txLogWatermarks();
+  await kv.listSnapshots();
+
+  // Optional: force an on-demand snapshot now.
+  await kv.createSnapshot();
+} finally {
+  await kv.close();
+}
+```
+
+</div>
 
 #### 1.5.2 Garbage Collection
 
@@ -173,6 +219,11 @@ runs.
 (d/gc-txlog-segments! kv 5000)
 ```
 
+In Java, Python, and JavaScript, use `gcTxLogSegments`,
+`gc_tx_log_segments`, and `gcTxLogSegments` on the local KV or connection
+handle. The optional retain-floor LSN is passed as the method argument in Java
+and Python, or as `{ retainFloorLsn: 5000 }` in JavaScript.
+
 ---
 
 ### 1.6 Online Snapshots: `d/copy`
@@ -183,8 +234,8 @@ the file while a write is happening, the copy might be corrupted.
 Datalevin's **`d/copy`** function creates a consistent snapshot from a Datalog
 connection or DB object, or from a KV handle. It can run while the database is
 actively used, so readers can continue accessing the source while the copy is
-being made. In the Java, Python, and JavaScript bindings, use the KV-backed copy
-operation.
+being made. The Java, Python, and JavaScript bindings expose `copy` directly on
+both connection and KV handles.
 
 <div class="multi-lang">
 
@@ -198,31 +249,41 @@ operation.
 
 ```java
 import datalevin.*;
-import java.util.Map;
+
+try (Connection conn = Datalevin.getConn("/data/app-db", schema)) {
+    conn.copy("/path/to/backup-db");
+}
 
 try (KV kv = Datalevin.openKV("/data/app-kv")) {
-    kv.exec("copy", Map.of("dest", "/path/to/backup-kv"));
+    kv.copy("/path/to/backup-kv");
 }
 ```
 
 ```python
-from datalevin import exec_json
+from datalevin import connect, open_kv
 
-kv = exec_json("open-kv", {"dir": "/data/app-kv"})
-try:
-    exec_json("copy", {"kv": kv, "dest": "/path/to/backup-kv"})
-finally:
-    exec_json("release-handle", {"handle": kv})
+with connect("/data/app-db", schema=schema) as conn:
+    conn.copy("/path/to/backup-db")
+
+with open_kv("/data/app-kv") as kv:
+    kv.copy("/path/to/backup-kv")
 ```
 
 ```javascript
-import { execJson } from "datalevin-node";
+import { connect, openKv } from "datalevin-node";
 
-const kv = await execJson("open-kv", { dir: "/data/app-kv" });
+const conn = await connect("/data/app-db", { schema });
 try {
-  await execJson("copy", { kv, dest: "/path/to/backup-kv" });
+  await conn.copy("/path/to/backup-db");
 } finally {
-  await execJson("release-handle", { handle: kv });
+  await conn.close();
+}
+
+const kv = await openKv("/data/app-kv");
+try {
+  await kv.copy("/path/to/backup-kv");
+} finally {
+  await kv.close();
 }
 ```
 
@@ -259,6 +320,9 @@ B+Tree locality.
 ;; Copy and compact a raw KV store
 (d/copy kv "/path/to/compact-backup-kv" true)
 ```
+
+In Java and Python, pass `true` / `True` as the compact argument to `copy`. In
+JavaScript, pass `{ compact: true }`.
 
 The copy operation can run **regardless of whether the database is currently in
 use**; readers can continue accessing the source while the copy is being made.

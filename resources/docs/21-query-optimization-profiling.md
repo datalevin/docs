@@ -61,6 +61,8 @@ When a query is submitted:
     switches to greedy after considering `P(n, 2)` plans, since only the first
     two joins have the most accurate size estimates.
 
+![The query planner pipeline: parse, rewrite, estimate, plan, and execute, with rewrite through plan forming the cost-based optimizer](/images/diagrams/query-planner-pipeline.svg)
+
 A **left-deep join tree** is a plan shape where each step joins one new base
 relation into the intermediate result built so far. The alternative is a bushy
 tree, where two independently built subplans are joined together. Datalevin uses

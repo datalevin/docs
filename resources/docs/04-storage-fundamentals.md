@@ -130,6 +130,8 @@ visible only when the root switch succeeds. In read-heavy workloads, throughput
 is often limited by CPU, memory bandwidth, or storage latency rather than by
 reader/writer lock contention.
 
+![MVCC and the single writer: old and new B+tree roots share unchanged pages while readers stay pinned to their snapshot](/images/diagrams/mvcc-single-writer.svg)
+
 ---
 
 ## 2. B+Trees vs. LSM-Trees

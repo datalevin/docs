@@ -52,6 +52,8 @@ All specialized index functions return datoms for consistent destructuring:
 
 The shared entity ID (`?e`) enables seamless joins across all index types.
 
+![Hybrid retrieval: full-text, vector, document, and Datalog lenses each return datoms keyed by ?e, which the engine joins by intersecting entity-id sets](/images/diagrams/hybrid-retrieval.svg)
+
 Full-text scores and vector distances are different quantities. A full-text
 score is a relevance score where higher is better. A vector distance is a
 metric distance where lower is usually closer. They are not on the same scale,
