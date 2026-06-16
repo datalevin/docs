@@ -934,34 +934,22 @@ with connect(
 ```
 
 ```javascript
-import javaBridge from "java-bridge";
-import { connect, interop } from "datalevin-node";
+import {
+  connect,
+  createUdfRegistry,
+  keyword,
+  udfDescriptor
+} from "datalevin-node";
 
-const { newProxy } = javaBridge;
-const raw = interop();
+const registry = await createUdfRegistry();
+const descriptor = udfDescriptor(":user/bootstrap", { kind: ":tx-fn" });
+const ident = await keyword(":user/bootstrap");
 
-const descriptor = {
-  ":udf/lang": ":java",
-  ":udf/kind": ":tx-fn",
-  ":udf/id": ":user/bootstrap"
-};
-
-const registry = await raw.createUdfRegistry();
-const ident = await raw.keyword(":user/bootstrap");
-
-const bootstrap = newProxy("datalevin.UdfFunction", {
-  invoke: async (args) => {
-    const email = args.getSync(1);
-    const name = args.getSync(2);
-    return raw.txData([{
-      ":db/id": -1,
-      ":user/email": email,
-      ":user/name": name
-    }]);
-  }
-}, { keepAsDaemon: true });
-
-await raw.registerUdf(registry, descriptor, bootstrap);
+await registry.txUdf(":user/bootstrap", (_db, email, name) => [{
+  ":db/id": -1,
+  ":user/email": email,
+  ":user/name": name
+}]);
 
 const conn = await connect("/tmp/tx-udf-demo", {
   schema: {
@@ -985,7 +973,6 @@ try {
   ]);
 } finally {
   await conn.close();
-  bootstrap.reset(true);
 }
 ```
 

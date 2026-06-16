@@ -227,7 +227,9 @@ const conn = await connect("/tmp/import-dl", {
 </div>
 
 In the Java, Python, and JavaScript examples, the flag values use
-colon-prefixed strings because these option values are Datalevin keywords.
+colon-prefixed strings because these option values are Datalevin keywords. The
+Python `shared=True` and JavaScript `shared: true` options select the shared
+connection form corresponding to Java's `getConn`.
 
 If you use `:nosync` or `:writemap`/`:mapasync`, write the import so it can be
 replayed from a durable source. For raw KV imports, call the KV `sync` operation

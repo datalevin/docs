@@ -83,6 +83,47 @@ d.q(`[:find ?e :where [?e :user/name "Alice"]]`, db);
 Use ordinary single-language fences for shell commands, SQL, EDN/Datalog
 reference snippets, Babashka pods, server REPL tasks, and Clojure-specific APIs.
 
+## Pre-Publication Example Verification
+
+The docs include a manifest-driven verifier for Clojure examples:
+
+```bash
+# Inventory Clojure fences and current manifest status counts
+clojure -X:verify-examples :mode :inventory
+
+# Add/update manifest skeleton entries after large doc edits
+clojure -X:verify-examples :mode :write-skeleton
+
+# Run examples marked :runnable in test/doc_example_manifest.edn
+clojure -X:verify-examples
+
+# Release-gate mode: fail if any Clojure fence is still unclassified
+clojure -X:verify-examples :fail-on-unclassified true
+```
+
+Classify each executable-language code fence in `test/doc_example_manifest.edn`
+as one of:
+
+- `runnable`: self-contained or runnable with a small chapter fixture
+- `fragment`: illustrative code that depends on omitted surrounding setup
+- `external`: requires a server, network service, credentials, native model, or
+  destructive/operator action
+- `api-sketch`: intentionally not a tested public API example
+
+The release-blocking verification pass should mark and run every runnable
+Clojure example, then run a representative Java/Python/JavaScript matrix for
+each API family covered by multi-language examples. Do not claim in the
+manuscript that examples were executed until the manifest records the commands,
+Datalevin version, host runtimes, and pass/fail results.
+
+Skeleton generation preserves existing classifications for current snippet IDs,
+updates source/preview metadata, adds new snippets, and drops entries for
+removed snippets.
+
+Manifest entries may use `:setup` and `:teardown` strings for local fixtures.
+For repeated fixtures, define a top-level `:fixtures` map and reference entries
+with `:fixture`.
+
 ## Build CSS (production)
 
 ```bash

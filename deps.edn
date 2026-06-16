@@ -50,5 +50,11 @@
          :extra-deps  {io.github.cognitect-labs/test-runner {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
          :exec-fn     cognitect.test-runner.api/test}
 
+  :verify-examples
+  {:extra-paths ["test"]
+   :exec-fn datalevin.docs.example-verify/verify
+   :exec-args {:docs-dir "resources/docs"
+               :manifest "test/doc_example_manifest.edn"}}
+
   :build {:deps       {io.github.clojure/tools.build {:mvn/version "0.10.14"}}
           :ns-default build}}}
