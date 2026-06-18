@@ -1017,8 +1017,9 @@ to report the conflict or compute a new transaction against current state.
 
 ### 7.3 Recommended Retry Patterns
 
-In embedded Clojure, prefer `with-transaction` for read-modify-write logic that
-must be atomic within one store:
+In embedded Clojure, Java, or Python, prefer the Datalog transaction callback
+(`with-transaction`, `withTransaction`, or `with_transaction`) for
+read-modify-write logic that must be atomic within one store:
 
 ```clojure
 (defn increment-counter! [conn counter-id]

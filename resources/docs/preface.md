@@ -23,15 +23,15 @@ and understood together.
 
 One response is to keep everything in a capable SQL database and add extensions
 as requirements grow. That is often reasonable. However, as we will argue in
-details in Chapter 1, this choice is often less than ideal, because some far better
+detail in Chapter 1, this choice is often less than ideal, because some far better
 choices exist and they are practical today. We could not only reduce the number of
-services, but also improve the system performance while enhancing developer
-ergonomics at the same time. To preview the arguments, we will just say SQL is a
+services, but also improve system performance while enhancing developer
+ergonomics. To preview the arguments: SQL is a
 poor query language for programs, and table-shaped storage makes cardinality
 estimation hard for the query optimizer precisely when queries become complex.
 
-Datalevin is one of the such better choices. It makes a fundamentally different
-premise in data modeling and query language: facts are the storage and query
+Datalevin is one such better choice. It starts from a fundamentally different
+premise about data modeling and query language: facts are the storage and query
 substrate, and Datalog is the language for composing those facts. With this new
 approach, many of the aforementioned varying needs can share one small,
 composable data model.
@@ -51,13 +51,13 @@ full-text indexes, vector and embedding indexes, and path-indexed documents so
 that search and reasoning can meet in the same query.
 
 Below we will show a flavor of the model across the Datalevin APIs in code:
-schema, connection, transaction and query.
+schema, connection, transaction, and query.
 
-For printed book, we show Clojure code examples for its conciseness. However,
-you do not need to know Clojure to understand the code examples, as these are
-mostly showing data and Datalevin function calls. For Web version of the book at
-https://datalevin.org, examples in four languages are shown in parallel:
-Clojure, Java, JavaScript and Python.
+For the printed book, we show Clojure code examples for their conciseness.
+However, you do not need to know Clojure to understand the code examples, as these
+are mostly showing data and Datalevin function calls. For the Web version of the
+book at https://datalevin.org, examples in four languages are shown in parallel:
+Clojure, Java, JavaScript, and Python.
 
 To grasp the full nuances of some examples, you may want to be familiar with the
 data notation we use, called EDN (extensible data notation), which is similar to
@@ -190,7 +190,7 @@ try {
 </div>
 
 If you do not understand the code examples above, do not worry. We will explain
-everything in details in later chapters. The point is to show the basic shape of
+everything in detail in later chapters. The point is to show the basic shape of
 the book: Data is represented as facts. Relationships are ordinary values.
 Queries are data. The database can answer questions by joining facts, following
 references, and applying logic. Later chapters extend the same foundation to
@@ -261,8 +261,9 @@ persistent agent memory, to episodic, semantic, and working memory, to recall
 and context assembly, to apperception and truth maintenance, and finally to
 stateful AI application patterns.
 
-Part VII is reference material. It summarizes schema keys, Datalog built-ins,
-the key-value API, and EDN, the data notation used throughout the book.
+Part VII is reference material. It covers installation, runtimes, and deployment
+modes; EDN, the data notation used throughout the book; schema keys; Datalog
+built-ins; and the core, key-value, and client APIs.
 
 ## Who This Book Is For
 
@@ -297,7 +298,7 @@ The examples in this book use one convention throughout:
 - Clojure examples use EDN directly.
 - Java examples use the high-level `datalevin` package, especially typed schema
   and transaction builders. Attribute names are written as strings such as
-  `"person/name"`; When Java examples must pass a raw option map or UDF
+  `"person/name"`. When Java examples must pass a raw option map or UDF
   descriptor, keyword values are still written as colon-prefixed strings such as
   `":cosine"` or `":tx-fn"`, because those maps are normalized by the Java
   wrapper at runtime.

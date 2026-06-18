@@ -103,7 +103,7 @@ questions still produce better facts.
 ### 3.1 Choose Stable Keys
 
 Every important entity type should have a stable domain identifier when the
-domain has one. Use Datalevin's internal entity IDs for storage and joins, but
+domain has one. Use Datalevin's internal entity ids for storage and joins, but
 put natural identifiers in unique attributes so transactions, imports, and APIs
 can use lookup refs.
 
@@ -519,10 +519,10 @@ move from tables to attributes and facts:
 | SQL Concept | Datalevin Equivalent | Migration Note |
 | :--- | :--- | :--- |
 | **Table** | **Namespace** such as `:order/` | A namespace groups attributes by domain meaning; it is not a physical table. |
-| **Row** | **Entity ID** | An entity is the set of facts that share the same entity ID. |
+| **Row** | **entity id** | An entity is the set of facts that share the same entity id. |
 | **Column** | **Attribute** | Attributes are schema objects with their own value type, cardinality, uniqueness, and index settings. |
-| **Primary Key** | **Unique identity attribute** | Use stable domain IDs with `:db.unique/identity`; keep Datalevin entity IDs internal. |
-| **Foreign Key** | **Ref attribute** | A `:db.type/ref` stores another entity ID and joins naturally in Datalog. |
+| **Primary Key** | **Unique identity attribute** | Use stable domain IDs with `:db.unique/identity`; keep Datalevin entity ids internal. |
+| **Foreign Key** | **Ref attribute** | A `:db.type/ref` stores another entity id and joins naturally in Datalog. |
 | **Join Table** | **Associative entity** | Model the join as its own entity when the relationship is large, queried directly, or has attributes. |
 | **NULL** | **No datom** | Datalevin does not store `nil`/`null`; absence means the fact is not present. |
 

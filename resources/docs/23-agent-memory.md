@@ -52,8 +52,9 @@ implemented from Java, Python, JavaScript, or over the server API by composing
 the same `transact`, `query`, `pull`, full-text, vector, and embedding
 operations shown earlier in the book. For exact language coverage, use the
 compatibility matrix linked in Appendix A. The notable gaps for Part VI examples
-are the same as elsewhere: JavaScript does not expose a Datalog transaction
-callback, and staged mutation of existing Entity objects is Clojure-only.
+are the same as elsewhere: Clojure, Java, and Python expose the Datalog
+transaction callback, but JavaScript does not; staged mutation of existing
+Entity objects is Clojure-only.
 
 Many of the patterns in Part VI were informed by Xia, a separate open-source
 personal AI assistant project [3]. Xia is a reference implementation for these

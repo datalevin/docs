@@ -50,7 +50,7 @@ All specialized index functions return datoms for consistent destructuring:
 | `embedding-neighbors` | `[e a v]` | `:display :refs+dists` returns `[e a v dist]` |
 | `idoc-match` | `[e a v]` | — |
 
-The shared entity ID (`?e`) enables seamless joins across all index types.
+The shared entity id (`?e`) enables seamless joins across all index types.
 
 ![Hybrid retrieval: full-text, vector, document, and Datalog lenses each return datoms keyed by ?e, which the engine joins by intersecting entity-id sets](/images/diagrams/hybrid-retrieval.svg)
 
@@ -88,8 +88,8 @@ indexes. Ordinary Datalog clauses then join, filter, or extend those candidates.
 
 - **Selective Retrieval First**: Keep `:top`, domains, and index-specific
   filters tight so specialized functions produce useful candidate sets.
-- **Join Order**: All index results are sets of entity IDs. The join is an
-  intersection of these IDs—an extremely fast operation in memory-mapped
+- **Join Order**: All index results are sets of entity ids. The join is an
+  intersection of these ids—an extremely fast operation in memory-mapped
   architecture.
 
 You usually do not need to reorder clauses manually. State constraints clearly,
@@ -108,40 +108,67 @@ own key/value encoding, range access pattern, or lifecycle, while Datalog keeps
 managing its own internal DBIs.
 
 For absolute performance, combine raw Key-Value layer access with Datalog using
-function bindings:
+function bindings or descriptor-backed runtime UDFs. The example below assumes
+the connection was opened with a UDF registry that resolves
+`:kv/check-blacklist` to a small, deterministic function that reads the relevant
+same-store KV DBI.
 
 <div class="multi-lang">
 
 ```clojure
+(def blacklist-fn
+  {:udf/lang :app
+   :udf/kind :query-fn
+   :udf/id   :kv/check-blacklist})
+
 (d/q '[:find ?e
+       :in $ ?blacklist-fn
        :where [?e :user/id ?id]
-              [(my-app.kv/check-blacklist? ?id) ?blocked?]
+              [(udf ?blacklist-fn ?id) ?blocked?]
               [(false? ?blocked?)]]
-     db)
+     db blacklist-fn)
 ```
 
 ```java
+var blacklistFn = Datalevin.queryUdf("kv/check-blacklist")
+    .lang("app")
+    .build();
+
 conn.query("[:find ?e " +
+           " :in $ ?blacklist-fn " +
            " :where [?e :user/id ?id] " +
-           "        [(my-app.kv/check-blacklist? ?id) ?blocked?] " +
-           "        [(false? ?blocked?)]]");
+           "        [(udf ?blacklist-fn ?id) ?blocked?] " +
+           "        [(false? ?blocked?)]]",
+           blacklistFn);
 ```
 
 ```python
+from datalevin import udf_descriptor
+
+blacklist_fn = udf_descriptor(":kv/check-blacklist", lang=":app")
+
 conn.query(
     '[:find ?e '
+    ' :in $ ?blacklist-fn '
     ' :where [?e :user/id ?id] '
-    '        [(my-app.kv/check-blacklist? ?id) ?blocked?] '
-    '        [(false? ?blocked?)]]'
+    '        [(udf ?blacklist-fn ?id) ?blocked?] '
+    '        [(false? ?blocked?)]]',
+    blacklist_fn,
 )
 ```
 
 ```javascript
+import { udfDescriptor } from "datalevin-node";
+
+const blacklistFn = udfDescriptor(":kv/check-blacklist", { lang: ":app" });
+
 await conn.query(
   '[:find ?e ' +
+  ' :in $ ?blacklist-fn ' +
   ' :where [?e :user/id ?id] ' +
-  '        [(my-app.kv/check-blacklist? ?id) ?blocked?] ' +
-  '        [(false? ?blocked?)]]'
+  '        [(udf ?blacklist-fn ?id) ?blocked?] ' +
+  '        [(false? ?blocked?)]]',
+  blacklistFn
 );
 ```
 
@@ -150,12 +177,18 @@ await conn.query(
 The underlying KV layer is a first-class capability, allowing custom logic and
 specialized indexes.
 
-The example above uses a Datalog function binding: the function receives a value
-from the query and returns another value that the query can bind. In embedded
-Clojure, that function can close over an open KV handle or call application code
-that reads a same-file DBI. Keep such functions deterministic and cheap. If the
-function performs network calls, writes state, or scans a large KV range, it can
-make query behavior surprising and hard to optimize.
+The example above uses a Datalog function binding through the portable `udf`
+form: the function receives a value from the query and returns another value
+that the query can bind. Clojure can also call ordinary Clojure functions
+directly in embedded queries, but descriptor-backed UDFs are the portable shape
+for Java, Python, JavaScript, server deployments, and code that should be
+configured through an application registry. Register implementations with
+`datalevin.udf/register!`, Java `UdfRegistry.queryFn`, Python
+`registry.query_udf`, or JavaScript `registry.queryUdf`.
+
+Keep query UDFs deterministic and cheap. If a function performs network calls,
+writes state, or scans a large KV range, it can make query behavior surprising
+and hard to optimize.
 
 When a write must update Datalog datoms and application-owned KV DBIs atomically,
 use the `with-transaction` pattern from Chapter 6. Function bindings are for

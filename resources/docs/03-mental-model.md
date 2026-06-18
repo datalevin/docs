@@ -29,7 +29,7 @@ At the conceptual level, Datalevin discards these rigid boxes. Instead, it
 stores data as a stream of atomic facts called **datoms**. Each datom is a
 simple statement of truth represented as a triple: `[entity attribute value]`.
 
-- **Entity (E):** The "who" or "what" (a unique 64-bit integer ID in Datalevin).
+- **Entity (E):** The "who" or "what" (a unique 64-bit integer id in Datalevin).
 - **Attribute (A):** The "property" (a keyword like `:user/email`).
 - **Value (V):** The "data" (like `"alice@example.com"`).
 
@@ -74,10 +74,10 @@ Three schema terms appear often:
   exists, otherwise insert a new one."
 
 As illustrated in Figure 3.1, an **entity** in Datalevin is just a collection of
-datoms that happen to share the same Entity ID. This makes entities **fluid**. A
-single ID could have attributes associated with a `:user`, a `:customer`, and an
+datoms that happen to share the same entity id. This makes entities **fluid**. A
+single id could have attributes associated with a `:user`, a `:customer`, and an
 `:employee` simultaneously. You don't "join" these tables; you simply query for
-an ID that possesses all those attributes.
+an id that possesses all those attributes.
 
 ![One entity as many datoms: a row or document is really the set of datoms that share an entity id](/images/diagrams/entity-as-datoms.svg)
 
@@ -167,12 +167,12 @@ In the example below, one transaction creates two entities and relates them. A
 entity id of another entity. This is how Datalevin represents graph edges.
 
 When a transaction creates several related entities at once, you can use
-temporary entity IDs, or **tempids**, so the new entities can refer to one
-another before Datalevin assigns permanent IDs. In entity maps, `:db/id` is the
+temporary entity ids, or **tempids**, so the new entities can refer to one
+another before Datalevin assigns permanent ids. In entity maps, `:db/id` is the
 system attribute used to provide an explicit entity id or tempid. Negative
 integers and strings can be used as tempids. If the transaction data does not
 need to connect new entities to one another, `:db/id` can be omitted and
-Datalevin will assign permanent entity IDs automatically.
+Datalevin will assign permanent entity ids automatically.
 
 Do not put application identifiers in `:db/id`. A permanent Datalevin entity id
 is a system-managed `long`, not a UUID, email, slug, or external primary key.
@@ -192,13 +192,13 @@ steps, not by mutating one fact at a time in isolation.
 (def schema
   {:person/name    {:db/valueType :db.type/string}
    :person/email   {:db/valueType :db.type/string}
-   :person/school  {:db/valueType :db.type/ref} ; A reference to the ID of another entity
+   :person/school  {:db/valueType :db.type/ref} ; A reference to the id of another entity
    :school/name    {:db/valueType :db.type/string}
    :school/country {:db/valueType :db.type/string}})
 
 ;; Data is written as a collection of entities here.
 ;; Notice how 'Alice' and 'MIT' are just sets of attributes.
-;; :db/id is a system attribute for entity ID; tempids are used here
+;; :db/id is a system attribute for entity id; tempids are used here
 (d/transact! conn
   [{:db/id -1 :person/name "Alice" :person/email "alice@example.com" :person/school -10}
    {:db/id -10 :school/name "MIT" :school/country "USA"}])
@@ -212,7 +212,7 @@ Schema schema = Datalevin.schema()
     .attr("person/email",
           Schema.attribute().valueType(Schema.ValueType.STRING))
     .attr("person/school",
-          Schema.attribute().valueType(Schema.ValueType.REF)) // A reference to the ID of another entity
+          Schema.attribute().valueType(Schema.ValueType.REF)) // A reference to the id of another entity
     .attr("school/name",
           Schema.attribute().valueType(Schema.ValueType.STRING))
     .attr("school/country",
@@ -235,7 +235,7 @@ conn.transact(Datalevin.tx()
 schema = {
     ":person/name":    {":db/valueType": ":db.type/string"},
     ":person/email":   {":db/valueType": ":db.type/string"},
-    ":person/school":  {":db/valueType": ":db.type/ref"},  # A reference to the ID of another entity
+    ":person/school":  {":db/valueType": ":db.type/ref"},  # A reference to the id of another entity
     ":school/name":    {":db/valueType": ":db.type/string"},
     ":school/country": {":db/valueType": ":db.type/string"}}
 
@@ -256,7 +256,7 @@ conn.transact([
 const schema = {
   ":person/name":    { ":db/valueType": ":db.type/string" },
   ":person/email":   { ":db/valueType": ":db.type/string" },
-  ":person/school":  { ":db/valueType": ":db.type/ref" },  // A reference to the ID of another entity
+  ":person/school":  { ":db/valueType": ":db.type/ref" },  // A reference to the id of another entity
   ":school/name":    { ":db/valueType": ":db.type/string" },
   ":school/country": { ":db/valueType": ":db.type/string" }
 };
@@ -540,7 +540,7 @@ your database with an external search engine. Your search results are always
 transactionally consistent with your data: they reflect the same committed
 database state as the ordinary datoms in the query.
 
-Chapter 16 explains full-text search in details.
+Chapter 16 explains full-text search in detail.
 
 ## 9. Rules: Teaching the Database New Tricks
 
@@ -549,6 +549,83 @@ named Datalog pattern. Query clauses can call the rule by name, and Datalevin
 expands that call into the rule body during query evaluation. If you find
 yourself frequently querying for "Active Users who have Premium subscriptions,"
 you can define a rule called `premium-user`.
+
+<div class="multi-lang">
+
+```clojure
+(def user-rules
+  '[[(premium-user ?u)
+     [?u :user/status :user.status/active]
+     [?sub :subscription/user ?u]
+     [?sub :subscription/tier :subscription.tier/premium]
+     [?sub :subscription/status :subscription.status/active]]])
+
+(d/q '[:find ?email
+       :in $ %
+       :where
+       (premium-user ?u)
+       [?u :user/email ?email]]
+     db user-rules)
+```
+
+```java
+String userRules =
+    "[[(premium-user ?u) " +
+    "  [?u :user/status :user.status/active] " +
+    "  [?sub :subscription/user ?u] " +
+    "  [?sub :subscription/tier :subscription.tier/premium] " +
+    "  [?sub :subscription/status :subscription.status/active]]]";
+
+Object emails = conn.query(
+    "[:find ?email " +
+    " :in $ % " +
+    " :where " +
+    " (premium-user ?u) " +
+    " [?u :user/email ?email]]",
+    userRules);
+```
+
+```python
+user_rules = """
+    [[(premium-user ?u)
+      [?u :user/status :user.status/active]
+      [?sub :subscription/user ?u]
+      [?sub :subscription/tier :subscription.tier/premium]
+      [?sub :subscription/status :subscription.status/active]]]"""
+
+emails = conn.query("""
+    [:find ?email
+     :in $ %
+     :where
+     (premium-user ?u)
+     [?u :user/email ?email]]""",
+    user_rules)
+```
+
+```javascript
+const userRules = `
+    [[(premium-user ?u)
+      [?u :user/status :user.status/active]
+      [?sub :subscription/user ?u]
+      [?sub :subscription/tier :subscription.tier/premium]
+      [?sub :subscription/status :subscription.status/active]]]`;
+
+const emails = await conn.query(
+  `[:find ?email
+    :in $ %
+    :where
+    (premium-user ?u)
+    [?u :user/email ?email]]`,
+  userRules);
+```
+
+</div>
+
+The query only names the policy as `(premium-user ?u)`. The rule body records
+what the policy means: the user is active, has a subscription entity, and that
+subscription is both premium and active. If the policy changes, the calling
+queries can stay focused on the business concept rather than repeating all of
+those clauses.
 
 Rules can also be **recursive**, meaning a rule can call itself. Recursion is
 essential for graph traversal because it lets a query follow an unknown number
@@ -644,7 +721,7 @@ const ancestors = await conn.query(
 You can now ask "Who are all the ancestors of Entity 42?" and the engine will
 navigate the graph for you.
 
-Chapter 9 discusses rules in details.
+Chapter 9 discusses rules in detail.
 
 ## Summary
 

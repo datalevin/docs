@@ -303,6 +303,8 @@ Attribute-specific `idoc-match` requires an attribute with
 
 The descriptor must be installed in the database or available from the runtime
 UDF registry, and its kind must be usable as a query function or predicate.
+Clojure, Java, Python, and JavaScript use the same Datalog `udf` form; only the
+registry helper names differ by host language.
 
 ---
 

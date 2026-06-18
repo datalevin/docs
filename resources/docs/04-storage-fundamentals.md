@@ -25,13 +25,13 @@ like memory management to the operating system (OS) kernel.
 
 ### 1.1 Why Memory-Mapping Fits Datalevin
 
-LMDB uses **memory-mapping (`mmap`)**. It treats the database file as if it was
+LMDB uses **memory-mapping (`mmap`)**. It treats the database file as if it were
 a large array in the address space of the operating system. This does not mean
 the whole database file is loaded into memory. When Datalevin reads data, the OS
 kernel handles fetching the required pages from disk into the **Page Cache**.
-Page is the basic unit of OS's memory management. On OS such as Linux or
-Windows, the page size often defaults to 4KB, while on macOS with Apple Silicon
-chip, the default is 16KB. The memory map reserves a range of virtual address
+A page is the basic unit of the OS's memory management. On operating systems such
+as Linux or Windows, the page size often defaults to 4KB, while on macOS with
+Apple Silicon, the default is 16KB. The memory map reserves a range of virtual address
 space; physical memory is used for pages that are actually touched, and clean
 pages can be evicted by the kernel when memory is needed elsewhere. LMDB
 deliberately made this architectural choice, because the OS already manages
@@ -68,7 +68,7 @@ some control from the database engine to the OS kernel, so systems that need cus
 I/O scheduling, specialized eviction policies, or tight control over page-fault
 latency may choose a private buffer manager. Datalevin's use case is different:
 it favors an embedded, low-administration engine that cooperates well with the
-rest of the host. This design have some benefits for its use cases:
+rest of the host. This design has some benefits for its use cases:
 
 - **Zero-Copy Reads**: On the read hot-path, Datalevin doesn't copy data from a
   kernel buffer to a user-space buffer. Instead, it returns a `DirectByteBuffer`
@@ -172,7 +172,7 @@ B+Tree keeps data in key order and provides predictable read latency. By
 using LMDB, Datalevin avoids the "write stalls" and CPU spikes associated with
 LSM background compaction, making it a better fit for predictable, real-time
 applications. In addition, the multi-paradigm nature of Datalevin demands the
-building of secondary indices (Section 5), which often require storing **large
+building of secondary indexes (Section 5), which often require storing **large
 values**, a pattern that is often less suitable for LSM storage because large
 values can be rewritten repeatedly during compaction.
 
@@ -193,14 +193,19 @@ this per-node count metadata; Datalevin uses it for the indexes where fast
 counts, samples, and rank-based access matter. The counted B+Tree gives
 Datalevin these advantages:
 
-- **Instant Counts**: All count/sample operations are O(log n) or O(1). For
+- **Instant Counts**: All count operations are O(log n) or O(1). For
   example, `(d/count-datoms db nil :person/age nil)` is an O(log n) operation,
   while `(d/count-datoms db nil :person/age 30)` is O(1).
 - **Fast Pagination**: You can skip the first 1,000,000 items in a sorted range
   and start reading the 1,000,001st item instantly using "rank-based" lookups.
-- **Efficient Query Planning**: The Datalog engine uses these counts and samples
-  to decide the most efficient join order (e.g., "should I filter by age first,
-  or by city?").
+- **Quick Sampling**: Given an ordered sequence of ith positions to be sampled,
+  a counted DB allows a cursor to move up and down the tree in order to reach the
+  correct positions quickly without going through all the keys in between, i.e.
+  sampling becomes O(log n) instead of O(n).
+
+These advantages translate directly into **Efficient Query Planning**: The
+Datalog engine uses these counts and samples to decide the most efficient join
+order (e.g., "should I filter by age first, or by city?").
 
 ### 3.2 Prefix Compression
 
@@ -224,7 +229,7 @@ Datalevin stores the primary Datalog indexes in two orders:
 
 ![From a datom to indexed access in the EAV and AVE orders](/images/diagrams/datom-eav-ave.svg)
 
-As shown in Figure 4.2, Datalevin put the input set of datoms into two indexes
+As shown in Figure 4.2, Datalevin puts the input set of datoms into two indexes
 simultaneously. Both indexes leverage LMDB's DUPSORT feature to break apart the
 datoms into two parts, and store the two parts in a nested fashion.
 
@@ -243,7 +248,7 @@ single key lookup followed by a sequential read of that entity's facts.
 In AVE, the attribute and value form the key, and all the entities that share
 that value are stored in a sorted duplicate list. This makes
 finding "all people aged 30" extremely fast: it is a single key lookup followed
-by a sequential read of entity IDs.
+by a sequential read of entity ids.
 
 The AVE index also makes reverse reference lookup cheap. A reference attribute is
 just an attribute whose value is another entity id. If orders point to customers
@@ -254,11 +259,12 @@ reverse-reference index for that case.
 ### 4.2 Storing Raw Bytes
 
 All triples are encoded into raw bytes, using a header byte for different data
-types. Datalevin binary encoding ensures that the binary sort order matches the
+types. Datalevin's binary encoding ensures that the binary sort order matches the
 logical data sort order. For example, encoded numbers sort as numbers, encoded
 strings sort as strings, and encoded instants sort by time. This property lets
 the storage engine use the same byte ordering for equality lookup, range lookup,
-and ordered iteration.
+and ordered iteration. This binary-logic ordering consistency is the key design
+feature that leads to Datalevin's simplicity.
 
 ---
 
@@ -343,7 +349,7 @@ or large binary blob stores. This "multi-paradigm" approach ensures that you
 aren't forced to fit every data shape into a Datalog triple if a simple key-value
 pair is more efficient.
 
-The details of the KV API and its practical usage are covered in **Chapter 10**.
+The details of the KV API and its practical usage are covered in Chapter 10.
 
 ---
 
@@ -366,10 +372,10 @@ committed root. With WAL, Datalevin may replay its own committed log records int
 LMDB.
 
 WAL mode also supports multi-thread write concurrency and lays the foundation for
-data replication and high availability (HA) server behavior. In Chapter 4, the
-important point is the storage shape: append a durable log record first, then
-update the indexed LMDB state. The operational details are covered in later
-chapters. WAL mode can be enabled in these ways:
+data replication and high availability (HA) server behavior. In this chapter, the
+important point we convey is about the storage shape of WAL: append a durable
+log record first, then update the indexed LMDB state. The operational details
+are covered in Part V. WAL mode can be enabled in these ways:
 
 - **Datalog**: Disabled by default for local embedded databases; enable with
   `{:wal? true}` in `create-conn` or `get-conn` options.

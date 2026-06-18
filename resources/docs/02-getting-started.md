@@ -30,7 +30,7 @@ on the Datalevin library. The examples use released package version
 `{{datalevin-version}}`. If you are reading an older copy, check the package
 page or the Datalevin GitHub repository for the current release.
 
-For Clojure command line, add the embedded Datalevin dependency:
+For the Clojure command line, add the embedded Datalevin dependency:
 
 ```clojure
 {:deps {org.datalevin/datalevin-embedded {:mvn/version "{{datalevin-version}}"}}}
@@ -119,8 +119,8 @@ const schema = {
 
 </div>
 
-This example gives the `datalevin.core` namespace an alias `d` for abbreviation
-purpose, so that when calling functions in the namespace, we do not have to
+This example gives the `datalevin.core` namespace an alias `d` for brevity,
+so that when calling functions in the namespace, we do not have to
 write the long namespace, just its alias: `d/q` rather than `datalevin.core/q`,
 for example.
 
@@ -153,8 +153,8 @@ const conn = await connect(dbPath, { schema });
 
 </div>
 
-The path names the local database directory. The directory does not need to be
-existent, but the parent directory needs to be writable, because if the
+The path names the local database directory. The directory does not need to
+exist, but the parent directory needs to be writable, because if the
 directory does not exist, Datalevin creates it. If the database already exists,
 Datalevin opens it and uses the supplied schema to ensure the attributes are
 available.
@@ -218,13 +218,13 @@ datoms:
 [10002 :user/age  25]
 [10002 :user/city "Berlin"]
 ```
-In Datalevin, entity ids are 64 bits integers automatically assigned by the
+In Datalevin, entity ids are 64-bit integers automatically assigned by the
 system. The exact numeric entity ids are illustrative only in the example above.
 
 After the transaction data are converted into datoms, the datoms are encoded into
-binary form and inserted into underlying key-value storage.
+binary form and inserted into the underlying key-value storage.
 
-`d/transact!` function returns a transaction report. In a REPL you may see keys
+The `d/transact!` function returns a transaction report. In a REPL you may see keys
 such as `:db-before`, `:db-after`, `:tx-data`, and `:tempids` in the report.
 Some application code may want to inspect the report when it needs to see what
 datoms are transacted, what ids are generated, or to audit other details.
@@ -287,9 +287,9 @@ For now, read the query as: find the names of users whose age is greater than
 query is also a piece of data: a vector of keywords and nested vectors.
 
 The `:find` keyword is followed by a vector that specifies what the query
-result should be returned, while the `:where` keyword are followed by a list of
-vectors, each is called a **where clause**. Two kinds of where clauses are shown
-here.
+should return, while the `:where` keyword is followed by a list of
+vectors, each of which is called a **where clause**. Two kinds of where clauses
+are shown here.
 
 `[?e :user/name ?name]` is a triple pattern, which describes facts that must be
 true for the query to return non-empty results. The entity position of the match
@@ -304,9 +304,9 @@ predicate tests if the `?age` variable, if bound, has a value greater than 28.
 Careful readers may notice that the whole query was prefixed by a quotation mark
 `'`. This is to prevent the query data from being evaluated as running code. The
 variable symbols in the query are meaningful only inside that query, not for the
-surrounding code, where they would be considered as undefined.
+surrounding code, where they would be considered undefined.
 
-`(d/db conn)` returns an database object that holds a snapshot of the current
+`(d/db conn)` returns a database object that holds a snapshot of the current
 database view. Reads use a stable view while writes advance the connection to a
 newer database object.
 
@@ -348,8 +348,8 @@ const alice = await conn.pull(
 
 </div>
 
-This works because attribute `:user/name` has `db.unique/identity` property in
-the schema. The important part is that `[:user/name "Alice"]` names the entity
+This works because the attribute `:user/name` has the `:db.unique/identity`
+property in the schema. The important part is that `[:user/name "Alice"]` names the entity
 without requiring you to know its internal entity id.
 
 ---
@@ -478,7 +478,7 @@ const memConn = await connect(null, {
 </div>
 
 `{:kv-opts {:inmemory? true}}` is an option map given when opening the database
-connection. It passes the `:inmemory? true` option to the underlying key value
+connection. It passes the `:inmemory? true` option to the underlying key-value
 store. With this, this database does not persist to disk. Closing the connection
 or ending the process loses the contents. Use a real directory path when the
 data must survive process restart.

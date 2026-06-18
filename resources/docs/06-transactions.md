@@ -6,11 +6,17 @@ part: "II — Core APIs: Datalog First, KV When Needed"
 
 # Chapter 6: Transactions and Atomic Updates
 
-Every write to a Datalevin database happens within a **transaction**.
+Every read or write to a Datalevin database happens within a **transaction**.
+This chapter focuses on write transactions. So transaction in this chapter means
+write transaction.
+
 Transactions are the cornerstone of database reliability, ensuring that your
 data moves from one consistent state to another, even in the face of concurrent
 operations or system crashes. Datalevin provides ACID (Atomicity, Consistency,
-Isolation, Durability) guarantees, and this chapter explores how.
+Isolation, Durability) guarantees [1], and this chapter explores how.
+
+Figure 6.1 gives an overview of a Datalog transaction's lifecycle. The sections
+below explain the details.
 
 ![The transaction lifecycle: input data, resolution and validation, datom changes, index updates, and the resulting report](/images/diagrams/transaction-lifecycle.svg)
 
@@ -18,17 +24,20 @@ Isolation, Durability) guarantees, and this chapter explores how.
 
 ## 1. The Transaction Model
 
+Datalevin supports several transaction modes with different properties.
+
 ### 1.1 Default Mode: Synchronous LMDB Transactions
 
 In its default (non-WAL) mode, a Datalevin transaction is a direct mapping to an
-underlying **LMDB transaction**.
+underlying **LMDB transaction**, which has strict ACID guarantees.
 
 - **Atomicity**: All changes within a single `transact!` call are applied as a
   single, atomic unit. They either all succeed or all fail.
 - **Durability**: By default, every transaction is synchronously flushed to disk
   (`msync`, the OS flush-to-disk call) before it is confirmed. This guarantees
   that once a transaction is committed, it is durable and will survive a system
-  crash.
+  crash. Note that the `msync` call is often an expensive system call that
+  takes significant time to finish, depending on the hardware and workload.
 
 Transaction scope is one Datalevin store, i.e. one LMDB environment whose
 primary data lives in one memory-mapped data file. In the default non-WAL mode,
@@ -45,7 +54,88 @@ not turn Datalevin into a cross-file distributed transaction manager.
 For use cases where maximum write speed is more important than crash-proof
 durability (e.g., bulk loading, caching), you can relax the `msync` behavior by
 setting LMDB flags during connection creation. For example, using `:nosync` can
-significantly improve write throughput at the cost of durability.
+significantly improve write throughput at the cost of durability: the `msync`
+call is left to OS discretion, and an untimely system crash can result in a
+corrupted database. There are also other non-durable flags; see Chapter 10 for
+details.
+
+These settings are not only open-time choices. You can explicitly force a flush
+with `d/sync`, and you can change LMDB environment flags at runtime with
+`d/set-env-flags`. Both functions operate on the KV store handle; for a Datalog
+connection, use the backing KV handle returned by `d/datalog-kv`,
+`conn.datalogKV()`, `conn.datalog_kv()`, or `await conn.datalogKv()`. This is a
+KV store capability, not a Clojure-only Datalog escape hatch: Java, Python, and
+JavaScript expose the same operations on their KV objects, using host-language
+method names such as `sync`, `setEnvFlags`, and `set_env_flags`.
+
+<div class="multi-lang">
+
+```clojure
+(def kv (d/datalog-kv conn))
+
+;; Force a synchronous flush to disk after a burst of faster writes.
+(d/sync kv)
+
+;; Change sync behavior for subsequent transactions.
+(d/set-env-flags kv #{:nosync} true)  ; relax commit-time sync
+(d/set-env-flags kv #{:nosync} false)
+```
+
+```java
+KV kv = conn.datalogKV();
+
+// Force a synchronous flush to disk after a burst of faster writes.
+kv.sync();
+
+// Change sync behavior for subsequent transactions.
+kv.setEnvFlags(Set.of("nosync"), true);  // relax commit-time sync
+kv.setEnvFlags(Set.of("nosync"), false);
+```
+
+```python
+kv = conn.datalog_kv()
+
+# Force a synchronous flush to disk after a burst of faster writes.
+kv.sync()
+
+# Change sync behavior for subsequent transactions.
+kv.set_env_flags({"nosync"}, True)  # relax commit-time sync
+kv.set_env_flags({"nosync"}, False)
+```
+
+```javascript
+const kv = await conn.datalogKv();
+
+// Force a synchronous flush to disk after a burst of faster writes.
+await kv.sync();
+
+// Change sync behavior for subsequent transactions.
+await kv.setEnvFlags(["nosync"], true);  // relax commit-time sync
+await kv.setEnvFlags(["nosync"], false);
+```
+
+</div>
+
+Use runtime flag changes deliberately. They affect subsequent transactions on
+that store, so they belong in controlled ingestion or maintenance workflows, not
+as incidental per-request toggles.
+
+### 1.3 Asynchronous Transactions
+
+Asynchronous transactions change when the caller waits, not what a transaction
+means. `d/transact-async` in Clojure, `transactAsync` in Java and JavaScript,
+and `transact_async` in Python submit ordinary Datalevin transaction data and
+return a future or promise immediately. The transaction still commits as one
+atomic unit, produces the usual transaction report, and either succeeds or fails
+as a whole.
+
+The important application rule is simple: if later code depends on the write,
+wait for the returned future or promise before reading or issuing dependent
+writes. Treating async transactions as fire-and-forget can hide validation
+errors, constraint violations, and write failures until too late. For independent
+high-volume writes, async transactions let Datalevin batch work internally and
+improve throughput; Section 6.2 returns to that performance model, and Chapter
+19 shows ingestion patterns in all four bindings.
 
 ---
 
@@ -73,6 +163,8 @@ contains the database before and after the transaction, the datoms that were
 actually added or retracted, the tempid resolution map, and any transaction
 metadata supplied by the caller:
 
+<div class="multi-lang">
+
 ```clojure
 (def report
   (d/transact! conn
@@ -86,8 +178,51 @@ metadata supplied by the caller:
 ;    :tx-meta {:source :signup-form}}
 ```
 
-That report is useful not only as a return value. It is also the shape delivered
-to transaction listeners, covered later in this chapter.
+```java
+Map<?, ?> report = conn.transact(
+    Datalevin.tx()
+        .entity(Tx.entity(-1)
+            .put("user/email", "alice@example.com")
+            .put("user/name", "Alice")),
+    Map.of(Datalevin.kw("source"), Datalevin.kw("signup-form")));
+
+Map<?, ?> sample = Map.of(
+    "tempids", report.get(Datalevin.kw("tempids")),
+    "tx-meta", report.get(Datalevin.kw("tx-meta")));
+```
+
+```python
+report = conn.transact(
+    [{":db/id": -1,
+      ":user/email": "alice@example.com",
+      ":user/name": "Alice"}],
+    {":source": ":signup-form"})
+
+sample = {
+    ":tempids": report[":tempids"],
+    ":tx-meta": report[":tx-meta"],
+}
+```
+
+```javascript
+const report = await conn.transact(
+  [{ ":db/id": -1,
+     ":user/email": "alice@example.com",
+     ":user/name": "Alice" }],
+  { ":source": ":signup-form" }
+);
+
+const sample = {
+  ":tempids": report[":tempids"],
+  ":tx-meta": report[":tx-meta"]
+};
+```
+
+</div>
+
+In the example above, we select two keys of the map to show, because the full
+report is large.  That report is useful not only as a return value. It is also
+the data delivered to transaction listeners, covered later in this chapter.
 
 ### 2.1 Entity Maps
 
@@ -127,14 +262,14 @@ await conn.transact([
 
 </div>
 
-When you omit `:db/id`, Datalevin assigns a new unique entity ID automatically.
-That entity ID is a Datalevin internal `long`. Do not use `:db/id` for a UUID,
+When you omit `:db/id`, Datalevin assigns a new unique entity id automatically.
+That entity id is a Datalevin internal `long`. Do not use `:db/id` for a UUID,
 slug, email address, or external primary key; put application identity in a
 separate unique attribute and address the entity with a lookup ref.
 
 ### 2.2 Updating Existing Entities
 
-To update an existing entity, include its entity ID in the map:
+To update an existing entity, include its entity id in the map:
 
 <div class="multi-lang">
 
@@ -162,13 +297,15 @@ await conn.transact([
 
 </div>
 
-This updates the entity with ID 101 to set `:user/active?` to false.
+This updates the entity with id 101 to set `:user/active?` to false.
 
 ### 2.3 Automatic Entity Timestamps
 
 Many applications want to know when an entity was first created and when it was
 last modified. Datalevin can maintain this information automatically when the
 connection is opened with `:auto-entity-time? true`:
+
+<div class="multi-lang">
 
 ```clojure
 (require '[datalevin.core :as d])
@@ -189,6 +326,82 @@ connection is opened with `:auto-entity-time? true`:
     :user/name  "Alice Smith"}])
 ```
 
+```java
+import datalevin.Connection;
+import datalevin.Datalevin;
+import datalevin.Schema;
+import datalevin.Tx;
+
+import java.util.Map;
+
+Connection conn = Datalevin.createConn(
+    "/tmp/entity-time-demo",
+    Datalevin.schema()
+        .attr("user/email",
+              Schema.attribute()
+                  .valueType(Schema.ValueType.STRING)
+                  .unique(Schema.Unique.IDENTITY)),
+    Map.of("auto-entity-time?", true));
+
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity()
+        .put("user/email", "alice@example.com")
+        .put("user/name", "Alice")));
+
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity()
+        .put("user/email", "alice@example.com")
+        .put("user/name", "Alice Smith")));
+```
+
+```python
+from datalevin import connect
+
+conn = connect(
+    "/tmp/entity-time-demo",
+    schema={
+        ":user/email": {
+            ":db/valueType": ":db.type/string",
+            ":db/unique": ":db.unique/identity",
+        },
+    },
+    opts={":auto-entity-time?": True})
+
+conn.transact([
+    {":user/email": "alice@example.com",
+     ":user/name": "Alice"}])
+
+conn.transact([
+    {":user/email": "alice@example.com",
+     ":user/name": "Alice Smith"}])
+```
+
+```javascript
+import { connect } from "datalevin-node";
+
+const conn = await connect("/tmp/entity-time-demo", {
+  schema: {
+    ":user/email": {
+      ":db/valueType": ":db.type/string",
+      ":db/unique": ":db.unique/identity"
+    }
+  },
+  opts: { ":auto-entity-time?": true }
+});
+
+await conn.transact([
+  { ":user/email": "alice@example.com",
+    ":user/name": "Alice" }
+]);
+
+await conn.transact([
+  { ":user/email": "alice@example.com",
+    ":user/name": "Alice Smith" }
+]);
+```
+
+</div>
+
 With this option enabled, a newly created entity receives both `:db/created-at`
 and `:db/updated-at`. Later transactions that modify the entity update
 `:db/updated-at` while preserving `:db/created-at`. The values are stored as
@@ -204,12 +417,13 @@ event occur?"
 
 Automatic timestamps also store only the current created/updated values. For a
 full audit trail, model audit events explicitly or use transaction-log based
-operations such as the WAL and txlog tools covered in Chapter 20.
+operations, if WAL mode is enabled, such as the txlog tools covered in
+Chapter 20.
 
 ### 2.4 Tempids
 
 When creating new entities that will be referenced by other entities in the
-same transaction, use **tempids**: temporary entity IDs that act as
+same transaction, use **tempids**: temporary entity ids that act as
 placeholders. Negative numbers are commonly used as tempids:
 
 <div class="multi-lang">
@@ -245,10 +459,12 @@ await conn.transact([
 </div>
 
 In this example, `-1` references `-2` as a friend. Datalevin resolves these
-tempids during the transaction, replacing them with real entity IDs.
+tempids during the transaction, replacing them with real entity ids.
 
 Tempids are especially useful when the data has cycles. Two new entities can
-refer to each other before either one has a permanent entity ID:
+refer to each other before either one has a permanent entity id:
+
+<div class="multi-lang">
 
 ```clojure
 (d/transact! conn
@@ -260,12 +476,45 @@ refer to each other before either one has a permanent entity ID:
     :user/friend -1}])
 ```
 
+```java
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity(-1)
+        .put("user/name", "Alice")
+        .put("user/friend", -2))
+    .entity(Tx.entity(-2)
+        .put("user/name", "Bob")
+        .put("user/friend", -1)));
+```
+
+```python
+conn.transact([
+    {":db/id": -1,
+     ":user/name": "Alice",
+     ":user/friend": -2},
+    {":db/id": -2,
+     ":user/name": "Bob",
+     ":user/friend": -1}])
+```
+
+```javascript
+await conn.transact([
+  { ":db/id": -1,
+    ":user/name": "Alice",
+    ":user/friend": -2 },
+  { ":db/id": -2,
+    ":user/name": "Bob",
+    ":user/friend": -1 }
+]);
+```
+
+</div>
+
 Both references are resolved in the same transaction, so the database never
 needs a half-built intermediate state where only one side of the cycle exists.
 
 ### 2.5 Lookup Refs
 
-Instead of knowing the entity ID, you can use a **lookup ref** to identify an existing entity by a unique attribute. A lookup ref is a vector `[attribute value]`:
+Instead of knowing the entity id, you can use a **lookup ref** to identify an existing entity by a unique attribute. A lookup ref is a vector `[attribute value]`:
 
 <div class="multi-lang">
 
@@ -294,13 +543,17 @@ await conn.transact([
 
 </div>
 
-This finds the entity with `:user/email` equal to `"alice@example.com"` and updates it. If no entity exists with that email, the transaction will fail.
+This finds the entity with `:user/email` equal to `"alice@example.com"` and
+updates it. If no entity exists with that email, the transaction will fail.
 
-Lookup refs are particularly useful when you only have a unique identifier (like an email) but not the entity ID.
+Lookup refs are particularly useful when you only have a unique identifier (like
+an email) but not the entity id.
 
 ### 2.6 Unique Attributes and Upsert
 
-When an attribute is marked as `:db.unique/identity`, Datalevin automatically performs an **upsert**: if an entity with that value exists, it updates that entity; otherwise, it creates a new one:
+When an attribute is marked as `:db.unique/identity`, Datalevin automatically
+performs an **upsert**: if an entity with that value exists, it updates that
+entity; otherwise, it creates a new one:
 
 <div class="multi-lang">
 
@@ -359,11 +612,14 @@ await conn.transact([
 
 </div>
 
-If `"alice@example.com"` already exists, this updates the existing entity. If not, it creates a new one. This eliminates the need to check for existence before transacting.
+If `"alice@example.com"` already exists, this updates the existing entity. If
+not, it creates a new one. This eliminates the need to check for existence
+before transacting.
 
 ### 2.7 Raw Datom Vectors
 
-For fine-grained control, you can express changes as raw datom vectors `[op entity attribute value]`:
+For fine-grained control, you can express changes as raw datom vectors `[op
+entity attribute value]`:
 
 <div class="multi-lang">
 
@@ -409,6 +665,8 @@ Use `:db/retract` when you want to remove one attribute value. Use
 entity, regardless of its current value. Use `:db/retractEntity` when you want
 to remove an entity as a logical object.
 
+<div class="multi-lang">
+
 ```clojure
 ;; Remove one known value.
 (d/transact! conn
@@ -426,6 +684,67 @@ to remove an entity as a logical object.
   [[:db/retractEntity [:user/email "alice@example.com"]]])
 ```
 
+```java
+// Remove one known value.
+conn.transact(Datalevin.tx()
+    .retract(List.of("user/email", "alice@example.com"),
+             "user/status",
+             "inactive"));
+
+// Remove the whole :user/status attribute from Alice.
+conn.transact(Datalevin.tx()
+    .raw(List.of(Datalevin.kw("db.fn/retractAttribute"),
+                 List.of(Datalevin.kw("user/email"), "alice@example.com"),
+                 Datalevin.kw("user/status"))));
+
+// Remove Alice as an entity.
+conn.transact(Datalevin.tx()
+    .retractEntity(List.of("user/email", "alice@example.com")));
+```
+
+```python
+# Remove one known value.
+conn.transact([
+    [":db/retract",
+     [":user/email", "alice@example.com"],
+     ":user/status",
+     "inactive"]])
+
+# Remove the whole :user/status attribute from Alice.
+conn.transact([
+    [":db.fn/retractAttribute",
+     [":user/email", "alice@example.com"],
+     ":user/status"]])
+
+# Remove Alice as an entity.
+conn.transact([
+    [":db/retractEntity", [":user/email", "alice@example.com"]]])
+```
+
+```javascript
+// Remove one known value.
+await conn.transact([
+  [":db/retract",
+   [":user/email", "alice@example.com"],
+   ":user/status",
+   "inactive"]
+]);
+
+// Remove the whole :user/status attribute from Alice.
+await conn.transact([
+  [":db.fn/retractAttribute",
+   [":user/email", "alice@example.com"],
+   ":user/status"]
+]);
+
+// Remove Alice as an entity.
+await conn.transact([
+  [":db/retractEntity", [":user/email", "alice@example.com"]]
+]);
+```
+
+</div>
+
 `retractEntity` accepts an entity id or a lookup ref. It retracts facts where
 the entity is the subject, and it also retracts declared `:db.type/ref` facts
 that point to the entity. If the entity owns child entities through attributes
@@ -434,6 +753,8 @@ recursively. This is usually the right operation for deleting an entity that may
 be referenced elsewhere.
 
 For example, with this schema:
+
+<div class="multi-lang">
 
 ```clojure
 {:order/id    {:db/valueType :db.type/string
@@ -444,12 +765,83 @@ For example, with this schema:
  :line/sku    {:db/valueType :db.type/string}}
 ```
 
+```java
+Schema schema = Datalevin.schema()
+    .attr("order/id",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .unique(Schema.Unique.IDENTITY))
+    .attr("order/items",
+          Schema.attribute()
+              .valueType(Schema.ValueType.REF)
+              .cardinality(Schema.Cardinality.MANY)
+              .isComponent(true))
+    .attr("line/sku",
+          Schema.attribute().valueType(Schema.ValueType.STRING));
+```
+
+```python
+schema = {
+    ":order/id": {
+        ":db/valueType": ":db.type/string",
+        ":db/unique": ":db.unique/identity",
+    },
+    ":order/items": {
+        ":db/valueType": ":db.type/ref",
+        ":db/cardinality": ":db.cardinality/many",
+        ":db/isComponent": True,
+    },
+    ":line/sku": {
+        ":db/valueType": ":db.type/string",
+    },
+}
+```
+
+```javascript
+const schema = {
+  ":order/id": {
+    ":db/valueType": ":db.type/string",
+    ":db/unique": ":db.unique/identity"
+  },
+  ":order/items": {
+    ":db/valueType": ":db.type/ref",
+    ":db/cardinality": ":db.cardinality/many",
+    ":db/isComponent": true
+  },
+  ":line/sku": {
+    ":db/valueType": ":db.type/string"
+  }
+};
+```
+
+</div>
+
 Deleting the order also deletes its owned line-item entities:
+
+<div class="multi-lang">
 
 ```clojure
 (d/transact! conn
   [[:db/retractEntity [:order/id "o-1001"]]])
 ```
+
+```java
+conn.transact(Datalevin.tx()
+    .retractEntity(List.of("order/id", "o-1001")));
+```
+
+```python
+conn.transact([
+    [":db/retractEntity", [":order/id", "o-1001"]]])
+```
+
+```javascript
+await conn.transact([
+  [":db/retractEntity", [":order/id", "o-1001"]]
+]);
+```
+
+</div>
 
 Use component relationships only for ownership. If a referenced entity has an
 independent lifecycle, retract the relationship with `:db/retract` instead of
@@ -502,7 +894,8 @@ await conn.transact([
 
 </div>
 
-This flexibility allows you to choose the most convenient form for each operation in your transaction.
+This flexibility allows you to choose the most convenient form for each
+operation in your transaction.
 
 ### 2.10 Typed Values, Validation, and Coercion
 
@@ -521,7 +914,8 @@ Strict input validation is controlled separately by `:validate-data?`:
 | Declared `:db/valueType` with `{:validate-data? true}` | Datalevin rejects values that do not already match the declared runtime type. |
 
 When you transact data without a value type in schema, Datalevin serializes it
-as an EDN binary blob. It can sometimes behave unexpectedly:
+as an EDN binary blob. In Clojure/JVM code, where numeric literals and casts can
+produce different boxed numeric types, this can sometimes behave unexpectedly:
 
 ```clojure
 ;; Transacting with an explicit int
@@ -555,9 +949,12 @@ coercion, and schema evolution in more detail.
 
 Many applications need to react after a write commits: invalidate a cache,
 notify a UI session, enqueue a background job, update an in-process projection,
-or append an audit record in another system. `listen!` registers an in-process
-callback on a Datalevin connection. After a transaction commits, Datalevin calls
-the callback with the transaction report:
+or append an audit record in another system. `listen!` in Clojure, and
+`listen` in Java, Python, and JavaScript, register an in-process callback on a
+Datalevin connection. After a transaction commits, Datalevin calls the callback
+with the transaction report:
+
+<div class="multi-lang">
 
 ```clojure
 (def listener-key
@@ -579,10 +976,65 @@ the callback with the transaction report:
 (d/unlisten! conn listener-key)
 ```
 
-`listen!` itself returns the listener key. When you pass a key explicitly, as
-`:audit-log` above, that same key is returned and can be passed to `unlisten!`.
-When you call the two-argument form `(d/listen! conn callback)`, Datalevin
-generates and returns a key for you.
+```java
+Object listenerKey =
+    conn.listen("audit-log", report -> {
+        List<?> txData = (List<?>) report.get(Datalevin.kw("tx-data"));
+        System.out.println("committed " + txData.size() + " datoms");
+        System.out.println("metadata " + report.get(Datalevin.kw("tx-meta")));
+        System.out.println("tempids " + report.get(Datalevin.kw("tempids")));
+    });
+
+conn.transact(
+    Datalevin.tx()
+        .entity(Tx.entity()
+            .put("user/email", "ada@example.com")
+            .put("user/name", "Ada")),
+    Map.of(Datalevin.kw("request-id"), "req-123"));
+
+conn.unlisten(listenerKey);
+```
+
+```python
+def audit_log(report):
+    print("committed", len(report[":tx-data"]), "datoms")
+    print("metadata", report[":tx-meta"])
+    print("tempids", report[":tempids"])
+
+listener_key = conn.listen(audit_log, key="audit-log")
+
+conn.transact(
+    [{":db/id": -1,
+      ":user/email": "ada@example.com",
+      ":user/name": "Ada"}],
+    {":request-id": "req-123"})
+
+conn.unlisten(listener_key)
+```
+
+```javascript
+const listenerKey = await conn.listen((report) => {
+  console.log("committed", report[":tx-data"].length, "datoms");
+  console.log("metadata", report[":tx-meta"]);
+  console.log("tempids", report[":tempids"]);
+}, "audit-log");
+
+await conn.transact(
+  [{ ":db/id": -1,
+     ":user/email": "ada@example.com",
+     ":user/name": "Ada" }],
+  { ":request-id": "req-123" }
+);
+
+await conn.unlisten(listenerKey);
+```
+
+</div>
+
+The listener registration call returns the listener key. When you pass a key
+explicitly, as above, that same key is returned and can be passed to
+`unlisten!` in Clojure or `unlisten` in Java, Python, and JavaScript. When you
+register without a key, Datalevin generates and returns one for you.
 
 The callback receives the same transaction report returned by `transact!`:
 
@@ -598,10 +1050,29 @@ The listener key can be any unique value meaningful to the application.
 Registering another listener with the same key replaces the previous callback,
 so listener registration is idempotent:
 
+<div class="multi-lang">
+
 ```clojure
 (d/listen! conn :cache (fn [report] (invalidate-cache! report)))
 (d/listen! conn :cache (fn [report] (enqueue-cache-refresh! report)))
 ```
+
+```java
+conn.listen("cache", report -> invalidateCache(report));
+conn.listen("cache", report -> enqueueCacheRefresh(report));
+```
+
+```python
+conn.listen(invalidate_cache, key="cache")
+conn.listen(enqueue_cache_refresh, key="cache")
+```
+
+```javascript
+await conn.listen((report) => invalidateCache(report), "cache");
+await conn.listen((report) => enqueueCacheRefresh(report), "cache");
+```
+
+</div>
 
 Listeners observe committed transactions; they do not make the listener's side
 effects part of the original transaction. If a callback writes to a log file,
@@ -610,8 +1081,10 @@ from the Datalevin commit. Keep listener callbacks small and predictable. For
 expensive work, enqueue a lightweight task and let a worker handle it.
 
 For durable domain events, the strongest pattern is to transact the event as
-data in the same Datalevin transaction, then use `listen!` only to wake a
+data in the same Datalevin transaction, then use the listener only to wake a
 publisher or projector:
+
+<div class="multi-lang">
 
 ```clojure
 (d/transact!
@@ -629,6 +1102,45 @@ publisher or projector:
     (publish-pending-events! conn)))
 ```
 
+```java
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity()
+        .put("user/email", "ada@example.com")
+        .put("user/name", "Ada"))
+    .entity(Tx.entity()
+        .put("event/type", Datalevin.kw("event.type/user-created"))
+        .put("event/user", List.of("user/email", "ada@example.com"))
+        .put("event/request-id", "req-123")));
+
+conn.listen("event-publisher", report -> publishPendingEvents(conn));
+```
+
+```python
+conn.transact([
+    {":user/email": "ada@example.com",
+     ":user/name": "Ada"},
+    {":event/type": ":event.type/user-created",
+     ":event/user": [":user/email", "ada@example.com"],
+     ":event/request-id": "req-123"}])
+
+conn.listen(lambda _report: publish_pending_events(conn),
+            key="event-publisher")
+```
+
+```javascript
+await conn.transact([
+  { ":user/email": "ada@example.com",
+    ":user/name": "Ada" },
+  { ":event/type": ":event.type/user-created",
+    ":event/user": [":user/email", "ada@example.com"],
+    ":event/request-id": "req-123" }
+]);
+
+await conn.listen((_report) => publishPendingEvents(conn), "event-publisher");
+```
+
+</div>
+
 This keeps the fact that the event happened inside the database transaction,
 while allowing delivery to be retried independently.
 
@@ -638,8 +1150,9 @@ while allowing delivery to be retried independently.
 
 Often, you need to read a value, modify it, and write it back as a single
 atomic operation. This is a classic race condition if not handled carefully.
-In embedded Clojure, Datalevin provides the `with-transaction` macro for this
-purpose:
+In Clojure, Datalevin provides the `with-transaction` macro for this purpose:
+
+<div class="multi-lang">
 
 ```clojure
 (d/with-transaction [tx conn]
@@ -648,15 +1161,40 @@ purpose:
     (d/transact! tx [{:db/id 101, :account/balance new-balance}])))
 ```
 
-The `with-transaction` macro ensures that the reads (e.g., `d/q`) and the write
-(`d/transact!`) happen within the same isolated transaction, preventing any
-other concurrent write from interfering. Java and Python expose the same
-embedded pattern as `conn.withTransaction(...)` and `conn.with_transaction(...)`.
-JavaScript does not expose a Datalog transaction callback because of JVM bridge
-re-entry constraints; use conditional transaction forms such as `:db/cas`,
-transaction functions, a single `conn.transact(...)`, or an application command
-running inside the Datalevin-hosting process when the read-modify-write logic
-must be serialized.
+```java
+conn.withTransaction(tx -> {
+    Number currentBalance =
+        (Number) tx.query("[:find ?bal . :where [101 :account/balance ?bal]]");
+    long newBalance = currentBalance.longValue() - 100;
+    tx.transact(Datalevin.tx()
+        .entity(Tx.entity(101)
+            .put("account/balance", newBalance)));
+    return null;
+});
+```
+
+```python
+def withdraw(tx):
+    current_balance = tx.query(
+        "[:find ?bal . :where [101 :account/balance ?bal]]")
+    tx.transact([
+        {":db/id": 101,
+         ":account/balance": current_balance - 100}])
+
+conn.with_transaction(withdraw)
+```
+
+</div>
+
+The transaction callback ensures that the read and the write happen within the
+same isolated transaction, preventing another concurrent write from interfering.
+In Clojure this is the `with-transaction` macro; Java and Python expose the same
+embedded Datalog transaction callback as `conn.withTransaction(...)` and
+`conn.with_transaction(...)`. JavaScript does not expose this Datalog callback
+because of JVM bridge re-entry constraints; use conditional transaction forms
+such as `:db/cas`, transaction functions, a single `conn.transact(...)`, or an
+application command running inside the Datalevin-hosting process when the
+read-modify-write logic must be serialized.
 
 `with-transaction` is a serialization tool, not a general retry loop. If the
 body throws, the transaction aborts. Datalevin retries its own safe internal
@@ -667,29 +1205,48 @@ miss, validation failure, or unique conflict are returned to the caller. Chapter
 ### 4.1 Mixing Datalog and KV Writes
 
 Because a local Datalog store is built on Datalevin's KV store, embedded
-Clojure code can also use `with-transaction` to update Datalog data and custom
-KV DBIs as one atomic unit. The important point is to use the KV instance inside
-the transactional connection, not a separately opened `open-kv` handle on the
-same directory.
+Clojure, Java, and Python code can use the Datalog transaction callback to
+update Datalog data and custom KV DBIs as one atomic unit. The important point
+is to use the KV instance inside the transactional connection, not a separately
+opened `open-kv` handle on the same directory.
 
-Use the public `d/datalog-kv` helper to get the KV handle that belongs to a
-Datalog connection or DB:
+Use the public Datalog/KV helper to get the KV handle that belongs to a Datalog
+connection or DB:
+
+<div class="multi-lang">
 
 ```clojure
 (def kv (d/datalog-kv conn))
 ```
 
+```java
+KV kv = conn.datalogKV();
+```
+
+```python
+kv = conn.datalog_kv()
+```
+
+```javascript
+const kv = await conn.datalogKv();
+```
+
+</div>
+
 The returned KV handle is owned by the Datalog connection. Do not close it
 separately; close the Datalog connection instead. Java, Python, and JavaScript
 expose the same borrowed handle as `conn.datalogKV()`, `conn.datalog_kv()`, and
 `await conn.datalogKv()` for setup and direct same-store KV operations. The
-transaction-bound mixed-write pattern below is Clojure-specific; in other
-runtimes, use a transaction function or an application command on the server
+transaction-bound mixed-write pattern below is available in Clojure, Java, and
+Python because those bindings expose Datalog transaction callbacks. In
+JavaScript, use a transaction function or an application command on the server
 side if the Datalog and KV updates must commit atomically. Open application DBIs
 during setup, then use the transaction-bound connection inside
 `with-transaction` for both parts of the write:
 
 <!-- pdf-listing: Mixing Datalog and key-value writes in one transaction -->
+
+<div class="multi-lang">
 
 ```clojure
 (let [kv (d/datalog-kv conn)]
@@ -709,20 +1266,73 @@ during setup, then use the transaction-bound connection inside
         :string :data))))
 ```
 
+```java
+KV kv = conn.datalogKV();
+// DBI opening is idempotent, so this is safe during application startup.
+kv.openDbi("audit-log");
+
+conn.withTransaction(tx -> {
+    KV txKv = tx.datalogKV();
+
+    tx.transact(Datalevin.tx()
+        .entity(Tx.entity()
+            .put("order/id", "o-1001")
+            .put("order/status", Datalevin.kw("order.status/paid"))));
+
+    txKv.transact(
+        "audit-log",
+        List.of(List.of(
+            Datalevin.kw("put"),
+            "o-1001",
+            Map.of(Datalevin.kw("event/type"), Datalevin.kw("order/paid"),
+                   Datalevin.kw("order/id"), "o-1001"))),
+        "string",
+        "data");
+
+    return null;
+});
+```
+
+```python
+kv = conn.datalog_kv()
+# DBI opening is idempotent, so this is safe during application startup.
+kv.open_dbi("audit-log")
+
+def mark_paid(tx):
+    tx_kv = tx.datalog_kv()
+
+    tx.transact([
+        {":order/id": "o-1001",
+         ":order/status": ":order.status/paid"}])
+
+    tx_kv.transact(
+        [(":put",
+          "o-1001",
+          {":event/type": ":order/paid",
+           ":order/id": "o-1001"})],
+        dbi_name="audit-log",
+        k_type=":string",
+        v_type=":data")
+
+conn.with_transaction(mark_paid)
+```
+
+</div>
+
 If the block returns normally, both the Datalog datoms and the KV entry are
-committed. If the block throws or calls `d/abort-transact`, both parts are
-aborted. This only works for DBIs that live in the same local Datalevin store;
-it is not a cross-file transaction mechanism.
+committed. If the block throws, both parts are aborted; in Clojure, an explicit
+`d/abort-transact` has the same effect. This only works for DBIs that live in
+the same local Datalevin store; it is not a cross-file transaction mechanism.
 
 ---
 
 ## 5. Transaction Functions
 
 Datalevin does not use a bare symbolic list form such as `(my-tx-fn arg)` for
-transaction functions. Transaction functions are transaction data vectors that expand to more
-transaction data while the transaction is being prepared. They run against the
-current DB object and are committed atomically with the rest of the
-transaction.
+transaction functions. Transaction functions are transaction data vectors that
+expand to more transaction data while the transaction is being prepared. They
+run against the current DB object and are committed atomically with the rest of
+the transaction.
 
 Transaction function can be one of the supported vector forms:
 
@@ -802,9 +1412,10 @@ shows how to re-read and retry when that is the correct application behavior.
 ### 5.2 Transaction UDFs
 
 For arbitrary user defined functions (UDF), Datalevin allows descriptor-backed
-transaction functions. This works for non-Clojure runtimes and client/server
-deployments as well, as long as the runtime can resolve the UDF to find its
-implementation.
+transaction functions. The same descriptor and registry model is available from
+Clojure, Java, Python, and JavaScript, and it also works in client/server
+deployments as long as the runtime that executes the transaction can resolve the
+UDF implementation.
 
 Store the descriptor in `:db/udf`, open the database with a
 runtime UDF registry or resolver, and call it by descriptor or by installed
@@ -1065,7 +1676,7 @@ sequential log before applying them to LMDB.
   bypass the WAL for maximum performance and will not appear in the transaction
   log.
 - **Concurrent Throughput**: WAL allows multiple writer threads to achieve
-  significantly higher aggregate throughput than a single thread.
+  higher aggregate throughput than a single thread.
 - **Explicit Opt-In**: Local embedded Datalog stores now default to `:wal?
   false`. Enable WAL with `{:wal? true}` when the workload needs WAL throughput,
   replay, or replication behavior.
@@ -1077,11 +1688,41 @@ For the absolute highest throughput, use the async transaction API:
 `transact_async` in Python. Instead of waiting for the transaction to be
 confirmed, these calls return a future or promise immediately.
 
+<div class="multi-lang">
+
 ```clojure
 (let [fut (d/transact-async conn [{:user/name "Charlie"}])]
   ;; ... do other work ...
   @fut) ; Dereference the future to wait for completion and get the result
 ```
+
+```java
+CompletableFuture<Map<?, ?>> fut =
+    conn.transactAsync(Datalevin.tx()
+        .entity(Tx.entity().put("user/name", "Charlie")));
+
+// ... do other work ...
+Map<?, ?> report = fut.join();
+```
+
+```python
+future = conn.transact_async([
+    {":user/name": "Charlie"}])
+
+# ... do other work ...
+report = future.result(timeout=30)
+```
+
+```javascript
+const promise = conn.transactAsync([
+  { ":user/name": "Charlie" }
+]);
+
+// ... do other work ...
+const report = await promise;
+```
+
+</div>
 
 Under the hood, `transact-async` uses a powerful **adaptive batching** strategy.
 It collects multiple concurrent asynchronous transactions and commits them
@@ -1102,3 +1743,9 @@ simple, safe synchronous writes to high-performance asynchronous batching. By
 using tools like `listen!` for committed-write observation, `with-transaction`
 for atomic updates, and `transact-async` for high throughput, you can build
 applications that are both correct and fast.
+
+## References
+
+[1] Theo Haerder and Andreas Reuter, ["Principles of Transaction-Oriented
+Database Recovery"](https://doi.org/10.1145/289.291), *ACM Computing Surveys*,
+15(4):287-317, 1983.

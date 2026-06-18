@@ -48,9 +48,12 @@ are not the normal way to open an application database.
 
 `datalog-kv` is the supported bridge from a Datalog connection to the
 underlying KV APIs. The returned handle is owned by the Datalog connection; do
-not close it separately. Chapter 6 shows how to use it inside
-`with-transaction` when one atomic operation needs both Datalog datoms and
-custom KV writes.
+not close it separately. The same capability is exposed in Java as
+`conn.datalogKV()` or `Datalevin.datalogKV(conn)`, in Python as
+`conn.datalog_kv()` or `datalog_kv(conn)`, and in JavaScript as
+`await conn.datalogKv()` or `await datalogKv(conn)`. Chapter 6 shows how to use
+the borrowed KV handle inside `with-transaction` when one atomic operation needs
+both Datalog datoms and custom KV writes.
 
 ---
 
@@ -272,8 +275,20 @@ stored, sent over the wire, or used outside the original Clojure runtime.
 Use `datalevin.udf` for descriptor-backed user-defined functions, especially
 when the function may come from another runtime, a server process, or an
 application registry rather than from embedded Clojure source. Chapter 6 uses
-this mechanism for transaction UDFs; Chapter 8 uses the same idea for query
+this mechanism for transaction UDFs; Chapter 18 uses the same idea for query
 UDFs.
+
+The registry and descriptor model is available across the supported host
+languages:
+
+- Clojure: `create-registry`, `descriptor`, and `register!` in
+  `datalevin.udf`.
+- Java: `Datalevin.udfRegistry()`, `queryUdf(...)`, `predicateUdf(...)`,
+  `txUdf(...)`, and the corresponding `UdfRegistry` methods.
+- Python: `create_udf_registry()` and `udf_descriptor()`. The registry exposes
+  `query_udf`, `predicate_udf`, and `tx_udf`.
+- JavaScript: `createUdfRegistry()` and `udfDescriptor()`. The registry exposes
+  `queryUdf`, `predicateUdf`, and `txUdf`.
 
 A UDF descriptor is a map with these keys:
 

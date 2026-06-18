@@ -156,7 +156,7 @@ nesting used for each index.
 
 ### 1.3 EAV (Entity-Attribute-Value)
 
-The EAV index is sorted primarily by the **Entity ID**, then by the
+The EAV index is sorted primarily by the **entity id**, then by the
 **Attribute**, and finally by the **Value**.
 
 - **Structure**: `E -> A -> V`
@@ -169,7 +169,7 @@ The EAV index is sorted primarily by the **Entity ID**, then by the
 ### 1.4 AVE (Attribute-Value-Entity)
 
 The AVE index is sorted primarily by the **Attribute**, then by the **Value**,
-and finally by the **Entity ID**.
+and finally by the **entity id**.
 
 - **Structure**: `A -> V -> E`
 - **Primary Use Case**: "Find all entities where the `:user/age` is `30`."
@@ -206,7 +206,7 @@ index specifically for reverse references. This increase write and storage
 burden. Datalevin chooses a simpler approach.
 
 In Datalevin, a reference (`:db.type/ref`) is just a value that happens to be an
-Entity ID. Therefore, a reverse reference (e.g., "who points to Alice?") is
+entity id. Therefore, a reverse reference (e.g., "who points to Alice?") is
 simply an AVE lookup: `[?who :user/friend ?alice-id]`, because in most cases
 the attribute is given.
 
@@ -690,7 +690,7 @@ Chapter 10). This allows Datalevin to store many values for a single key
 efficiently.
 
 - **In EAV**: The Key is `E`, and the Values are `(A, V)` pairs.
-- **In AVE**: The Key is `(A, V)`, and the Values are `E` (entity IDs).
+- **In AVE**: The Key is `(A, V)`, and the Values are `E` (entity ids).
 
 ![EAV DUPSORT nesting: the entity id is the key, and its sorted attribute/value pairs are stored as nested duplicate values, so the entity id is not repeated for every datom](/images/diagrams/dupsort-eav.svg)
 
@@ -698,22 +698,22 @@ efficiently.
 
 Thinking in terms of traditional database storage models:
 
-- **EAV is a row store**: Each entity ID (key) maps to a list of attribute-value
+- **EAV is a row store**: Each entity id (key) maps to a list of attribute-value
   pairs, analogous to a row where all column values are stored together.
   Retrieving an entity is a single key lookup.
 - **AVE is a column store**: Each `(A, V)` combination (key) maps to a tightly
-  packed list of entity IDs—the "row IDs" that share that column value. This is
+  packed list of entity ids—the "row IDs" that share that column value. This is
   ideal for analytical queries that scan a column.
 
 This nested storage eliminates redundant prefixes. In EAV, an entity with 10
-attributes stores the entity ID once as the key, with 10 `(A, V)` pairs as
+attributes stores the entity id once as the key, with 10 `(A, V)` pairs as
 values. In AVE, each `(A, V)` combination is stored once as the key, with all
-matching entity IDs as values, so finding all entities where `:user/age` is
+matching entity ids as values, so finding all entities where `:user/age` is
 `30` is a single key lookup.
 
 In the Join Order Benchmark database, this `DUPSORT` nesting reduced index space
 by roughly 20%. Treat that number as an anecdotal workload observation, not a
-general guarantee: the savings depend on the number of repeated entity IDs in
+general guarantee: the savings depend on the number of repeated entity ids in
 EAV and repeated `(A, V)` prefixes in AVE. This is separate from DLMDB's
 page-level prefix compression, which can provide additional savings depending on
 how much of neighboring encoded keys is actually shared.

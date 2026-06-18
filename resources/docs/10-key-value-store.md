@@ -250,7 +250,7 @@ position.
 | `:data` | Any EDN data | Default. Stored as opaque binary; **not sortable** for range queries. |
 | `:string` | `String` | UTF-8 encoded, lexicographically sorted. |
 | `:long` | `Long` (64-bit) | Numerically sorted. |
-| `:id` | `Long` (64-bit) | Specialized ID encoding used for Entity IDs. |
+| `:id` | `Long` (64-bit) | Specialized id encoding used for entity ids. |
 | `:int` | `Integer` (32-bit) | Numerically sorted. |
 | `:float` | `Float` (32-bit) | IEEE 754 floating point. |
 | `:double` | `Double` (64-bit) | IEEE 754 floating point. |

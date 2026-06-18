@@ -46,10 +46,10 @@ an RDF graph is defined as a set of subject-predicate-object triples, and
 asserting one triple states that a relationship holds between its subject and
 object, a single fact [6]. Datalevin uses entity-attribute-value rather than
 subject-predicate-object, because Datalevin is an operational database and
-choose to use a set of database-friendly terminology: entity is a fluid concept
+chooses database-friendly terminology: entity is a fluid concept
 (see below), not a concrete subject; attribute can have value types, cardinality,
 uniqueness, indexing behavior, and transaction-time validation, while predicate
-already means boolean decision function in databases; the third position is
+already means a boolean decision function in databases; the third position is
 called a value, because it may be a scalar, a reference to another entity, a
 tuple, a document value, or another supported Datalevin value type. Despite the
 terminology differences, the modeling point is the same: each assertion is
@@ -67,8 +67,8 @@ sparse, and composable:
   namespaced keywords such as `:user/email`, `:order/customer`, or
   `:doc/body`. The relationship between entity and attribute is arbitrary. There
   is no requirement that certain entities must have certain attributes, and vice
-  vesa. Therefore, the data model can be sparse, with only true datoms are
-  asserted in the database, the false ones are simply missing.
+  versa. Therefore, the data model can be sparse: only true datoms are
+  asserted in the database, and the false ones are simply missing.
 - **Value (V):** the value of the property. A value may be a string, number,
   keyword, boolean, reference to another entity, timestamp, document value,
   vector, or another supported Datalevin value type.
@@ -92,9 +92,9 @@ need three separate containers to hold those facts. They are simply assertions
 about the same entity. This gives the model room to evolve as the application
 learns more about the thing being represented.
 
-As database-local handles, entity id should not be confused with stable
+As database-local handles, entity ids should not be confused with stable
 application identifiers; two databases containing the same application data may
-assign different set of eids. Application domain identifiers such as user IDs,
+assign different sets of eids. Application domain identifiers such as user IDs,
 order IDs, document IDs, UUIDs, and slugs should be stored as ordinary attribute
 values, often with `:db.unique/identity` property (see Chapter 3 for detailed
 explanations).
@@ -203,8 +203,16 @@ and let the engine find bindings for the variables [7].
 
 A small comparison makes the difference concrete:
 
-Classic Datalog literature writes Datalog in Prolog-like expressions:
-`friend_of_friend(X, Z) :- follows(X, Y), follows(Y, Z).`
+Classic Datalog literature writes Datalog in Prolog syntax:
+
+```prolog
+friend_of_friend(X, Z) :- follows(X, Y), follows(Y, Z).
+```
+
+The logical expression is concise and elegant, but less familiar to application
+developers who are not versed in first-order predicate logic. For example, it
+would be easy to miss the precise meaning of `:-`, `,`, or `.`. The functors and
+arguments seem to be arbitrary, and everything seems to be abstract.
 
 Datalevin writes the same Datalog as EDN data:
 
@@ -216,8 +224,13 @@ Datalevin writes the same Datalog as EDN data:
  [?y :person/follows ?z]]
 ```
 
+`:find`, `:in`, and `:where` are meaningful words for developers who are
+familiar with the ideas of database queries. Variables all conveniently start
+with `?`. `$` can be easily explained as representing the database. Attributes
+are part of the schema. Everything is concrete.
+
 Both examples say: find `Z` such that `X` follows `Y` and `Y` follows `Z`. The
-Datalevin form is not a string in a mathematics-looking language. It is an
+Datalevin form is not a string in a mathematical language. It is an
 ordinary piece of EDN data: a vector containing keywords in English, symbols
 starting with `?` for variables, and nested vectors. That makes queries easier
 for programs to construct, validate, transform, and compose before handing them
@@ -252,8 +265,8 @@ logical querying.
 
 ### Path-Indexed Documents with idoc
 
-Datalevin supports path-indexed workflow for documents in EDN, JSON, and
-Markdown format using `:db.type/idoc` data type (Chapter 14). You can query
+Datalevin supports path-indexed access to documents in EDN, JSON, and
+Markdown formats using the `:db.type/idoc` data type (Chapter 14). You can query
 nested structures with `idoc-match`, including logical combinators and path
 predicates, while keeping the documents in the same transactional store.
 
@@ -292,7 +305,7 @@ These search modes answer different questions:
 - Embedding converts text to vectors. It is useful when the application
   wants semantic retrieval over text fields instead of exact word matching.
   Datalevin provides built-in embedding services so users do not have to roll
-  their own. It can also leverage 3rd party embedding services.
+  their own. It can also leverage third-party embedding services.
 
 In many systems, these capabilities live outside the primary database. The
 application first asks a search engine for candidate ids, then asks the
@@ -364,8 +377,8 @@ count [5].
 
 This is why adding more features to a SQL database does not fully answer the
 question that a modern database is presented with. That is, a modern database
-needs not only to be full of features, but also required to be simple in
-concepts, fast in performance and easy in operation. For many legacy systems
+needs not only to be full of features, but also to be simple in concept, fast in
+performance, and easy to operate. For many legacy systems
 that are already heavily invested in SQL ecosystems, a mature SQL database
 remains the right choice. But feature accumulation does not fix SQL as a query
 language, and it does not remove the cardinality estimation burden created by
@@ -388,10 +401,10 @@ sparse, evolving, searchable, and increasingly retrieval-driven.
 
 A concrete way to see this argument is through Join Order Benchmark (JOB) [3].
 JOB is useful here because it is not a benchmark of simple key lookups or
-single-table scans, nor some academic exercises with synthetic data. JOB is based
-on real IMDb dataset, and its queries stresses query optimizer because the data
-distribution is highly skewed and correlated, like all real world datasets do.
-It requires joins across many related entities: 113 analytical queries, with
+single-table scans, nor some academic exercise with synthetic data. JOB is based
+on the real IMDb dataset, and its queries stress the query optimizer because the
+data distribution is highly skewed and correlated, as it is in all real-world
+datasets. It requires joins across many related entities: 113 analytical queries, with
 query shapes that range from a few joins to more than a dozen. Its queries have
 enough joins that a poor query plan can produce orders of magnitude more
 intermediate rows than a good one.
@@ -405,7 +418,7 @@ affiliations, topics, institutions, and collaborators. If a system never seems
 to have such queries, that is because the complexity has been moved into
 denormalized records, application-side filtering, or cache materialization
 rather than disappearing. That is to say, the lack of complex queries is a
-symptom of weak database capability, not a lack of demands for them. Developers
+symptom of weak database capability, not a lack of demand for them. Developers
 have to deal with the complexities in application code because the database they
 use cannot handle them effectively.
 
@@ -440,7 +453,7 @@ engine must decide whether to start from the vendor's products, the recent
 refunds, the late shipments, the region, or some other selective fact, and then
 join outward.
 
-In a SQL engine, the kind of questions is usually a many-join query over
+In a SQL engine, this kind of question is usually a many-join query over
 table-shaped containers. The optimizer must estimate selectivity, i.e. how many
 rows survive each predicate and each join, because the fact counts it needs are
 bundled inside rows, indexes, histograms, and assumptions about value
@@ -449,14 +462,14 @@ table, build huge intermediate results, and only later discover that a different
 predicate would have narrowed the search immediately. It is therefore quite
 unpredictable if a SQL query engine would perform well or not for complex
 queries. Due to this kind of uncertainty, large join queries are widely treated
-as optimizer-sensitive. For example, PostgreSQL’s own documentation [8] notes
+as optimizer-sensitive. For example, PostgreSQL's own documentation [8] notes
 that possible join orders grow exponentially, that exhaustive planning becomes
 impractical beyond roughly ten input tables, and that the planner switches to
 heuristic search for many-relation queries. It also documents techniques for
 constraining join order to reduce planning time. That is the practical pressure
 behind advice to denormalize, split a query, materialize intermediate results,
 or hand-guide the planner when SQL joins become too large or too sensitive to
-cardinality estimation-the work of estimating the result size of all sub-plans
+cardinality estimation, the work of estimating the result size of all sub-plans
 of a query [9].
 
 Fact-based storage changes that problem. Datalevin does not have to answer every
@@ -538,7 +551,7 @@ workflow matures.
 
 Due to the advantages in handling complex queries that are common in today's
 practical applications, greenfield projects and mature systems looking to
-modernize data access layers should seriously consider a Datalog based system
+modernize data access layers should seriously consider a Datalog-based system
 like Datalevin.
 
 If your workload is narrowly specialized, a single-purpose engine may still be
@@ -548,8 +561,9 @@ append-only log pipeline, or a dedicated search cluster may be better served by
 systems built only for those jobs.
 
 Datalevin's niche is the application database that needs to be
-logical, graph-aware, document-friendly, and retrieval-capable, and when the
-user requirements grow in complexity and composition as application matures.
+logical, graph-aware, document-friendly, and retrieval-capable, especially as
+user requirements grow in complexity and composition while the application
+matures.
 
 ## 6. A Minimal Unified Query Example
 

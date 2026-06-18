@@ -600,14 +600,14 @@ Prefix compression is most effective when a large portion of neighboring encoded
 keys is identical. Some KV workloads with long structured keys can therefore see
 large savings. Datalevin's Datalog indexes also benefit, but the effect is more
 modest than the largest KV cases because the shared part is usually a portion of
-the encoded 8-byte entity ID in EAV and a portion of the encoded 4-byte
-attribute ID in AVE.
+the encoded 8-byte entity id in EAV and a portion of the encoded 4-byte
+attribute id in AVE.
 The `DUPSORT` nesting described in Chapter 15 is the main reason Datalog indexes
-avoid repeating full entity IDs or full `(A, V)` prefixes.
+avoid repeating full entity ids or full `(A, V)` prefixes.
 
 - **Reduces Storage Size**: Workload dependent; high reductions are possible
   when key prefixes are substantial, while Datalog index savings are usually
-  smaller because their common prefixes are compact encoded IDs.
+  smaller because their common prefixes are compact encoded ids.
 - **Improves Cache Locality**: More keys fit into a single CPU cache line,
   making index scans significantly faster.
 

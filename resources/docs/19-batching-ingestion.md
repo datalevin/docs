@@ -247,7 +247,7 @@ WAL mode with async transactions and tune durability there instead.
 ## 2. Sorting Before Ingestion
 
 A B+Tree performs best when keys are inserted in **sorted order**. If you insert
-random Entity IDs and random Values, the engine must "jump around" the B+Tree,
+random entity ids and random Values, the engine must "jump around" the B+Tree,
 leading to frequent cache misses and page splits. A **page split** happens when
 a B+Tree page becomes full and must be divided into two pages, with parent pages
 updated to point at the new key ranges. Random insert order causes more of this
@@ -259,7 +259,7 @@ predictably.
 If you are performing a bulk import (e.g., from a CSV or a SQL dump), sort your
 datoms *before* they reach the database.
 
-1.  **Group by Entity ID**: This ensures that all attributes for a single entity
+1.  **Group by entity id**: This ensures that all attributes for a single entity
     are written to the EAV index contiguously.
 2.  **Group by Attribute and Value**: This ensures that updates to the AVE index
     are also localized.
@@ -267,14 +267,14 @@ datoms *before* they reach the database.
 <div class="multi-lang">
 
 ```clojure
-;; Sort data by Entity ID
+;; Sort data by entity id
 (let [sorted-datoms (sort-by :db/id raw-data)]
   (doseq [batch (partition-all 5000 sorted-datoms)]
     (d/transact! conn batch)))
 ```
 
 ```java
-// Sort data by Entity ID
+// Sort data by entity id
 rawData.sort(Comparator.comparing(m -> (Long) m.get("db/id")));
 List<List<Map>> batches = partition(rawData, 5000);
 for (List<Map> batch : batches) {
@@ -283,14 +283,14 @@ for (List<Map> batch : batches) {
 ```
 
 ```python
-# Sort data by Entity ID
+# Sort data by entity id
 sorted_datoms = sorted(raw_data, key=lambda x: x[":db/id"])
 for batch in partition_all(sorted_datoms, 5000):
     conn.transact(batch)
 ```
 
 ```javascript
-// Sort data by Entity ID
+// Sort data by entity id
 const sortedDatoms = rawData.sort((a, b) => a[":db/id"] - b[":db/id"]);
 for (const batch of partitionAll(sortedDatoms, 5000)) {
   await conn.transact(batch);
@@ -340,7 +340,7 @@ bindings: `Datalevin.initDb` / `fillDb`, `init_db` / `fill_db`, and `initDb` /
 lookup refs, upserts, transaction functions, or transaction-level integrity
 checks.
 
-### 3.1 Assigning Entity IDs for Prepared Datoms
+### 3.1 Assigning Entity Ids for Prepared Datoms
 
 `init-db` and `fill-db` do not accept transaction maps, tempids, lookup refs, or
 upserts. They accept prepared `Datom` values. That means the subject entity id
@@ -497,7 +497,7 @@ and use that map when emitting subject ids and reference values. With
 you reserved non-overlapping ranges up front.
 
 > **Note**: These functions skip transaction-level data integrity checks and
-> temporary entity ID resolution. You must ensure the datoms are correct before
+> temporary entity id resolution. You must ensure the datoms are correct before
 > calling them: no duplicate entity-id ranges, no unresolved references, values
 > must match the declared schema, and every item must be a `Datom` created with
 > `d/datom`.
@@ -514,7 +514,7 @@ When you need to ingest data at scale, follow this checklist:
     for orders-of-magnitude throughput improvement.
 3.  **Combine with manual batching**: The effects of auto-batching and manual
     batching compound.
-4.  **Sort your data**: Sort by Entity ID before transacting to minimize B+Tree
+4.  **Sort your data**: Sort by entity id before transacting to minimize B+Tree
     fragmentation.
 5.  **Disable the Datalog index cache during large bulk transactions**:
     temporarily set `datalog-index-cache-limit` to `0`, then restore it after

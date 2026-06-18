@@ -159,7 +159,7 @@ For range queries, DLMDB's order statistics provide **O(log n)** counting.
 For complex joins where counting isn't feasible, Datalevin uses **online
 reservoir sampling** under actual query conditions. It:
 
-1.  Collects sample entity IDs
+1.  Collects sample entity ids
 2.  Performs merge scans to get selectivity ratios
 3.  Uses empirical-Bayes shrinkage with priors
 4.  Applies skew-aware upper-bound correction for extreme data distributions

@@ -6,7 +6,7 @@ part: "I — Foundations: A Multi-Paradigm Database"
 
 # Chapter 5: Attributes, Entities, and Namespaces
 
-In Chapter 4, we looked at how Datalevin stores triples (datoms) in LMDB. Now,
+In Chapter 4, we looked at how Datalevin stores triples (datoms) in DLMDB. Now,
 we move up the stack to the logical model. Datalevin's data model is built on
 three pillars: **Attributes**, **Entities**, and **Namespaces**.
 
@@ -18,20 +18,24 @@ constraints for an attribute, they are *enforced* on write. The database is
 flexible by default, but provides powerful controls when you need performance
 and integrity.
 
+![Schema-on-write lifecycle: a new attribute appears on transact and is added automatically; by default it has an implicit EDN-blob type supporting exact-match lookup; declaring :db/valueType with :db/cardinality and :db/unique unlocks range and sorted queries, validation, upsert, and compact storage; adding the :db/fulltext and :db/embedding flags unlocks full-text and embedding search — a progression from flexible, zero schema to strict, enforced types and indexes](/images/diagrams/schema-on-write-lifecycle.svg)
+
+Figure 5.1 depicts the lifecycle of schema evolution for an application. The
+detailed description of each stage comes in the following sections.
+
 ---
 
 ## 1. Attributes: The Schema-on-Write Model
 
 An attribute (the "A" in EAV) defines a property that can be associated with an
-entity.
+entity. Attributes are the main subjects of a Datalevin schema.
 
-![Schema-on-write lifecycle: a new attribute appears on transact and is added automatically; by default it has an implicit EDN-blob type supporting exact-match lookup; declaring :db/valueType with :db/cardinality and :db/unique unlocks range and sorted queries, validation, upsert, and compact storage; adding the :db/fulltext and :db/embedding flags unlocks full-text and embedding search — a progression from flexible, zero schema to strict, enforced types and indexes](/images/diagrams/schema-on-write-lifecycle.svg)
 
 ### 1.1 Automatic Attribute Creation
 
 By default, you don't need to "create a table" or "define a schema" to start
 using Datalevin. When you transact a new attribute keyword that the database hasn't
-seen before, Datalevin automatically adds it to the internal schema.
+seen before, Datalevin automatically adds it to the schema for you.
 
 <div class="multi-lang">
 
@@ -70,7 +74,7 @@ schema. Chapter 11 covers this and other write-time validation options.
 ### 1.2 The Default Type: EDN Binary
 
 If an attribute is added automatically, Datalevin treats its value as a generic
-**EDN blob**, which has some trade-offs.
+**EDN blob**, serialized EDN in binary form, which has some trade-offs.
 
 - **Pros**: You can store any Clojure data structure (maps, vectors, sets)
   directly.
@@ -88,12 +92,12 @@ type. Full-text indexing is more permissive: Datalevin calls `str` on the
 transacted value before indexing it, though string attributes are still the
 usual choice for human text.
 
-### 1.3 Why Explicit Types Matter
+### 1.3 Why Explicit Types Are Preferred
 
 To enable range queries, validation, compact storage, and specialized indexes,
-you are encouraged to specify a data type. Explicit types allow Datalevin to use
-specialized codecs for sorting values in the B+Tree instead of treating values
-as opaque EDN blobs.
+you are strongly encouraged to specify a data type. Explicit types allow
+Datalevin to use specialized codecs for sorting values in the B+Tree instead of
+treating values as opaque EDN blobs.
 
 Some common Datalog value types for `:db/valueType`:
 
@@ -141,6 +145,9 @@ below lists some example attribute properties.
 Appendix C includes a complete description of acceptable properties in the schema.
 
 **Example Schema Definition:**
+
+<div class="multi-lang">
+
 ```clojure
 (def schema
   {:user/email       {:db/valueType :db.type/string
@@ -151,6 +158,57 @@ Appendix C includes a complete description of acceptable properties in the schem
                       :db/fulltext  true
                       :db/embedding true}})
 ```
+
+```java
+Schema schema = Datalevin.schema()
+    .attr("user/email",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .unique(Schema.Unique.IDENTITY))
+    .attr("user/login-count",
+          Schema.attribute().valueType(Schema.ValueType.LONG))
+    .attr("user/tags",
+          Schema.attribute().cardinality(Schema.Cardinality.MANY))
+    .attr("user/bio",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .fulltext(true)
+              .prop("db/embedding", true));
+```
+
+```python
+schema = {
+    ":user/email": {
+        ":db/valueType": ":db.type/string",
+        ":db/unique": ":db.unique/identity",
+    },
+    ":user/login-count": {":db/valueType": ":db.type/long"},
+    ":user/tags": {":db/cardinality": ":db.cardinality/many"},
+    ":user/bio": {
+        ":db/valueType": ":db.type/string",
+        ":db/fulltext": True,
+        ":db/embedding": True,
+    },
+}
+```
+
+```javascript
+const schema = {
+  ":user/email": {
+    ":db/valueType": ":db.type/string",
+    ":db/unique": ":db.unique/identity"
+  },
+  ":user/login-count": { ":db/valueType": ":db.type/long" },
+  ":user/tags": { ":db/cardinality": ":db.cardinality/many" },
+  ":user/bio": {
+    ":db/valueType": ":db.type/string",
+    ":db/fulltext": true,
+    ":db/embedding": true
+  }
+};
+```
+
+</div>
 
 ### 2.1 Cardinality: One Value or a Set of Values
 
@@ -164,6 +222,8 @@ old email and asserts the new one in a single step.
 With `:db.cardinality/many`, transacting a new value **accumulates** instead.
 The values behave as a set: duplicates are ignored, and there is no ordering.
 
+<div class="multi-lang">
+
 ```clojure
 ;; :user/tags is :db.cardinality/many
 (d/transact! conn [{:db/id 1 :user/tags "clojure"}])
@@ -171,10 +231,42 @@ The values behave as a set: duplicates are ignored, and there is no ordering.
 ;; entity 1 now has tags "clojure" and "databases" — a set, no duplicates
 ```
 
-If you need an ordered or duplicated collection, model it differently: store a
-vector in an EDN-valued attribute, or model the list items as entities that
-carry a position attribute (a variant of the join-entity pattern in
-Chapter 11).
+```java
+// user/tags is db.cardinality/many
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity(1)
+        .put("user/tags", "clojure")));
+
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity(1)
+        .put("user/tags", Datalevin.listOf("databases", "clojure"))));
+
+// Entity 1 now has tags "clojure" and "databases": a set, no duplicates.
+```
+
+```python
+# :user/tags is :db.cardinality/many
+conn.transact([{":db/id": 1, ":user/tags": "clojure"}])
+conn.transact([{":db/id": 1, ":user/tags": ["databases", "clojure"]}])
+
+# Entity 1 now has tags "clojure" and "databases": a set, no duplicates.
+```
+
+```javascript
+// :user/tags is :db.cardinality/many
+await conn.transact([{ ":db/id": 1, ":user/tags": "clojure" }]);
+await conn.transact([{ ":db/id": 1, ":user/tags": ["databases", "clojure"] }]);
+
+// Entity 1 now has tags "clojure" and "databases": a set, no duplicates.
+```
+
+</div>
+
+If you need an ordered or duplicated collection, model it differently: store the
+collection in a tuple value if the number of items is limited and the total length
+is less than 511 bytes, store a vector in an EDN-valued attribute, or model the
+list items as entities that carry a position attribute (a variant of the
+join-entity pattern in Chapter 11).
 
 ### 2.2 Uniqueness: Identity vs. Value
 
@@ -183,12 +275,12 @@ for the attribute, but they differ in how a duplicate write is handled:
 
 - `:db.unique/value` is a pure constraint: transacting a duplicate is an
   **error**. Use it for values that must never collide but are not used as
-  handles, such as a serial number.
+  entity identifiers, such as a serial number.
 - `:db.unique/identity` treats the value as the entity's identity: transacting
   a map with an existing value **upserts**, i.e. it updates the existing entity
   instead of creating a new one. It also enables **lookup refs**, which let you
   address an entity as `[:user/email "alice@example.com"]` anywhere an entity
-  ID is expected.
+  id is expected.
 
 Chapter 6 shows lookup refs and upserts in transactions; Chapter 11 goes deeper
 into identity modeling.
@@ -204,11 +296,33 @@ In EDN, `:user/email` is a qualified keyword. The part before the slash,
 `user`, is the keyword namespace. The part after the slash, `email`, is the
 keyword name.
 
+<div class="multi-lang">
+
 ```clojure
 :user/email          ;; namespace: user, name: email
 :order/id            ;; namespace: order, name: id
 :line-item/quantity  ;; namespace: line-item, name: quantity
 ```
+
+```java
+String userEmail = "user/email";              // namespace: user, name: email
+String orderId = "order/id";                  // namespace: order, name: id
+String lineItemQuantity = "line-item/quantity"; // namespace: line-item, name: quantity
+```
+
+```python
+user_email = ":user/email"          # namespace: user, name: email
+order_id = ":order/id"              # namespace: order, name: id
+line_item_quantity = ":line-item/quantity"  # namespace: line-item, name: quantity
+```
+
+```javascript
+const userEmail = ":user/email";          // namespace: user, name: email
+const orderId = ":order/id";              // namespace: order, name: id
+const lineItemQuantity = ":line-item/quantity"; // namespace: line-item, name: quantity
+```
+
+</div>
 
 The namespace is part of the attribute's identity. `:user/name`,
 `:product/name`, and `:company/name` are three different attributes. They may
@@ -220,11 +334,46 @@ them as distinct facts.
 Namespaces are a naming convention, not a storage container or type constraint.
 An entity can have attributes from more than one namespace:
 
+<div class="multi-lang">
+
 ```clojure
 {:user/email "ada@example.com"
  :account/id "acct-1"
  :account/plan :account.plan/pro}
 ```
+
+```java
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity()
+        .put("user/email", "ada@example.com")
+        .put("account/id", "acct-1")
+        .put("account/plan", Datalevin.kw("account.plan/pro"))));
+```
+
+```python
+from datalevin import interop
+
+kw = interop().keyword
+
+conn.transact([{":user/email": "ada@example.com",
+                ":account/id": "acct-1",
+                ":account/plan": kw(":account.plan/pro")}])
+```
+
+```javascript
+import { interop } from "datalevin-node";
+
+const raw = interop();
+const pro = await raw.keyword(":account.plan/pro");
+
+await conn.transact([{
+  ":user/email": "ada@example.com",
+  ":account/id": "acct-1",
+  ":account/plan": pro
+}]);
+```
+
+</div>
 
 That is legal because entities are collections of facts, not rows in a table.
 The namespace tells readers what the attribute means; it does not prevent the
@@ -232,7 +381,7 @@ attribute from appearing on a particular entity. If your application needs to
 enforce that only certain entities have certain attributes, enforce that in the
 write path or with higher-level validation.
 
-### 3.2 Why Namespaces Matter
+### 3.2 Why Namespaces Are Preferred
 
 Namespaces give Datalevin's flexible schema enough structure to remain
 maintainable:
@@ -252,9 +401,36 @@ maintainable:
 The namespace on an attribute describes the fact. The namespace on a keyword
 value describes the value domain. These often differ:
 
+<div class="multi-lang">
+
 ```clojure
 {:order/status :order.status/paid}
 ```
+
+```java
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity()
+        .put("order/status", Datalevin.kw("order.status/paid"))));
+```
+
+```python
+from datalevin import interop
+
+kw = interop().keyword
+
+conn.transact([{":order/status": kw(":order.status/paid")}])
+```
+
+```javascript
+import { interop } from "datalevin-node";
+
+const raw = interop();
+const paid = await raw.keyword(":order.status/paid");
+
+await conn.transact([{ ":order/status": paid }]);
+```
+
+</div>
 
 Here, `:order/status` is an attribute on an order. The value
 `:order.status/paid` is an enum-like keyword from the order-status value domain.
@@ -269,13 +445,13 @@ metadata.
 
 Readers who know RDF will notice the similarity: RDF has triples of
 subject-predicate-object, while Datalevin has datoms of entity-attribute-value.
-That resemblance is useful, but the design goals are different.
+That resemblance is useful, but the design goals are different [1].
 
 In RDF, predicates are often IRIs chosen from shared vocabularies or ontologies.
 They are meant to carry portable meaning across datasets, organizations, and
 reasoning systems. RDF Schema and OWL can then attach richer ontology semantics
 to those predicates: class hierarchies, property relationships, domain/range
-constraints, and inference rules.
+constraints, and inference rules [2] [3].
 
 Datalevin attributes are intentionally more local and operational. An attribute
 such as `:order/placed-at` or `:invoice/issued-at` is not trying to be a
@@ -286,12 +462,42 @@ validate values; they do not assert a global ontology.
 That difference makes Datalevin's model more open in day-to-day application
 design. You can create many specific attributes when they make the data clearer:
 
+<div class="multi-lang">
+
 ```clojure
 :order/placed-at
 :invoice/issued-at
 :shipment/delivered-at
 :support-ticket/closed-at
 ```
+
+```java
+List<String> attributes = List.of(
+    "order/placed-at",
+    "invoice/issued-at",
+    "shipment/delivered-at",
+    "support-ticket/closed-at");
+```
+
+```python
+attributes = [
+    ":order/placed-at",
+    ":invoice/issued-at",
+    ":shipment/delivered-at",
+    ":support-ticket/closed-at",
+]
+```
+
+```javascript
+const attributes = [
+  ":order/placed-at",
+  ":invoice/issued-at",
+  ":shipment/delivered-at",
+  ":support-ticket/closed-at"
+];
+```
+
+</div>
 
 Those attributes may all be `:db.type/instant`, but they mean different things
 to the application. You do not need to collapse them into a generic
@@ -334,31 +540,31 @@ keywords. In Python and JavaScript examples, colon-prefixed strings such as
 
 ---
 
-## 4. Entities and IDs
+## 4. Entities and Ids
 
 An **Entity** (the "E" in EAV) is simply a collection of datoms that share the
-same Entity ID. There is no separate entity record in storage: the ID is the
-only thing tying the datoms together. Assert a datom with a new ID and an
-entity comes into existence; retract the last datom carrying an ID and that
+same entity id. There is no separate entity record in storage: the id is the
+only thing tying the datoms together. Assert a datom with a new id and an
+entity comes into existence; retract the last datom carrying an id and that
 entity is gone. As Chapter 3 discussed, this is what makes entities fluid: an
 entity has no declared type, only whatever attributes have been asserted about
 it.
 
-### 4.1 System-Managed IDs
+### 4.1 System-Managed Ids
 
-Datalevin uses 64-bit integers for Entity IDs.
+Datalevin uses 64-bit integers for entity ids.
 
-- **Auto-Increment**: When you transact a new map without an ID, Datalevin
-  automatically assigns a new, incrementing ID.
-- **Permanent**: Once assigned, an ID is the permanent handle for that entity.
-  Updating or adding attributes never changes the ID, so references between
+- **Auto-Increment**: When you transact a new map without an id, Datalevin
+  automatically assigns a new, incrementing id.
+- **Permanent**: Once assigned, an id is the permanent handle for that entity.
+  Updating or adding attributes never changes the id, so references between
   entities remain stable across transactions.
 
-In transaction maps, the system attribute `:db/id` carries the entity ID. To
-add facts to an existing entity, include its ID; to create a new entity, omit
+In transaction maps, the system attribute `:db/id` carries the entity id. To
+add facts to an existing entity, include its id; to create a new entity, omit
 `:db/id` (or use a tempid, below).
 
-`:db/id` is not a place for application identity. A real entity ID is a
+`:db/id` is not a place for application identity. A real entity id is a
 Datalevin-managed `long`; you cannot assign a UUID, slug, email address, or
 other domain key as the permanent `:db/id`. Store those values in ordinary
 attributes declared with `:db.unique/identity`, then use lookup refs such as
@@ -366,16 +572,16 @@ attributes declared with `:db.unique/identity`, then use lookup refs such as
 
 ### 4.2 Tempids
 
-During a transaction, you often use **tempids** (temporary IDs) to express
+During a transaction, you often use **tempids** (temporary ids) to express
 relationships between new entities before the database has assigned permanent
-IDs. Tempids can be a negative integer or a string.
+ids. Tempids can be a negative integer or a string.
 
 <div class="multi-lang">
 
 ```clojure
 (d/transact! conn
   [{:db/id -1 :user/name "Alice"}
-   {:db/id -2 :user/name "Bob" :user/friend -1}]) ; Bob follows Alice using her tempid
+   {:db/id -2 :user/name "Bob" :user/friend -1}]) ; Bob befriends Alice using her tempid
 ```
 
 ```java
@@ -384,54 +590,80 @@ conn.transact(Datalevin.tx()
         .put("user/name", "Alice"))
     .entity(Tx.entity(-2)
         .put("user/name", "Bob")
-        .put("user/friend", -1))); // Bob follows Alice using her tempid
+        .put("user/friend", -1))); // Bob befriends Alice using her tempid
 ```
 
 ```python
 conn.transact([
     {":db/id": -1, ":user/name": "Alice"},
-    {":db/id": -2, ":user/name": "Bob", ":user/friend": -1}])  # Bob follows Alice using her tempid
+    {":db/id": -2, ":user/name": "Bob", ":user/friend": -1}])  # Bob befriends Alice using her tempid
 ```
 
 ```javascript
 await conn.transact([
   { ":db/id": -1, ":user/name": "Alice" },
-  { ":db/id": -2, ":user/name": "Bob", ":user/friend": -1 }  // Bob follows Alice using her tempid
+  { ":db/id": -2, ":user/name": "Bob", ":user/friend": -1 }  // Bob befriends Alice using her tempid
 ]);
 ```
 
 </div>
 
 A tempid is meaningful only within a single transaction; using `-1` again in a
-later transaction denotes a different new entity. To learn which permanent IDs
+later transaction denotes a different new entity. To learn which permanent ids
 were assigned, inspect the transaction report returned by the transact call:
-its `:tempids` map translates each tempid to the entity ID it received.
+its `:tempids` map translates each tempid to the entity id it received.
 String tempids are also only placeholders; they do not become string-valued
-entity IDs.
+entity ids.
+
+<div class="multi-lang">
 
 ```clojure
 (let [report (d/transact! conn [{:db/id -1 :user/name "Alice"}])]
-  (get-in report [:tempids -1])) ;=> Alice's permanent entity ID, e.g. 17
+  (get-in report [:tempids -1])) ;=> Alice's permanent entity id, e.g. 17
 ```
 
-### 4.3 Entity IDs Are Internal Handles
+```java
+Map<?, ?> report = conn.transact(Datalevin.tx()
+    .entity(Tx.entity(-1)
+        .put("user/name", "Alice")));
 
-Entity IDs are assigned by the database and carry no meaning outside it. Avoid
+Map<?, ?> tempids = (Map<?, ?>) report.get(Datalevin.kw("tempids"));
+Object aliceId = tempids.get(-1); // Alice's permanent entity id, e.g. 17
+```
+
+```python
+report = conn.transact([{":db/id": -1, ":user/name": "Alice"}])
+alice_id = report[":tempids"][-1]  # Alice's permanent entity id, e.g. 17
+```
+
+```javascript
+const report = await conn.transact([{ ":db/id": -1, ":user/name": "Alice" }]);
+const aliceId = report[":tempids"].get(-1); // Alice's permanent entity id, e.g. 17
+```
+
+</div>
+
+### 4.3 Entity Ids Are Internal Handles
+
+Entity ids are assigned by the database and carry no meaning outside it. Avoid
 exposing them in URLs, API payloads, or other systems: data that is exported
 and re-imported, merged from another database, or rebuilt from source may end
-up with different IDs. Two databases can contain the same application data while
+up with different ids. Two databases can contain the same application data while
 using different eids for the corresponding entities.
 
 For a stable, externally visible identity, give the entity a natural key
 declared as `:db.unique/identity` — an email, a slug, or a UUID. The example
 schema in Section 2 declares `:user/email` this way, which lets the rest of
 the application address that user as `[:user/email "alice@example.com"]`
-without ever knowing the internal ID. Chapter 11 also introduces `:db/ident`,
+without ever knowing the internal id. Chapter 11 also introduces `:db/ident`,
 a built-in identity attribute for system-wide named entities such as enums.
 
 ---
 
 ## 5. Schema Workflow in Practice
+
+As depicted in Figure 5.1, the schema workflow can be summarized as the
+following:
 
 1. **Prototyping**: Start without a schema. Just transact maps.
 2. **Optimization**: Once you know your access patterns, add `:db/valueType` to
@@ -455,6 +687,20 @@ a built-in identity attribute for system-wide named entities such as enums.
 Datalevin's approach to schema is **"Pay as you go."** You get the speed of a
 schema-less store during development, but the power of a strictly typed, indexed
 database as your application matures. Namespaces keep your attributes organized,
-and system-managed IDs ensure your entities remain stable across transactions —
-while unique identity attributes, not raw IDs, provide the stable names the
+and system-managed ids ensure your entities remain stable across transactions —
+while unique identity attributes, not raw ids, provide the stable names the
 outside world should use.
+
+## References
+
+[1] Richard Cyganiak, David Wood, and Markus Lanthaler,
+   [RDF 1.1 Concepts and Abstract Syntax](https://www.w3.org/TR/rdf11-concepts/),
+   W3C Recommendation, February 25, 2014.
+
+[2] Dan Brickley and R. V. Guha,
+   [RDF Schema 1.1](https://www.w3.org/TR/rdf-schema/),
+   W3C Recommendation, February 25, 2014.
+
+[3] W3C OWL Working Group,
+   [OWL 2 Web Ontology Language Document Overview (Second Edition)](https://www.w3.org/TR/owl2-overview/),
+   W3C Recommendation, December 11, 2012.

@@ -151,8 +151,9 @@ as the source of truth. This book does not reproduce that matrix.
 
 The notable gaps to keep in mind while reading are:
 
-- JavaScript does not expose the Datalog transaction callback API
-  (`with-transaction` / `withTransaction`). Use a single `conn.transact(...)`,
+- Clojure, Java, and Python expose the Datalog transaction callback API
+  (`with-transaction`, `withTransaction`, and `with_transaction`). JavaScript
+  does not expose that Datalog callback; use a single `conn.transact(...)`,
   `conn.transactAsync(...)`, KV transaction APIs, or move the callback logic
   into a transaction function or application command.
 - Existing entity objects are transactable only in Clojure. Java, Python, and

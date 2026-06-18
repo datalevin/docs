@@ -27,7 +27,7 @@ values, see Appendix C, "Datalog Schema Reference."
 ## 1. The Power of Identity: `:db.unique/identity`
 
 One of the most important decisions in schema design is how you identify your
-entities. While Datalevin provides internal 64-bit integer IDs, you often need
+entities. While Datalevin provides internal 64-bit integer ids, you often need
 to refer to entities using natural keys from your domain (like an email, a SKU,
 or a URL slug).
 
@@ -36,7 +36,7 @@ or a URL slug).
 When an attribute is marked as `:db.unique/identity`, it becomes a **Lookup
 Ref**. This allows you to refer to an entity by its natural key in any part of
 the API, transactions, queries, or `d/pull`, without knowing its internal integer
-ID.
+id.
 
 <div class="multi-lang">
 
@@ -236,7 +236,7 @@ used to assign a globally unique keyword to an entity.
 
 This is the standard way to represent **enums** or system-wide constants. Once
 an entity has a `:db/ident`, you can use that keyword anywhere you would use an
-entity ID or a lookup ref.
+entity id or a lookup ref.
 
 <div class="multi-lang">
 
@@ -324,9 +324,9 @@ itself is a full-fledged entity. You can attach additional metadata to it (like
 
 In Datalevin, relationships are first-class citizens. They are defined using the
 `:db.type/ref` value type and the `:db/cardinality` property. **Crucially, the
-value of a reference attribute is always the entity ID (a 64-bit integer) of the
+value of a reference attribute is always the entity id (a 64-bit integer) of the
 target entity.** In transaction data, you can still use tempids, lookup refs, or
-`:db/ident` keywords as convenient inputs; Datalevin resolves them to entity IDs
+`:db/ident` keywords as convenient inputs; Datalevin resolves them to entity ids
 when it writes the datoms.
 
 ### 2.1 One-to-One and One-to-Many
@@ -390,7 +390,7 @@ quantity, rank, validity interval, or source system.
 
 Because Datalevin is "schema-on-write" and flexible, it does not enforce
 traditional "foreign key" constraints by default. If you delete an entity that
-is referred to by others, the references to its ID will remain (pointing to a
+is referred to by others, the references to its id will remain (pointing to a
 non-existent entity).
 
 To ensure a clean removal of an entity and its associated facts, it is highly
@@ -404,7 +404,7 @@ This operation will:
     entity.
 
 By using `:db/retractEntity`, you ensure that no dangling `:db.type/ref`
-references point to a non-existent entity ID, effectively maintaining reference
+references point to a non-existent entity id, effectively maintaining reference
 integrity for declared references.
 
 ---
