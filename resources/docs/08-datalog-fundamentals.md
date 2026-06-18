@@ -224,6 +224,7 @@ but the logical meaning is the same.
 
 ![Worked query binding flow: the binding relation gains a ?u column, unifies to add ?name, joins orders on the same ?u (dropping order-4 whose customer is not a London user), adds ?total, filters out the row whose total is 60, and projects ?name and ?total into the result](/images/diagrams/query-binding-flow.svg)
 
+Figure 8.1 illustrates a possible variable binding flow that resolves this query.
 The steps below trace that relation one clause at a time.
 
 The first clause finds entities whose city is London:
@@ -300,7 +301,7 @@ variations for aggregation and shaping data.
 By default, `:find` returns a **relation**: a set of tuples, where each tuple
 contains the values named in the `:find` clause.
 
-The word **set** matters. If two different internal rows produce the same
+The word **set** is important. If two different internal rows produce the same
 `:find` tuple, the duplicate tuple appears only once in the final relation.
 This is usually what you want for ordinary queries, but it matters for
 aggregates: aggregation works over the distinct tuples that remain in the query
@@ -345,6 +346,8 @@ Datalevin supports the standard Datalog find shapes:
 | Collection | `:find [?name ...]` | A collection of scalar values, e.g. `["Alice" "Bob"]`. |
 | Tuple | `:find [?name ?age]` | One tuple, e.g. `["Alice" 30]`. |
 | Scalar | `:find ?name .` | One scalar value, e.g. `"Alice"`. |
+
+Figure 8.2 shows the differences graphically.
 
 ![The four :find shapes applied to the same result set: relation selects all cells and returns a set of tuples, collection selects one column flattened into a vector, tuple selects one row, and scalar selects one cell](/images/diagrams/find-result-shapes.svg)
 
@@ -541,10 +544,56 @@ const cityCounts = await conn.query('[:find ?city (count ?e) ' +
 </div>
 Common aggregates include `sum`, `avg`, `count`, `min`, `max`, and `median`.
 
-Aggregate expressions can also appear in `:find`. For example, `(+ (sum ?x)
-(sum ?y))` returns a value derived from two aggregate results. This is useful
-when a query needs a computed metric rather than several separate aggregate
-columns.
+Arithmetic expressions over aggregate results can also appear in `:find`. The
+expression is evaluated after grouping, so each aggregate operand sees the same
+group it would see if it appeared as a separate `:find` column. In this query,
+`?customer` is the grouping key, and the final column adds two aggregate results:
+
+<div class="multi-lang">
+
+```clojure
+(d/q '[:find ?customer
+              (sum ?subtotal)
+              (sum ?tax)
+              (+ (sum ?subtotal) (sum ?tax))
+       :where [?order :order/customer ?customer]
+              [?order :order/subtotal ?subtotal]
+              [?order :order/tax ?tax]]
+     db)
+```
+
+```java
+Object totals = conn.query("[:find ?customer " +
+    "(sum ?subtotal) (sum ?tax) " +
+    "(+ (sum ?subtotal) (sum ?tax)) " +
+    ":where [?order :order/customer ?customer] " +
+    "       [?order :order/subtotal ?subtotal] " +
+    "       [?order :order/tax ?tax]]");
+```
+
+```python
+totals = conn.query('[:find ?customer '
+    '(sum ?subtotal) (sum ?tax) '
+    '(+ (sum ?subtotal) (sum ?tax)) '
+    ':where [?order :order/customer ?customer] '
+    '       [?order :order/subtotal ?subtotal] '
+    '       [?order :order/tax ?tax]]')
+```
+
+```javascript
+const totals = await conn.query('[:find ?customer ' +
+    '(sum ?subtotal) (sum ?tax) ' +
+    '(+ (sum ?subtotal) (sum ?tax)) ' +
+    ':where [?order :order/customer ?customer] ' +
+    '       [?order :order/subtotal ?subtotal] ' +
+    '       [?order :order/tax ?tax]]');
+```
+
+</div>
+
+Aggregate expressions support `+`, `-`, `*`, `/`, `mod`, `rem`, and `quot`.
+Their arguments may be aggregate calls, constants, or nested aggregate
+expressions, for example `(* 2 (+ (sum ?x) (sum ?y)))`.
 
 ### 2.3 Pull Expressions in `:find`
 
@@ -557,39 +606,28 @@ operation.
 
 ```clojure
 (d/q '[:find [(pull ?e [:user/name {:user/orders [:order/id]}]) ...]
-       :in $ ?min-age
-       :where [?e :user/age ?age]
-              [(> ?age ?min-age)]]
-     db 30)
+       :where [?e :user/city "London"]]
+     db)
 ```
 
 ```java
 Object result = conn.query("[:find [(pull ?e [:user/name {:user/orders [:order/id]}]) ...] " +
-    ":in $ ?min-age " +
-    ":where [?e :user/age ?age] " +
-    "       [(> ?age ?min-age)]]",
-    30);
+    ":where [?e :user/city \"London\"]]");
 ```
 
 ```python
 result = conn.query('[:find [(pull ?e [:user/name {:user/orders [:order/id]}]) ...] '
-    ':in $ ?min-age '
-    ':where [?e :user/age ?age] '
-    '       [(> ?age ?min-age)]]',
-    30)
+    ':where [?e :user/city "London"]]')
 ```
 
 ```javascript
 const result = await conn.query('[:find [(pull ?e [:user/name {:user/orders [:order/id]}]) ...] ' +
-    ':in $ ?min-age ' +
-    ':where [?e :user/age ?age] ' +
-    '       [(> ?age ?min-age)]]',
-    30);
+    ':where [?e :user/city "London"]]');
 ```
 
 </div>
 
-This query finds all users older than 30 and, for each one, pulls their name and
+This query finds all users in London and, for each one, pulls their name and
 a nested list of their orders. The result is a collection of maps, ready to be
 used by your application.
 
@@ -614,7 +652,7 @@ finding the London users first, as it's a much smaller set to filter.
 
 ## 4. Predicates and Function Bindings
 
-You can go beyond simple data patterns by using functions within your `:where`
+You can go beyond simple triple patterns by using functions within your `:where`
 clauses.
 
 ### 4.1 Predicate Clauses
@@ -657,6 +695,9 @@ const result = await conn.query('[:find ?name ?age ' +
 ```
 
 </div>
+
+This returns only users who are older than 30. Notice that the predicate
+function call is wrapped in a vector form.
 
 ### 4.2 Binding Clauses
 

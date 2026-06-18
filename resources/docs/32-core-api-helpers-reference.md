@@ -57,7 +57,75 @@ both Datalog datoms and custom KV writes.
 
 ---
 
-## 2. Transaction Observation and Simulation
+## 2. Pull Pattern Syntax Reference
+
+Chapter 7 explains when to use pull. This table is the compact syntax reference
+for pull selectors:
+
+| Selector form | Meaning |
+| :--- | :--- |
+| `[:user/name :user/email]` | Pull named forward attributes. |
+| `[*]` | Pull all forward attributes. Datalevin includes `:db/id` if the pattern does not name it. |
+| `[[:user/name :as :name]]` | Rename a pulled value in the returned map. |
+| `[[:user/friends :limit 5]]` | Limit a cardinality-many attribute. `nil` means no limit. |
+| `[[:user/active? :default true]]` | Return a default value when the attribute is missing. |
+| `[[:user/name :xform clojure.string/upper-case]]` | Transform the pulled value before returning it. Prefer resolvable symbols across process or language boundaries. |
+| `[{:order/customer [:user/name]}]` | Follow a forward reference and pull a nested shape. |
+| `[{[:user/friends :limit 5] [:user/name]}]` | Use an attribute expression as a nested map key. |
+| `[:order/_customer]` | Pull reverse references for entities that point to the current entity. |
+| `[{:order/_customer [:order/id]}]` | Pull a nested shape through a reverse reference. |
+| `[{:category/children ...}]` | Recursively pull through a reference until no new entities remain. |
+| `[{:category/children 2}]` | Recursively pull through a reference with a positive depth limit. |
+| `[{:category/_children 2}]` | Recursively pull through a reverse reference with a positive depth limit. |
+| `[(limit :user/friends 5)]` | Legacy limit form. Prefer `[[:user/friends :limit 5]]` in new code. |
+| `[(default :user/nickname "unknown")]` | Legacy default form. Prefer `[[:user/nickname :default "unknown"]]` in new code. |
+
+Pull selectors are EDN data. In Clojure, they are usually quoted vectors. In
+Java, Python, and JavaScript, they can be supplied as EDN strings or host
+language lists/maps accepted by the binding.
+
+Map-spec keys may be attribute names, reverse attribute names, or attribute
+expressions with options. `:limit` is valid only for cardinality-many
+attributes. Recursive pull tracks visited entities; if a cycle is encountered,
+the repeated entity is represented by `{:db/id ...}` instead of expanding
+forever.
+
+Component references are owned children. A bare component reference may expand
+recursively, because components are part of the parent's logical document. Use
+explicit nested patterns or bounded recursion when the response is part of an
+external API.
+
+In Datalog queries, pull appears in the `:find` clause:
+
+```clojure
+(d/q '[:find [(pull ?e [:user/name]) ...]
+       :where [?e :user/email]]
+     db)
+```
+
+The pattern can also be supplied as an input variable:
+
+```clojure
+(d/q '[:find [(pull ?e ?pattern) ...]
+       :in $ ?pattern
+       :where [?e :user/email]]
+     db [:user/name])
+```
+
+For multi-source queries, qualify the pull with the source that owns the entity
+ids being shaped:
+
+```clojure
+(d/q '[:find ?customer (pull $users ?customer [:user/name])
+       :in $users $orders
+       :where [$users ?customer :user/email ?email]
+              [$orders ?order :order/customer-email ?email]]
+     users-db orders-db)
+```
+
+---
+
+## 3. Transaction Observation and Simulation
 
 Chapter 6 gives `listen!` the full transaction-observation treatment. The short
 reference form is:
@@ -89,6 +157,9 @@ without mutating the database:
 (:db-after report)
 ```
 
+Like `transact!`, a simulated report may include `:new-attributes` when the
+transaction data introduce attributes not already present in the schema.
+
 `resolve-tempid` is a Datomic-compatibility helper for looking up a tempid in a
 transaction report's `:tempids` map:
 
@@ -104,7 +175,7 @@ In ordinary Clojure code, direct map lookup is usually clearer:
 
 ---
 
-## 3. Datom, Entity, and Type Helpers
+## 4. Datom, Entity, and Type Helpers
 
 These helpers are mostly for inspection, low-level import, and generic tooling:
 
@@ -129,7 +200,7 @@ for entity ids, schema compatibility, and value correctness.
 
 ---
 
-## 4. Secondary Index Job Helpers
+## 5. Secondary Index Job Helpers
 
 Full-text, vector, and embedding secondary indexes are synchronous by default.
 When a domain uses async indexing, these helpers expose the durable job queue:
@@ -157,7 +228,7 @@ updated before the transaction returns.
 
 ---
 
-## 5. Direct Provider Helpers
+## 6. Direct Provider Helpers
 
 Chapter 17 covers vector and embedding indexes. Datalevin also exposes direct
 provider helpers for code that wants to call embedding or generation models
@@ -207,7 +278,7 @@ resulting facts, episodes, embeddings, or summaries in Datalevin.
 
 ---
 
-## 6. Small Compatibility and Utility Helpers
+## 7. Small Compatibility and Utility Helpers
 
 | Function | Use |
 | :--- | :--- |
@@ -229,7 +300,7 @@ resulting facts, episodes, embeddings, or summaries in Datalevin.
 
 ---
 
-## 7. Other Public API Namespaces
+## 8. Other Public API Namespaces
 
 Not every public namespace needs its own appendix. The following namespaces are
 public, but narrower than `datalevin.core`, `datalevin.lmdb`, or
@@ -242,7 +313,7 @@ public, but narrower than `datalevin.core`, `datalevin.lmdb`, or
 | `datalevin.constants` | Stable defaults, documented tuning vars, and system constants shared by the implementation. |
 | `datalevin.main` | Programmatic support for the `dtlv` command-line tool. |
 
-### 7.1 `datalevin.interpret`
+### 8.1 `datalevin.interpret`
 
 Use `datalevin.interpret` when a function must be represented as data/source
 and later interpreted by Datalevin. Ordinary embedded Clojure code can usually
@@ -270,7 +341,7 @@ stored, sent over the wire, or used outside the original Clojure runtime.
       [k v])))
 ```
 
-### 7.2 `datalevin.udf`
+### 8.2 `datalevin.udf`
 
 Use `datalevin.udf` for descriptor-backed user-defined functions, especially
 when the function may come from another runtime, a server process, or an
@@ -329,7 +400,7 @@ transaction or query, `datalevin.interpret/inter-fn` is usually simpler. If the
 function should be looked up by descriptor in a host application, use
 `datalevin.udf`.
 
-### 7.3 `datalevin.constants`
+### 8.3 `datalevin.constants`
 
 `datalevin.constants` contains both public defaults and implementation
 constants. Treat it as a place to read documented defaults or bind documented
@@ -357,7 +428,7 @@ Many other constants name internal DBIs, type tags, WAL markers, query planner
 costs, and HA control-plane defaults. Prefer documented option maps and API
 functions when possible.
 
-### 7.4 `datalevin.main`
+### 8.4 `datalevin.main`
 
 `datalevin.main` backs the `dtlv` command-line tool. Most users should call the
 CLI directly from a shell, or use the higher-level Clojure APIs. The namespace
@@ -385,7 +456,8 @@ is useful when JVM tooling or tests need to invoke CLI behavior in process.
 
 The central Datalevin API is small: open a connection, transact data, call
 `db`, query, pull, and close the connection. The helpers in this appendix fill
-in the edges: observing transactions, simulating transaction reports, checking
-types, managing async secondary indexes, calling model providers directly,
-using compatibility utilities when porting code, and locating narrower public
-namespaces such as `interpret`, `udf`, `constants`, and `main`.
+in the edges: reading pull syntax precisely, observing transactions, simulating
+transaction reports, checking types, managing async secondary indexes, calling
+model providers directly, using compatibility utilities when porting code, and
+locating narrower public namespaces such as `interpret`, `udf`, `constants`,
+and `main`.

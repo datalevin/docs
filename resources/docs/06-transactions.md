@@ -7,8 +7,8 @@ part: "II — Core APIs: Datalog First, KV When Needed"
 # Chapter 6: Transactions and Atomic Updates
 
 Every read or write to a Datalevin database happens within a **transaction**.
-This chapter focuses on write transactions. So transaction in this chapter means
-write transaction.
+This chapter focuses on write transactions, so "transaction" here means a write
+transaction.
 
 Transactions are the cornerstone of database reliability, ensuring that your
 data moves from one consistent state to another, even in the face of concurrent
@@ -161,7 +161,9 @@ Entity API.
 Every successful `transact!` returns a **transaction report**. The report
 contains the database before and after the transaction, the datoms that were
 actually added or retracted, the tempid resolution map, and any transaction
-metadata supplied by the caller:
+metadata supplied by the caller. When a transaction introduces attributes that
+were not previously present in the database schema, the report also includes
+`:new-attributes`:
 
 <div class="multi-lang">
 
@@ -221,7 +223,7 @@ const sample = {
 </div>
 
 In the example above, we select two keys of the map to show, because the full
-report is large.  That report is useful not only as a return value. It is also
+report is large. That report is useful not only as a return value. It is also
 the data delivered to transaction listeners, covered later in this chapter.
 
 ### 2.1 Entity Maps
@@ -1045,6 +1047,7 @@ The callback receives the same transaction report returned by `transact!`:
 | `:tx-data` | The full datom objects actually added or retracted by the transaction; Chapter 15 explains their `:e`, `:a`, `:v`, `:tx`, and `:added` fields. |
 | `:tempids` | Map from transaction tempids to assigned entity ids. |
 | `:tx-meta` | The metadata value supplied as the optional third argument to `transact!`, or `nil`. |
+| `:new-attributes` | Optional vector of attribute idents first introduced by this transaction. This appears only when the transaction adds facts for attributes that were not already in the schema. |
 
 The listener key can be any unique value meaningful to the application.
 Registering another listener with the same key replaces the previous callback,
@@ -1334,7 +1337,7 @@ expand to more transaction data while the transaction is being prepared. They
 run against the current DB object and are committed atomically with the rest of
 the transaction.
 
-Transaction function can be one of the supported vector forms:
+A transaction function can be one of the supported vector forms:
 
 - `[:db.fn/call f arg ...]` calls an inline function, an installed function, or
   a user defined function (UDF) descriptor.

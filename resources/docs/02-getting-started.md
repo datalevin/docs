@@ -225,7 +225,9 @@ After the transaction data are converted into datoms, the datoms are encoded int
 binary form and inserted into the underlying key-value storage.
 
 The `d/transact!` function returns a transaction report. In a REPL you may see keys
-such as `:db-before`, `:db-after`, `:tx-data`, and `:tempids` in the report.
+such as `:db-before`, `:db-after`, `:tx-data`, and `:tempids` in the report; a
+transaction that introduces previously unknown attributes may also include
+`:new-attributes`.
 Some application code may want to inspect the report when it needs to see what
 datoms are transacted, what ids are generated, or to audit other details.
 

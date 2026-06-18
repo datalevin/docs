@@ -118,6 +118,8 @@
  {:term "prefix compression" :index "DLMDB!prefix compression"}
  {:term "provenance"}
  {:term "pull"}
+ {:term "pull pattern" :index "pull!pattern"}
+ {:term "pull-many" :index "pull!pull-many"}
  {:term "Python API"
   :patterns ["\\bPython\\b"]}
  {:term "query planner"}
@@ -125,6 +127,7 @@
  {:term "recursion" :index "Datalog!recursion"}
  {:term "reference attribute" :index "references!reference attribute"}
  {:term "re-index"}
+ {:term "recursive pull" :index "pull!recursive pull"}
  {:term "replication"}
  {:term "reverse reference" :index "references!reverse reference"}
  {:term "reverse pull" :index "pull!reverse pull"}
