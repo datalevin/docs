@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="540" viewBox="0 0 1000 540" role="img" aria-labelledby="title desc">
+  <title id="title">Composite identity from a derived tuple attribute</title>
+  <desc id="desc">A line-item entity stores the component attributes you write: line-item/order-id is "o-1001", line-item/sku is "SKU-42", and line-item/quantity is 2. The first two are components. Datalevin derives the tuple attribute line-item/order+sku from :db/tupleAttrs over order-id and sku; its value is ["o-1001" "SKU-42"], it is marked :db.unique/identity, and you never write it directly. Because it is a unique derived tuple, it becomes a composite identity that enables two things: a composite lookup ref [:line-item/order+sku ["o-1001" "SKU-42"]] usable in transact, pull, and retract; and upsert, where re-transacting the same components merges into the same entity instead of creating a duplicate.</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .ebox { fill: #ffffff; stroke: #94a3b8; stroke-width: 2; }
+      .ehead { fill: #f1f5f9; stroke: #94a3b8; stroke-width: 2; }
+      .tbox { fill: #f0fdfa; stroke: #0f766e; stroke-width: 2.6; }
+      .cbox { fill: #ecfeff; stroke: #0891b2; stroke-width: 2; }
+      .flow { fill: none; stroke: #64748b; stroke-width: 2.4; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 27px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 450; }
+      .ehdr { fill: #334155; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; font-weight: 700; }
+      .ehsub { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 500; }
+      .attr { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 13px; font-weight: 450; }
+      .val { fill: #0f766e; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 13px; font-weight: 600; }
+      .thdr { fill: #0f766e; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 15px; font-weight: 700; }
+      .tval { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 14px; font-weight: 600; }
+      .tnote { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 500; }
+      .chdr { fill: #0e7490; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; font-weight: 700; }
+      .cmono { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12.5px; font-weight: 500; }
+      .cnote { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 450; }
+      .flbl { fill: #475569; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; font-weight: 500; }
+      .flbl2 { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; font-weight: 650; }
+      .comp { fill: #0f766e; }
+      .deriv { fill: #0f766e; }
+      .uniq { fill: #d97706; }
+      .tagt { fill: #ffffff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 10px; font-weight: 700; }
+    </style>
+    <marker id="a" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Figure card (transparent corners adapt to light/dark page) -->
+  <rect class="card" x="2" y="2" width="996" height="536" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+
+  <text class="title" x="500" y="44" text-anchor="middle">Composite Identity from a Derived Tuple</text>
+  <text class="caption" x="500" y="70" text-anchor="middle">Write the components; Datalevin maintains the tuple that powers lookup refs and upsert.</text>
+
+  <!-- ===== Entity (components) ===== -->
+  <rect class="ebox" x="290" y="92" width="420" height="128" rx="10"/>
+  <path class="ehead" d="M290 102 a10 10 0 0 1 10 -10 h400 a10 10 0 0 1 10 10 v24 h-420 z"/>
+  <text class="ehdr" x="308" y="111">line-item entity</text>
+  <text class="ehsub" x="700" y="111" text-anchor="end">you write these</text>
+  <text class="attr" x="308" y="150">:line-item/order-id</text>
+  <text class="val" x="556" y="150">"o-1001"</text>
+  <rect class="comp" x="636" y="138" width="62" height="16" rx="8"/>
+  <text class="tagt" x="667" y="150" text-anchor="middle">component</text>
+  <text class="attr" x="308" y="178">:line-item/sku</text>
+  <text class="val" x="556" y="178">"SKU-42"</text>
+  <rect class="comp" x="636" y="166" width="62" height="16" rx="8"/>
+  <text class="tagt" x="667" y="178" text-anchor="middle">component</text>
+  <text class="attr" x="308" y="206">:line-item/quantity</text>
+  <text class="val" x="556" y="206">2</text>
+
+  <!-- ===== flow: components derive the tuple ===== -->
+  <path class="flow" d="M500 220 V266" marker-end="url(#a)"/>
+  <text class="flbl" x="514" y="248" text-anchor="start">:db/tupleAttrs</text>
+
+  <!-- ===== Derived tuple attribute ===== -->
+  <rect class="tbox" x="300" y="266" width="400" height="108" rx="10"/>
+  <text class="thdr" x="318" y="294">:line-item/order+sku</text>
+  <rect class="deriv" x="548" y="280" width="62" height="17" rx="8"/>
+  <text class="tagt" x="579" y="293" text-anchor="middle">DERIVED</text>
+  <rect class="uniq" x="618" y="280" width="64" height="17" rx="8"/>
+  <text class="tagt" x="650" y="293" text-anchor="middle">UNIQUE</text>
+  <text class="tval" x="318" y="328">= ["o-1001" "SKU-42"]</text>
+  <text class="tnote" x="318" y="354">you never write this &#8212; Datalevin maintains and indexes it</text>
+
+  <!-- ===== flow: tuple enables ===== -->
+  <path class="flow" d="M446 376 L286 412" marker-end="url(#a)"/>
+  <path class="flow" d="M554 376 L714 412" marker-end="url(#a)"/>
+  <text class="flbl2" x="500" y="400" text-anchor="middle">enables</text>
+
+  <!-- ===== Capability: lookup ref ===== -->
+  <rect class="cbox" x="42" y="416" width="440" height="98" rx="10"/>
+  <text class="chdr" x="62" y="442">Composite lookup ref</text>
+  <text class="cmono" x="62" y="466">[:line-item/order+sku ["o-1001" "SKU-42"]]</text>
+  <text class="cnote" x="62" y="492">use anywhere a lookup ref works: transact, pull, retract</text>
+
+  <!-- ===== Capability: upsert ===== -->
+  <rect class="cbox" x="518" y="416" width="440" height="98" rx="10"/>
+  <text class="chdr" x="538" y="442">Upsert</text>
+  <text class="cnote" x="538" y="468">re-transact the same components and Datalevin merges</text>
+  <text class="cnote" x="538" y="488">into the same entity &#8212; no duplicate is created</text>
+</svg>

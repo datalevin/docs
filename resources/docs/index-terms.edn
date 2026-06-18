@@ -1,0 +1,169 @@
+[
+ {:term "ACID"}
+ {:term "agent memory"}
+ {:term "analyzer" :index "full-text search!analyzer"}
+ {:term "append-only log"}
+ {:term "approximate nearest-neighbor"
+  :index "vector search!approximate nearest neighbor"
+  :patterns ["approximate nearest[- ]neighbor"]}
+ {:term "apperception"}
+ {:term "associative entity" :index "graph modeling!associative entity"}
+ {:term "attribute"}
+ {:term "AVE"}
+ {:term "AVE" :index "indexes!AVE"}
+ {:term "B+tree"}
+ {:term "Babashka pod"}
+ {:term "backup"}
+ {:term "batching"}
+ {:term "Boolean logic"
+  :index "full-text search!Boolean logic"
+  :patterns ["Boolean logic" "Boolean operators"]}
+ {:term "bundle theory" :patterns ["bundle theory"]}
+ {:term "cardinality"}
+ {:term "cardinality estimation"
+  :index "query planner!cardinality estimation"
+  :patterns ["cardinality[- ]estimation"]}
+ {:term "CAS" :index "compare-and-swap"}
+ {:term ":db/cas" :index "compare-and-swap!:db/cas"}
+ {:term "checkpoint"}
+ {:term "client API"
+  :patterns ["datalevin\\.client" "administrative client API"]}
+ {:term "closed schema"
+  :index "schema!closed schema"
+  :patterns ["closed schema" ":closed-schema\\?"]}
+ {:term "compaction"}
+ {:term "component reference" :index "references!component reference"}
+ {:term "composite identity" :index "schema!composite identity"}
+ {:term "composite index" :index "schema!composite index"}
+ {:term "consensus HA"}
+ {:term "copy-on-write" :index "LMDB!copy-on-write"}
+ {:term "Datalog"}
+ {:term "data-oriented programming"}
+ {:term "datom"}
+ {:term "DBI" :index "key-value store!DBI"}
+ {:term ":db.cardinality/many" :index "schema!:db.cardinality/many"}
+ {:term ":db/ident" :index "schema!:db/ident"}
+ {:term ":db.type/idoc" :index "schema!:db.type/idoc"}
+ {:term ":db.type/ref" :index "schema!:db.type/ref"}
+ {:term ":db.type/tuple" :index "schema!:db.type/tuple"}
+ {:term ":db.type/vec" :index "schema!:db.type/vec"}
+ {:term ":db/tupleAttrs" :index "schema!:db/tupleAttrs"}
+ {:term ":db/tupleType" :index "schema!:db/tupleType"}
+ {:term ":db/tupleTypes" :index "schema!:db/tupleTypes"}
+ {:term ":db.unique/identity" :index "schema!:db.unique/identity"}
+ {:term ":db.unique/value" :index "schema!:db.unique/value"}
+ {:term "DLMDB"}
+ {:term "document modeling"}
+ {:term "DUPSORT" :index "LMDB!DUPSORT"}
+ {:term "durability"}
+ {:term "EAV"}
+ {:term "EAV" :index "indexes!EAV"}
+ {:term "EDB" :index "Datalog!EDB"}
+ {:term "edge with properties"
+  :index "graph modeling!edge with properties"
+  :patterns ["data \\*on\\* the edge" "property-graph-style modeling"]}
+ {:term "embedding domain" :index "vector search!embedding domain"}
+ {:term "embedding search" :index "vector search!embedding search"}
+ {:term "entity"}
+ {:term "entity id"}
+ {:term "eid"
+  :raw-index "eid|see{entity id}"
+  :patterns ["entity id \\(eid\\)"]}
+ {:term "entity API"}
+ {:term "evidence" :index "agent memory!evidence"}
+ {:term "fact"}
+ {:term "fill-db" :index "bulk loading!fill-db"}
+ {:term "fixpoint" :index "Datalog!fixpoint"}
+ {:term "full-text search"}
+ {:term "graph modeling"}
+ {:term "heterogeneous tuple"
+  :index "schema!heterogeneous tuple"
+  :patterns ["heterogeneous tuple" "hetero[- ]tuple" "hetro[- ]tuple"]}
+ {:term "HNSW"}
+ {:term "HNSW" :index "vector search!HNSW"}
+ {:term "homogeneous tuple"
+  :index "schema!homogeneous tuple"
+  :patterns ["homogeneous tuple" "homo[- ]tuple"]}
+ {:term "hybrid query"}
+ {:term "IDB" :index "Datalog!IDB"}
+ {:term "idoc"}
+ {:term "idoc domain" :index "idoc!domain"}
+ {:term "idoc-get" :index "idoc!idoc-get"}
+ {:term "idoc-match" :index "idoc!idoc-match"}
+ {:term "index"}
+ {:term "init-db" :index "bulk loading!init-db"}
+ {:term "Java API"
+  :patterns ["\\bJava\\b" "JavaDoc"]}
+ {:term "JavaScript API"
+  :patterns ["\\bJavaScript\\b"]}
+ {:term "join order" :index "query planner!join order"}
+ {:term "key-value store"}
+ {:term "left-deep join" :index "query planner!left-deep join"}
+ {:term "LMDB"}
+ {:term "logical database"
+  :patterns ["logical databases?" "logical view" "logic programming"]}
+ {:term "lookup ref"}
+ {:term "LSN" :index "WAL!LSN"}
+ {:term "mapsize"}
+ {:term "MCP"}
+ {:term "memory-mapped storage"
+  :index "LMDB!memory-mapped storage"
+  :patterns ["memory-mapped storage" "memory-mapped files" "memory-mapped key-value store" "memory mapped database file"]}
+ {:term "MVCC"}
+ {:term "not-join" :index "Datalog!not-join"}
+ {:term "operating envelope" :index "agent memory!operating envelope"}
+ {:term "order statistics" :index "DLMDB!order statistics"}
+ {:term "path index" :index "idoc!path index"}
+ {:term "predicate" :index "Datalog!predicate"}
+ {:term "prefix compression" :index "DLMDB!prefix compression"}
+ {:term "provenance"}
+ {:term "pull"}
+ {:term "Python API"
+  :patterns ["\\bPython\\b"]}
+ {:term "query planner"}
+ {:term "reciprocal rank fusion" :index "hybrid query!reciprocal rank fusion"}
+ {:term "recursion" :index "Datalog!recursion"}
+ {:term "reference attribute" :index "references!reference attribute"}
+ {:term "re-index"}
+ {:term "replication"}
+ {:term "reverse reference" :index "references!reverse reference"}
+ {:term "reverse pull" :index "pull!reverse pull"}
+ {:term "rules" :index "Datalog!rules"}
+ {:term "schema"}
+ {:term "schema-on-write" :index "schema!schema-on-write"}
+ {:term "semantic memory" :index "agent memory!semantic memory"}
+ {:term "server mode"}
+ {:term "single writer"
+  :index "concurrency!single writer"
+  :patterns ["single[- ]writer"]}
+ {:term "snapshot"}
+ {:term "sorted import"
+  :index "bulk loading!sorted import"
+  :patterns ["sorted import" "sorted order" "sort your datoms"]}
+ {:term "stateful AI" :index "agent memory!stateful AI"}
+ {:term "stored tuple" :index "schema!stored tuple"}
+ {:term "subquery" :index "Datalog!subquery"}
+ {:term "tempid"}
+ {:term "TF-IDF" :index "full-text search!TF-IDF"}
+ {:term "T-Wand"
+  :index "full-text search!T-WAND"
+  :patterns ["T-Wand" "T-WAND" "Tiered WAND"]}
+ {:term "tokenizer" :index "full-text search!tokenizer"}
+ {:term "transaction"}
+ {:term "transaction function" :index "transactions!transaction function"}
+ {:term "transaction report" :index "transactions!transaction report"}
+ {:term "truth maintenance" :index "agent memory!truth maintenance"}
+ {:term "tuple"}
+ {:term "tuple attribute" :index "schema!tuple attribute"}
+ {:term "unification" :index "Datalog!unification"}
+ {:term "unique identity" :index "schema!unique identity"}
+ {:term "upsert"}
+ {:term "validation"}
+ {:term "vector domain" :index "vector search!vector domain"}
+ {:term "vector search"}
+ {:term "WAL"}
+ {:term "WAND" :index "full-text search!WAND"}
+ {:term "with-transaction" :index "transactions!with-transaction"}
+ {:term "working memory" :index "agent memory!working memory"}
+ {:term "xia" :index "agent memory!xia"}
+]

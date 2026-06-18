@@ -156,6 +156,8 @@ Here is a small runnable helper using the Chapter 23 schema. The policy decision
 to accept a fact remains outside Datalevin; this function only makes the state
 transition atomic and inspectable:
 
+<!-- pdf-listing: Accepting a current fact with supersession tracking -->
+
 ```clojure
 (defn current-fact-ids
   [db user-id kind]

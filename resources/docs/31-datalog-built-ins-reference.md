@@ -1,10 +1,10 @@
 ---
-title: "Appendix C: Datalog Built-In Functions Reference"
-chapter: 30
+title: "Appendix D: Datalog Built-In Functions Reference"
+chapter: 31
 part: "VII — Appendices"
 ---
 
-# Appendix C: Datalog Built-In Functions Reference
+# Appendix D: Datalog Built-In Functions Reference
 
 This appendix lists the functions and predicates that Datalevin resolves
 without namespace qualification inside Datalog query clauses. It also lists the

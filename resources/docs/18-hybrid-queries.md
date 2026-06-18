@@ -274,6 +274,8 @@ Datalog attribute.
 
 <div class="multi-lang">
 
+<!-- pdf-listing: Hybrid product search with text, vector, logic, KV, and idoc -->
+
 ```clojure
 (d/q '[:find ?title ?dist
        :in $ ?search-term ?target-vec ?category

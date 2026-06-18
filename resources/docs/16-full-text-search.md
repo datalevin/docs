@@ -80,6 +80,12 @@ const schema = {
 The concept of search domains and `:db.fulltext/autoDomain` will be explained in
 section 3.
 
+The examples use `:db.type/string` because full-text search is usually applied
+to human text. It is not a hard requirement of `:db/fulltext`: during
+transaction processing, Datalevin calls `str` on the value before sending it to
+the analyzer. Embedding search is different; `:db/embedding` requires a string
+attribute.
+
 ---
 
 ## 2. Querying with `fulltext`
@@ -299,6 +305,8 @@ There are two separate decisions:
 
 - Schema properties assign attributes to domains.
 - Store options configure the search engine used by each domain.
+
+![Search domain membership: :post/title (domains public + autoDomain) belongs to the named domain public and its own attribute domain post/title; :post/body belongs to public; :post/draft belongs to private; :note/body, with no domain keys, belongs to the default datalevin domain — showing the default, named, and automatic attribute domain kinds and that one attribute can join several domains](/images/diagrams/search-domains.svg)
 
 ### 3.1 Assigning Attributes to Domains
 
@@ -520,8 +528,8 @@ Boolean operators can be arbitrarily nested:
 
 ## 5. Analyzers: Tokenization and Normalization
 
-When you transact a string into a full-text attribute, it passes through an
-**Analyzer**:
+When you transact a value into a full-text attribute, Datalevin first converts
+the value with `str`, then passes the resulting text through an **Analyzer**:
 
 1. **Tokenization**: Breaking text into terms
 2. **Normalization**: Lowercasing, punctuation handling
@@ -535,6 +543,8 @@ An analyzer turns text into `[term position offset]` triples. The term is the
 searchable token. The position is the token number inside the document, used for
 phrase and proximity scoring. The offset is the character offset in the original
 text, used for highlighting.
+
+![Analyzer pipeline: document d1 "Running runners in databases" is split by a regexp tokenizer into tokens with positions and offsets; token filters lower-case, drop the stop word "in", and stem the rest, preserving positions to yield ["run" 0 0], ["runner" 1 8], ["databas" 3 19]; a second document d2 "database run" runs through the same analyzer, and both are indexed by term in the inverted index, which maps each term to the documents and positions where it appears (run to d1·0 and d2·1, runner to d1·1, databas to d1·3 and d2·0)](/images/diagrams/analyzer-pipeline.svg)
 
 ### 5.1 Analyzer Pipelines with `datalevin.search-utils`
 
@@ -670,18 +680,55 @@ documents.
 
 ### 6.1 T-Wand Algorithm
 
-The search uses a novel **Tiered WAND** algorithm, described in the T-Wand blog
-post [2]. WAND-style algorithms are top-k retrieval algorithms: they avoid
-fully scoring documents that cannot enter the best result set. Datalevin's
-T-Wand variant adds tiers by term coverage:
+Datalevin uses **Tiered WAND** (T-Wand), described in the T-Wand blog post [3].
+To understand what T-Wand adds, first understand ordinary WAND [2].
 
-1. First, documents containing *all* query terms
-2. Then documents with *n-1* terms
-3. Continue until enough results are found
+WAND is a top-k retrieval algorithm. A query such as `"red fox database"` has
+one posting iterator per query term. Each iterator walks the document references
+that contain that term, and each term has an upper bound: the largest score that
+term could possibly contribute to any document. During search, the engine keeps
+a heap of the current best `k` documents. Once the heap is full, the lowest
+score in that heap becomes the threshold a new document must beat.
 
-This ensures documents with better term coverage rank higher, addressing a
-common frustration with search engines where partial matches outrank complete
-matches.
+At each step, WAND sorts the term iterators by their current document id. It
+then adds the per-term upper bounds from left to right until the sum can beat
+the current threshold. The iterator where that happens is the pivot. Any
+document id before the pivot cannot possibly beat the threshold, even under the
+most generous score estimate, so the earlier iterators can be advanced directly
+to the pivot document id. If all iterators up to the pivot point at the same
+document, the engine scores that document exactly and maybe updates the top-k
+heap. Otherwise it keeps advancing. The important property is that the skipping
+is exact, not approximate: skipped documents are skipped only when their maximum
+possible score is already too low.
+
+T-Wand keeps that WAND score pruning and adds a relevance constraint based on
+term coverage. It divides matching documents into tiers:
+
+1. First, documents containing all `n` query terms.
+2. Then documents containing `n - 1` query terms.
+3. Then documents containing `n - 2` query terms, and so on until enough
+   results are found.
+
+Within a tier, documents are still ranked by TF-IDF score. Across tiers, term
+coverage wins: a document that contains all query terms is considered before
+documents that contain only some of them. This addresses a common search
+frustration where a high-scoring partial match outranks a complete match.
+
+The tiering also gives the engine more ways to prune. Suppose a query has `n`
+terms and the current tier requires at least `t` matching terms. Sort the query
+terms from rarest to most common. Any document with `t` matches must contain at
+least one of the rarest `n - t + 1` terms. If it contained none of those rare
+terms, it could match at most the remaining `t - 1` terms. Therefore the engine
+can use the union of those rare-term posting lists as the candidate set for the
+tier, instead of considering every document that matches any query term.
+
+There is a second tier-specific pruning rule while checking a candidate. If the
+candidate has matched `h` terms so far and only `r` unchecked query terms remain,
+then its best possible final coverage is `h + r`. If `h + r < t`, the candidate
+can no longer reach the tier and can be discarded before exact scoring. Combined
+with WAND's score upper bounds, this lets Datalevin avoid both low-coverage
+candidates and high-coverage candidates that still cannot enter the current
+top-k result set.
 
 ### 6.2 Term Proximity Scoring
 
@@ -769,6 +816,8 @@ The Java, Python, and JavaScript bindings expose the same standalone search
 writer as `SearchIndexWriter` / `search_index_writer` / `searchIndexWriter`.
 The writer batches index changes and flushes final term metadata on `commit`,
 so call `commit` before relying on search results:
+
+<!-- pdf-listing: Bulk loading a standalone full-text search index -->
 
 ```clojure
 (def lmdb (d/open-kv "/tmp/search-db"))
@@ -858,6 +907,15 @@ transaction's index work.
 
 ---
 
+## Summary
+
+Full-text search in Datalevin is a first-class capability: tightly integrated,
+high-performance, and synchronous by default. Enable `:db/fulltext`, use the
+`fulltext` function with Clojure-style boolean expressions, and leverage search
+domains for organized indexing, without operating a separate search cluster.
+
+---
+
 ## References
 
 [1] Christopher D. Manning, Prabhakar Raghavan, and Hinrich Schütze,
@@ -866,14 +924,11 @@ transaction's index work.
    especially Section 6.3,
    [The vector space model for scoring](https://nlp.stanford.edu/IR-book/html/htmledition/the-vector-space-model-for-scoring-1.html).
 
-[2] Huahai Yang, [T-Wand: Beat Lucene in Less Than 600 Lines of Code](https://yyhh.org/blog/2021/11/t-wand-beat-lucene-in-less-than-600-lines-of-code/),
+[2] Andrei Z. Broder, David Carmel, Michael Herscovici, Aya Soffer, and Jason
+   Zien, "Efficient Query Evaluation Using a Two-Level Retrieval Process,"
+   *Proceedings of the Twelfth International Conference on Information and
+   Knowledge Management* (CIKM '03), 2003,
+   DOI: [10.1145/956863.956944](https://doi.org/10.1145/956863.956944).
+
+[3] Huahai Yang, [T-Wand: Beat Lucene in Less Than 600 Lines of Code](https://yyhh.org/blog/2021/11/t-wand-beat-lucene-in-less-than-600-lines-of-code/),
    yyhh.org, November 5, 2021.
-
----
-
-## Summary
-
-Full-text search in Datalevin is a first-class capability: tightly integrated,
-high-performance, and synchronous by default. Enable `:db/fulltext`, use the
-`fulltext` function with Clojure-style boolean expressions, and leverage search
-domains for organized indexing, without operating a separate search cluster.

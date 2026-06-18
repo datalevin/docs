@@ -51,7 +51,7 @@ transactions, and data shapes stay runnable in one place. The same model can be
 implemented from Java, Python, JavaScript, or over the server API by composing
 the same `transact`, `query`, `pull`, full-text, vector, and embedding
 operations shown earlier in the book. For exact language coverage, use the
-compatibility matrix linked in Chapter 2. The notable gaps for Part VI examples
+compatibility matrix linked in Appendix A. The notable gaps for Part VI examples
 are the same as elsewhere: JavaScript does not expose a Datalog transaction
 callback, and staged mutation of existing Entity objects is Clojure-only.
 
@@ -64,6 +64,8 @@ the agent-specific machinery on top of ordinary database capabilities.
 
 The following minimal in-memory setup is enough to run many of the Clojure
 examples in Part VI:
+
+<!-- pdf-listing: Minimal Part VI memory schema -->
 
 ```clojure
 (require '[datalevin.core :as d])

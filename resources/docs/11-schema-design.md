@@ -20,7 +20,7 @@ connection named `conn`. Schema snippets show the shape to pass when opening a
 connection or updating a schema.
 
 For a compact reference of every Datalog schema property and its accepted
-values, see Appendix A, "Datalog Schema Reference."
+values, see Appendix C, "Datalog Schema Reference."
 
 ---
 
@@ -112,11 +112,13 @@ mean the application stores a special tuple value directly, and it does not
 create a separate storage structure outside the normal Datalog indexes. It is a
 derived composite access path over ordinary attributes. The stored tuple value
 forms are `:db.type/tuple` with `:db/tupleType` or `:db/tupleTypes`, covered in
-Appendix A.
+Appendix C.
 
 A line item, for example, may be identified by the pair of order id and SKU. The
 application writes `:line-item/order-id` and `:line-item/sku`; Datalevin
 makes `:line-item/order+sku` available as a derived composite lookup.
+
+![Composite identity from a derived tuple: a line-item entity stores the component attributes order-id and sku; Datalevin derives the tuple attribute :line-item/order+sku via :db/tupleAttrs, marks it unique, and never requires you to write it; the unique derived tuple then enables a composite lookup ref and upsert on the component values](/images/diagrams/composite-tuple-identity.svg)
 
 <div class="multi-lang">
 
@@ -223,7 +225,7 @@ There are a few important rules:
 ```
 
 For homogeneous and heterogeneous tuple values that are not derived from other
-attributes, use `:db/tupleType` or `:db/tupleTypes`; Appendix A summarizes those
+attributes, use `:db/tupleType` or `:db/tupleTypes`; Appendix C summarizes those
 forms.
 
 ### 1.4 System-Wide Identifiers: `:db/ident`
@@ -350,6 +352,8 @@ them.
     and results in a "cleaner" data structure when using `d/pull`.
 2.  **Join Entities**: You can create a third entity that "joins" the other two,
     similar to a join table in SQL.
+
+![Many-to-many models compared: a :db.cardinality/many ref puts :user/roles holding role/admin and role/editor on user u-1 — convenient and pulls as one nested list, but each member is still a separate datom, the relationship can't carry attributes, and very large sets get costly; a join entity uses role-assignment entities linking u-1 to each role — normalized facts the optimizer can count, join, and filter, scaling to large relationships and able to carry edge attributes like assigned-at, validity, rank, or source](/images/diagrams/many-to-many-models.svg)
 
 **Performance Tip: Prefer Normalized Relationship Facts.**
 
@@ -761,7 +765,7 @@ trying to change the meaning of a populated attribute in place.
 
 ---
 
-## 5. Summary: The Schema Checklist
+## Summary: The Schema Checklist
 
 When adding a new attribute to your Datalevin database, ask yourself:
 

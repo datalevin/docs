@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="420" viewBox="0 0 1000 420" role="img" aria-labelledby="title desc">
+  <title id="title">Co-appearance bipartite graph and its person-to-person projection</title>
+  <desc id="desc">On the left, a bipartite graph with two node types: people (Kevin Bacon, John Belushi, Tom Hanks) and movies (Animal House, Apollo 13), connected through Credit entities. Each Credit links one person to one movie via :credit/person and :credit/movie. Belushi and Bacon both have credits on Animal House; Bacon and Hanks both have credits on Apollo 13. On the right, the projected acted-with graph over people only: two people are adjacent when they share a movie. Bacon is adjacent to Belushi through Animal House and to Hanks through Apollo 13. Belushi and Hanks share no movie, so they are not adjacent.</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .panel { fill: #fcfdfe; stroke: #e2e8f0; stroke-width: 1.6; }
+      .pnode { fill: #ecfeff; stroke: #0891b2; stroke-width: 2; }
+      .mnode { fill: #fffbeb; stroke: #f59e0b; stroke-width: 2; }
+      .cnode { fill: #0f766e; stroke: #0f766e; stroke-width: 2; }
+      .bedge { fill: none; stroke: #94a3b8; stroke-width: 1.8; }
+      .pedge { fill: none; stroke: #0f766e; stroke-width: 2.6; }
+      .proj { fill: none; stroke: #0f766e; stroke-width: 3; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 27px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 450; }
+      .colh { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; font-weight: 700; }
+      .nodet { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13.5px; font-weight: 650; }
+      .ctag { fill: #ffffff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 9px; font-weight: 700; }
+      .plbl { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 600; }
+      .projlbl { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; font-weight: 700; }
+      .projsub { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11px; font-weight: 450; }
+      .foot { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-style: italic; font-weight: 450; }
+    </style>
+    <marker id="pa" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#0f766e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Figure card (transparent corners adapt to light/dark page) -->
+  <rect class="card" x="2" y="2" width="996" height="416" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+
+  <text class="title" x="500" y="42" text-anchor="middle">Co-Appearance: Bipartite Graph &amp; Projection</text>
+  <text class="caption" x="500" y="68" text-anchor="middle">People and movies connect through Credit entities; project to a person-to-person graph.</text>
+
+  <!-- ===================== LEFT: bipartite ===================== -->
+  <rect class="panel" x="24" y="88" width="432" height="276" rx="12"/>
+  <text class="colh" x="92" y="110" text-anchor="middle">People</text>
+  <text class="colh" x="242" y="110" text-anchor="middle">Credits</text>
+  <text class="colh" x="392" y="110" text-anchor="middle">Movies</text>
+
+  <!-- bipartite edges -->
+  <path class="bedge" d="M152 150 L228 165"/>
+  <path class="bedge" d="M256 165 L332 178"/>
+  <path class="bedge" d="M152 230 L228 207"/>
+  <path class="bedge" d="M256 203 L332 182"/>
+  <path class="bedge" d="M152 230 L228 253"/>
+  <path class="bedge" d="M256 257 L332 278"/>
+  <path class="bedge" d="M152 310 L228 297"/>
+  <path class="bedge" d="M256 293 L332 282"/>
+
+  <!-- people -->
+  <rect class="pnode" x="32" y="130" width="120" height="40" rx="10"/>
+  <text class="nodet" x="92" y="155" text-anchor="middle">John Belushi</text>
+  <rect class="pnode" x="32" y="210" width="120" height="40" rx="10"/>
+  <text class="nodet" x="92" y="235" text-anchor="middle">Kevin Bacon</text>
+  <rect class="pnode" x="32" y="290" width="120" height="40" rx="10"/>
+  <text class="nodet" x="92" y="315" text-anchor="middle">Tom Hanks</text>
+
+  <!-- movies -->
+  <rect class="mnode" x="332" y="160" width="120" height="40" rx="10"/>
+  <text class="nodet" x="392" y="185" text-anchor="middle">Animal House</text>
+  <rect class="mnode" x="332" y="260" width="120" height="40" rx="10"/>
+  <text class="nodet" x="392" y="285" text-anchor="middle">Apollo 13</text>
+
+  <!-- credit nodes -->
+  <circle class="cnode" cx="242" cy="165" r="14"/>
+  <text class="ctag" x="242" y="168" text-anchor="middle">CR</text>
+  <circle class="cnode" cx="242" cy="205" r="14"/>
+  <text class="ctag" x="242" y="208" text-anchor="middle">CR</text>
+  <circle class="cnode" cx="242" cy="255" r="14"/>
+  <text class="ctag" x="242" y="258" text-anchor="middle">CR</text>
+  <circle class="cnode" cx="242" cy="295" r="14"/>
+  <text class="ctag" x="242" y="298" text-anchor="middle">CR</text>
+
+  <text class="foot" x="240" y="350" text-anchor="middle">each Credit links :credit/person &#8594; :credit/movie</text>
+
+  <!-- ===================== projection arrow ===================== -->
+  <path class="proj" d="M470 226 H530" marker-end="url(#pa)"/>
+  <text class="projlbl" x="500" y="214" text-anchor="middle">project</text>
+  <text class="projsub" x="500" y="248" text-anchor="middle">shared movie</text>
+
+  <!-- ===================== RIGHT: projection ===================== -->
+  <rect class="panel" x="544" y="88" width="432" height="276" rx="12"/>
+  <text class="colh" x="760" y="110" text-anchor="middle">Projected: acted-with (people only)</text>
+
+  <!-- projection edges -->
+  <path class="pedge" d="M712 200 L690 288"/>
+  <path class="pedge" d="M808 200 L830 288"/>
+  <text class="plbl" x="676" y="250" text-anchor="end">Animal House</text>
+  <text class="plbl" x="844" y="250" text-anchor="start">Apollo 13</text>
+
+  <rect class="pnode" x="700" y="160" width="120" height="40" rx="10"/>
+  <text class="nodet" x="760" y="185" text-anchor="middle">Kevin Bacon</text>
+  <rect class="pnode" x="595" y="290" width="120" height="40" rx="10"/>
+  <text class="nodet" x="655" y="315" text-anchor="middle">John Belushi</text>
+  <rect class="pnode" x="805" y="290" width="120" height="40" rx="10"/>
+  <text class="nodet" x="865" y="315" text-anchor="middle">Tom Hanks</text>
+
+  <text class="foot" x="760" y="350" text-anchor="middle">adjacent = shared a movie; Belushi &amp; Hanks share none</text>
+</svg>

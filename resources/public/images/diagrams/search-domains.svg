@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="460" viewBox="0 0 1000 460" role="img" aria-labelledby="title desc">
+  <title id="title">Full-text search domain membership</title>
+  <desc id="desc">Full-text attributes are assigned to search domains. :post/title has domains public and autoDomain true, so it belongs to the named domain public and to its own attribute domain post/title — one attribute in two domains. :post/body has domains public, so it belongs to the named domain public. :post/draft has domains private, so it belongs to the named domain private. :note/body has no domain keys, so it belongs to the default domain datalevin. Domains come in three kinds: the default domain datalevin, named domains such as public and private, and automatic attribute domains such as post/title.</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .attrbox { fill: #ffffff; stroke: #94a3b8; stroke-width: 2; }
+      .dom-default { fill: #f1f5f9; stroke: #64748b; stroke-width: 2; }
+      .dom-named { fill: #ecfeff; stroke: #0891b2; stroke-width: 2; }
+      .dom-auto { fill: #f0fdfa; stroke: #0f766e; stroke-width: 2.4; }
+      .edge { fill: none; stroke: #94a3b8; stroke-width: 1.8; }
+      .edge-hi { fill: none; stroke: #0f766e; stroke-width: 2.6; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 28px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 450; }
+      .colh { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; font-weight: 700; }
+      .attrt { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 14px; font-weight: 500; }
+      .domt { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 14px; font-weight: 600; }
+      .tag-default { fill: #64748b; }
+      .tag-named { fill: #0891b2; }
+      .tag-auto { fill: #0f766e; }
+      .tagt { fill: #ffffff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 10px; font-weight: 700; }
+      .note { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 650; }
+      .legt { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12.5px; font-weight: 450; }
+    </style>
+    <marker id="a" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#94a3b8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="at" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#0f766e" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Figure card (transparent corners adapt to light/dark page) -->
+  <rect class="card" x="2" y="2" width="996" height="456" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+
+  <text class="title" x="500" y="44" text-anchor="middle">Search Domains</text>
+  <text class="caption" x="500" y="70" text-anchor="middle">One :db/fulltext attribute can belong to several domains at once.</text>
+
+  <text class="colh" x="140" y="106" text-anchor="middle">full-text attributes</text>
+  <text class="colh" x="765" y="106" text-anchor="middle">search domains</text>
+
+  <!-- ===== membership edges ===== -->
+  <path class="edge-hi" d="M240 153 L658 147" marker-end="url(#at)"/>
+  <path class="edge-hi" d="M240 153 L658 219" marker-end="url(#at)"/>
+  <path class="edge" d="M240 223 L658 219" marker-end="url(#a)"/>
+  <path class="edge" d="M240 293 L658 291" marker-end="url(#a)"/>
+  <path class="edge" d="M240 373 L658 373" marker-end="url(#a)"/>
+
+  <!-- ===== attributes ===== -->
+  <rect class="attrbox" x="40" y="130" width="200" height="46" rx="10"/>
+  <text class="attrt" x="58" y="159">:post/title</text>
+  <rect class="attrbox" x="40" y="200" width="200" height="46" rx="10"/>
+  <text class="attrt" x="58" y="229">:post/body</text>
+  <rect class="attrbox" x="40" y="270" width="200" height="46" rx="10"/>
+  <text class="attrt" x="58" y="299">:post/draft</text>
+  <rect class="attrbox" x="40" y="350" width="200" height="46" rx="10"/>
+  <text class="attrt" x="58" y="379">:note/body</text>
+
+  <!-- ===== domains ===== -->
+  <rect class="dom-auto" x="660" y="124" width="220" height="46" rx="10"/>
+  <text class="domt" x="678" y="153">"post/title"</text>
+  <rect class="tag-auto" x="800" y="138" width="68" height="18" rx="9"/>
+  <text class="tagt" x="834" y="151" text-anchor="middle">auto</text>
+
+  <rect class="dom-named" x="660" y="196" width="220" height="46" rx="10"/>
+  <text class="domt" x="678" y="225">"public"</text>
+  <rect class="tag-named" x="794" y="210" width="74" height="18" rx="9"/>
+  <text class="tagt" x="831" y="223" text-anchor="middle">named</text>
+
+  <rect class="dom-named" x="660" y="268" width="220" height="46" rx="10"/>
+  <text class="domt" x="678" y="297">"private"</text>
+  <rect class="tag-named" x="794" y="282" width="74" height="18" rx="9"/>
+  <text class="tagt" x="831" y="295" text-anchor="middle">named</text>
+
+  <rect class="dom-default" x="660" y="350" width="220" height="46" rx="10"/>
+  <text class="domt" x="678" y="379">"datalevin"</text>
+  <rect class="tag-default" x="792" y="364" width="76" height="18" rx="9"/>
+  <text class="tagt" x="830" y="377" text-anchor="middle">default</text>
+
+  <!-- ===== multi-membership annotation ===== -->
+  <text class="note" x="360" y="128" text-anchor="middle">in 2 domains</text>
+
+  <!-- ===== legend ===== -->
+  <text class="legt" x="40" y="430">Membership rules:</text>
+  <text class="legt" x="160" y="430">no domain keys &#8594; default &#183; :db.fulltext/domains &#8594; named &#183; :db.fulltext/autoDomain &#8594; attribute domain</text>
+</svg>

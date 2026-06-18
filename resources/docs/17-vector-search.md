@@ -358,6 +358,8 @@ The provider, model, dimensions, metric, and quantization together define an
 embedding space. Values from different embedding spaces should not be mixed in
 one domain.
 
+![Text embedding indexing pipeline: on write, transacting :doc/text stores the datom as-is in the Datalog store (the text stays the source of truth) and also sends the text through the embedding provider to a vector that is inserted into the HNSW index keyed to the entity — the vector is only a secondary index, unlike :db.type/vec which stores the vector itself; on query, embedding-neighbors runs the query text through the same provider and embedding space to a query vector, the HNSW index does nearest-neighbor search, and the nearest entities' stored :doc/text is pulled](/images/diagrams/embedding-index-pipeline.svg)
+
 <div class="multi-lang">
 
 ```clojure
@@ -927,6 +929,15 @@ to inspect or manually process pending work, and use
 
 ---
 
+## Summary
+
+Vector search transforms Datalevin into a semantic database. Use `:db.type/vec`
+and `vec-neighbors` when your application owns vectors directly; use
+`:db/embedding` and `embedding-neighbors` when Datalevin should embed string
+datoms and maintain the vector index for you.
+
+---
+
 ## References
 
 [1] Yu. A. Malkov and D. A. Yashunin,
@@ -935,12 +946,3 @@ to inspect or manually process pending work, and use
    arXiv:1603.09320, 2016; IEEE Transactions on Pattern Analysis and Machine
    Intelligence 42(4):824-836, 2020,
    [doi:10.1109/TPAMI.2018.2889473](https://doi.org/10.1109/TPAMI.2018.2889473).
-
----
-
-## Summary
-
-Vector search transforms Datalevin into a semantic database. Use `:db.type/vec`
-and `vec-neighbors` when your application owns vectors directly; use
-`:db/embedding` and `embedding-neighbors` when Datalevin should embed string
-datoms and maintain the vector index for you.

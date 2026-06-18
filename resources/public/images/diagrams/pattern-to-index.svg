@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="416" viewBox="0 0 1000 416" role="img" aria-labelledby="title desc">
+  <title id="title">Mapping query patterns to index choice</title>
+  <desc id="desc">A table mapping datom patterns to the index Datalevin scans. EAV sorts by entity then attribute then value; AVE sorts by attribute then value then entity. The known, bound positions that form a leading prefix of an index sort key select that index. Pattern entity-known, attribute and value free, uses the EAV index as a prefix scan to return all facts about the entity, via datoms eav e. Pattern entity and attribute known, value free, uses EAV as a prefix scan to return the values of that attribute on the entity, via datoms eav e a. Pattern attribute and value known, entity free, uses the AVE index as a prefix scan to return entities where the attribute equals the value, via datoms ave a v. Pattern attribute known and value free uses AVE to scan every value and entity for that attribute. Pattern attribute known with a value range uses AVE as a range scan to return entities whose value falls between bounds, via index-range.</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .rowbg { fill: #f8fafc; }
+      .cell-on { fill: #ccfbf1; stroke: #0f766e; stroke-width: 1.6; }
+      .cell-free { fill: #f1f5f9; stroke: #e2e8f0; stroke-width: 1.4; }
+      .cell-rng { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.6; }
+      .badge-eav { fill: #0f766e; }
+      .badge-ave { fill: #0891b2; }
+      .arrow { fill: none; stroke: #94a3b8; stroke-width: 2; }
+      .hrule { stroke: #cbd5e1; stroke-width: 1.4; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 28px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 450; }
+      .legend { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; font-weight: 500; }
+      .legk { fill: #0f766e; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; }
+      .colh { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 700; }
+      .cellt-on { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 14px; font-weight: 700; }
+      .cellt-free { fill: #94a3b8; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 14px; font-weight: 500; }
+      .cellt-rng { fill: #b45309; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; font-weight: 700; }
+      .badge-t { fill: #ffffff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; font-weight: 720; }
+      .access { fill: #334155; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; font-weight: 600; }
+      .ret { fill: #334155; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; font-weight: 450; }
+      .api { fill: #0f766e; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; font-weight: 500; }
+      .foot { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-style: italic; font-weight: 450; }
+    </style>
+    <marker id="a" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#94a3b8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Figure card (transparent corners adapt to light/dark page) -->
+  <rect class="card" x="2" y="2" width="996" height="412" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+
+  <text class="title" x="500" y="40" text-anchor="middle">Query Pattern &#8594; Index Choice</text>
+  <text class="caption" x="500" y="66" text-anchor="middle">The known (bound) positions decide which index is scanned, and how.</text>
+  <text class="legend" x="500" y="92" text-anchor="middle">EAV key sorts <tspan class="legk">E&#183;A&#183;V</tspan> &#160;&#160;AVE key sorts <tspan class="legk">A&#183;V&#183;E</tspan> &#160;&#160;&#8212; a known leading prefix picks the index.</text>
+
+  <!-- ===== Header ===== -->
+  <text class="colh" x="72" y="120" text-anchor="middle">E</text>
+  <text class="colh" x="108" y="120" text-anchor="middle">A</text>
+  <text class="colh" x="148" y="120" text-anchor="middle">V</text>
+  <text class="colh" x="259" y="120" text-anchor="middle">index</text>
+  <text class="colh" x="316" y="120">access</text>
+  <text class="colh" x="470" y="120">what it returns</text>
+  <line class="hrule" x1="44" y1="128" x2="956" y2="128"/>
+
+  <!-- row backgrounds (odd rows) -->
+  <rect class="rowbg" x="44" y="137" width="912" height="50" rx="6"/>
+  <rect class="rowbg" x="44" y="241" width="912" height="50" rx="6"/>
+  <rect class="rowbg" x="44" y="345" width="912" height="50" rx="6"/>
+
+  <!-- ===== Row 1: [e _ _] -> EAV ===== -->
+  <rect class="cell-on" x="56" y="147" width="32" height="30" rx="6"/>
+  <text class="cellt-on" x="72" y="167" text-anchor="middle">e</text>
+  <rect class="cell-free" x="92" y="147" width="32" height="30" rx="6"/>
+  <text class="cellt-free" x="108" y="167" text-anchor="middle">_</text>
+  <rect class="cell-free" x="128" y="147" width="40" height="30" rx="6"/>
+  <text class="cellt-free" x="148" y="167" text-anchor="middle">_</text>
+  <path class="arrow" d="M182 162 H214" marker-end="url(#a)"/>
+  <rect class="badge-eav" x="226" y="148" width="66" height="28" rx="14"/>
+  <text class="badge-t" x="259" y="167" text-anchor="middle">EAV</text>
+  <text class="access" x="316" y="167">prefix scan</text>
+  <text class="ret" x="470" y="158">all facts about entity e</text>
+  <text class="api" x="470" y="175">(datoms :eav e)</text>
+
+  <!-- ===== Row 2: [e a _] -> EAV ===== -->
+  <rect class="cell-on" x="56" y="199" width="32" height="30" rx="6"/>
+  <text class="cellt-on" x="72" y="219" text-anchor="middle">e</text>
+  <rect class="cell-on" x="92" y="199" width="32" height="30" rx="6"/>
+  <text class="cellt-on" x="108" y="219" text-anchor="middle">a</text>
+  <rect class="cell-free" x="128" y="199" width="40" height="30" rx="6"/>
+  <text class="cellt-free" x="148" y="219" text-anchor="middle">_</text>
+  <path class="arrow" d="M182 214 H214" marker-end="url(#a)"/>
+  <rect class="badge-eav" x="226" y="200" width="66" height="28" rx="14"/>
+  <text class="badge-t" x="259" y="219" text-anchor="middle">EAV</text>
+  <text class="access" x="316" y="219">prefix scan</text>
+  <text class="ret" x="470" y="210">values of a on e</text>
+  <text class="api" x="470" y="227">(datoms :eav e a)</text>
+
+  <!-- ===== Row 3: [_ a v] -> AVE ===== -->
+  <rect class="cell-free" x="56" y="251" width="32" height="30" rx="6"/>
+  <text class="cellt-free" x="72" y="271" text-anchor="middle">_</text>
+  <rect class="cell-on" x="92" y="251" width="32" height="30" rx="6"/>
+  <text class="cellt-on" x="108" y="271" text-anchor="middle">a</text>
+  <rect class="cell-on" x="128" y="251" width="40" height="30" rx="6"/>
+  <text class="cellt-on" x="148" y="271" text-anchor="middle">v</text>
+  <path class="arrow" d="M182 266 H214" marker-end="url(#a)"/>
+  <rect class="badge-ave" x="226" y="252" width="66" height="28" rx="14"/>
+  <text class="badge-t" x="259" y="271" text-anchor="middle">AVE</text>
+  <text class="access" x="316" y="271">prefix scan</text>
+  <text class="ret" x="470" y="262">entities where a = v</text>
+  <text class="api" x="470" y="279">(datoms :ave a v)</text>
+
+  <!-- ===== Row 4: [_ a ?v] -> AVE ===== -->
+  <rect class="cell-free" x="56" y="303" width="32" height="30" rx="6"/>
+  <text class="cellt-free" x="72" y="323" text-anchor="middle">_</text>
+  <rect class="cell-on" x="92" y="303" width="32" height="30" rx="6"/>
+  <text class="cellt-on" x="108" y="323" text-anchor="middle">a</text>
+  <rect class="cell-free" x="128" y="303" width="40" height="30" rx="6"/>
+  <text class="cellt-free" x="148" y="323" text-anchor="middle">?v</text>
+  <path class="arrow" d="M182 318 H214" marker-end="url(#a)"/>
+  <rect class="badge-ave" x="226" y="304" width="66" height="28" rx="14"/>
+  <text class="badge-t" x="259" y="323" text-anchor="middle">AVE</text>
+  <text class="access" x="316" y="323">range scan</text>
+  <text class="ret" x="470" y="314">every (v, e) for attribute a</text>
+  <text class="api" x="470" y="331">(datoms :ave a)</text>
+
+  <!-- ===== Row 5: [_ a v1..v2] -> AVE range ===== -->
+  <rect class="cell-free" x="56" y="355" width="32" height="30" rx="6"/>
+  <text class="cellt-free" x="72" y="375" text-anchor="middle">_</text>
+  <rect class="cell-on" x="92" y="355" width="32" height="30" rx="6"/>
+  <text class="cellt-on" x="108" y="375" text-anchor="middle">a</text>
+  <rect class="cell-rng" x="128" y="355" width="40" height="30" rx="6"/>
+  <text class="cellt-rng" x="148" y="374" text-anchor="middle">lo&#8211;hi</text>
+  <path class="arrow" d="M182 370 H214" marker-end="url(#a)"/>
+  <rect class="badge-ave" x="226" y="356" width="66" height="28" rx="14"/>
+  <text class="badge-t" x="259" y="375" text-anchor="middle">AVE</text>
+  <text class="access" x="316" y="375">range scan</text>
+  <text class="ret" x="470" y="366">entities with a in [lo, hi]</text>
+  <text class="api" x="470" y="383">(index-range a lo hi)</text>
+
+</svg>

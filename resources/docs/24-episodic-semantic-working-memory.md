@@ -304,6 +304,8 @@ data from episodic memory into semantic memory:
 5. **Refresh Working Memory**: Pull the currently relevant subset into a bounded
    projection for the next turn.
 
+![The consolidation loop as a clockwise cycle: ingest episodes, analyze recent episodes with an LLM or rules, abstract recurring patterns into candidate facts, update semantic state by writing facts with their source, confidence, and review status, then refresh working memory with a bounded projection — and repeat periodically, off the hot path](/images/diagrams/consolidation-loop.svg)
+
 By doing this, you prevent episodic memory from becoming a dumping ground and
 ensure the agent's core knowledge stays relevant and structured.
 
@@ -327,6 +329,8 @@ Here is a minimal consolidation step using the Chapter 23 in-memory schema. The
 function records one episode and one candidate fact atomically. The extraction
 policy is passed in as data; Datalevin only commits the records and keeps the
 links queryable.
+
+<!-- pdf-listing: Recording an episode and candidate fact atomically -->
 
 ```clojure
 (defn record-episode-and-candidate-fact!

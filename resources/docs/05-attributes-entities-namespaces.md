@@ -25,6 +25,8 @@ and integrity.
 An attribute (the "A" in EAV) defines a property that can be associated with an
 entity.
 
+![Schema-on-write lifecycle: a new attribute appears on transact and is added automatically; by default it has an implicit EDN-blob type supporting exact-match lookup; declaring :db/valueType with :db/cardinality and :db/unique unlocks range and sorted queries, validation, upsert, and compact storage; adding the :db/fulltext and :db/embedding flags unlocks full-text and embedding search — a progression from flexible, zero schema to strict, enforced types and indexes](/images/diagrams/schema-on-write-lifecycle.svg)
+
 ### 1.1 Automatic Attribute Creation
 
 By default, you don't need to "create a table" or "define a schema" to start
@@ -81,8 +83,10 @@ Note that exact-value matching still works on untyped attributes: equal values
 serialize to equal bytes, so a query such as "find the order whose total is
 exactly 100" can still use the index. What you lose is meaningful *ordering* —
 range scans, sorted results, and comparisons. You also can't enable specialized
-indexes such as full-text or embedding search, which require a declared string
-type.
+indexes that require typed values. Embedding search requires a declared string
+type. Full-text indexing is more permissive: Datalevin calls `str` on the
+transacted value before indexing it, though string attributes are still the
+usual choice for human text.
 
 ### 1.3 Why Explicit Types Matter
 
@@ -111,7 +115,7 @@ Beyond these scalar types, Datalevin offers specialized value types:
 similarity-indexed vectors (Chapter 17), and `:db.type/idoc` for path-indexed
 nested documents (Chapter 14). Composite indexes over several attributes use
 `:db/tupleAttrs`, not a special stored data type; Chapter 11 explains that
-pattern. For a complete list of acceptable value types, please see Appendix A.
+pattern. For a complete list of acceptable value types, please see Appendix C.
 
 ---
 
@@ -127,14 +131,14 @@ below lists some example attribute properties.
 | `:db/valueType` | The data type (e.g., `:db.type/long`). |
 | `:db/cardinality` | `:db.cardinality/one` (allow single value, default) or `:db.cardinality/many` (allow multiple values). |
 | `:db/unique` | `:db.unique/identity` (unique, upsert when duplicate) or `:db.unique/value` (unique, reject duplicate). |
-| `:db/fulltext` | Set to `true` to enable full-text search on string values. |
+| `:db/fulltext` | Set to `true` to enable full-text search. Values are converted with `str` before indexing. |
 | `:db/embedding` | Set to `true` on string attributes to maintain an embedding similarity index. |
 | `:db/idocFormat` | Format for `:db.type/idoc` attributes: `:edn`, `:json`, or `:markdown`. |
 | `:db/doc` | Human-readable documentation string for the attribute. |
 
 > **Note on Indexing**: Unlike some other Datalog databases, Datalevin indexes **every attribute** by default in the AVE (Attribute-Value-Entity) index. You do not need to specify a `:db/index` property to enable fast lookups.
 
-Appendix A includes a complete description of acceptable properties in the schema.
+Appendix C includes a complete description of acceptable properties in the schema.
 
 **Example Schema Definition:**
 ```clojure
@@ -427,7 +431,7 @@ a built-in identity attribute for system-wide named entities such as enums.
 
 ---
 
-## 5. Practical Summary: Schema Workflow
+## 5. Schema Workflow in Practice
 
 1. **Prototyping**: Start without a schema. Just transact maps.
 2. **Optimization**: Once you know your access patterns, add `:db/valueType` to

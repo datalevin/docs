@@ -22,10 +22,12 @@ conflicts, and which are transient operational conditions.
 
 ## Version Target and API Stability
 
-The rendered version of this book targets Datalevin `{{datalevin-version}}`.
-If you are reading a local checkout, older generated copy, or printed edition,
-check your installed Datalevin version against the version shown here and the
-package metadata for your language binding.
+This review draft targets Datalevin master branch commit `9142da07`. If you
+are reading a local checkout, older generated copy, or printed edition, check
+your installed Datalevin version or source checkout against the target shown
+here and the package metadata for your language binding. Released package
+snippets elsewhere in the book still use `{{datalevin-version}}` where a Maven,
+Leiningen, Gradle, Babashka pod, or standalone-jar version string is required.
 
 Datalevin follows the common Clojure library practice of keeping public APIs
 stable and evolving them mostly by accumulation. Core APIs such as schema,
@@ -46,7 +48,7 @@ upgrading, and verify behavior in staging.
 
 Platform support can also differ by feature. For example, the core Datalog and
 KV APIs may be available on a platform where optional vector or embedding
-support is still experimental. Chapter 2 calls out current platform and runtime
+support is still experimental. Appendix A calls out current platform and runtime
 requirements.
 
 ---
@@ -294,6 +296,8 @@ Datalevin can run as an embedded library, a TCP server, a read-replica topology,
 a consensus-lease HA cluster, an MCP tool process, or a Babashka pod. The data
 model and storage format stay the same; the operational boundary changes.
 
+![Deployment topologies around the same database: embedded keeps the app and DB in one process; server exposes the DB to remote clients over dtlv://; an async read replica ships WAL from a primary to a read-only replica; consensus-lease HA coordinates a leader and follower DBs via Raft with fencing; MCP wraps the DB in a tool-call boundary with writes off by default; a Babashka pod reaches the DB over IPC](/images/diagrams/deployment-topologies.svg)
+
 | Mode | Best Fit | Main Trade-Off |
 | :--- | :--- | :--- |
 | Embedded | Single-process services, desktop apps, local tools | Fastest path, but access is local to the process and storage path |
@@ -538,7 +542,7 @@ const client = await newClient("dtlv://datalevin:secret@localhost:8898");
 
 </div>
 
-Appendix F lists the public `datalevin.client` administrative API.
+Appendix G lists the public `datalevin.client` administrative API.
 
 ### 3.4 Protocol and Client Tuning
 
@@ -957,6 +961,8 @@ bug. Retrying a CAS conflict can be correct if the operation re-reads current
 state on every attempt. Retrying an operational failure is only safe when the
 application operation is idempotent or has an idempotency key.
 
+![Failure and retry policy: a failed write is classified into a semantic failure (invalid data for the schema or state — do not retry, fix the cause), a logical conflict (a well-formed transaction whose condition such as :db/cas did not hold — re-read current state, recompute, and retry), or an operational failure (the store, WAL, remote server, or HA topology could not complete the write — retry only when the operation is idempotent and the topology is healthy)](/images/diagrams/failure-retry-policy.svg)
+
 ### 7.1 The Write Serialization Model
 
 Datalevin inherits LMDB's MVCC read model: readers do not block writers, and
@@ -1037,6 +1043,8 @@ the transaction body.
 When a write is intentionally optimistic, use CAS and retry at the application
 operation boundary. Re-read inside every attempt:
 
+<!-- pdf-listing: Optimistic CAS retry pattern -->
+
 ```clojure
 (defn cas-conflict?
   [e]
@@ -1074,7 +1082,7 @@ operation boundary. Re-read inside every attempt:
 
 The retry wrapper does not retry unique, lookup-ref, schema, or validation
 failures. It retries only CAS conflicts, and each retry re-reads the balance
-from a fresh database value before preparing a new transaction.
+from a fresh DB snapshot before preparing a new transaction.
 
 For operational retries, apply the same rule at a higher level:
 
@@ -1109,7 +1117,9 @@ code that understands the business operation.
 
 ---
 
-## 8. Production Checklist
+## Summary
+
+### Production Checklist
 
 Use this as a final review before production:
 

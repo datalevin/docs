@@ -1,10 +1,10 @@
 ---
-title: "Appendix F: datalevin.client API Reference"
-chapter: 33
+title: "Appendix G: datalevin.client API Reference"
+chapter: 34
 part: "VII — Appendices"
 ---
 
-# Appendix F: datalevin.client API Reference
+# Appendix G: datalevin.client API Reference
 
 The `datalevin.client` namespace is Datalevin's public administrative client
 API for a remote Datalevin server. Use it when you need to manage server-side

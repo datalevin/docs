@@ -384,6 +384,12 @@ episodes, facts, task state, and working-memory projection. The application
 implements the extraction policy, thresholds, review workflow, and publication
 rules.
 
+![Capstone feedback memory loop: not-helpful search-feedback episodes are grouped into a candidate gap once they meet a threshold; the app accepts a current docs-gap fact (with evidence and supersession), opens a docs-gap-review task against it, and projects the fact and its evidence into working memory; resolving the task improves the docs and closes the loop with fewer failed searches. Boxes are stored in Datalevin; the dashed candidate-gap box is application-computed; transitions are application policy](/images/diagrams/capstone-memory-loop.svg)
+
+The program below implements this loop end to end.
+
+<!-- pdf-listing: Documentation feedback memory loop capstone -->
+
 ```clojure
 (require '[clojure.string :as str])
 (require '[datalevin.core :as d])
@@ -685,7 +691,7 @@ which candidate facts deserve review.
 
 ---
 
-## 10. Summary: The Path to Machine Intelligence
+## Summary: The Path to Machine Intelligence
 
 Building stateful AI is about building systems that **accrue value over time**.
 

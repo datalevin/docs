@@ -195,6 +195,8 @@ The following Clojure helper walks maps and vectors and emits one tuple for
 each leaf value. By default, the tuple is the path segments followed by the
 leaf value:
 
+<!-- pdf-listing: Turning nested EDN leaves into Datalog tuples -->
+
 ```clojure
 (defn leaf-paths
   "Returns paths to scalar leaves in a nested map/vector."
@@ -574,6 +576,8 @@ Datalevin can identify which value should be patched.
 | **Querying** | Datalog joins, pull, entity API | `idoc-match` and `idoc-get` |
 | **Updates** | Fine-grained datom updates | `patchIdoc` or full replacement |
 | **Best for** | Core domain state and relationships | Flexible metadata and imported documents |
+
+![Logical documents vs. idoc, modeling the same nested user data: the logical document (:db/isComponent) decomposes it into a user entity that owns separate profile and contact component entities plus tag datoms — many facts that join, pull, and update independently; the native idoc (:db.type/idoc) stores the whole nested map as one datom value on :user/metadata with an automatic path index over leaf paths like profile.name, profile.age, contact.email, and tags. The two models can coexist on the same entity](/images/diagrams/logical-vs-idoc.svg)
 
 Use logical documents when nested data needs type checking, referential
 integrity, joins to other entities, or independent updates as facts. Use `idoc`
@@ -961,7 +965,7 @@ joins as a first-class fact, model that part with normal attributes instead.
 
 ---
 
-## 6. Summary
+## Summary
 
 Datalevin lets you choose the right representation for each part of your data.
 Use logical documents for structured domain state where facts, relationships,

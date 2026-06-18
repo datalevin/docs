@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="404" viewBox="0 0 1000 404" role="img" aria-labelledby="title desc">
+  <title id="title">From SQL tables to Datalog joins</title>
+  <desc id="desc">A four-stage migration from a relational model to Datalevin. Stage 1, a SQL row in the orders table has columns order_id ord-1001, customer_id cust-42 which is a foreign key, status paid, total_cents 4299, and discount_code which is NULL. Stage 2, the row decomposes into separate datoms on entity 2001: order/id ord-1001, order/customer 1001, order/status order.status/paid, and order/total-cents 4299. There is no datom for the NULL discount_code, shown as a struck-out ghost datom: because the value is NULL, no fact is written, so absent facts are simply not stored. Stage 3, the foreign key becomes a ref edge: entity 2001, the order, points through order/customer to entity 1001, the customer, because the lookup ref cust-42 resolved to that entity id. Stage 4, a Datalog query joins by sharing the variable ?c between the order/customer pattern and the customer/email pattern; unification over the shared variable is the join, so there is no JOIN keyword.</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .body { fill: #fcfdfe; stroke: #e2e8f0; stroke-width: 1.6; }
+      .s1 { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.6; }
+      .s2 { fill: #ecfeff; stroke: #0891b2; stroke-width: 1.6; }
+      .s3 { fill: #f0fdfa; stroke: #0f766e; stroke-width: 1.6; }
+      .s4 { fill: #ccfbf1; stroke: #0f766e; stroke-width: 1.6; }
+      .badge { fill: #0f766e; }
+      .bn { fill: #ffffff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11px; font-weight: 700; }
+      .st { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; font-weight: 720; }
+      .sub { fill: #64748b; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 10px; font-weight: 500; }
+      .k { fill: #475569; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; }
+      .v { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 600; }
+      .dat { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 9px; font-weight: 500; }
+      .dat-hi { fill: #0f766e; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 9px; font-weight: 700; }
+      .fk { fill: #b45309; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 700; }
+      .null { fill: #94a3b8; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 10.5px; font-style: italic; font-weight: 600; }
+      .ghost { fill: #aeb6c2; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 9px; font-weight: 500; }
+      .ghostline { stroke: #aeb6c2; stroke-width: 1.4; }
+      .fktag { fill: #d97706; }
+      .tagt { fill: #ffffff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 9px; font-weight: 700; }
+      .node { fill: #ffffff; stroke: #94a3b8; stroke-width: 1.8; }
+      .nodec { fill: #ecfeff; stroke: #0891b2; stroke-width: 1.8; }
+      .nt { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11px; font-weight: 700; }
+      .nid { fill: #64748b; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 9.5px; font-weight: 500; }
+      .edge { fill: none; stroke: #0f766e; stroke-width: 2; }
+      .edlbl { fill: #0f766e; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 8.5px; font-weight: 600; }
+      .qln { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 9px; font-weight: 500; }
+      .qhi { fill: #b45309; font-weight: 700; }
+      .note { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 9.5px; font-style: italic; font-weight: 450; }
+      .flow { fill: none; stroke: #64748b; stroke-width: 2; }
+      .tlbl { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 10px; font-weight: 700; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 27px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 450; }
+    </style>
+    <marker id="a" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="ae" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#0f766e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect class="card" x="2" y="2" width="996" height="400" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+  <text class="title" x="500" y="40" text-anchor="middle">From SQL Tables to Datalog Joins</text>
+  <text class="caption" x="500" y="64" text-anchor="middle">A row becomes facts; a foreign key becomes a ref; a shared variable is the join.</text>
+
+  <!-- transition labels -->
+  <text class="tlbl" x="252" y="104" text-anchor="middle">decompose</text>
+  <text class="tlbl" x="498" y="104" text-anchor="middle">FK &#8594; ref</text>
+  <text class="tlbl" x="744" y="104" text-anchor="middle">join on ?c</text>
+
+  <!-- arrows -->
+  <path class="flow" d="M243 235 H261" marker-end="url(#a)"/>
+  <path class="flow" d="M489 235 H507" marker-end="url(#a)"/>
+  <path class="flow" d="M735 235 H753" marker-end="url(#a)"/>
+
+  <!-- ================= Stage 1: SQL row ================= -->
+  <rect class="body" x="15" y="116" width="228" height="238" rx="11"/>
+  <path class="s1" d="M15 127 a11 11 0 0 1 11 -11 h206 a11 11 0 0 1 11 11 v22 h-228 z"/>
+  <circle class="badge" cx="33" cy="138" r="10"/>
+  <text class="bn" x="33" y="142" text-anchor="middle">1</text>
+  <text class="st" x="50" y="142">SQL row</text>
+  <text class="sub" x="29" y="170">table: orders</text>
+  <text class="k" x="29" y="194">order_id</text>
+  <text class="v" x="138" y="194">"ord-1001"</text>
+  <text class="k" x="29" y="218">customer_id</text>
+  <text class="fk" x="138" y="218">"cust-42"</text>
+  <rect class="fktag" x="190" y="208" width="34" height="14" rx="7"/>
+  <text class="tagt" x="207" y="219" text-anchor="middle">FK</text>
+  <text class="k" x="29" y="242">status</text>
+  <text class="v" x="138" y="242">"paid"</text>
+  <text class="k" x="29" y="266">total_cents</text>
+  <text class="v" x="138" y="266">4299</text>
+  <text class="k" x="29" y="290">discount_code</text>
+  <text class="null" x="138" y="290">NULL</text>
+
+  <!-- ================= Stage 2: facts ================= -->
+  <rect class="body" x="261" y="116" width="228" height="238" rx="11"/>
+  <path class="s2" d="M261 127 a11 11 0 0 1 11 -11 h206 a11 11 0 0 1 11 11 v22 h-228 z"/>
+  <circle class="badge" cx="279" cy="138" r="10"/>
+  <text class="bn" x="279" y="142" text-anchor="middle">2</text>
+  <text class="st" x="296" y="142">Facts</text>
+  <text class="sub" x="275" y="172">datoms [e a v]</text>
+  <text class="dat" x="275" y="196">[2001 :order/id "ord-1001"]</text>
+  <text class="dat-hi" x="275" y="220">[2001 :order/customer 1001]</text>
+  <text class="dat" x="275" y="244">[2001 :order/status</text>
+  <text class="dat" x="289" y="258">:order.status/paid]</text>
+  <text class="dat" x="275" y="282">[2001 :order/total-cents 4299]</text>
+  <text class="ghost" x="275" y="306">[2001 :order/discount ...]</text>
+  <line class="ghostline" x1="271" y1="302.5" x2="400" y2="302.5"/>
+  <text class="note" x="275" y="330">discount_code is NULL,</text>
+  <text class="note" x="275" y="344">so no datom is written</text>
+
+  <!-- ================= Stage 3: refs as edges ================= -->
+  <rect class="body" x="507" y="116" width="228" height="238" rx="11"/>
+  <path class="s3" d="M507 127 a11 11 0 0 1 11 -11 h206 a11 11 0 0 1 11 11 v22 h-228 z"/>
+  <circle class="badge" cx="525" cy="138" r="10"/>
+  <text class="bn" x="525" y="142" text-anchor="middle">3</text>
+  <text class="st" x="542" y="142">Refs as edges</text>
+  <text class="sub" x="521" y="172">FK becomes a ref</text>
+
+  <rect class="node" x="525" y="196" width="92" height="44" rx="10"/>
+  <text class="nt" x="571" y="216" text-anchor="middle">order</text>
+  <text class="nid" x="571" y="232" text-anchor="middle">#2001</text>
+  <rect class="nodec" x="625" y="262" width="100" height="44" rx="10"/>
+  <text class="nt" x="675" y="282" text-anchor="middle">customer</text>
+  <text class="nid" x="675" y="298" text-anchor="middle">#1001</text>
+  <path class="edge" d="M591 240 L645 260" marker-end="url(#ae)"/>
+  <text class="edlbl" x="620" y="252" text-anchor="end">:order/customer</text>
+  <text class="note" x="521" y="330">"cust-42" resolved</text>
+  <text class="note" x="521" y="344">to entity 1001</text>
+
+  <!-- ================= Stage 4: Datalog join ================= -->
+  <rect class="body" x="753" y="116" width="228" height="238" rx="11"/>
+  <path class="s4" d="M753 127 a11 11 0 0 1 11 -11 h206 a11 11 0 0 1 11 11 v22 h-228 z"/>
+  <circle class="badge" cx="771" cy="138" r="10"/>
+  <text class="bn" x="771" y="142" text-anchor="middle">4</text>
+  <text class="st" x="788" y="142">Datalog join</text>
+  <text class="sub" x="767" y="172">shared var = join</text>
+  <text class="qln" x="767" y="200">[:find ?order-id ?email</text>
+  <text class="qln" x="767" y="220"> :where</text>
+  <text class="qln" x="767" y="240">  [?o :order/customer <tspan class="qhi">?c</tspan>]</text>
+  <text class="qln" x="767" y="260">  [<tspan class="qhi">?c</tspan> :customer/email</text>
+  <text class="qln" x="781" y="274">     ?email]]</text>
+  <text class="note" x="767" y="304">shared <tspan class="qhi" style="font-style:normal">?c</tspan> is the join &#8212;</text>
+  <text class="note" x="767" y="318">no JOIN keyword</text>
+</svg>

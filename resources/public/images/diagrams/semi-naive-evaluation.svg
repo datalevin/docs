@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="420" viewBox="0 0 1000 420" role="img" aria-labelledby="title desc">
+  <title id="title">Semi-naive recursive evaluation with delta tracking</title>
+  <desc id="desc">Semi-naive evaluation of the reachable relation over the base edges a to b, b to c, b to d, d to e, p to q, and q to r. Each round produces a delta of new tuples by joining only the previous round's delta against the edges, not the whole relation. Round 1's delta is the six direct edges. Round 2 joins that delta with the edges to get four new tuples: a to c, a to d, b to e, and p to r. Round 3 produces one new tuple, a to e. Round 4 produces no new tuples, so a fixpoint is reached. The result is the union of all deltas. A naive evaluator instead re-joins every known tuple each round, rediscovering results it already had; semi-naive evaluation joins only the new delta.</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .edges { fill: #ecfeff; stroke: #0891b2; stroke-width: 2; }
+      .dcard { fill: #f0fdfa; stroke: #0f766e; stroke-width: 2; }
+      .fcard { fill: #f1f5f9; stroke: #64748b; stroke-width: 2; }
+      .contrast { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.8; }
+      .flow { fill: none; stroke: #0f766e; stroke-width: 2.2; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 27px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 450; }
+      .eh { fill: #0e7490; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; font-weight: 720; }
+      .et { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 14px; font-weight: 600; }
+      .dh { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 720; }
+      .ds { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 10.5px; font-weight: 500; }
+      .dt { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 14px; font-weight: 600; }
+      .fh { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 720; }
+      .ft { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 500; }
+      .albl { fill: #0f766e; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 600; }
+      .asub { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 10px; font-weight: 500; }
+      .cnt { fill: #0f766e; }
+      .cnt-f { fill: #64748b; }
+      .cntt { fill: #ffffff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 10px; font-weight: 700; }
+      .res { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; font-weight: 600; }
+      .resm { fill: #0f766e; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 13px; font-weight: 600; }
+      .cth { fill: #b45309; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 720; }
+      .ctt { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 450; }
+    </style>
+    <marker id="ae" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#0f766e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect class="card" x="2" y="2" width="996" height="416" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+  <text class="title" x="500" y="38" text-anchor="middle">Semi-Naive Evaluation</text>
+  <text class="caption" x="500" y="62" text-anchor="middle">Each round joins only the previous round's new tuples (its delta) against the edges.</text>
+
+  <!-- ===== base edges ===== -->
+  <rect class="edges" x="40" y="84" width="920" height="44" rx="10"/>
+  <text class="eh" x="58" y="111">Base edges (:link/to)</text>
+  <text class="et" x="300" y="112">a&#8594;b   b&#8594;c   b&#8594;d   d&#8594;e   p&#8594;q   q&#8594;r</text>
+
+  <!-- ===== delta rounds ===== -->
+  <!-- D1 -->
+  <rect class="dcard" x="40" y="160" width="212" height="124" rx="11"/>
+  <text class="dh" x="58" y="188">&#916;1</text>
+  <text class="ds" x="86" y="188">round 1 &#183; direct edges</text>
+  <circle class="cnt" cx="232" cy="180" r="13"/>
+  <text class="cntt" x="232" y="184" text-anchor="middle">6</text>
+  <text class="dt" x="58" y="220">a&#8594;b</text>
+  <text class="dt" x="150" y="220">b&#8594;c</text>
+  <text class="dt" x="58" y="244">b&#8594;d</text>
+  <text class="dt" x="150" y="244">d&#8594;e</text>
+  <text class="dt" x="58" y="268">p&#8594;q</text>
+  <text class="dt" x="150" y="268">q&#8594;r</text>
+
+  <!-- arrow -->
+  <path class="flow" d="M252 222 H294" marker-end="url(#ae)"/>
+  <text class="albl" x="273" y="214" text-anchor="middle">&#8904;</text>
+  <text class="asub" x="273" y="240" text-anchor="middle">join &#916;</text>
+
+  <!-- D2 -->
+  <rect class="dcard" x="296" y="160" width="212" height="124" rx="11"/>
+  <text class="dh" x="314" y="188">&#916;2</text>
+  <text class="ds" x="342" y="188">round 2</text>
+  <circle class="cnt" cx="488" cy="180" r="13"/>
+  <text class="cntt" x="488" y="184" text-anchor="middle">4</text>
+  <text class="dt" x="314" y="226">a&#8594;c</text>
+  <text class="dt" x="406" y="226">a&#8594;d</text>
+  <text class="dt" x="314" y="252">b&#8594;e</text>
+  <text class="dt" x="406" y="252">p&#8594;r</text>
+
+  <!-- arrow -->
+  <path class="flow" d="M508 222 H550" marker-end="url(#ae)"/>
+  <text class="albl" x="529" y="214" text-anchor="middle">&#8904;</text>
+  <text class="asub" x="529" y="240" text-anchor="middle">join &#916;</text>
+
+  <!-- D3 -->
+  <rect class="dcard" x="552" y="160" width="150" height="124" rx="11"/>
+  <text class="dh" x="570" y="188">&#916;3</text>
+  <text class="ds" x="598" y="188">round 3</text>
+  <circle class="cnt" cx="682" cy="180" r="13"/>
+  <text class="cntt" x="682" y="184" text-anchor="middle">1</text>
+  <text class="dt" x="570" y="230">a&#8594;e</text>
+
+  <!-- arrow -->
+  <path class="flow" d="M702 222 H744" marker-end="url(#ae)"/>
+  <text class="albl" x="723" y="214" text-anchor="middle">&#8904;</text>
+  <text class="asub" x="723" y="240" text-anchor="middle">join &#916;</text>
+
+  <!-- D4 fixpoint -->
+  <rect class="fcard" x="746" y="160" width="214" height="124" rx="11"/>
+  <text class="fh" x="764" y="188">&#916;4 = &#8709;</text>
+  <circle class="cnt-f" cx="940" cy="180" r="13"/>
+  <text class="cntt" x="940" y="184" text-anchor="middle">0</text>
+  <text class="ft" x="764" y="224">no new tuples</text>
+  <text class="ft" x="764" y="246">&#8594; fixpoint reached</text>
+
+  <!-- ===== result ===== -->
+  <text class="res" x="40" y="318">Result =</text>
+  <text class="resm" x="112" y="318">&#916;1 &#8746; &#916;2 &#8746; &#916;3</text>
+  <text class="res" x="250" y="318">&#8212; the full reachable relation (11 pairs).</text>
+
+  <!-- ===== naive contrast ===== -->
+  <rect class="contrast" x="40" y="338" width="920" height="56" rx="10"/>
+  <text class="cth" x="58" y="362">Why "semi"-naive?</text>
+  <text class="ctt" x="186" y="362">A naive evaluator re-joins every known tuple each round, rediscovering old results.</text>
+  <text class="ctt" x="58" y="382">Semi-naive joins only the new delta, so each round does the least work needed to reach the fixpoint.</text>
+</svg>

@@ -640,6 +640,8 @@ complete derived `reports-to` relation is the union of all IDB rounds:
 (reports-to eli  alice)
 ```
 
+![Recursive rule fixpoint: from the employee/manager facts, round 1 derives the direct reports (bob→alice, cara→bob, dee→alice, eli→cara), round 2 adds the indirect reports cara→alice and eli→bob, round 3 adds eli→alice, and round 4 produces no new tuples, reaching a fixpoint; the reports-to relation is the union of all rounds](/images/diagrams/recursive-fixpoint.svg)
+
 The query asks only for tuples whose boss is Alice, so it returns Bob, Cara,
 Dee, and Eli. Chapter 21 explains how Datalevin evaluates recursive rules
 efficiently; the step-by-step table here is the conceptual model.
@@ -776,6 +778,8 @@ Here is a simplified rule set. It first derives candidate prices: the base
 price, plus one candidate for each applicable discount. The final
 `calculated-price` rule keeps only a candidate for which no better candidate
 exists.
+
+<!-- pdf-listing: Rule-based product pricing abstraction -->
 
 ```clojure
 (def pricing-rules

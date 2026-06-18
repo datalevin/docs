@@ -150,6 +150,10 @@ contiguous. AVE makes facts for one attribute/value range contiguous. Datalog
 clauses become cheap when the bound variables line up with one of those sorted
 orders.
 
+For the visual overview of this layout, see Chapter 4's diagram of a datom
+projected into EAV and AVE order. Section 5 below shows the physical DUPSORT
+nesting used for each index.
+
 ### 1.3 EAV (Entity-Attribute-Value)
 
 The EAV index is sorted primarily by the **Entity ID**, then by the
@@ -242,8 +246,19 @@ API boundary.
 | `rseek-datoms` | You need a reverse cursor starting near an upper bound. | Same as `seek-datoms`, but walks backward. |
 | `index-range` | You need all values of one attribute between two bounds. | Scans the AVE range for one attribute. |
 
+![Choosing a direct index API as a top-down decision flow: if you only need a count use count-datoms or cardinality; else if you know the index and a key prefix use datoms; else if you have an (e a v) wildcard pattern use search-datoms; else if you want one attribute's values in a range use index-range; else if you need a cursor from a bound use seek-datoms or rseek-datoms](/images/diagrams/index-api-decision.svg)
+
 For `:eav`, the positional components are `c1 = e`, `c2 = a`, and `c3 = v`. For
 `:ave`, they are `c1 = a`, `c2 = v`, and `c3 = e`.
+
+![Query pattern to index choice: a pattern's known positions, when they form a leading prefix of an index sort key, pick the index. Entity-known patterns use EAV prefix scans; attribute-and-value patterns use AVE prefix scans; an attribute with a value range uses an AVE range scan via index-range](/images/diagrams/pattern-to-index.svg)
+
+The two attribute-scoped value lookups are both range scans for the same reason.
+Fixing the attribute pins the leading bytes of the AVE key, so LMDB has a known
+lower and upper byte bound to scan between. Reading every value of an attribute
+walks from that attribute's minimum encoded value to its maximum; a bounded
+predicate such as `[(< 20 ?age 30)]` just tightens those bounds. Neither case
+scans the whole index.
 
 ### 4.2 Prefix Scans with `datoms`
 
@@ -677,6 +692,10 @@ efficiently.
 - **In EAV**: The Key is `E`, and the Values are `(A, V)` pairs.
 - **In AVE**: The Key is `(A, V)`, and the Values are `E` (entity IDs).
 
+![EAV DUPSORT nesting: the entity id is the key, and its sorted attribute/value pairs are stored as nested duplicate values, so the entity id is not repeated for every datom](/images/diagrams/dupsort-eav.svg)
+
+![AVE DUPSORT nesting: the attribute/value pair is the key, and the matching entity ids are stored as a sorted list of nested duplicate values](/images/diagrams/dupsort-ave.svg)
+
 Thinking in terms of traditional database storage models:
 
 - **EAV is a row store**: Each entity ID (key) maps to a list of attribute-value
@@ -701,7 +720,7 @@ how much of neighboring encoded keys is actually shared.
 
 ---
 
-## 6. Summary: Indexes as Capabilities
+## Summary: Indexes as Capabilities
 
 By making every attribute indexed by default and providing direct API access to
 those indexes, Datalevin transforms the database from a "black box" into a set

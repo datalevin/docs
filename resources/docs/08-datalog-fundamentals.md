@@ -222,6 +222,10 @@ Conceptually, read the clauses as constraints over a relation of variable
 bindings. The optimizer may evaluate the physical query in a different order,
 but the logical meaning is the same.
 
+![Worked query binding flow: the binding relation gains a ?u column, unifies to add ?name, joins orders on the same ?u (dropping order-4 whose customer is not a London user), adds ?total, filters out the row whose total is 60, and projects ?name and ?total into the result](/images/diagrams/query-binding-flow.svg)
+
+The steps below trace that relation one clause at a time.
+
 The first clause finds entities whose city is London:
 
 ```text
@@ -341,6 +345,8 @@ Datalevin supports the standard Datalog find shapes:
 | Collection | `:find [?name ...]` | A collection of scalar values, e.g. `["Alice" "Bob"]`. |
 | Tuple | `:find [?name ?age]` | One tuple, e.g. `["Alice" 30]`. |
 | Scalar | `:find ?name .` | One scalar value, e.g. `"Alice"`. |
+
+![The four :find shapes applied to the same result set: relation selects all cells and returns a set of tuples, collection selects one column flattened into a vector, tuple selects one row, and scalar selects one cell](/images/diagrams/find-result-shapes.svg)
 
 Use collection find when you only need one value from each result tuple:
 
@@ -702,7 +708,7 @@ const result = await conn.query('[:find ?order-id ?total ' +
 -   **Built-in Functions/Predicates**: Common built-in functions and predicates
     (like `+`, `-`, `*`, `/`, `>`, `<`, `like`, `re-find`, `empty?`, `true?`) do
     **not** need to be fully qualified. They are implicitly available. Appendix
-    C lists all built-in query and aggregate functions.
+    D lists all built-in query and aggregate functions.
 
 -   **Custom Functions**: If you define your own Clojure functions and want to
     use them in binding or predicate clauses, they **must** be fully qualified
@@ -1154,9 +1160,13 @@ const result = await conn.query('[:find ?e ' +
 
 </div>
 
-Here, the `not-join` efficiently finds all users who do *not* appear as a
-customer in any order, and joins that result with the set of London users. This
-is vastly more performant than the nested `q` approach.
+Here, `not-join` declares that `?e` is the variable shared with the surrounding
+query. Datalevin can plan the negative pattern together with the positive
+clauses, so it can exclude users with matching orders without invoking a
+separate query for each candidate user. This is vastly more performant than the
+nested `q` approach.
+
+![Nested q versus not-join for "London users with no orders": the nested-q anti-pattern produces N candidate rows and runs an inner subquery once per row (N invocations whose cost scales with the candidates), while not-join folds the positive clause and a planned negative pattern into one query graph evaluated by the planner with index lookups as a single optimized query](/images/diagrams/subquery-vs-notjoin.svg)
 
 ---
 

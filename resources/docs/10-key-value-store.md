@@ -19,7 +19,7 @@ transactions, read APIs, Datalog, and rules before returning to direct KV
 access. Treat this chapter as the direct-storage chapter you reach for when you
 need sorted-key access, custom indexes, list DBIs, scripting primitives, or
 performance-critical storage structures. For a compact list of all public KV
-functions, see Appendix B.
+functions, see Appendix F.
 
 ---
 
@@ -161,6 +161,8 @@ Datalog DBIs such as `datalevin/eav` or `datalevin/ave`; those are maintained
 by the Datalog engine.
 
 There are two types of DBI:
+
+![Regular DBI vs. list DBI: a regular DBI (open-dbi) maps one key to one value, such as "u-100" to "Alice"; a list DBI (open-list-dbi, using LMDB DUPSORT) maps one key to many sorted values, such as "post-1" to clojure, database, lmdb](/images/diagrams/dbi-regular-vs-list.svg)
 
 ### 2.1 Regular DBI
 
@@ -455,7 +457,7 @@ shorter, clearer, and avoids repeating the same descriptors on every item.
 
 For list DBIs, `:put` adds one sorted value under the key. To add or delete many
 list values under one key, the dedicated `put-list-items` and `del-list-items`
-helpers are often clearer; Appendix B lists the full list-DBI API.
+helpers are often clearer; Appendix F lists the full list-DBI API.
 
 ### 4.2 Point query
 

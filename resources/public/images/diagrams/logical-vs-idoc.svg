@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="432" viewBox="0 0 1000 432" role="img" aria-labelledby="title desc">
+  <title id="title">Logical component documents versus idoc</title>
+  <desc id="desc">The same nested user data modeled two ways. On the left, a logical document using :db/isComponent: the user entity owns separate component entities, so the data is decomposed into many datoms. The user has a profile component entity with name and age, a contact component entity with an email, and two tag datoms. Each field is an ordinary fact that can be typed, joined, pulled, and updated independently; this is best for core domain state and relationships. On the right, a native idoc: the whole nested map is stored as a single datom value on :user/metadata, and Datalevin builds an automatic path index over leaf paths such as profile.name, profile.age, contact.email, and tags. Nested fields can evolve freely and are queried with idoc-match and idoc-get; this is best for flexible metadata and imported documents. The two models can coexist on the same entity.</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .panel-l { fill: #fcfdfe; stroke: #cbd5e1; stroke-width: 1.6; }
+      .panel-r { fill: #fcfdfe; stroke: #5eead4; stroke-width: 1.6; }
+      .ent { fill: #ecfeff; stroke: #0891b2; stroke-width: 2; }
+      .comp { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.8; }
+      .blob { fill: #f0fdfa; stroke: #0f766e; stroke-width: 2.2; }
+      .chip { fill: #ecfeff; stroke: #0891b2; stroke-width: 1.4; }
+      .spine { fill: none; stroke: #64748b; stroke-width: 1.8; }
+      .flow { fill: none; stroke: #0f766e; stroke-width: 2; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 27px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 450; }
+      .ph-l { fill: #334155; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 720; }
+      .ph-r { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 720; }
+      .psub { fill: #64748b; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 600; }
+      .et { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 12px; font-weight: 600; }
+      .cn { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 700; }
+      .cf { fill: #475569; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 10px; font-weight: 500; }
+      .elbl { fill: #64748b; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 9px; font-weight: 500; }
+      .doc { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 500; }
+      .dock { fill: #0e7490; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 700; }
+      .pathlbl { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11px; font-weight: 600; }
+      .chipt { fill: #0e7490; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 10px; font-weight: 600; }
+      .note-l { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11.5px; font-weight: 500; }
+      .note-r { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11.5px; font-weight: 500; }
+      .foot { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-style: italic; font-weight: 500; }
+    </style>
+    <marker id="ae" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#0f766e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect class="card" x="2" y="2" width="996" height="428" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+  <text class="title" x="500" y="38" text-anchor="middle">Logical Documents vs. idoc</text>
+  <text class="caption" x="500" y="62" text-anchor="middle">The same nested data: decomposed into facts, or stored as one path-indexed value.</text>
+
+  <!-- ================= LEFT: logical document ================= -->
+  <rect class="panel-l" x="28" y="80" width="452" height="306" rx="12"/>
+  <text class="ph-l" x="48" y="108">Logical document</text>
+  <text class="psub" x="48" y="126">:db/isComponent</text>
+
+  <!-- user entity -->
+  <rect class="ent" x="48" y="142" width="130" height="38" rx="10"/>
+  <text class="et" x="64" y="166">user #101</text>
+
+  <!-- spine + branches -->
+  <path class="spine" d="M70 180 V330 M70 232 H126 M70 282 H126 M70 330 H126"/>
+
+  <!-- component entities -->
+  <rect class="comp" x="128" y="212" width="218" height="40" rx="9"/>
+  <text class="cn" x="142" y="230">profile #201</text>
+  <text class="cf" x="142" y="245">name "Alice" &#183; age 30</text>
+  <text class="elbl" x="124" y="226" text-anchor="end">/profile</text>
+
+  <rect class="comp" x="128" y="262" width="218" height="40" rx="9"/>
+  <text class="cn" x="142" y="280">contact #202</text>
+  <text class="cf" x="142" y="295">email "alice@&#8230;"</text>
+  <text class="elbl" x="124" y="276" text-anchor="end">/contact</text>
+
+  <rect class="comp" x="128" y="312" width="218" height="40" rx="9"/>
+  <text class="cn" x="142" y="330">tags (&#215;2 datoms)</text>
+  <text class="cf" x="142" y="345">"beta" &#183; "admin"</text>
+  <text class="elbl" x="124" y="326" text-anchor="end">/tags</text>
+
+  <text class="note-l" x="362" y="232">Decomposed into</text>
+  <text class="note-l" x="362" y="248">many datoms and</text>
+  <text class="note-l" x="362" y="264">sub-entities.</text>
+  <text class="note-l" x="362" y="296">Datalog joins, pull,</text>
+  <text class="note-l" x="362" y="312">per-fact updates.</text>
+
+  <text class="note-l" x="48" y="374" style="font-weight:650;fill:#334155">Best for core domain state &amp; relationships.</text>
+
+  <!-- ================= RIGHT: native idoc ================= -->
+  <rect class="panel-r" x="520" y="80" width="452" height="306" rx="12"/>
+  <text class="ph-r" x="540" y="108">Native idoc</text>
+  <text class="psub" x="540" y="126">:db.type/idoc</text>
+
+  <!-- user entity -->
+  <rect class="ent" x="540" y="142" width="130" height="38" rx="10"/>
+  <text class="et" x="556" y="166">user #101</text>
+  <path class="flow" d="M605 180 V198" marker-end="url(#ae)"/>
+
+  <!-- single idoc value -->
+  <rect class="blob" x="540" y="202" width="412" height="104" rx="10"/>
+  <text class="dock" x="556" y="224">:user/metadata = {</text>
+  <text class="elbl" x="936" y="224" text-anchor="end">one datom value</text>
+  <text class="doc" x="572" y="244">profile {name "Alice", age 30},</text>
+  <text class="doc" x="572" y="262">contact {email "alice@&#8230;"},</text>
+  <text class="doc" x="572" y="280">tags ["beta", "admin"]</text>
+  <text class="dock" x="556" y="298">}</text>
+
+  <!-- path index -->
+  <text class="pathlbl" x="540" y="330">automatic path index:</text>
+  <rect class="chip" x="540" y="338" width="98" height="22" rx="6"/>
+  <text class="chipt" x="548" y="353">profile.name</text>
+  <rect class="chip" x="646" y="338" width="92" height="22" rx="6"/>
+  <text class="chipt" x="654" y="353">profile.age</text>
+  <rect class="chip" x="746" y="338" width="110" height="22" rx="6"/>
+  <text class="chipt" x="754" y="353">contact.email</text>
+  <rect class="chip" x="864" y="338" width="56" height="22" rx="6"/>
+  <text class="chipt" x="872" y="353">tags[]</text>
+
+  <text class="note-r" x="540" y="374" style="font-weight:650">Best for flexible metadata &amp; imported documents (idoc-match / idoc-get).</text>
+
+  <!-- footnote -->
+  <text class="foot" x="500" y="412" text-anchor="middle">The two models can coexist on the same entity.</text>
+</svg>

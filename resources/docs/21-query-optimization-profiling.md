@@ -300,7 +300,7 @@ another deployment.
 
 ---
 
-### 1.9 Summary: The Optimizer's Principles
+### 1.9 Optimizer Principles
 
 In summary, Datalevin has a sophisticated query optimizer that compiles
 declarative query clauses into execution steps that use index scans where they
@@ -392,6 +392,8 @@ round, and joins only against that delta in the recursive step. For this graph:
 | 3 | `(reachable a e)` |
 | 4 | No new tuples; fixpoint reached. |
 
+![Semi-naive evaluation with delta tracking: from the base edges, round 1's delta is the six direct edges; each later round joins only the previous round's delta against the edges, yielding four new tuples in round 2 (a→c, a→d, b→e, p→r), one in round 3 (a→e), and none in round 4, which is the fixpoint; the result is the union of all deltas, and unlike a naive evaluator that re-joins every known tuple each round, semi-naive joins only the new delta](/images/diagrams/semi-naive-evaluation.svg)
+
 A naive bottom-up evaluator would keep rejoining all known `reachable` tuples
 in every round, rediscovering many results it already had. Semi-naive evaluation
 uses only the previous round's delta to produce the next delta, then unions the
@@ -440,6 +442,8 @@ component is never seeded, so recursive evaluation does not spend work deriving
 answers that cannot contribute to `[:find ?end :where (reachable a ?end)]`.
 For the graph above, the seeded starts are `a`, `b`, `c`, `d`, and `e`, and the
 answers are `b`, `c`, `d`, and `e`.
+
+![Magic-set rewrite turning broad recursion into goal-directed recursion: for the query reachable from a, plain bottom-up recursion derives the whole relation including the disconnected p→q→r component (wasted work), while the magic-set rewrite seeds the recursion at a and expands only the nodes reachable from a (a, b, c, d, e), leaving p, q, r never seeded and skipped; both return the same answer b c d e](/images/diagrams/magic-set-rewrite.svg)
 
 Datalevin also connects rule evaluation back to the cost-based optimizer:
 
@@ -627,7 +631,7 @@ expect is hidden inside a complex predicate or rule.
 
 ---
 
-### 3.6 Summary: The Explain Workflow
+## Summary: The Explain Workflow
 
 When a query is slow, follow this workflow:
 
@@ -695,9 +699,9 @@ Datalevin plans a query and why a query may be slower than expected.
    Cardinality Estimation for RDF Queries with Multiple Joins", ICDE 2011.
 
 [13] Datalevin project,
-   [Join Order Benchmark](https://github.com/juji-io/datalevin/tree/master/benchmarks/JOB-bench),
+   [Join Order Benchmark](https://github.com/datalevin/datalevin/tree/master/benchmarks/JOB-bench),
    benchmark writeup and implementation.
 
 [14] Datalevin project,
-   [LDBC Social Network Benchmark](https://github.com/juji-io/datalevin/tree/master/benchmarks/LDBC-SNB-bench),
+   [LDBC Social Network Benchmark](https://github.com/datalevin/datalevin/tree/master/benchmarks/LDBC-SNB-bench),
    benchmark writeup and implementation.

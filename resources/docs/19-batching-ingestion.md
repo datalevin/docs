@@ -12,6 +12,11 @@ Ingesting large datasets requires a different strategy than standard interactive
 writes or OLTP. Datalevin provides several infrastructure features to support
 extreme throughput.
 
+![Choosing an ingestion strategy: if you can supply final prepared datoms, use bulk load (init-db / fill-db); otherwise, for a one-time rebuildable import use non-durable flags (:nosync / :writemap+:mapasync); otherwise, for interactive or modest write rates use normal transactions (transact!); otherwise use async transactions, with a sync checkpoint when you need durable checkpoints, or async plus WAL for the highest durable throughput](/images/diagrams/ingestion-strategy.svg)
+
+The decision flow above maps the situations to the strategies the rest of this
+chapter covers in detail.
+
 ### 1.1 WAL Mode for Ingestion
 
 For high-throughput ingestion where data must remain queryable as it arrives,
@@ -346,6 +351,8 @@ relational imports whose source tables already have integer primary keys:
 reserve a non-overlapping entity-id range for each source table, then convert
 every primary key and foreign key with the same function [1] [2]. For example:
 
+<!-- pdf-listing: Preparing stable entity ids for bulk datom ingestion -->
+
 ```clojure
 (def schema
   {:user/id        {:db/valueType :db.type/long
@@ -497,7 +504,7 @@ you reserved non-overlapping ranges up front.
 
 ---
 
-## 4. Summary: The Ingestion Checklist
+## Summary: The Ingestion Checklist
 
 When you need to ingest data at scale, follow this checklist:
 

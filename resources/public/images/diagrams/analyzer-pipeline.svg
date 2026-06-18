@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="600" viewBox="0 0 1000 600" role="img" aria-labelledby="title desc">
+  <title id="title">Full-text analyzer pipeline</title>
+  <desc id="desc">An analyzer turns text into term-position-offset triples for the inverted index. Document d1, raw text "Running runners in databases", passes through a regexp tokenizer that splits on non-word characters into tokens with positions and character offsets: Running at position 0 offset 0, runners at position 1 offset 8, in at position 2 offset 16, databases at position 3 offset 19. Token filters then apply: lower-case, stop-words, and stemming. The token "in" is dropped as a stop word; the others are lowercased and stemmed, keeping their original positions: ["run" 0 0], ["runner" 1 8], ["databas" 3 19]. A second document d2, "database run", runs through the same analyzer to ["databas" 0 0] and ["run" 1 9]. Both documents are then indexed by term in the inverted index, which maps each term to the documents and positions where it appears: run maps to d1 position 0 and d2 position 1; runner maps to d1 position 1; databas maps to d1 position 3 and d2 position 0.</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .raw { fill: #f8fafc; stroke: #94a3b8; stroke-width: 2; }
+      .tok { fill: #ecfeff; stroke: #0891b2; stroke-width: 2; }
+      .tok-drop { fill: #f1f5f9; stroke: #cbd5e1; stroke-width: 1.6; }
+      .fband { fill: #f0fdfa; stroke: #0f766e; stroke-width: 1.8; }
+      .trip { fill: #f0fdfa; stroke: #0f766e; stroke-width: 2; }
+      .idx { fill: #ffffff; stroke: #0891b2; stroke-width: 2; }
+      .idxh { fill: #ecfeff; stroke: #0891b2; stroke-width: 2; }
+      .flow { fill: none; stroke: #64748b; stroke-width: 2.2; }
+      .drop { fill: none; stroke: #94a3b8; stroke-width: 2.4; stroke-linecap: round; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 28px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 450; }
+      .slabel { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 700; }
+      .alabel { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12.5px; font-weight: 600; }
+      .raws { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 16px; font-weight: 500; }
+      .term { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 15px; font-weight: 600; }
+      .term-mut { fill: #94a3b8; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 15px; font-weight: 600; }
+      .po { fill: #64748b; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 11.5px; font-weight: 450; }
+      .tript { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 14px; font-weight: 600; }
+      .fhead { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; font-weight: 700; }
+      .pill { fill: #0f766e; }
+      .pillt { fill: #ffffff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11px; font-weight: 700; }
+      .idxhdr { fill: #0e7490; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; font-weight: 700; }
+      .idxt { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 14px; font-weight: 500; }
+      .dropt { fill: #94a3b8; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11px; font-style: italic; font-weight: 600; }
+      .pchip { fill: #ecfeff; stroke: #0891b2; stroke-width: 1.4; }
+      .pchipt { fill: #0e7490; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; font-weight: 700; }
+      .doch { fill: #0e7490; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; font-weight: 700; }
+      .lane { fill: none; stroke: #cbd5e1; stroke-width: 1.8; }
+      .rowlbl { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 700; }
+    </style>
+    <marker id="a" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Figure card (transparent corners adapt to light/dark page) -->
+  <rect class="card" x="2" y="2" width="996" height="596" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+
+  <text class="title" x="500" y="42" text-anchor="middle">Analyzer Pipeline</text>
+  <text class="caption" x="500" y="68" text-anchor="middle">Text becomes [term position offset] triples for the inverted index.</text>
+
+  <!-- ===== raw text ===== -->
+  <text class="doch" x="300" y="92">doc d1</text>
+  <text class="slabel" x="356" y="92">raw text</text>
+  <rect class="raw" x="300" y="98" width="400" height="42" rx="10"/>
+  <text class="raws" x="500" y="125" text-anchor="middle">"Running runners in databases"</text>
+  <path class="flow" d="M500 140 V170" marker-end="url(#a)"/>
+  <text class="alabel" x="514" y="159">tokenizer &#183; regexp \W+</text>
+
+  <!-- ===== analyzer lanes: one per term, before on top and after on bottom ===== -->
+  <rect class="lane" x="182" y="178" width="156" height="196" rx="12"/>
+  <rect class="lane" x="342" y="178" width="156" height="196" rx="12"/>
+  <rect class="lane" x="502" y="178" width="156" height="196" rx="12"/>
+  <rect class="lane" x="662" y="178" width="156" height="196" rx="12"/>
+
+  <!-- filter band crosses every lane -->
+  <rect class="fband" x="176" y="252" width="652" height="44" rx="10"/>
+  <text class="fhead" x="310" y="280">token filters</text>
+  <rect class="pill" x="414" y="269" width="86" height="20" rx="10"/>
+  <text class="pillt" x="457" y="283" text-anchor="middle">lower-case</text>
+  <rect class="pill" x="508" y="269" width="86" height="20" rx="10"/>
+  <text class="pillt" x="551" y="283" text-anchor="middle">stop-words</text>
+  <rect class="pill" x="602" y="269" width="80" height="20" rx="10"/>
+  <text class="pillt" x="642" y="283" text-anchor="middle">stemming</text>
+
+  <!-- row labels -->
+  <text class="rowlbl" x="166" y="214" text-anchor="end">before</text>
+  <text class="rowlbl" x="166" y="342" text-anchor="end">after</text>
+
+  <!-- before: tokens [term position offset] -->
+  <text class="term" x="260" y="212" text-anchor="middle">Running</text>
+  <text class="po" x="260" y="232" text-anchor="middle">pos 0 &#183; off 0</text>
+  <text class="term" x="420" y="212" text-anchor="middle">runners</text>
+  <text class="po" x="420" y="232" text-anchor="middle">pos 1 &#183; off 8</text>
+  <text class="term" x="580" y="212" text-anchor="middle">in</text>
+  <text class="po" x="580" y="232" text-anchor="middle">pos 2 &#183; off 16</text>
+  <text class="term" x="740" y="212" text-anchor="middle">databases</text>
+  <text class="po" x="740" y="232" text-anchor="middle">pos 3 &#183; off 19</text>
+
+  <!-- after: filtered triples (in is dropped, positions preserved) -->
+  <text class="tript" x="260" y="343" text-anchor="middle">["run" 0 0]</text>
+  <text class="tript" x="420" y="343" text-anchor="middle">["runner" 1 8]</text>
+  <path class="drop" d="M573 330 L587 344 M587 330 L573 344"/>
+  <text class="dropt" x="580" y="361" text-anchor="middle">dropped (stop word)</text>
+  <text class="tript" x="740" y="343" text-anchor="middle">["databas" 3 19]</text>
+
+  <!-- d1 lanes feed the index -->
+  <path class="flow" d="M500 376 V430" marker-end="url(#a)"/>
+  <text class="alabel" x="514" y="408">index by term</text>
+
+  <!-- ===== second document, same analyzer ===== -->
+  <rect class="tok" x="40" y="448" width="322" height="100" rx="10"/>
+  <text class="doch" x="58" y="474">doc d2</text>
+  <text class="po" x="338" y="474" text-anchor="end">same analyzer</text>
+  <text class="tript" x="58" y="500">"database run"</text>
+  <text class="tript" x="58" y="526">["databas" 0 0] ["run" 1 9]</text>
+  <path class="flow" d="M362 498 H402" marker-end="url(#a)"/>
+
+  <!-- ===== inverted index (term -> doc : position) ===== -->
+  <rect class="idx" x="404" y="432" width="556" height="132" rx="10"/>
+  <path class="idxh" d="M404 442 a10 10 0 0 1 10 -10 h536 a10 10 0 0 1 10 10 v18 h-556 z"/>
+  <text class="idxhdr" x="420" y="455">inverted index</text>
+  <text class="slabel" x="944" y="455" text-anchor="end">term &#8594; doc &#183; pos &#183; off</text>
+
+  <text class="idxt" x="424" y="496">"run"</text>
+  <text class="idxt" x="540" y="496">&#8594;</text>
+  <rect class="pchip" x="560" y="483" width="72" height="22" rx="7"/>
+  <text class="pchipt" x="596" y="498" text-anchor="middle">d1&#183;0&#183;0</text>
+  <rect class="pchip" x="640" y="483" width="72" height="22" rx="7"/>
+  <text class="pchipt" x="676" y="498" text-anchor="middle">d2&#183;1&#183;9</text>
+
+  <text class="idxt" x="424" y="524">"runner"</text>
+  <text class="idxt" x="540" y="524">&#8594;</text>
+  <rect class="pchip" x="560" y="511" width="72" height="22" rx="7"/>
+  <text class="pchipt" x="596" y="526" text-anchor="middle">d1&#183;1&#183;8</text>
+
+  <text class="idxt" x="424" y="552">"databas"</text>
+  <text class="idxt" x="540" y="552">&#8594;</text>
+  <rect class="pchip" x="560" y="539" width="78" height="22" rx="7"/>
+  <text class="pchipt" x="599" y="554" text-anchor="middle">d1&#183;3&#183;19</text>
+  <rect class="pchip" x="646" y="539" width="72" height="22" rx="7"/>
+  <text class="pchipt" x="682" y="554" text-anchor="middle">d2&#183;0&#183;0</text>
+</svg>

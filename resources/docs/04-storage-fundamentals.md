@@ -21,36 +21,39 @@ queries, secondary indexes, and high-throughput writes.
 
 LMDB is a small embedded key-value store with a deliberately narrow design. Its
 philosophy is to do as little as possible in user space, offloading complex tasks
-like memory management to the operating system kernel.
+like memory management to the operating system (OS) kernel.
 
 ### 1.1 Why Memory-Mapping Fits Datalevin
 
-Traditional databases often manage their own "buffer pool", a chunk of RAM where
+LMDB uses **memory-mapping (`mmap`)**. It treats the database file as if it was
+a large array in the address space of the operating system. This does not mean
+the whole database file is loaded into memory. When Datalevin reads data, the OS
+kernel handles fetching the required pages from disk into the **Page Cache**.
+Page is the basic unit of OS's memory management. On OS such as Linux or
+Windows, the page size often defaults to 4KB, while on macOS with Apple Silicon
+chip, the default is 16KB. The memory map reserves a range of virtual address
+space; physical memory is used for pages that are actually touched, and clean
+pages can be evicted by the kernel when memory is needed elsewhere. LMDB
+deliberately made this architectural choice, because the OS already manages
+file-backed pages across all processes on the machine, and it can evict,
+prefetch, and share those pages with knowledge of the whole system.
+
+Datalevin APIs usually ask for a directory path, but an LMDB environment is not
+a directory full of table files. In the normal directory layout, the durable
+pages all live in **one** memory-mapped data file, conventionally called
+`data.mdb`. The directory may also contain support files, such as LMDB's
+lock/readers file (`lock.mdb`) and Datalevin-managed WAL or snapshot files when
+those features are enabled. This one data file is divided into a number of named
+sub-databases, called DBIs. These are logical key-value spaces inside the
+same LMDB data file; they are not separate data files.
+
+Traditional databases often manage their own "buffer pool", a chunk of memory where
 they keep data pages. That design makes sense when the database is the main
 program on the machine and wants tight control over every page of memory. But
 many modern databases do not own the whole computer. They run in cloud VMs and
 containers beside other services, on desktops beside user applications, or
-embedded inside application servers. In those environments, the operating system
-has a broader view of memory pressure than any one database process can have.
-
-LMDB uses **memory-mapping (`mmap`)**. It treats the database file as if it were
-a large array in the application's address space. When Datalevin reads data, the
-OS handles fetching the required pages from disk into the **Page Cache**. This
-does not mean the whole database file is loaded into RAM. The map reserves a
-range of virtual address space; physical memory is used for pages that are
-actually touched, and clean pages can be evicted by the kernel when memory is
-needed elsewhere. This is not just an implementation shortcut; it is an
-architectural choice. The OS already manages file-backed pages across all
-processes on the machine, and it can evict, prefetch, and share those pages with
-knowledge of the whole system.
-
-Datalevin APIs usually ask for a directory path, but an LMDB environment is not
-a directory full of table files. In the normal directory layout, the durable
-B+tree pages live in one memory-mapped data file, conventionally `data.mdb`. The
-directory may also contain support files, such as LMDB's lock/readers file
-(`lock.mdb`) and Datalevin-managed WAL or snapshot files when those features are
-enabled. Named DBIs are logical key-value spaces inside the same LMDB
-environment; they are not separate data files.
+embedded inside application servers. In those environments, the OS has a broader
+view of memory pressure than any one database process can have.
 
 A database-owned buffer pool sees only the database's allocation. It may keep a
 page in its own cache while the OS also keeps the same page in the file-system
@@ -61,11 +64,11 @@ file-backed pages can be reclaimed by the kernel and read again later from the
 database file.
 
 This does not mean mmap is always the right design for every database. It shifts
-some control from the database engine to the kernel, so systems that need custom
+some control from the database engine to the OS kernel, so systems that need custom
 I/O scheduling, specialized eviction policies, or tight control over page-fault
 latency may choose a private buffer manager. Datalevin's use case is different:
 it favors an embedded, low-administration engine that cooperates well with the
-rest of the host.
+rest of the host. This design have some benefits for its use cases:
 
 - **Zero-Copy Reads**: On the read hot-path, Datalevin doesn't copy data from a
   kernel buffer to a user-space buffer. Instead, it returns a `DirectByteBuffer`
@@ -107,9 +110,12 @@ rest of the host.
 ### 1.2 Read-Heavy Concurrency
 
 LMDB provides **MVCC (Multi-Version Concurrency Control)** [1]. Readers never
-block writers, and writers never block readers. The easiest way to understand this,
-especially for Clojure programmers, is to think of LMDB's B+tree as a persistent
-immutable data structure [2].
+block writers, and writers never block readers. An illustration of LMDB's MVCC
+is in Figure 4.1. The easiest way to understand this, perhaps for Clojure
+programmers, is to think of LMDB's B+tree as a persistent immutable data
+structure [2].
+
+![MVCC and the single writer: old and new B+tree roots share unchanged pages while readers stay pinned to their snapshot](/images/diagrams/mvcc-single-writer.svg)
 
 When a read transaction starts, it sees one stable root of the tree. That root is
 a snapshot: the reader can keep using it while other transactions commit newer
@@ -129,8 +135,6 @@ and lockless, while writes remain atomic because a committed transaction becomes
 visible only when the root switch succeeds. In read-heavy workloads, throughput
 is often limited by CPU, memory bandwidth, or storage latency rather than by
 reader/writer lock contention.
-
-![MVCC and the single writer: old and new B+tree roots share unchanged pages while readers stay pinned to their snapshot](/images/diagrams/mvcc-single-writer.svg)
 
 ---
 
@@ -220,6 +224,10 @@ Datalevin stores the primary Datalog indexes in two orders:
 
 ![From a datom to indexed access in the EAV and AVE orders](/images/diagrams/datom-eav-ave.svg)
 
+As shown in Figure 4.2, Datalevin put the input set of datoms into two indexes
+simultaneously. Both indexes leverage LMDB's DUPSORT feature to break apart the
+datoms into two parts, and store the two parts in a nested fashion.
+
 ### 4.1 Leveraging DUPSORT
 
 Instead of storing every triple as a completely separate flat key, Datalevin uses
@@ -228,20 +236,12 @@ database lets one key map to many sorted values. In Datalevin, that means common
 prefixes such as the entity id in EAV, or the attribute/value pair in AVE, do not
 have to be repeated for every matching datom.
 
-**Conceptual EAV Layout:**
-
-![EAV DUPSORT nesting: the entity id is the key, and its sorted attribute/value pairs are stored as nested duplicate values, so the entity id is not repeated for every datom](/images/diagrams/dupsort-eav.svg)
-
 In EAV, the entity id is the key. The duplicate values under that key are sorted
 attribute/value pairs. This makes "what facts do we know about entity 101?" a
 single key lookup followed by a sequential read of that entity's facts.
 
-**Conceptual AVE Layout:**
-
-![AVE DUPSORT nesting: the attribute/value pair is the key, and the matching entity ids are stored as a sorted list of nested duplicate values](/images/diagrams/dupsort-ave.svg)
-
-In this layout, the Attribute and Value form the **Key**, and all the Entities
-that share that value are stored in a sorted **Duplicate List**. This makes
+In AVE, the attribute and value form the key, and all the entities that share
+that value are stored in a sorted duplicate list. This makes
 finding "all people aged 30" extremely fast: it is a single key lookup followed
 by a sequential read of entity IDs.
 

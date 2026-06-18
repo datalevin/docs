@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560" role="img" aria-labelledby="title desc">
+  <title id="title">Recursive rule evaluation to a fixpoint</title>
+  <desc id="desc">The reports-to relation is derived from employee/manager facts round by round. The org graph: bob and dee report to alice, cara reports to bob, and eli reports to cara. Round 0 has no derived tuples. Round 1 applies the base rule and turns each manager edge into a direct reports-to tuple: bob to alice, cara to bob, dee to alice, eli to cara. Round 2 applies the recursive rule to round 1 tuples and adds indirect reports: cara to alice and eli to bob. Round 3 adds eli to alice. Round 4 produces no new tuples, so evaluation reaches a fixpoint. The complete reports-to relation is the union of all rounds, seven tuples.</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .node { fill: #ecfeff; stroke: #0891b2; stroke-width: 2; }
+      .nodet { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; font-weight: 650; }
+      .tree { fill: none; stroke: #0f766e; stroke-width: 2.4; }
+      .t2 { fill: none; stroke: #0891b2; stroke-width: 2.2; stroke-dasharray: 8 4; stroke-linecap: butt; }
+      .t3 { fill: none; stroke: #d97706; stroke-width: 2.6; stroke-dasharray: 1 5; stroke-linecap: round; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 28px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 450; }
+      .glabel { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 600; }
+      .panel { fill: #fcfdfe; stroke: #e2e8f0; stroke-width: 1.6; }
+      .phead { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 700; }
+      .rnum { fill: #ffffff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; font-weight: 700; }
+      .rlbl { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; font-weight: 650; }
+      .rsub { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 450; }
+      .tup { fill: #334155; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 13px; font-weight: 500; }
+      .fix { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; font-weight: 700; }
+      .foot { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-style: italic; font-weight: 450; }
+      .b-grey { fill: #94a3b8; }
+      .b-teal { fill: #0f766e; }
+      .b-cyan { fill: #0891b2; }
+      .b-amber { fill: #d97706; }
+    </style>
+    <marker id="mt" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#0f766e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="mc" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#0891b2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="ma" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#d97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Figure card (transparent corners adapt to light/dark page) -->
+  <rect class="card" x="2" y="2" width="996" height="556" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+
+  <text class="title" x="500" y="44" text-anchor="middle">Recursive Rule Fixpoint</text>
+  <text class="caption" x="500" y="70" text-anchor="middle">reports-to is derived round by round until no new tuples appear.</text>
+
+  <!-- ===== transitive closure edges (round 2 cyan, round 3 amber) ===== -->
+  <path class="t3" d="M114 430 Q 2 272 224 128" marker-end="url(#ma)"/>
+  <path class="t2" d="M132 330 Q 70 226 238 124" marker-end="url(#mc)"/>
+  <path class="t2" d="M120 445 Q 60 332 130 240" marker-end="url(#mc)"/>
+
+  <!-- ===== tree edges = round-1 direct reports (teal) ===== -->
+  <path class="tree" d="M175 198 L252 124" marker-end="url(#mt)"/>
+  <path class="tree" d="M362 198 L272 124" marker-end="url(#mt)"/>
+  <path class="tree" d="M175 312 L175 240" marker-end="url(#mt)"/>
+  <path class="tree" d="M175 427 L175 355" marker-end="url(#mt)"/>
+
+  <!-- ===== nodes ===== -->
+  <rect class="node" x="219" y="82" width="86" height="40" rx="20"/>
+  <text class="nodet" x="262" y="107" text-anchor="middle">alice</text>
+  <rect class="node" x="132" y="197" width="86" height="40" rx="20"/>
+  <text class="nodet" x="175" y="222" text-anchor="middle">bob</text>
+  <rect class="node" x="327" y="197" width="86" height="40" rx="20"/>
+  <text class="nodet" x="370" y="222" text-anchor="middle">dee</text>
+  <rect class="node" x="132" y="312" width="86" height="40" rx="20"/>
+  <text class="nodet" x="175" y="337" text-anchor="middle">cara</text>
+  <rect class="node" x="132" y="427" width="86" height="40" rx="20"/>
+  <text class="nodet" x="175" y="452" text-anchor="middle">eli</text>
+
+  <!-- ===== graph legend ===== -->
+  <text class="glabel" x="60" y="508">edges = reports-to:</text>
+  <line class="tree" x1="60" y1="528" x2="92" y2="528"/>
+  <text class="glabel" x="98" y="532">round 1 (direct)</text>
+  <line class="t2" x1="222" y1="528" x2="254" y2="528"/>
+  <text class="glabel" x="260" y="532">round 2</text>
+  <line class="t3" x1="338" y1="528" x2="370" y2="528"/>
+  <text class="glabel" x="376" y="532">round 3</text>
+
+  <!-- ===================== rounds panel ===================== -->
+  <rect class="panel" x="470" y="92" width="490" height="430" rx="12"/>
+  <text class="phead" x="492" y="122">Deriving reports-to, round by round</text>
+
+  <!-- round 0 -->
+  <circle class="b-grey" cx="504" cy="156" r="13"/>
+  <text class="rnum" x="504" y="161" text-anchor="middle">0</text>
+  <text class="rlbl" x="528" y="153">Start</text>
+  <text class="tup" x="528" y="172">no derived tuples &#8212; only EDB facts</text>
+
+  <!-- round 1 -->
+  <circle class="b-teal" cx="504" cy="214" r="13"/>
+  <text class="rnum" x="504" y="219" text-anchor="middle">1</text>
+  <text class="rlbl" x="528" y="207">Base rule</text>
+  <text class="rsub" x="610" y="207">each manager edge becomes a direct report</text>
+  <text class="tup" x="528" y="227">bob&#8594;alice   cara&#8594;bob   dee&#8594;alice   eli&#8594;cara</text>
+
+  <!-- round 2 -->
+  <circle class="b-cyan" cx="504" cy="276" r="13"/>
+  <text class="rnum" x="504" y="281" text-anchor="middle">2</text>
+  <text class="rlbl" x="528" y="269">Recursive rule</text>
+  <text class="rsub" x="640" y="269">indirect reports via round-1 tuples</text>
+  <text class="tup" x="528" y="289">cara&#8594;alice   eli&#8594;bob</text>
+
+  <!-- round 3 -->
+  <circle class="b-amber" cx="504" cy="338" r="13"/>
+  <text class="rnum" x="504" y="343" text-anchor="middle">3</text>
+  <text class="rlbl" x="528" y="331">Recursive rule</text>
+  <text class="rsub" x="640" y="331">one more indirect report</text>
+  <text class="tup" x="528" y="351">eli&#8594;alice</text>
+
+  <!-- round 4 -->
+  <circle class="b-grey" cx="504" cy="396" r="13"/>
+  <text class="rnum" x="504" y="401" text-anchor="middle">4</text>
+  <text class="fix" x="528" y="393">Fixpoint reached</text>
+  <text class="tup" x="528" y="413">no new tuples &#8212; evaluation stops</text>
+
+  <line x1="492" y1="442" x2="938" y2="442" stroke="#e2e8f0" stroke-width="1.4"/>
+  <text class="foot" x="492" y="466">reports-to = union of all rounds = 7 tuples</text>
+  <text class="foot" x="492" y="488">query for boss = alice returns bob, cara, dee, eli</text>
+</svg>

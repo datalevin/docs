@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="470" viewBox="0 0 1000 470" role="img" aria-labelledby="title desc">
+  <title id="title">Transaction failure and retry policy</title>
+  <desc id="desc">A failed write is classified into one of three groups, each with its own retry policy. A semantic failure means the transaction data is invalid for the current schema or state, such as a unique constraint violation, closed-schema or type validation rejection, a bad lookup ref, or an upsert conflict; the policy is do not retry, because retrying just repeats the bug, so fix the data, schema, or caller. A logical conflict means the transaction was well formed but a condition did not hold, such as a db/cas failure where the current value is not the expected old value; the policy is re-read current state, recompute the transaction, and retry. An operational failure means the local store, WAL, remote server, or HA topology could not complete the write; the policy is retry only when the operation is idempotent or carries an idempotency key, and the topology is healthy.</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .start { fill: #f1f5f9; stroke: #64748b; stroke-width: 2; }
+      .gbox-r { fill: #fffbeb; stroke: #f59e0b; stroke-width: 2; }
+      .gbox-c { fill: #ecfeff; stroke: #0891b2; stroke-width: 2; }
+      .gbox-o { fill: #f0fdfa; stroke: #0f766e; stroke-width: 2; }
+      .pol-no { fill: #fef2f2; stroke: #dc8a8a; stroke-width: 2; }
+      .pol-yes { fill: #f0fdfa; stroke: #0f766e; stroke-width: 2; }
+      .pol-cond { fill: #fffbeb; stroke: #f59e0b; stroke-width: 2; }
+      .flow { fill: none; stroke: #64748b; stroke-width: 2; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 28px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 450; }
+      .startt { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; font-weight: 700; }
+      .gt { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; font-weight: 720; }
+      .gd { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11.5px; font-weight: 450; }
+      .gex { fill: #64748b; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 11px; font-weight: 500; }
+      .polh-no { fill: #b91c1c; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; font-weight: 720; }
+      .polh-yes { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; font-weight: 720; }
+      .polh-cond { fill: #b45309; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; font-weight: 720; }
+      .polt { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11.5px; font-weight: 450; }
+    </style>
+    <marker id="a" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect class="card" x="2" y="2" width="996" height="466" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+  <text class="title" x="500" y="42" text-anchor="middle">Failure &amp; Retry Policy</text>
+  <text class="caption" x="500" y="68" text-anchor="middle">Classify the failure first; the class decides whether and how to retry.</text>
+
+  <!-- ===== start ===== -->
+  <rect class="start" x="400" y="92" width="200" height="44" rx="22"/>
+  <text class="startt" x="500" y="119" text-anchor="middle">write fails</text>
+
+  <!-- fan-out to three groups -->
+  <path class="flow" d="M460 136 C 360 160, 200 168, 173 196" marker-end="url(#a)"/>
+  <path class="flow" d="M500 136 V196" marker-end="url(#a)"/>
+  <path class="flow" d="M540 136 C 640 160, 800 168, 827 196" marker-end="url(#a)"/>
+
+  <!-- ===== Group 1: semantic ===== -->
+  <rect class="gbox-r" x="28" y="198" width="290" height="118" rx="12"/>
+  <text class="gt" x="46" y="226">Semantic failure</text>
+  <text class="gd" x="46" y="248">data invalid for the schema or state</text>
+  <text class="gex" x="46" y="276">unique &#183; closed-schema / type</text>
+  <text class="gex" x="46" y="294">lookup-ref &#183; upsert conflict</text>
+
+  <!-- ===== Group 2: logical conflict ===== -->
+  <rect class="gbox-c" x="355" y="198" width="290" height="118" rx="12"/>
+  <text class="gt" x="373" y="226">Logical conflict</text>
+  <text class="gd" x="373" y="248">well-formed, but a condition failed</text>
+  <text class="gex" x="373" y="276">:db/cas &#8212; current value is</text>
+  <text class="gex" x="373" y="294">not the expected old value</text>
+
+  <!-- ===== Group 3: operational ===== -->
+  <rect class="gbox-o" x="682" y="198" width="290" height="118" rx="12"/>
+  <text class="gt" x="700" y="226">Operational failure</text>
+  <text class="gd" x="700" y="248">the write could not complete</text>
+  <text class="gex" x="700" y="276">local store &#183; WAL</text>
+  <text class="gex" x="700" y="294">remote server &#183; HA topology</text>
+
+  <!-- arrows to policies -->
+  <path class="flow" d="M173 316 V348" marker-end="url(#a)"/>
+  <path class="flow" d="M500 316 V348" marker-end="url(#a)"/>
+  <path class="flow" d="M827 316 V348" marker-end="url(#a)"/>
+
+  <!-- ===== Policy 1: do not retry ===== -->
+  <rect class="pol-no" x="28" y="350" width="290" height="92" rx="12"/>
+  <text class="polh-no" x="46" y="378">Do not retry</text>
+  <text class="polt" x="46" y="400">retrying repeats the bug</text>
+  <text class="polt" x="46" y="420">fix the data, schema, or caller;</text>
+  <text class="polt" x="46" y="436">or return a conflict</text>
+
+  <!-- ===== Policy 2: reread + retry ===== -->
+  <rect class="pol-yes" x="355" y="350" width="290" height="92" rx="12"/>
+  <text class="polh-yes" x="373" y="378">Re-read, then retry</text>
+  <text class="polt" x="373" y="400">read current state,</text>
+  <text class="polt" x="373" y="420">recompute the transaction,</text>
+  <text class="polt" x="373" y="436">and try again</text>
+
+  <!-- ===== Policy 3: retry if idempotent ===== -->
+  <rect class="pol-cond" x="682" y="350" width="290" height="92" rx="12"/>
+  <text class="polh-cond" x="700" y="378">Retry if idempotent</text>
+  <text class="polt" x="700" y="400">only when the operation is</text>
+  <text class="polt" x="700" y="420">idempotent (or has an idempotency</text>
+  <text class="polt" x="700" y="436">key) and the topology is healthy</text>
+</svg>

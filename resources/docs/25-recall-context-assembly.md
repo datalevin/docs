@@ -164,6 +164,8 @@ Those numbers come from different scoring systems. Instead, run bounded queries
 for each lens, apply the same logical constraints to each candidate set, and
 fuse the resulting ranked lists with reciprocal rank fusion (RRF).
 
+<!-- pdf-listing: Hybrid recall with full-text, vector search, authorization, and RRF -->
+
 ```clojure
 (def text-hits
   (d/q '[:find ?e ?content ?score
@@ -368,6 +370,8 @@ flat text. A better pattern is to assemble a labeled context packet from the
 different memory sources, then give the model an explicit output contract.
 
 Suppose the refresh step has produced the following Datalevin-backed context:
+
+<!-- pdf-listing: Datalevin-backed context packet for prompt assembly -->
 
 ```clojure
 {:goal

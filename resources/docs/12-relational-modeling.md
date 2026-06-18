@@ -326,6 +326,10 @@ draw three strong entity types and one associative entity:
 status, grade, enrollment time, and perhaps the source system that created the
 record. That makes it a proper entity in Datalevin.
 
+![ER model for course enrollment: Student, Course, and Term are strong entities, each with a unique key; Enrollment is an associative entity whose refs (:enrollment/student, :enrollment/course, :enrollment/term) are one-to-many relationships to them, plus its own attributes and a composite unique key over student, course, and term](/images/diagrams/er-course-enrollment.svg)
+
+<!-- pdf-listing: Course enrollment schema with an associative entity -->
+
 ```clojure
 (def school-schema
   {:student/id   {:db/valueType :db.type/string
@@ -505,6 +509,8 @@ from facts and uses Datalog as the surface language, so migration is not merely
 a change of syntax; it is a change in what the database exposes as its basic
 unit of reasoning.
 
+![From SQL tables to Datalog joins: a SQL orders row decomposes into datoms on entity 2001, where its NULL discount_code column produces no datom at all; its customer_id foreign key becomes an :order/customer ref edge to the customer entity; and a Datalog query joins by sharing the variable ?c between the order and customer patterns, with no JOIN keyword](/images/diagrams/sql-to-datalog.svg)
+
 ### 7.1 Translate the Vocabulary
 
 The familiar SQL concepts still have Datalevin equivalents, but the boundaries
@@ -525,12 +531,13 @@ move from tables to attributes and facts:
 In SQL, a row is the unit that receives a full set of column values:
 
 ```sql
-INSERT INTO orders (order_id, customer_id, status, total_cents)
-VALUES ('ord-1001', 'cust-42', 'paid', 4299);
+INSERT INTO orders (order_id, customer_id, status, total_cents, discount_code)
+VALUES ('ord-1001', 'cust-42', 'paid', 4299, NULL);
 ```
 
 In Datalevin, the transaction can still be written as an entity map, but the
-stored representation is separate facts:
+stored representation is separate facts. The unknown `discount_code` is simply
+left out of the map rather than set to a null:
 
 ```clojure
 {:order/id          "ord-1001"
@@ -548,6 +555,8 @@ Conceptually, after lookup refs are resolved, the database contains datoms like:
 [2001 :order/total-cents 4299]
 ```
 
+Notice there is no `:order/discount` datom at all. Where SQL stores a `NULL` in
+the `discount_code` cell, Datalevin stores nothing: the fact is simply absent.
 This is why sparse and evolving domains work well in Datalevin. Optional fields
 do not require nullable columns. If a discount code, shipment, or cancellation
 reason is unknown, the corresponding datom is absent.
@@ -725,7 +734,7 @@ const ecommerceSchema = {
 
 ---
 
-## 8. Summary: Relational Best Practices
+## Summary: Relational Best Practices
 
 1.  **Think in singular namespaces**: `:user/email`, not `:users/emails`.
 2.  **Choose stable keys**: Use `:db.unique/identity` for domain identifiers you

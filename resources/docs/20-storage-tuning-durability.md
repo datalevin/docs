@@ -427,7 +427,7 @@ $ dtlv -d /dest/dir -f dump.edn -g load
 
 ---
 
-### 1.10 Summary: The Operations Checklist
+### 1.10 Operations Checklist
 
 To ensure your data is safe and recoverable, follow this checklist:
 
@@ -481,6 +481,8 @@ Unlike a traditional Java heap, the `:mapsize` is a **virtual memory**
 reservation. Setting a 1TB mapsize does *not* mean the database will consume 1TB
 of RAM. It simply means the OS will reserve a 1TB "address space" for the
 database file.
+
+![mapsize, address space, and the page cache as three nested scales: :mapsize reserves a large virtual address space (not disk, not RAM, safe to set generously); the database file grows on disk up to that mapsize (pre-size to avoid a costly auto-resize); and only the hot working set is resident in RAM via the OS page cache (zero-copy reads, outside the JVM heap). Each layer is a subset of the one above](/images/diagrams/mapsize-address-space.svg)
 
 - **Recommendation**: Set `:mapsize` to be significantly larger than your
   expected data size (e.g., if you expect 50GB of data, set it to 256GB).
@@ -616,7 +618,7 @@ materializing them. Those counts feed both direct index APIs, such as
 
 ---
 
-### 2.5 Summary: The Tuning Checklist
+## Summary: The Tuning Checklist
 
 When deploying Datalevin to production, follow this checklist:
 

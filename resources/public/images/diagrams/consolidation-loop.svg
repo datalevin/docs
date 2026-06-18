@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="452" viewBox="0 0 1000 452" role="img" aria-labelledby="title desc">
+  <title id="title">The consolidation loop from episodes to semantic facts</title>
+  <desc id="desc">A five-step consolidation loop that runs periodically on the side to move data from episodic memory into semantic memory, drawn as a clockwise cycle around a central hub. Step 1, ingest episodes: store every interaction as a raw episode. Step 2, analyze: periodically use an LLM or Datalog rules to scan recent episodes. Step 3, abstract: identify recurring patterns and turn them into candidate facts. Step 4, update semantic state: write the derived facts with their source episode, confidence, and review status in one transaction. Step 5, refresh working memory: pull the currently relevant subset into a bounded projection for the next turn. The loop then repeats. Consolidation is conservative: the fact, its source, confidence, and review status are stored together.</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .c-ep { fill: #ecfeff; stroke: #0891b2; stroke-width: 2; }
+      .c-an { fill: #fffbeb; stroke: #f59e0b; stroke-width: 2; }
+      .c-se { fill: #f0fdfa; stroke: #0f766e; stroke-width: 2; }
+      .c-wm { fill: #f1f5f9; stroke: #64748b; stroke-width: 2; }
+      .hub { fill: #ffffff; stroke: #0f766e; stroke-width: 2.4; }
+      .arc { fill: none; stroke: #0f766e; stroke-width: 2.4; }
+      .badge-ep { fill: #0891b2; }
+      .badge-an { fill: #d97706; }
+      .badge-se { fill: #0f766e; }
+      .badge-wm { fill: #64748b; }
+      .bn { fill: #ffffff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 700; }
+      .ct { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13.5px; font-weight: 720; }
+      .cd { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 10.5px; font-weight: 450; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 27px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 450; }
+      .ht { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 720; }
+      .hs { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11px; font-weight: 500; }
+      .foot { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 450; }
+      .foot-em { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 650; }
+    </style>
+    <marker id="arw" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#0f766e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect class="card" x="2" y="2" width="996" height="448" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+  <text class="title" x="500" y="38" text-anchor="middle">The Consolidation Loop</text>
+  <text class="caption" x="500" y="62" text-anchor="middle">A periodic job moves episodes into durable semantic facts, then refreshes working memory.</text>
+
+  <!-- ===== clockwise arcs (drawn under cards) ===== -->
+  <path class="arc" d="M580 104 Q 666 120 636 168" marker-end="url(#arw)"/>
+  <path class="arc" d="M652 235 Q 712 292 636 339" marker-end="url(#arw)"/>
+  <path class="arc" d="M516 388 Q 500 410 484 388" marker-end="url(#arw)"/>
+  <path class="arc" d="M340 340 Q 292 290 346 236" marker-end="url(#arw)"/>
+  <path class="arc" d="M362 168 Q 334 120 418 104" marker-end="url(#arw)"/>
+
+  <!-- ===== center hub ===== -->
+  <circle class="hub" cx="500" cy="250" r="58"/>
+  <text class="ht" x="500" y="244" text-anchor="middle">repeat</text>
+  <text class="hs" x="500" y="264" text-anchor="middle">periodic,</text>
+  <text class="hs" x="500" y="278" text-anchor="middle">off the hot path</text>
+
+  <!-- ===== Step 1: Ingest (top) ===== -->
+  <rect class="c-ep" x="416" y="66" width="168" height="64" rx="11"/>
+  <circle class="badge-ep" cx="440" cy="90" r="11"/>
+  <text class="bn" x="440" y="94" text-anchor="middle">1</text>
+  <text class="ct" x="458" y="94">Ingest episodes</text>
+  <text class="cd" x="432" y="116">store every interaction</text>
+
+  <!-- ===== Step 2: Analyze (upper-right) ===== -->
+  <rect class="c-an" x="561" y="171" width="168" height="64" rx="11"/>
+  <circle class="badge-an" cx="585" cy="195" r="11"/>
+  <text class="bn" x="585" y="199" text-anchor="middle">2</text>
+  <text class="ct" x="603" y="199">Analyze</text>
+  <text class="cd" x="577" y="221">LLM or rules scan recent</text>
+
+  <!-- ===== Step 3: Abstract (lower-right) ===== -->
+  <rect class="c-an" x="520" y="341" width="168" height="64" rx="11"/>
+  <circle class="badge-an" cx="544" cy="365" r="11"/>
+  <text class="bn" x="544" y="369" text-anchor="middle">3</text>
+  <text class="ct" x="562" y="369">Abstract</text>
+  <text class="cd" x="536" y="391">patterns &#8594; candidate facts</text>
+
+  <!-- ===== Step 4: Update semantic (lower-left) ===== -->
+  <rect class="c-se" x="312" y="341" width="168" height="64" rx="11"/>
+  <circle class="badge-se" cx="336" cy="365" r="11"/>
+  <text class="bn" x="336" y="369" text-anchor="middle">4</text>
+  <text class="ct" x="354" y="369">Update semantic</text>
+  <text class="cd" x="328" y="391">facts &#183; source &#183; confidence</text>
+
+  <!-- ===== Step 5: Refresh working memory (upper-left) ===== -->
+  <rect class="c-wm" x="271" y="171" width="168" height="64" rx="11"/>
+  <circle class="badge-wm" cx="295" cy="195" r="11"/>
+  <text class="bn" x="295" y="199" text-anchor="middle">5</text>
+  <text class="ct" x="313" y="199">Refresh work. mem.</text>
+  <text class="cd" x="287" y="221">bounded projection</text>
+
+  <!-- ===== side note (right) ===== -->
+  <text class="ht" x="772" y="170" style="font-size:13px">Episodic &#8594; Semantic</text>
+  <text class="hs" x="772" y="190">raw events become</text>
+  <text class="hs" x="772" y="206">durable, structured facts</text>
+  <text class="hs" x="772" y="232">(like memory consolidation:</text>
+  <text class="hs" x="772" y="248">rapid binding, then</text>
+  <text class="hs" x="772" y="264">gradual reorganization)</text>
+
+  <!-- ===== footnote ===== -->
+  <text class="foot-em" x="40" y="430">Conservative:</text>
+  <text class="foot" x="128" y="430">store the fact, its source episode, confidence, and review status together in one transaction.</text>
+</svg>

@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="396" viewBox="0 0 1000 396" role="img" aria-labelledby="title desc">
+  <title id="title">Magic-set rewrite: broad versus goal-directed recursion</title>
+  <desc id="desc">The same directed graph evaluated two ways for the query reachable from a. The graph has nodes a to b to c, b to d to e, and a separate component p to q to r. On the left, plain bottom-up recursion derives the entire reachable relation, including the disconnected p to q to r component, even though it cannot affect the answer; that work is wasted. On the right, the magic-set rewrite seeds the recursion at a and only expands nodes reachable from a, namely a, b, c, d, and e; the p, q, r component is never seeded and is skipped. Both produce the same answer, b c d e, but the magic-set version does no wasted work.</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .panel-l { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.8; }
+      .panel-r { fill: #f0fdfa; stroke: #0f766e; stroke-width: 1.8; }
+      .nodeon { fill: #ccfbf1; stroke: #0f766e; stroke-width: 2; }
+      .nodeoff { fill: #f1f5f9; stroke: #cbd5e1; stroke-width: 1.8; stroke-dasharray: 4 3; }
+      .nodewaste { fill: #fde9c8; stroke: #d97706; stroke-width: 2; }
+      .nlbl { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; font-weight: 700; }
+      .nlbl-off { fill: #94a3b8; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; font-weight: 700; }
+      .edge { fill: none; stroke: #64748b; stroke-width: 2; }
+      .edge-off { fill: none; stroke: #cbd5e1; stroke-width: 1.8; stroke-dasharray: 4 3; }
+      .seedbox { fill: none; stroke: #0f766e; stroke-width: 1.8; stroke-dasharray: 6 4; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 26px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; font-weight: 450; }
+      .q { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 13px; font-weight: 600; }
+      .ph-l { fill: #b45309; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; font-weight: 720; }
+      .ph-r { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; font-weight: 720; }
+      .psub { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11.5px; font-weight: 500; }
+      .tag-waste { fill: #d97706; }
+      .tag-seed { fill: #0f766e; }
+      .tagt { fill: #ffffff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 9.5px; font-weight: 700; }
+      .rlbl { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11px; font-weight: 600; }
+      .skip { fill: #94a3b8; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11px; font-style: italic; font-weight: 600; }
+      .seedlbl { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11px; font-weight: 700; }
+      .foot { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 450; }
+    </style>
+    <marker id="a" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="ao" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#cbd5e1" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arw" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#0f766e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect class="card" x="2" y="2" width="996" height="392" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+  <text class="title" x="500" y="36" text-anchor="middle">Magic-Set Rewrite: Broad &#8594; Goal-Directed</text>
+  <text class="caption" x="500" y="60" text-anchor="middle">Query:</text>
+  <text class="q" x="556" y="61" text-anchor="start">[:find ?end :where (reachable a ?end)]</text>
+
+  <!-- ===== LEFT panel: plain recursion ===== -->
+  <rect class="panel-l" x="28" y="80" width="446" height="272" rx="12"/>
+  <text class="ph-l" x="48" y="108">Plain bottom-up</text>
+  <text class="psub" x="48" y="126">derives the whole relation</text>
+
+  <!-- left edges -->
+  <path class="edge" d="M124 175 H186" marker-end="url(#a)"/>
+  <path class="edge" d="M210 168 L266 150" marker-end="url(#a)"/>
+  <path class="edge" d="M205 175 V213" marker-end="url(#a)"/>
+  <path class="edge" d="M222 231 H266" marker-end="url(#a)"/>
+  <path class="edge" d="M124 305 H186" marker-end="url(#a)"/>
+  <path class="edge" d="M222 305 H266" marker-end="url(#a)"/>
+  <!-- left nodes (all active) -->
+  <circle class="nodeon" cx="106" cy="175" r="18"/><text class="nlbl" x="106" y="180" text-anchor="middle">a</text>
+  <circle class="nodeon" cx="205" cy="175" r="18"/><text class="nlbl" x="205" y="180" text-anchor="middle">b</text>
+  <circle class="nodeon" cx="285" cy="146" r="18"/><text class="nlbl" x="285" y="151" text-anchor="middle">c</text>
+  <circle class="nodeon" cx="205" cy="231" r="18"/><text class="nlbl" x="205" y="236" text-anchor="middle">d</text>
+  <circle class="nodeon" cx="285" cy="231" r="18"/><text class="nlbl" x="285" y="236" text-anchor="middle">e</text>
+  <circle class="nodewaste" cx="106" cy="305" r="18"/><text class="nlbl" x="106" y="310" text-anchor="middle">p</text>
+  <circle class="nodewaste" cx="205" cy="305" r="18"/><text class="nlbl" x="205" y="310" text-anchor="middle">q</text>
+  <circle class="nodewaste" cx="285" cy="305" r="18"/><text class="nlbl" x="285" y="310" text-anchor="middle">r</text>
+  <rect class="tag-waste" x="330" y="296" width="118" height="18" rx="9"/>
+  <text class="tagt" x="389" y="309" text-anchor="middle">wasted work</text>
+  <text class="rlbl" x="330" y="180">answer: b c d e</text>
+
+  <!-- ===== rewrite arrow ===== -->
+  <path d="M482 216 H518" fill="none" stroke="#0f766e" stroke-width="2.4" marker-end="url(#arw)"/>
+  <text class="seedlbl" x="500" y="206" text-anchor="middle">seed a</text>
+
+  <!-- ===== RIGHT panel: magic-set ===== -->
+  <rect class="panel-r" x="526" y="80" width="446" height="272" rx="12"/>
+  <text class="ph-r" x="546" y="108">Magic-set (seeded from a)</text>
+  <text class="psub" x="546" y="126">only expands nodes reachable from a</text>
+
+  <!-- seeded region boundary -->
+  <rect class="seedbox" x="566" y="138" width="246" height="120" rx="12"/>
+
+  <!-- right edges (a..e active, p..r skipped) -->
+  <path class="edge" d="M622 175 H684" marker-end="url(#a)"/>
+  <path class="edge" d="M708 168 L764 150" marker-end="url(#a)"/>
+  <path class="edge" d="M703 175 V213" marker-end="url(#a)"/>
+  <path class="edge" d="M720 231 H764" marker-end="url(#a)"/>
+  <path class="edge-off" d="M622 305 H684" marker-end="url(#ao)"/>
+  <path class="edge-off" d="M720 305 H764" marker-end="url(#ao)"/>
+  <!-- right nodes -->
+  <circle class="nodeon" cx="604" cy="175" r="18"/><text class="nlbl" x="604" y="180" text-anchor="middle">a</text>
+  <circle class="nodeon" cx="703" cy="175" r="18"/><text class="nlbl" x="703" y="180" text-anchor="middle">b</text>
+  <circle class="nodeon" cx="783" cy="146" r="18"/><text class="nlbl" x="783" y="151" text-anchor="middle">c</text>
+  <circle class="nodeon" cx="703" cy="231" r="18"/><text class="nlbl" x="703" y="236" text-anchor="middle">d</text>
+  <circle class="nodeon" cx="783" cy="231" r="18"/><text class="nlbl" x="783" y="236" text-anchor="middle">e</text>
+  <circle class="nodeoff" cx="604" cy="305" r="18"/><text class="nlbl-off" x="604" y="310" text-anchor="middle">p</text>
+  <circle class="nodeoff" cx="703" cy="305" r="18"/><text class="nlbl-off" x="703" y="310" text-anchor="middle">q</text>
+  <circle class="nodeoff" cx="783" cy="305" r="18"/><text class="nlbl-off" x="783" y="310" text-anchor="middle">r</text>
+  <!-- seed marker on a -->
+  <rect class="tag-seed" x="576" y="140" width="44" height="17" rx="8"/>
+  <text class="tagt" x="598" y="153" text-anchor="middle">seed</text>
+  <text class="skip" x="830" y="300">never seeded</text>
+  <text class="skip" x="830" y="316">&#8594; skipped</text>
+  <text class="rlbl" x="830" y="180">answer: b c d e</text>
+
+  <!-- footnote -->
+  <text class="foot" x="28" y="378">Same graph and rules; seeding from a prunes recursion to the part that can affect the answer &#8212; the p&#8594;q&#8594;r component is never explored.</text>
+</svg>

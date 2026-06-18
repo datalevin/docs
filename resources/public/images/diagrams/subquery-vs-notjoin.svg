@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="540" viewBox="0 0 1000 540" role="img" aria-labelledby="title desc">
+  <title id="title">Nested q subquery versus not-join</title>
+  <desc id="desc">A side-by-side comparison of two ways to find London users with no orders. On the left, the nested q anti-pattern: the clause for city London produces N candidate rows, then an inner q subquery is run once per ?e, which means N subquery invocations; cost scales with the number of candidate rows. On the right, not-join: the positive London clause and a planned negative pattern are folded into one query graph, evaluated by the planner with index lookups as a single optimized query; the negative pattern is planned together with the positive clauses. Both return London users with no matching order, but the left repeats work per row while the right evaluates once.</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .lhead { fill: #fef3c7; stroke: #f59e0b; stroke-width: 2; }
+      .rhead { fill: #ccfbf1; stroke: #0f766e; stroke-width: 2; }
+      .lbox { fill: #fffbeb; stroke: #fcd34d; stroke-width: 2; }
+      .lresult { fill: #fef3c7; stroke: #f59e0b; stroke-width: 2.5; }
+      .rbox { fill: #f0fdfa; stroke: #5eead4; stroke-width: 2; }
+      .rresult { fill: #ccfbf1; stroke: #0f766e; stroke-width: 2.5; }
+      .larrow { fill: none; stroke: #d97706; stroke-width: 2.4; }
+      .rarrow { fill: none; stroke: #0f766e; stroke-width: 2.4; }
+      .divider { fill: none; stroke: #cbd5e1; stroke-width: 1.6; stroke-dasharray: 2 6; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 29px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 17px; font-weight: 450; }
+      .lhead-t { fill: #b45309; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 19px; font-weight: 720; }
+      .rhead-t { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 19px; font-weight: 720; }
+      .code { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 13px; font-weight: 450; }
+      .desc { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12.5px; font-weight: 450; }
+      .emph-l { fill: #b45309; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; font-weight: 700; }
+      .emph-r { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; font-weight: 700; }
+      .res-lbl { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11px; font-weight: 600; }
+      .res-t { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; font-weight: 700; }
+      .pill-l { fill: #f59e0b; }
+      .pill-r { fill: #0f766e; }
+      .pill-t { fill: #ffffff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; font-weight: 700; }
+      .foot-l { fill: #b45309; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-style: italic; font-weight: 500; }
+      .foot-r { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-style: italic; font-weight: 500; }
+      .vs { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; font-weight: 700; }
+      .vs-c { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.6; }
+    </style>
+    <marker id="la" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#d97706" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="ra" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#0f766e" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Figure card (transparent corners adapt to light/dark page) -->
+  <rect class="card" x="2" y="2" width="996" height="536" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+
+  <text class="title" x="500" y="44" text-anchor="middle">Subqueries: Nested q vs. not-join</text>
+  <text class="caption" x="500" y="72" text-anchor="middle">Same question &#8212; London users with no orders &#8212; two ways to evaluate it.</text>
+
+  <!-- ===== Center divider ===== -->
+  <path class="divider" d="M500 152 V300"/>
+  <path class="divider" d="M500 340 V488"/>
+  <circle class="vs-c" cx="500" cy="320" r="16"/>
+  <text class="vs" x="500" y="325" text-anchor="middle">vs</text>
+
+  <!-- ================= LEFT: nested q ================= -->
+  <rect class="lhead" x="36" y="96" width="450" height="46" rx="12"/>
+  <text class="lhead-t" x="261" y="125" text-anchor="middle">Nested q &#8212; anti-pattern</text>
+
+  <path class="larrow" d="M261 224 V246" marker-end="url(#la)"/>
+  <path class="larrow" d="M261 312 V334" marker-end="url(#la)"/>
+  <path class="larrow" d="M261 400 V422" marker-end="url(#la)"/>
+
+  <rect class="lbox" x="56" y="158" width="410" height="66" rx="11"/>
+  <text class="code" x="72" y="186">[?e :user/city "London"]</text>
+  <text class="desc" x="72" y="209">N London users &#8212; candidate rows</text>
+
+  <rect class="lbox" x="56" y="246" width="410" height="66" rx="11"/>
+  <text class="code" x="72" y="274">(q &#8230; [?o :order/customer ?e])</text>
+  <text class="desc" x="72" y="297">run once per ?e</text>
+  <rect class="pill-l" x="404" y="261" width="50" height="24" rx="12"/>
+  <text class="pill-t" x="429" y="278" text-anchor="middle">&#215;N</text>
+
+  <rect class="lbox" x="56" y="334" width="410" height="66" rx="11"/>
+  <text class="emph-l" x="72" y="363">N subquery invocations</text>
+  <text class="desc" x="72" y="386">one inner query per candidate row</text>
+
+  <rect class="lresult" x="56" y="422" width="410" height="66" rx="11"/>
+  <text class="res-lbl" x="72" y="449">&#8594; result</text>
+  <text class="res-t" x="72" y="472">London users with no orders</text>
+
+  <text class="foot-l" x="261" y="512" text-anchor="middle">cost scales with the number of candidate rows</text>
+
+  <!-- ================= RIGHT: not-join ================= -->
+  <rect class="rhead" x="514" y="96" width="450" height="46" rx="12"/>
+  <text class="rhead-t" x="739" y="125" text-anchor="middle">not-join &#8212; one planned query</text>
+
+  <path class="rarrow" d="M739 224 V246" marker-end="url(#ra)"/>
+  <path class="rarrow" d="M739 312 V334" marker-end="url(#ra)"/>
+  <path class="rarrow" d="M739 400 V422" marker-end="url(#ra)"/>
+
+  <rect class="rbox" x="534" y="158" width="410" height="66" rx="11"/>
+  <text class="code" x="550" y="186">[?e :user/city "London"]</text>
+  <text class="desc" x="550" y="209">positive clause</text>
+
+  <rect class="rbox" x="534" y="246" width="410" height="66" rx="11"/>
+  <text class="code" x="550" y="274">(not-join [?e] [?o :order/customer ?e])</text>
+  <text class="desc" x="550" y="297">planned negative pattern</text>
+  <rect class="pill-r" x="884" y="261" width="46" height="24" rx="12"/>
+  <text class="pill-t" x="907" y="278" text-anchor="middle">&#215;1</text>
+
+  <rect class="rbox" x="534" y="334" width="410" height="66" rx="11"/>
+  <text class="emph-r" x="550" y="363">one query graph</text>
+  <text class="desc" x="550" y="386">planner + index lookups &#183; single optimized query</text>
+
+  <rect class="rresult" x="534" y="422" width="410" height="66" rx="11"/>
+  <text class="res-lbl" x="550" y="449">&#8594; result</text>
+  <text class="res-t" x="550" y="472">London users with no matching order</text>
+
+  <text class="foot-r" x="739" y="512" text-anchor="middle">negative pattern planned with the positive clauses</text>
+</svg>

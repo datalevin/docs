@@ -6,7 +6,7 @@ Part I — Foundations: A Multi-Paradigm Database
 
 1. Why Datalevin: Logic, Graphs, and Key–Value in One Engine
 
-2. Getting Started: Embedded, Server, CLI, Babashka, and MCP Modes
+2. Your First Datalevin Session
 
 3. The Datalevin Mental Model: Values, Facts, and Relationships
 
@@ -70,14 +70,16 @@ Part VI — Datalevin for Intelligent Systems
 
 Part VII — Appendices
 
-28. Appendix A: Datalog Schema Reference
+28. Appendix A: Installation, Runtimes, and Deployment Modes
 
-29. Appendix B: Key-Value API Reference
+29. Appendix B: EDN Format
 
-30. Appendix C: Datalog Built-In Functions Reference
+30. Appendix C: Datalog Schema Reference
 
-31. Appendix D: EDN Format
+31. Appendix D: Datalog Built-In Functions Reference
 
 32. Appendix E: Core API Helpers Reference
 
-33. Appendix F: datalevin.client API Reference
+33. Appendix F: Key-Value API Reference
+
+34. Appendix G: datalevin.client API Reference

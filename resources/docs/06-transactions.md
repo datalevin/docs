@@ -689,6 +689,8 @@ side if the Datalog and KV updates must commit atomically. Open application DBIs
 during setup, then use the transaction-bound connection inside
 `with-transaction` for both parts of the write:
 
+<!-- pdf-listing: Mixing Datalog and key-value writes in one transaction -->
+
 ```clojure
 (let [kv (d/datalog-kv conn)]
   ;; DBI opening is idempotent, so this is safe during application startup.
@@ -809,6 +811,8 @@ runtime UDF registry or resolver, and call it by descriptor or by installed
 `:db/ident`. Transaction UDF descriptors use `:udf/kind :tx-fn`.
 
 <div class="multi-lang">
+
+<!-- pdf-listing: Descriptor-backed transaction function -->
 
 ```clojure
 (require '[datalevin.udf :as udf])

@@ -22,24 +22,26 @@ collection of moving parts that must be secured, backed up, observed, upgraded,
 and understood together.
 
 One response is to keep everything in a capable SQL database and add extensions
-as requirements grow. That is often reasonable, but this book's argument is not
-only about reducing the number of services. SQL is a poor query language for
-programs, and table-shaped storage makes cardinality estimation hard for the
-optimizer precisely when queries become complex. Datalevin takes a different
-route: facts are the storage and query substrate, and Datalog is the language
-for composing those facts.
+as requirements grow. That is often reasonable. However, as we will argue in
+details in Chapter 1, this choice is often less than ideal, because some far better
+choices exist and they are practical today. We could not only reduce the number of
+services, but also improve the system performance while enhancing developer
+ergonomics at the same time. To preview the arguments, we will just say SQL is a
+poor query language for programs, and table-shaped storage makes cardinality
+estimation hard for the query optimizer precisely when queries become complex.
 
-Datalevin starts from a different premise: many of these needs can share one
-small, composable data model.
+Datalevin is one of the such better choices. It makes a fundamentally different
+premise in data modeling and query language: facts are the storage and query
+substrate, and Datalog is the language for composing those facts. With this new
+approach, many of the aforementioned varying needs can share one small,
+composable data model.
 
-At its core, Datalevin stores facts. A fact says that an entity has an attribute
-with a value. From that simple shape, Datalevin builds relational queries,
-graph traversal, document modeling, key-value access, full-text search, vector
-search, and logical rules. The important idea is not that every workload looks
-the same. The important idea is that these workloads can cooperate inside one
-transactional engine instead of being bolted together after the fact.
-
-![Datalevin unified data model](/images/diagrams/unified-data-model.svg)
+At its core, Datalevin stores simple facts. A fact says that an entity has an
+attribute with a value. From that simple shape, Datalevin builds relational
+queries, graph traversal, document modeling, key-value access, full-text search,
+vector search, and logical rules. The important idea is that these workloads can
+cooperate inside one transactional engine and apply the same elegant data model,
+instead of being bolted together in an ad-hoc fashion.
 
 Datalevin is built on LMDB, a fast memory-mapped key-value store,
 but it is not only a key-value wrapper. It exposes KV APIs when direct sorted
@@ -48,26 +50,19 @@ constraints, identity, and logical queries are the right tool. It also integrate
 full-text indexes, vector and embedding indexes, and path-indexed documents so
 that search and reasoning can meet in the same query.
 
-Here is the flavor of the model across the main application APIs. The examples
-in this book use one convention throughout:
+Below we will show a flavor of the model across the Datalevin APIs in code:
+schema, connection, transaction and query.
 
-- Clojure examples use EDN directly.
-- Java examples use the high-level `datalevin` package, especially typed schema
-  and transaction builders. Attribute names are written as strings such as
-  `"person/name"`; the Java wrapper turns them into Datalevin keywords.
-- Python Datalog examples use `from datalevin import connect` and connection
-  methods such as `conn.transact`, `conn.query`, and `conn.pull`. Schema and
-  transaction maps use EDN keyword strings such as `":person/name"`. KV,
-  administration, and interop examples import the specific Python helpers they
-  use, such as `open_kv`, `new_client`, `exec_json`, or `interop`.
-- JavaScript examples use `connect` from `datalevin-node`, `await conn.*`
-  methods, and the same colon-prefixed keyword strings as Python.
+For printed book, we show Clojure code examples for its conciseness. However,
+you do not need to know Clojure to understand the code examples, as these are
+mostly showing data and Datalevin function calls. For Web version of the book at
+https://datalevin.org, examples in four languages are shown in parallel:
+Clojure, Java, JavaScript and Python.
 
-When Java examples must pass a raw option map or UDF descriptor, keyword values
-are still written as colon-prefixed strings such as `":cosine"` or
-`":tx-fn"`, because those maps are normalized by the Java wrapper at runtime.
-Unless a snippet is explicitly labeled as an API sketch, non-Clojure examples
-show the public high-level binding style rather than pseudocode.
+To grasp the full nuances of some examples, you may want to be familiar with the
+data notation we use, called EDN (extensible data notation), which is similar to
+JSON, but with slightly richer data types. Appendix B is the EDN reference for
+this book.
 
 <div class="multi-lang">
 
@@ -194,20 +189,30 @@ try {
 
 </div>
 
-The example is small, but it shows the shape of the book. Data is represented as
-facts. Relationships are ordinary values. Queries are data. The database can
-answer questions by joining facts, following references, and applying logic.
-Later chapters extend the same foundation to transactions, schema design,
-documents, full-text search, vectors, rules, operations, and intelligent
-applications.
+If you do not understand the code examples above, do not worry. We will explain
+everything in details in later chapters. The point is to show the basic shape of
+the book: Data is represented as facts. Relationships are ordinary values.
+Queries are data. The database can answer questions by joining facts, following
+references, and applying logic. Later chapters extend the same foundation to
+transactions, schema design, documents, full-text search, vectors, rules,
+operations, and intelligent applications.
+
+A related theme runs throughout the book: data-oriented programming for
+application design. Model durable application state as plain, inspectable data;
+make relationships explicit; and let small functions and declarative queries
+transform that data instead of hiding essential state inside opaque objects.
+
+Datalevin is open source. Its source code, issues, release history, and project
+documentation live in the
+[Datalevin GitHub repository](https://github.com/datalevin/datalevin).
 
 ## Why This Book Exists
 
-Datalevin is a compact production database system. It can be embedded in an
-application, run as a server, used from scripts, accessed from multiple language
-clients, and deployed as part of production systems. It also supports a style of
-modeling that is unfamiliar to many engineers who come from table-first,
-document-first, or service-first architectures.
+Datalevin is a compact database system. It can be embedded in an application,
+run as a server, used from scripts, accessed from multiple language clients, and
+deployed as part of large production systems. It also supports a style of modeling
+that is unfamiliar to many engineers who come from table-first, document-first,
+or service-first architectures.
 
 This book exists to make that style practical.
 
@@ -275,13 +280,34 @@ developers than the older Prolog-like notation, but still based on the same
 logic-programming ideas of variables, unification, and rules.
 
 Most examples use Clojure because Datalevin's native data model is easiest to
-see in EDN and Datalog forms. The ideas are not limited to Clojure. Datalevin
-also exposes Java, Python, JavaScript, command-line, server, and MCP surfaces,
-and the book calls out those modes where they matter.
+see in EDN and Datalog forms due to their conciseness. The ideas are not limited
+to Clojure. The Web version of this book at https://datalevin.org includes
+multi-language code examples in Java, Python, and JavaScript as well. To
+conserve print length and avoid spending paper on repeated versions of the same
+idea, the printed book includes Clojure code blocks only. The printed examples
+therefore show the Clojure API and EDN data notation directly, while the web
+version remains the place to compare language bindings side by side.
 
-If EDN is new to you, read Appendix D early. You do not need to become a
+If EDN is new to you, read Appendix B early. You do not need to become a
 Clojure programmer to understand EDN, but the notation appears everywhere in
 schemas, transactions, queries, rules, and examples.
+
+The examples in this book use one convention throughout:
+
+- Clojure examples use EDN directly.
+- Java examples use the high-level `datalevin` package, especially typed schema
+  and transaction builders. Attribute names are written as strings such as
+  `"person/name"`; When Java examples must pass a raw option map or UDF
+  descriptor, keyword values are still written as colon-prefixed strings such as
+  `":cosine"` or `":tx-fn"`, because those maps are normalized by the Java
+  wrapper at runtime.
+- Python Datalog examples use `from datalevin import connect` and connection
+  methods such as `conn.transact`, `conn.query`, and `conn.pull`. Schema and
+  transaction maps use EDN keyword strings such as `":person/name"`. KV,
+  administration, and interop examples import the specific Python helpers they
+  use, such as `open_kv`, `new_client`, `exec_json`, or `interop`.
+- JavaScript examples use `connect` from `datalevin-node`, `await conn.*`
+  methods, and the same colon-prefixed keyword strings as Python.
 
 ## How to Read This Book
 
@@ -302,8 +328,9 @@ queries are represented.
 
 If you are building AI systems, resist the urge to jump straight to Part VI.
 Persistent memory and agent state are only reliable when the underlying data
-model, transactions, indexes, and query semantics are clear. Part VI is not a
-separate AI appendix; it is the natural consequence of the earlier parts.
+model, transactions, indexes, and query semantics are clear. You should not
+consider Part VI to be a separate AI appendix, it is the natural consequence of
+the earlier parts.
 
 ## What You Should Take Away
 
@@ -348,14 +375,16 @@ Hopperdietzel, Isaac Ballone, and many others that I have missed.
 
 Datalevin was originally motivated by needs at Juji [5], where intelligent
 applications required persistent memory, fast retrieval, and a more flexible
-way to represent user and agent state. I am grateful to Michelle Zhou, Wenxi
-Chen, and other great people at Juji, whose work made those needs concrete and
-whose applications kept the project grounded in real systems.
+way to represent user and agent state. I am grateful to Michelle Zhou, Amar
+Mehta, Wenxi Chen, Ransom Williams, Taejun Song, and other great people at Juji,
+whose work made those needs concrete and whose applications kept the project
+grounded in real systems.
 
-This book has already benefited from volunteer reviewers who read draft
-chapters, ran examples, questioned unclear explanations, found inconsistent
-terminology, and pointed out places where the book assumed too much background:
-[insert reviewer names here]. I am grateful for the contributions!
+This book has already benefited from volunteer reviewers in the Datalevin
+community who read draft chapters, ran examples, questioned unclear
+explanations, found inconsistent terminology, and pointed out places where the
+book assumed too much background. I am grateful for the contributions:
+[reviewer names].
 
 ## Notes
 

@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="530" viewBox="0 0 1000 530" role="img" aria-labelledby="title desc">
+  <title id="title">The four :find result shapes</title>
+  <desc id="desc">One logical result set with columns ?name and ?age and rows Alice 30 and Bob 42, shaped four ways by :find. Relation, :find ?name ?age, selects all cells and returns a set of tuples #{["Alice" 30] ["Bob" 42]}. Collection, :find [?name ...], selects the ?name column across both rows and returns a flat vector ["Alice" "Bob"]. Tuple, :find [?name ?age], selects one row and returns a single tuple ["Alice" 30]. Scalar, :find ?name with a trailing dot, selects one cell and returns a single value "Alice". Tuple and scalar are for queries that identify one result.</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .scard { fill: #fcfdfe; stroke: #d7e7ee; stroke-width: 1.6; }
+      .sgh { fill: #ccfbf1; stroke: #0f766e; stroke-width: 1.4; }
+      .sgd { fill: #ffffff; stroke: #94a3b8; stroke-width: 1.4; }
+      .cell-on { fill: #ccfbf1; stroke: #0f766e; stroke-width: 1.6; }
+      .cell-off { fill: #f1f5f9; stroke: #e2e8f0; stroke-width: 1.4; }
+      .cell-h { fill: #eef2f6; stroke: #dbe3ea; stroke-width: 1.2; }
+      .fan { fill: none; stroke: #94a3b8; stroke-width: 1.8; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 29px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 17px; font-weight: 450; }
+      .slabel { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; font-weight: 600; }
+      .sgt { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 14px; font-weight: 500; }
+      .sgth { fill: #0f766e; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; }
+      .shape-t { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 720; }
+      .syntax { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12.5px; font-weight: 500; }
+      .ct-on { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; font-weight: 600; }
+      .ct-off { fill: #94a3b8; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; font-weight: 450; }
+      .ch { fill: #64748b; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 10.5px; font-weight: 600; }
+      .out { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 11px; font-weight: 600; }
+      .note { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11.5px; font-weight: 450; }
+    </style>
+    <marker id="dn" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#94a3b8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Figure card (transparent corners adapt to light/dark page) -->
+  <rect class="card" x="2" y="2" width="996" height="526" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+
+  <text class="title" x="500" y="42" text-anchor="middle">The Same Result, Four :find Shapes</text>
+  <text class="caption" x="500" y="70" text-anchor="middle">:find decides which cells you get and how they are packaged.</text>
+
+  <!-- ===== Source logical result set ===== -->
+  <text class="slabel" x="500" y="100" text-anchor="middle">logical result set</text>
+  <rect class="sgh" x="420" y="110" width="80" height="24"/>
+  <rect class="sgh" x="500" y="110" width="80" height="24"/>
+  <text class="sgth" x="460" y="127" text-anchor="middle">?name</text>
+  <text class="sgth" x="540" y="127" text-anchor="middle">?age</text>
+  <rect class="sgd" x="420" y="134" width="80" height="24"/>
+  <rect class="sgd" x="500" y="134" width="80" height="24"/>
+  <text class="sgt" x="460" y="151" text-anchor="middle">"Alice"</text>
+  <text class="sgt" x="540" y="151" text-anchor="middle">30</text>
+  <rect class="sgd" x="420" y="158" width="80" height="24"/>
+  <rect class="sgd" x="500" y="158" width="80" height="24"/>
+  <text class="sgt" x="460" y="175" text-anchor="middle">"Bob"</text>
+  <text class="sgt" x="540" y="175" text-anchor="middle">42</text>
+
+  <!-- ===== Fan-out arrows ===== -->
+  <path class="fan" d="M470 184 C 360 214, 200 220, 143 250" marker-end="url(#dn)"/>
+  <path class="fan" d="M485 184 C 440 214, 410 222, 387 250" marker-end="url(#dn)"/>
+  <path class="fan" d="M515 184 C 560 214, 600 222, 631 250" marker-end="url(#dn)"/>
+  <path class="fan" d="M530 184 C 640 214, 800 220, 875 250" marker-end="url(#dn)"/>
+
+  <!-- ===================== Card 1: Relation ===================== -->
+  <rect class="scard" x="30" y="252" width="226" height="226" rx="12"/>
+  <text class="shape-t" x="143" y="278" text-anchor="middle">Relation</text>
+  <text class="syntax" x="143" y="300" text-anchor="middle">:find ?name ?age</text>
+  <rect class="cell-h" x="79" y="320" width="64" height="22"/>
+  <rect class="cell-h" x="143" y="320" width="64" height="22"/>
+  <text class="ch" x="111" y="335" text-anchor="middle">?name</text>
+  <text class="ch" x="175" y="335" text-anchor="middle">?age</text>
+  <rect class="cell-on" x="79" y="342" width="64" height="22"/>
+  <rect class="cell-on" x="143" y="342" width="64" height="22"/>
+  <text class="ct-on" x="111" y="357" text-anchor="middle">"Alice"</text>
+  <text class="ct-on" x="175" y="357" text-anchor="middle">30</text>
+  <rect class="cell-on" x="79" y="364" width="64" height="22"/>
+  <rect class="cell-on" x="143" y="364" width="64" height="22"/>
+  <text class="ct-on" x="111" y="379" text-anchor="middle">"Bob"</text>
+  <text class="ct-on" x="175" y="379" text-anchor="middle">42</text>
+  <path class="fan" d="M143 390 V406" marker-end="url(#dn)"/>
+  <text class="out" x="143" y="430" text-anchor="middle">#{["Alice" 30] ["Bob" 42]}</text>
+  <text class="note" x="143" y="456" text-anchor="middle">a set of tuples</text>
+
+  <!-- ===================== Card 2: Collection ===================== -->
+  <rect class="scard" x="274" y="252" width="226" height="226" rx="12"/>
+  <text class="shape-t" x="387" y="278" text-anchor="middle">Collection</text>
+  <text class="syntax" x="387" y="300" text-anchor="middle">:find [?name ...]</text>
+  <rect class="cell-h" x="323" y="320" width="64" height="22"/>
+  <rect class="cell-h" x="387" y="320" width="64" height="22"/>
+  <text class="ch" x="355" y="335" text-anchor="middle">?name</text>
+  <text class="ch" x="419" y="335" text-anchor="middle">?age</text>
+  <rect class="cell-on" x="323" y="342" width="64" height="22"/>
+  <rect class="cell-off" x="387" y="342" width="64" height="22"/>
+  <text class="ct-on" x="355" y="357" text-anchor="middle">"Alice"</text>
+  <text class="ct-off" x="419" y="357" text-anchor="middle">30</text>
+  <rect class="cell-on" x="323" y="364" width="64" height="22"/>
+  <rect class="cell-off" x="387" y="364" width="64" height="22"/>
+  <text class="ct-on" x="355" y="379" text-anchor="middle">"Bob"</text>
+  <text class="ct-off" x="419" y="379" text-anchor="middle">42</text>
+  <path class="fan" d="M387 390 V406" marker-end="url(#dn)"/>
+  <text class="out" x="387" y="430" text-anchor="middle">["Alice" "Bob"]</text>
+  <text class="note" x="387" y="456" text-anchor="middle">one column, flattened</text>
+
+  <!-- ===================== Card 3: Tuple ===================== -->
+  <rect class="scard" x="518" y="252" width="226" height="226" rx="12"/>
+  <text class="shape-t" x="631" y="278" text-anchor="middle">Tuple</text>
+  <text class="syntax" x="631" y="300" text-anchor="middle">:find [?name ?age]</text>
+  <rect class="cell-h" x="567" y="320" width="64" height="22"/>
+  <rect class="cell-h" x="631" y="320" width="64" height="22"/>
+  <text class="ch" x="599" y="335" text-anchor="middle">?name</text>
+  <text class="ch" x="663" y="335" text-anchor="middle">?age</text>
+  <rect class="cell-on" x="567" y="342" width="64" height="22"/>
+  <rect class="cell-on" x="631" y="342" width="64" height="22"/>
+  <text class="ct-on" x="599" y="357" text-anchor="middle">"Alice"</text>
+  <text class="ct-on" x="663" y="357" text-anchor="middle">30</text>
+  <rect class="cell-off" x="567" y="364" width="64" height="22"/>
+  <rect class="cell-off" x="631" y="364" width="64" height="22"/>
+  <text class="ct-off" x="599" y="379" text-anchor="middle">"Bob"</text>
+  <text class="ct-off" x="663" y="379" text-anchor="middle">42</text>
+  <path class="fan" d="M631 390 V406" marker-end="url(#dn)"/>
+  <text class="out" x="631" y="430" text-anchor="middle">["Alice" 30]</text>
+  <text class="note" x="631" y="456" text-anchor="middle">one row (when unique)</text>
+
+  <!-- ===================== Card 4: Scalar ===================== -->
+  <rect class="scard" x="762" y="252" width="226" height="226" rx="12"/>
+  <text class="shape-t" x="875" y="278" text-anchor="middle">Scalar</text>
+  <text class="syntax" x="875" y="300" text-anchor="middle">:find ?name .</text>
+  <rect class="cell-h" x="811" y="320" width="64" height="22"/>
+  <rect class="cell-h" x="875" y="320" width="64" height="22"/>
+  <text class="ch" x="843" y="335" text-anchor="middle">?name</text>
+  <text class="ch" x="907" y="335" text-anchor="middle">?age</text>
+  <rect class="cell-on" x="811" y="342" width="64" height="22"/>
+  <rect class="cell-off" x="875" y="342" width="64" height="22"/>
+  <text class="ct-on" x="843" y="357" text-anchor="middle">"Alice"</text>
+  <text class="ct-off" x="907" y="357" text-anchor="middle">30</text>
+  <rect class="cell-off" x="811" y="364" width="64" height="22"/>
+  <rect class="cell-off" x="875" y="364" width="64" height="22"/>
+  <text class="ct-off" x="843" y="379" text-anchor="middle">"Bob"</text>
+  <text class="ct-off" x="907" y="379" text-anchor="middle">42</text>
+  <path class="fan" d="M875 390 V406" marker-end="url(#dn)"/>
+  <text class="out" x="875" y="430" text-anchor="middle">"Alice"</text>
+  <text class="note" x="875" y="456" text-anchor="middle">one value (when unique)</text>
+</svg>

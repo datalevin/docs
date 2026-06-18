@@ -147,6 +147,42 @@ target/datalevin-docs-standalone.jar
 
 The uberjar avoids resolving the production classpath on every boot and is the preferred deployment target on a 1 GB VM.
 
+## Build reviewer PDF
+
+The reviewer PDF is generated from the Markdown chapters with a print-oriented
+preprocessing step. The generated PDF uses a page-numbered table of contents,
+adds an index from `resources/docs/index-terms.edn` and generated function
+entries, and keeps Clojure fenced code blocks only; Java, Python, JavaScript,
+shell, JSON, SQL, and other non-Clojure fenced blocks remain in the web book but
+are omitted from the reviewer PDF source.
+
+Prerequisites:
+
+- `pandoc`
+- XeLaTeX, usually from TeX Live
+- `makeindex`, usually included with TeX Live
+- `rsvg-convert` for SVG diagrams
+- The PDF type stack configured in `build.clj`: Charter for body text, Avenir
+  Next for headings, and Menlo for code. These are available on macOS; adjust
+  the font metadata in `build.clj` if building on another platform.
+
+Build it with:
+
+```bash
+clojure -T:build reviewer-pdf
+```
+
+This produces:
+
+```bash
+target/pdf/datalevin-reviewer.md
+target/pdf/datalevin-reviewer.tex
+target/pdf/datalevin-reviewer.pdf
+```
+
+Set `DATALEVIN_VERSION` to override the default version used for
+`{{datalevin-version}}` substitution.
+
 ## Production
 
 Start the docs site from the built uberjar with explicit JVM heap limits:

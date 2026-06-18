@@ -8,9 +8,9 @@ part: "I — Foundations: A Multi-Paradigm Database"
 
 Transitioning to Datalevin often requires a fundamental shift in how you perceive
 data. If you are coming from a relational (SQL) or document (NoSQL) background,
-your mental model likely revolves around "containers": tables with fixed columns
-or documents with nested structures. In these systems, the container is the
-primary unit of truth.
+your mental model likely revolves around "containers": table rows with fixed
+columns or documents with nested structures. In these systems, the container is
+the primary unit of truth.
 
 Datalevin asks you to look deeper, past the containers, to the atomic facts
 themselves. Moving from SQL to Datalevin is less like moving between different
@@ -33,10 +33,9 @@ simple statement of truth represented as a triple: `[entity attribute value]`.
 - **Attribute (A):** The "property" (a keyword like `:user/email`).
 - **Value (V):** The "data" (like `"alice@example.com"`).
 
-
-From a traditional perspective, `e` and `a` are coordinates in a two-dimensional
-table view of values, and the value `v` is contained in the cell identified by
-the coordinates.
+From a traditional perspective, `e` and `a` are the two coordinates in a
+two-dimensional table view of values, and the value `v` is contained in the cell
+identified by the coordinates.
 
 However, a better view is to imagine a giant ledger where every single cell of
 every spreadsheet in your entire company is cut out and pasted as an individual
@@ -44,12 +43,9 @@ line. Each line tells you exactly which "row" it came from (Entity), what
 "column" it represents (Attribute), and what the "value" is.
 
 This "fact-first" approach is powerful because it is **additive**.
-To add a new piece of information, like her preferred language, you
+To add a new piece of information, like a user's preferred language, you
 don't need to "alter a table." You just add another datom:
 `[101 :user/preferred-language "en"]`.
-
-![One entity as many datoms: a row or document is really the set of datoms that share an entity id](/images/diagrams/entity-as-datoms.svg)
-
 
 ## 2. Attributes Over Tables: The Fluid Entity
 
@@ -58,7 +54,7 @@ In its place is **attribute-centric modeling**: you describe the behavior of
 each attribute instead of defining a fixed row shape for each entity type.
 
 In SQL, the schema belongs to the table. In Datalevin, the schema belongs to the
-**attribute**. A schema is a map from attribute names to behavior: value type,
+**attribute**. A schema is a map from attribute names to behaviors: value type,
 cardinality, uniqueness, full-text indexing for searching text, references to
 other entities, and other properties. You define what a `:user/email` is, for
 example a string and perhaps a value that must be unique, but you don't define
@@ -73,14 +69,17 @@ Three schema terms appear often:
   `:db.cardinality/many` means the entity can have a set of values.
 - **Uniqueness** describes whether a value can identify only one entity.
   `:db.unique/identity` is commonly used for natural keys such as emails,
-  slugs, and external ids. It also enables **upsert**, meaning "update the
-  existing entity if the identity already exists, otherwise insert a new one."
+  slugs, and external ids that uniquely identify an entity. It also enables
+  **upsert**, meaning "update the existing entity if the identity already
+  exists, otherwise insert a new one."
 
-An "Entity" in Datalevin is just a collection of datoms that happen to share
-the same Entity ID. This makes entities **fluid**. A single ID could have
-attributes associated with a `:user`, a `:customer`, and an `:employee`
-simultaneously. You don't "join" these tables; you simply query for an ID
-that possesses all those attributes.
+As illustrated in Figure 3.1, an **entity** in Datalevin is just a collection of
+datoms that happen to share the same Entity ID. This makes entities **fluid**. A
+single ID could have attributes associated with a `:user`, a `:customer`, and an
+`:employee` simultaneously. You don't "join" these tables; you simply query for
+an ID that possesses all those attributes.
+
+![One entity as many datoms: a row or document is really the set of datoms that share an entity id](/images/diagrams/entity-as-datoms.svg)
 
 To update a value, e.g. Alice's email address, you don't modify a row; you
 transact a new fact about the same attribute of the same entity. For a
@@ -97,7 +96,44 @@ conventions you create by naming your attributes (e.g., using the `person/`
 namespace, the part before `/` in `:person/name`), not constraints enforced by
 the storage engine.
 
-## 3. Transactions: Controlled Change
+## 3. Data-Oriented Application Design
+
+The previous two sections describe Datalevin's database model, but they also
+point to a broader application design principle: **data-oriented programming**.
+In this style, the essential state of the application is represented as plain,
+inspectable data, and behavior is expressed as functions and queries over that
+data rather than as hidden mutation inside object graphs [1].
+
+Datalevin is a natural fit for this style. Schemas are maps. Transactions are
+data. Queries are data. Rules are data. Entity maps are data. Even a
+relationship is not an object pointer with private behavior; it is an explicit
+fact whose value is another entity id. That means the important parts of the
+application can be printed, logged, diffed, tested, stored, transmitted, and
+reasoned about with ordinary tools.
+
+This does not mean applications have no behavior. It means behavior stays at the
+edges as named operations over data:
+
+- A command handler receives plain input data and produces transaction data.
+- A transaction commits facts that describe what changed.
+- A query describes the facts that must be true for an answer.
+- A projection or report turns query results into a shape the caller needs.
+- A rule names reusable logic without hiding the underlying facts.
+
+This is why later chapters repeatedly prefer data shapes over framework
+machinery. A transaction map is easier to inspect than an object with many
+mutating methods. A Datalog query is easier to test than a traversal hidden in a
+service class. A fact with provenance is easier to audit than a cached field
+whose origin is unclear. Part VI applies the same principle to agent memory:
+episodes, facts, tasks, evidence, and working-memory slots are ordinary
+entities and attributes, not a special memory subsystem.
+
+The practical payoff is not aesthetic. Data-oriented programs are easier to
+debug, migrate, replay, and explain because the application state has a durable,
+queryable shape. Datalevin gives that style a database substrate: facts remain
+small, attributes remain additive, and queries compose across domains.
+
+## 4. Transactions: Controlled Change
 
 A database is not only a place to read facts. It is also a system for changing
 facts without leaving the application in a half-updated state. A
@@ -107,7 +143,7 @@ database discipline of making those changes atomic, isolated, and durable while
 many users or programs read and write concurrently [2].
 
 Jim Gray's deeper motivation for transactions is that a database acts as a
-surrogate for the part of the external world your application cares about [2].
+surrogate for the part of the external world your application cares about.
 Real-world events do not happen halfway. A customer either placed an order or
 did not. A payment either settled or did not. A job either moved from pending to
 running or it did not. The database may need several internal writes to record
@@ -127,8 +163,8 @@ retract facts, and update custom key-value data in the same Datalevin store.
 After the transaction commits, readers see a consistent database state.
 
 In the example below, one transaction creates two entities and relates them. A
-**reference** attribute, declared with `:db.type/ref`, stores the entity id of
-another entity. This is how Datalevin represents graph edges.
+**reference** attribute, declared with data type `:db.type/ref`, stores the
+entity id of another entity. This is how Datalevin represents graph edges.
 
 When a transaction creates several related entities at once, you can use
 temporary entity IDs, or **tempids**, so the new entities can refer to one
@@ -240,7 +276,7 @@ await conn.transact([
 
 </div>
 
-## 4. Store Each Fact Once, Then Link Entities
+## 5. Store Each Fact Once, Then Link Entities
 
 Once you start thinking in datoms, the next modeling habit is simple: store each
 durable fact in one place, then connect entities with references. Suppose a
@@ -263,7 +299,7 @@ embedded inside the order, and the customer's email is not copied into the order
 The facts stay separate, but the shared entity id connects the order facts to
 the customer facts.
 
-Database terminology calls this **normalization** [1]: representing each durable
+Database terminology calls this **normalization** [3]: representing each durable
 fact once and connecting related entities by references. The opposite is
 **denormalization**: copying or nesting the same information into several larger
 records so each read can fetch a preassembled shape. Both styles have uses, but
@@ -307,17 +343,19 @@ For a deeper dive into how this approach often beats traditional relational
 engines in query performance, see the discussion on the [Join Order
 Benchmark](https://yyhh.org/blog/2024/09/competing-for-the-job-with-a-triplestore/).
 
-## 5. Three Views of the Same Database
+## 6. Three Views of the Same Database
 
 It is useful to separate three views of Datalevin: the logical view you model
 with, the storage view the engine persists, and the query view that connects the
 two at runtime. They are not three different databases. They are three ways of
-looking at the same facts.
+looking at the same set of facts. This is shown in Figure 3.2.
+
+![The three views of a Datalevin database: a query resolves from the logical view (datoms and schema), through the query view (the Datalog planner and evaluator), down to the storage view (DLMDB indexes of sorted keys read with range scans)](/images/diagrams/mental-model-views.svg)
 
 ### Logical View: Datoms and Schema
 
 This is the view you use when designing your application. You think in entities,
-attributes, values, references, and schema rules. At this level, a fact such as
+attributes, values, references, and schema. At this level, a fact such as
 "Alice's email is alice@example.com" is simply a datom:
 `[101 :user/email "alice@example.com"]`.
 
@@ -350,13 +388,11 @@ This view is what lets you stay focused on the shape of the answer instead of
 manual traversal. You describe the relationships that must hold, and the engine
 handles joins, filtering, recursion, and lookup order.
 
-![The three views of a Datalevin database: a query resolves from the logical view (datoms and schema), through the query view (the Datalog planner and evaluator), down to the storage view (DLMDB indexes of sorted keys read with range scans)](/images/diagrams/mental-model-views.svg)
-
-## 6. Datalog: Querying as Logic Programming
+## 7. Datalog: Querying as Logic Programming
 
 If SQL is like giving the database a set of instructions on how to assemble a
-table, Datalog is like giving the database a **description** of the answer you
-want. That declarative style comes from logic programming [3]:
+result table, Datalog is like giving the database a **description** of the
+answer you want. That declarative style comes from logic programming [4]:
 programs are expressed as logical clauses, and evaluation searches for values
 that make those clauses true.
 
@@ -375,12 +411,11 @@ The syntax has a few pieces:
   variable agree.
 - `db` is a Datalevin DB object used as the query input.
 
-Unlike Datomic, Datalevin does not provide "database as a value" semantics. A
-DB object is a mutable database object/reference, not a persistent immutable
-value. In application code, keep and share the connection. When you
-need to read the latest committed state, call `(d/db conn)` and use that DB
-object for the query instead of saving an old `db` object and expecting it to
-stay fresh.
+Datalevin does not provide "database as a value" semantics like that of Datomic.
+A DB object is a mutable database object/reference, not a persistent immutable
+value. In application code, keep and share the connection. When you need to read
+the latest committed state, call `(d/db conn)` and use that DB object for the
+query instead of saving an old `db` object and expecting it to stay fresh.
 
 <div class="multi-lang">
 
@@ -439,7 +474,9 @@ attributes are present on entities that have a `:person/name`:
 The first pattern finds entities with a `:person/name`; the second pattern binds
 `?attr` to each attribute asserted for those same entities.
 
-## 7. Unified Retrieval: Plugging into the Datom Flow
+Chapter 8 gives the details of the Datalog query language.
+
+## 8. Unified Retrieval: Plugging into the Datom Flow
 
 One of the most powerful aspects of the Datalevin mental model is that
 "special" features like full-text search, vector similarity, and document
@@ -452,7 +489,7 @@ When you perform a full-text search, the search function behaves just like any
 other Datalog clause. It returns a set of datoms (`[e a v]`) that can be
 immediately joined with other relational facts. The examples below destructure
 each returned datom as `[[?e _ _]]`: keep the entity id, and ignore the
-attribute and value.
+attribute and value. `_` is a placeholder symbol.
 
 <div class="multi-lang">
 
@@ -503,7 +540,9 @@ your database with an external search engine. Your search results are always
 transactionally consistent with your data: they reflect the same committed
 database state as the ordinary datoms in the query.
 
-## 8. Rules: Teaching the Database New Tricks
+Chapter 16 explains full-text search in details.
+
+## 9. Rules: Teaching the Database New Tricks
 
 Rules are how you encapsulate and reuse logic in Datalevin. A **rule** is a
 named Datalog pattern. Query clauses can call the rule by name, and Datalevin
@@ -605,12 +644,16 @@ const ancestors = await conn.query(
 You can now ask "Who are all the ancestors of Entity 42?" and the engine will
 navigate the graph for you.
 
+Chapter 9 discusses rules in details.
+
 ## Summary
 
 The Datalevin mental model is about moving from "data-in-boxes" to "data-as-facts."
 
 - **Datoms** are the atoms of truth.
 - **Attributes** define how facts behave.
+- **Data-oriented application design** keeps important state plain, inspectable,
+  and queryable.
 - **Transactions** move the database from one coherent state to the next.
 - **Storing each fact once and linking entities** keeps the model clean and the
   engine fast.
@@ -622,14 +665,16 @@ traditional databases struggle to match.
 
 ## References
 
-[1] E. F. Codd, "Further Normalization of the Data Base Relational Model,"
-IBM Research Report RJ909, August 31, 1971. Republished in Randall J. Rustin,
-ed., *Data Base Systems: Courant Computer Science Symposia Series 6*,
-Prentice-Hall, 1972.
+[1] Yehonathan Sharvit, *Data-Oriented Programming*, Manning, 2022.
 
 [2] Jim Gray and Andreas Reuter, *Transaction Processing: Concepts and
 Techniques*, Morgan Kaufmann, 1993.
 
-[3] Robert A. Kowalski, ["Predicate Logic as Programming
+[3] E. F. Codd, "Further Normalization of the Data Base Relational Model,"
+IBM Research Report RJ909, August 31, 1971. Republished in Randall J. Rustin,
+ed., *Data Base Systems: Courant Computer Science Symposia Series 6*,
+Prentice-Hall, 1972.
+
+[4] Robert A. Kowalski, ["Predicate Logic as Programming
 Language"](https://www.doc.ic.ac.uk/~rak/papers/IFIP74.pdf), IFIP Congress,
 1974, pp. 569-574.

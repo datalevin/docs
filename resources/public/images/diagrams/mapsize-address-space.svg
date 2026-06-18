@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="384" viewBox="0 0 1000 384" role="img" aria-labelledby="title desc">
+  <title id="title">mapsize, virtual address space, and the page cache</title>
+  <desc id="desc">Three memory scales drawn as nested boxes sharing a bottom-left corner, each contained in the next. The outermost box is the virtual address space reserved by :mapsize, for example 128 GiB; it is only an address-space reservation, not disk and not RAM, so it is safe to set generously. Inside it is the database file on disk, for example 50 GB of actual data, which grows over time up to the mapsize; pre-sizing avoids a costly automatic resize. Inside that is the resident set in RAM, held in the operating-system page cache; only the hot working set is resident, and reads are zero-copy and outside the JVM heap, so there are no garbage-collection pauses. Each layer is a subset of the one that contains it.</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .box-v { fill: #f0fbff; stroke: #0891b2; stroke-width: 2; }
+      .box-d { fill: #cff3fa; stroke: #0891b2; stroke-width: 2; }
+      .box-r { fill: #99ecd9; stroke: #0f766e; stroke-width: 2.4; }
+      .ext { fill: none; stroke: #475569; stroke-width: 1.6; stroke-dasharray: 5 4; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 27px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 450; }
+      .lt { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; font-weight: 720; }
+      .lt-r { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; font-weight: 720; }
+      .lm { fill: #0e7490; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 12.5px; font-weight: 600; }
+      .lm-r { fill: #0f766e; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 12.5px; font-weight: 600; }
+      .note { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12.5px; font-weight: 450; }
+      .note-em { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12.5px; font-weight: 650; }
+      .extlbl { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11.5px; font-style: italic; font-weight: 500; }
+      .foot { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11.5px; font-style: italic; font-weight: 500; }
+    </style>
+    <marker id="ae" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect class="card" x="2" y="2" width="996" height="380" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+  <text class="title" x="500" y="40" text-anchor="middle">mapsize, Address Space, and the Page Cache</text>
+  <text class="caption" x="500" y="66" text-anchor="middle">Each layer is contained in the next: RAM working set &#8838; on-disk data &#8838; reserved address space.</text>
+
+  <!-- ===== nested boxes, shared bottom-left corner ===== -->
+  <rect class="box-v" x="56" y="96" width="888" height="234" rx="10"/>
+  <rect class="box-d" x="56" y="160" width="520" height="170" rx="10"/>
+  <rect class="box-r" x="56" y="228" width="232" height="102" rx="10"/>
+
+  <!-- labels -->
+  <text class="lt" x="76" y="124">Virtual address space</text>
+  <text class="lm" x="76" y="145">:mapsize, e.g. 128 GiB</text>
+
+  <text class="lt" x="76" y="188">Database file (on disk)</text>
+  <text class="lm" x="76" y="209">actual data, e.g. 50 GB</text>
+
+  <text class="lt-r" x="76" y="270">Resident in RAM</text>
+  <text class="lm-r" x="76" y="291">page cache &#183; working set</text>
+
+  <!-- notes in the surrounding margins -->
+  <text class="note-em" x="624" y="126">Reserved by the OS &#8212;</text>
+  <text class="note" x="624" y="144">not disk, not RAM. Set it generously.</text>
+
+  <!-- disk growth toward mapsize -->
+  <path class="ext" d="M584 318 H930" marker-end="url(#ae)"/>
+  <text class="extlbl" x="757" y="312" text-anchor="middle">data grows up to :mapsize &#183; pre-size to avoid auto-resize</text>
+
+  <!-- footnote -->
+  <text class="foot" x="56" y="360">A large :mapsize costs address space, not disk or RAM &#8212; it is a ceiling, not an allocation.</text>
+</svg>

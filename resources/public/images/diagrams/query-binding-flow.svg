@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="700" viewBox="0 0 1000 700" role="img" aria-labelledby="title desc">
+  <title id="title">Worked query binding flow</title>
+  <desc id="desc">A Datalog query evaluated as a relation of variable bindings that changes clause by clause. The columns ?u, ?name, ?o, and ?total stay aligned across all stages. Stage 1, clause [?u :user/city "London"], binds ?u to alice and bob. Stage 2, clause [?u :user/name ?name], reuses the same ?u (unification) and adds ?name "Alice" and "Bob". Stage 3, clause [?o :order/customer ?u], joins orders on the same ?u, producing rows for order-1 and order-2 under alice and order-3 under bob; order-4 is not joined because its customer cara is not a London user. Stage 4, clause [?o :order/total ?total], adds totals 125, 60, and 200. Stage 5, predicate [(> ?total 100)], filters out the order-2 row whose total is 60. Stage 6, :find ?name ?total, projects the surviving rows to just the ?name and ?total columns, giving ["Alice" 125] and ["Bob" 200].</desc>
+  <defs>
+    <style>
+      .card { fill: #ffffff; }
+      .band { fill: #f6fbfd; stroke: #d7e7ee; stroke-width: 1.4; }
+      .guide { fill: none; stroke: #e2e8f0; stroke-width: 1.4; stroke-dasharray: 2 5; }
+      .hrule { stroke: #cbd5e1; stroke-width: 1.6; }
+      .badge { fill: #0f766e; }
+      .badge-num { fill: #ffffff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; font-weight: 700; }
+      .spine { fill: none; stroke: #94a3b8; stroke-width: 2.2; }
+      .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 29px; font-weight: 720; }
+      .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 17px; font-weight: 450; }
+      .hlabel { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; font-weight: 600; }
+      .colh { fill: #0f766e; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 14px; font-weight: 700; }
+      .clause { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 13px; font-weight: 450; }
+      .annot { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 600; }
+      .note { fill: #94a3b8; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11px; font-style: italic; font-weight: 450; }
+      .val { fill: #334155; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 13px; font-weight: 450; }
+      .val-drop { fill: #94a3b8; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 13px; font-weight: 450; }
+      .val-proj { fill: #0f766e; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; }
+      .dash { fill: #cbd5e1; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 13px; font-weight: 450; }
+      .strike { stroke: #94a3b8; stroke-width: 1.4; }
+      .result { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 14px; font-weight: 600; }
+    </style>
+    <marker id="arrow" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#94a3b8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Figure card (transparent corners adapt to light/dark page) -->
+  <rect class="card" x="2" y="2" width="996" height="696" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+
+  <text class="title" x="500" y="44" text-anchor="middle">Worked Query: Binding Flow</text>
+  <text class="caption" x="500" y="72" text-anchor="middle">One binding relation, step by step: shared variables join, a predicate filters, :find projects.</text>
+
+  <!-- ===== Column guides ===== -->
+  <path class="guide" d="M340 104 V650"/>
+  <path class="guide" d="M480 104 V650"/>
+  <path class="guide" d="M616 104 V650"/>
+  <path class="guide" d="M780 104 V650"/>
+
+  <!-- ===== Header ===== -->
+  <text class="hlabel" x="82" y="116">clause</text>
+  <text class="colh" x="352" y="116">?u</text>
+  <text class="colh" x="492" y="116">?name</text>
+  <text class="colh" x="628" y="116">?o</text>
+  <text class="colh" x="792" y="116">?total</text>
+  <line class="hrule" x1="36" y1="124" x2="964" y2="124"/>
+
+  <!-- ===== Spine arrows ===== -->
+  <path class="spine" d="M58 170 V218" marker-end="url(#arrow)"/>
+  <path class="spine" d="M58 244 V292" marker-end="url(#arrow)"/>
+  <path class="spine" d="M58 318 V390" marker-end="url(#arrow)"/>
+  <path class="spine" d="M58 416 V488" marker-end="url(#arrow)"/>
+  <path class="spine" d="M58 514 V586" marker-end="url(#arrow)"/>
+
+  <!-- ===== Stage 1: bind ?u ===== -->
+  <rect class="band" x="36" y="132" width="928" height="64" rx="10"/>
+  <circle class="badge" cx="58" cy="157" r="12"/>
+  <text class="badge-num" x="58" y="162" text-anchor="middle">1</text>
+  <text class="clause" x="82" y="162">[?u :user/city "London"]</text>
+  <text class="annot" x="82" y="184">bind ?u</text>
+  <text class="val" x="352" y="162">alice</text>
+  <text class="val" x="352" y="186">bob</text>
+
+  <!-- ===== Stage 2: unify, add ?name ===== -->
+  <rect class="band" x="36" y="206" width="928" height="64" rx="10"/>
+  <circle class="badge" cx="58" cy="231" r="12"/>
+  <text class="badge-num" x="58" y="236" text-anchor="middle">2</text>
+  <text class="clause" x="82" y="236">[?u :user/name ?name]</text>
+  <text class="annot" x="82" y="258">unify on ?u, add ?name</text>
+  <text class="val" x="352" y="236">alice</text>
+  <text class="val" x="492" y="236">"Alice"</text>
+  <text class="val" x="352" y="260">bob</text>
+  <text class="val" x="492" y="260">"Bob"</text>
+
+  <!-- ===== Stage 3: join orders on ?u ===== -->
+  <rect class="band" x="36" y="280" width="928" height="92" rx="10"/>
+  <circle class="badge" cx="58" cy="305" r="12"/>
+  <text class="badge-num" x="58" y="310" text-anchor="middle">3</text>
+  <text class="clause" x="82" y="310">[?o :order/customer ?u]</text>
+  <text class="annot" x="82" y="332">join on ?u</text>
+  <text class="note" x="82" y="354">order-4 (cara) not joined</text>
+  <text class="val" x="352" y="310">alice</text>
+  <text class="val" x="492" y="310">"Alice"</text>
+  <text class="val" x="628" y="310">order-1</text>
+  <text class="val" x="352" y="334">alice</text>
+  <text class="val" x="492" y="334">"Alice"</text>
+  <text class="val" x="628" y="334">order-2</text>
+  <text class="val" x="352" y="358">bob</text>
+  <text class="val" x="492" y="358">"Bob"</text>
+  <text class="val" x="628" y="358">order-3</text>
+
+  <!-- ===== Stage 4: add ?total ===== -->
+  <rect class="band" x="36" y="378" width="928" height="92" rx="10"/>
+  <circle class="badge" cx="58" cy="403" r="12"/>
+  <text class="badge-num" x="58" y="408" text-anchor="middle">4</text>
+  <text class="clause" x="82" y="408">[?o :order/total ?total]</text>
+  <text class="annot" x="82" y="430">add ?total</text>
+  <text class="val" x="352" y="408">alice</text>
+  <text class="val" x="492" y="408">"Alice"</text>
+  <text class="val" x="628" y="408">order-1</text>
+  <text class="val" x="792" y="408">125</text>
+  <text class="val" x="352" y="432">alice</text>
+  <text class="val" x="492" y="432">"Alice"</text>
+  <text class="val" x="628" y="432">order-2</text>
+  <text class="val" x="792" y="432">60</text>
+  <text class="val" x="352" y="456">bob</text>
+  <text class="val" x="492" y="456">"Bob"</text>
+  <text class="val" x="628" y="456">order-3</text>
+  <text class="val" x="792" y="456">200</text>
+
+  <!-- ===== Stage 5: predicate filter ===== -->
+  <rect class="band" x="36" y="476" width="928" height="92" rx="10"/>
+  <circle class="badge" cx="58" cy="501" r="12"/>
+  <text class="badge-num" x="58" y="506" text-anchor="middle">5</text>
+  <text class="clause" x="82" y="506">[(&gt; ?total 100)]</text>
+  <text class="annot" x="82" y="528">filter rows</text>
+  <text class="val" x="352" y="506">alice</text>
+  <text class="val" x="492" y="506">"Alice"</text>
+  <text class="val" x="628" y="506">order-1</text>
+  <text class="val" x="792" y="506">125</text>
+  <text class="val-drop" x="352" y="530">alice</text>
+  <text class="val-drop" x="492" y="530">"Alice"</text>
+  <text class="val-drop" x="628" y="530">order-2</text>
+  <text class="val-drop" x="792" y="530">60</text>
+  <line class="strike" x1="348" y1="526" x2="824" y2="526"/>
+  <text class="val" x="352" y="554">bob</text>
+  <text class="val" x="492" y="554">"Bob"</text>
+  <text class="val" x="628" y="554">order-3</text>
+  <text class="val" x="792" y="554">200</text>
+
+  <!-- ===== Stage 6: project ===== -->
+  <rect class="band" x="36" y="574" width="928" height="74" rx="10"/>
+  <circle class="badge" cx="58" cy="599" r="12"/>
+  <text class="badge-num" x="58" y="604" text-anchor="middle">6</text>
+  <text class="clause" x="82" y="604">:find ?name ?total</text>
+  <text class="annot" x="82" y="626">project columns</text>
+  <text class="dash" x="352" y="604">&#8212;</text>
+  <text class="val-proj" x="492" y="604">"Alice"</text>
+  <text class="dash" x="628" y="604">&#8212;</text>
+  <text class="val-proj" x="792" y="604">125</text>
+  <text class="dash" x="352" y="628">&#8212;</text>
+  <text class="val-proj" x="492" y="628">"Bob"</text>
+  <text class="dash" x="628" y="628">&#8212;</text>
+  <text class="val-proj" x="792" y="628">200</text>
+
+  <!-- ===== Result ===== -->
+  <text class="result" x="82" y="676">result  =&gt;  #{["Alice" 125] ["Bob" 200]}</text>
+</svg>

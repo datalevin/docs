@@ -30,6 +30,8 @@ In a graph model, your domain is a network of interconnected entities.
 - **Nodes**: Entities with their properties (attributes).
 - **Edges**: Reference attributes (`:db.type/ref`) that point from one entity to another.
 
+![Refs as directed edges: alice and cara follow bob, and bob follows dave, via :user/follows. Forward navigation from a known subject follows the edge using the EAV index; reverse navigation from a known object finds the subjects pointing to it using the AVE index](/images/diagrams/refs-directed-edges.svg)
+
 ### 1.1 Forward and Reverse Navigation
 
 Datalevin allows you to traverse relationships in both directions without any
@@ -65,6 +67,8 @@ Instead of a simple `:user/follows` ref, create a `Follow` entity:
  :follow/created-at #inst "2024-01-01T00:00:00Z"
  :follow/strength   0.85}
 ```
+
+![Reifying an edge into an associative entity: a simple user A :user/follows user B edge becomes a Follow entity that references user A as :follow/follower and user B as :follow/following, and carries properties such as created-at and strength on the relationship itself](/images/diagrams/associative-entity.svg)
 
 This transforms a simple edge into a node that can hold any number of
 attributes, effectively giving you property-graph-style modeling [1]
@@ -208,6 +212,8 @@ within a fixed radius, while preserving the distance so the final result can be
 ordered or aggregated.
 
 <div class="multi-lang">
+
+<!-- pdf-listing: Bounded graph neighborhood rules with distance -->
 
 ```clojure
 (def friends-3-rules
@@ -526,6 +532,8 @@ A Datomic article by Andrew Dennis used this problem to show both Datalog joins
 and application-level breadth-first search over database facts [3]. The same
 idea applies naturally to Datalevin.
 
+![Co-appearance as a bipartite graph: people (Kevin Bacon, John Belushi, Tom Hanks) and movies (Animal House, Apollo 13) connected through Credit entities, projected to a person-to-person acted-with graph where Bacon links to Belushi via Animal House and to Hanks via Apollo 13, while Belushi and Hanks share no movie](/images/diagrams/coappearance-bipartite.svg)
+
 Model the credit as an entity, not as redundant lists on both actors and
 movies:
 
@@ -564,7 +572,9 @@ That answers "Bacon number 1" questions. For a fixed small radius, you can add
 more joins or generate bounded rules, as shown earlier in this chapter. For an
 unknown shortest path, use the database to supply neighbors and run a normal
 graph algorithm in the application. Datalevin makes this practical because the
-same database value can be queried repeatedly and refs are indexed.
+same current DB snapshot can be queried repeatedly and refs are indexed.
+
+<!-- pdf-listing: Shortest-path helper over Datalevin graph facts -->
 
 ```clojure
 (defn acted-with
@@ -865,6 +875,8 @@ The rule has two branches:
 
 Now the query to find the forum and moderator:
 
+<!-- pdf-listing: Recursive graph query for LDBC-SNB forum lookup -->
+
 ```clojure
 (d/q '[:find ?forum-id ?forum-title ?moderator-id
               ?moderator-first-name ?moderator-last-name
@@ -942,7 +954,7 @@ time, text, taxonomy, and ranking.
 
 ---
 
-## 6. Summary: Graph Design Principles
+## Summary: Graph Design Principles
 
 1.  **Edges are Refs**: Use `:db.type/ref` for all relationships.
 2.  **Navigate Freely**: Don't be afraid of reverse navigation; it's free.
@@ -974,7 +986,7 @@ Alberto Mendelzon International Workshop on Foundations of Data Management*,
 CEUR Workshop Proceedings 2100, 2018.
 
 [2] Datalevin project, ["LDBC SNB
-Benchmark"](https://github.com/juji-io/datalevin/tree/master/benchmarks/LDBC-SNB-bench),
+Benchmark"](https://github.com/datalevin/datalevin/tree/master/benchmarks/LDBC-SNB-bench),
 benchmark writeup and implementation.
 
 [3] Andrew Dennis, ["Using Datomic as a Graph
@@ -982,10 +994,10 @@ Database"](https://hashrocket.com/blog/posts/using-datomic-as-a-graph-database),
 Hashrocket, April 10, 2014.
 
 [4] Datalevin project, ["Math
-Bench"](https://github.com/juji-io/datalevin/tree/master/benchmarks/math-bench),
+Bench"](https://github.com/datalevin/datalevin/tree/master/benchmarks/math-bench),
 benchmark implementation based on the Mathematics Genealogy Project.
 
 [5] Datalevin project,
-["OpenRuleBench"](https://github.com/juji-io/datalevin/tree/master/benchmarks/openrulebench),
+["OpenRuleBench"](https://github.com/datalevin/datalevin/tree/master/benchmarks/openrulebench),
 benchmark implementation including transitive closure, same-generation, and
 LUBM-style type inference rules.
