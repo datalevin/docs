@@ -474,13 +474,13 @@ The program below implements this loop end to end.
 
 (def feedback-events
   [{:query "datalevin backup restore"
-    :page "/docs/20-storage-tuning-durability"
+    :page "/docs/19-storage-tuning-durability"
     :helpful? false}
    {:query "backup verification"
     :page "/docs/22-production-operations"
     :helpful? false}
    {:query "restore backup wal"
-    :page "/docs/20-storage-tuning-durability"
+    :page "/docs/19-storage-tuning-durability"
     :helpful? false}
    {:query "datalog recursion"
     :page "/docs/09-rules-recursion"

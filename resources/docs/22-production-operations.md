@@ -6,7 +6,7 @@ part: "V — Performance and Operations"
 
 # Chapter 22: Testing, Deployment, and Production Operations
 
-Chapter 20 covered durability, snapshots, copy, dump/load, and storage tuning.
+Chapter 19 covered durability, snapshots, copy, dump/load, and storage tuning.
 This chapter covers the operational lifecycle around that storage: how to test
 an application against Datalevin, choose a deployment shape, run a server when
 needed, secure remote access, operate replicas or HA, and monitor a production
@@ -227,7 +227,7 @@ committing them.
 ### 1.6 Testing Search, Vectors, and Async Indexing
 
 Full-text, idoc, and vector indexes are maintained synchronously by default
-(Chapters 16–17), so an in-memory database is enough to test them:
+(Chapters 16-17), so an in-memory database is enough to test them:
 read-your-writes holds, and a `fulltext`, `idoc-match`, or `vec-neighbors` query
 sees data committed earlier in the same test.
 
@@ -701,7 +701,7 @@ terminology and lifecycle concerns [3].
 
 ## 5. Replication and High Availability
 
-Replication and HA are server-mode features. Chapter 20 covers WAL durability
+Replication and HA are server-mode features. Chapter 19 covers WAL durability
 and snapshots; this section covers the operational shape.
 
 ### 5.1 Non-HA Async Read Replicas
@@ -868,6 +868,9 @@ Watch these first:
   resident in RAM. A large virtual mapping reflects `:mapsize`; it is not the
   same as resident memory.
 
+Chapter 19 shows concrete Linux and macOS commands for checking page-cache
+residency, major page faults, swap activity, and file-backed cache usage.
+
 ### 6.2 Database Statistics
 
 Use `stat` to inspect LMDB B+Tree statistics. In Clojure, `stat` operates on a
@@ -903,7 +906,7 @@ $ dtlv -d /data/companydb stat datalevin/eav
 
 Useful fields include `:branch-pages`, `:leaf-pages`, `:overflow-pages`, and
 `:entries`. LMDB reuses deleted pages rather than shrinking the file in place.
-After large deletions, use the compact-copy workflow from Chapter 20 during
+After large deletions, use the compact-copy workflow from Chapter 19 during
 controlled maintenance.
 
 ### 6.3 Query and Write Diagnostics
@@ -1136,7 +1139,7 @@ Use this as a final review before production:
 - Create application users and roles with least-privilege RBAC permissions.
 - Use disk or volume encryption for the data directory, and application-level
   encryption for sensitive fields.
-- Follow Chapter 20 for `:mapsize`, `:max-readers`, WAL, durability profile,
+- Follow Chapter 19 for `:mapsize`, `:max-readers`, WAL, durability profile,
   copy, dump/load, snapshots, and compaction.
 - Define an application retry policy for CAS conflicts, uniqueness conflicts,
   validation failures, lookup-ref misses, and operational write failures

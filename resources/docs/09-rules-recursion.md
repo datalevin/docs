@@ -49,7 +49,8 @@ A rule consists of a **Head** and a **Body**:
 
 - **Head**: The rule name and its parameters, e.g., `(is-manager? ?e)`.
   The name plus the number of parameters is the rule's shape. Keep all
-  definitions of the same rule at the same arity.
+  definitions of the same rule at the same arity, i.e. the same number of
+  parameters.
 - **Body**: One or more Datalog clauses that must be true for the rule to match.
 
 Read a rule as a definition of a relation. The head names the relation and its
@@ -172,6 +173,9 @@ const result = await conn.query('[:find ?name ' +
 
 </div>
 
+Notice that unlike function calls or triple patterns, rule invocations are not
+wrapped in a vector.
+
 In this example, `(is-active? ?e)` acts as a filter. For every entity `?e` that
 has a name, the engine checks if that entity also satisfies the clauses defined
 in the `is-active?` rule.
@@ -257,6 +261,8 @@ variable gets more possible values when the query produces more result tuples.
 Multiple rule definitions with the same head are the idiomatic way to say
 "`?alias` may come from any of these sources."
 
+<div class="multi-lang">
+
 ```clojure
 (def alias-rules
   '[[(alias-of ?person ?alias)
@@ -276,21 +282,107 @@ Multiple rule definitions with the same head are the idiomatic way to say
      db alias-rules "u-123")
 ```
 
+```java
+Object aliasRules = Datalevin.edn("[[(alias-of ?person ?alias) " +
+    "[?person :person/name ?alias]] " +
+    "[(alias-of ?person ?alias) " +
+    "[?person :person/legal-name ?alias]] " +
+    "[(alias-of ?person ?alias) " +
+    "[?person :person/nickname ?alias]]]");
+
+Object aliases = conn.query("[:find ?alias " +
+    ":in $ % ?person-id " +
+    ":where [?person :person/id ?person-id] " +
+    "       (alias-of ?person ?alias)]",
+    aliasRules, "u-123");
+```
+
+```python
+alias_rules = interop().read_edn('[[(alias-of ?person ?alias) '
+    '[?person :person/name ?alias]] '
+    '[(alias-of ?person ?alias) '
+    '[?person :person/legal-name ?alias]] '
+    '[(alias-of ?person ?alias) '
+    '[?person :person/nickname ?alias]]]')
+
+aliases = conn.query('[:find ?alias '
+    ':in $ % ?person-id '
+    ':where [?person :person/id ?person-id] '
+    '       (alias-of ?person ?alias)]',
+    alias_rules, 'u-123')
+```
+
+```javascript
+const aliasRules = await interop().readEdn('[[(alias-of ?person ?alias) ' +
+    '[?person :person/name ?alias]] ' +
+    '[(alias-of ?person ?alias) ' +
+    '[?person :person/legal-name ?alias]] ' +
+    '[(alias-of ?person ?alias) ' +
+    '[?person :person/nickname ?alias]]]');
+
+const aliases = await conn.query('[:find ?alias ' +
+    ':in $ % ?person-id ' +
+    ':where [?person :person/id ?person-id] ' +
+    '       (alias-of ?person ?alias)]',
+    aliasRules, 'u-123');
+```
+
+</div>
+
 Each implementation contributes rows to the derived relation
 `(alias-of ?person ?alias)`. If the same alias is found through more than one
 branch, normal Datalog set semantics remove the duplicate result.
 
 You can express the same idea locally with `or` or `or-join`:
 
+<div class="multi-lang">
+
 ```clojure
-[:find ?alias
- :in $ ?person
- :where
- (or-join [?person ?alias]
-   [?person :person/name ?alias]
-   [?person :person/legal-name ?alias]
-   [?person :person/nickname ?alias])]
+(d/q '[:find ?alias
+       :in $ ?person-id
+       :where
+       [?person :person/id ?person-id]
+       (or-join [?person ?alias]
+         [?person :person/name ?alias]
+         [?person :person/legal-name ?alias]
+         [?person :person/nickname ?alias])]
+     db "u-123")
 ```
+
+```java
+Object aliases = conn.query("[:find ?alias " +
+    ":in $ ?person-id " +
+    ":where [?person :person/id ?person-id] " +
+    "       (or-join [?person ?alias] " +
+    "         [?person :person/name ?alias] " +
+    "         [?person :person/legal-name ?alias] " +
+    "         [?person :person/nickname ?alias])]",
+    "u-123");
+```
+
+```python
+aliases = conn.query('[:find ?alias '
+    ':in $ ?person-id '
+    ':where [?person :person/id ?person-id] '
+    '       (or-join [?person ?alias] '
+    '         [?person :person/name ?alias] '
+    '         [?person :person/legal-name ?alias] '
+    '         [?person :person/nickname ?alias])]',
+    'u-123')
+```
+
+```javascript
+const aliases = await conn.query('[:find ?alias ' +
+    ':in $ ?person-id ' +
+    ':where [?person :person/id ?person-id] ' +
+    '       (or-join [?person ?alias] ' +
+    '         [?person :person/name ?alias] ' +
+    '         [?person :person/legal-name ?alias] ' +
+    '         [?person :person/nickname ?alias])]',
+    'u-123');
+```
+
+</div>
 
 Use `or-join` for one-off branching inside a single query. Use multiple rule
 definitions when the expansion has a name, is reused, or is clearer as part of
@@ -314,6 +406,23 @@ materialize those results.
 An "expert system" is a rule-based classifier: domain experts write conditions,
 and the system applies those conditions to facts. In Datalevin, the conditions
 are Datalog rules and the classifications are query-time derived tuples.
+
+These terms come from the older expert-system and production-system literature
+[1][2][3]. Classic expert systems separated a knowledge base of facts and rules
+from an inference engine that derived conclusions. Forward chaining is the
+data-driven strategy in that family: start with known facts, apply rules, and
+derive consequences. Datalevin's mechanism here is Datalog rule evaluation, not
+a production-system shell or a Rete implementation, but the modeling direction
+is similar: represent domain knowledge as data and derive higher-level facts
+from it.
+
+If you are comparing this style with Clojure production rule engines such as
+Clara, the Datalevin repository includes an OpenRuleBench implementation that
+exercises recursive workloads such as transitive closure and same-generation
+queries [4][5]. In those workloads, Datalevin's bottom-up deductive evaluation
+is much more performant than forward-chaining production-rule engines. Treat
+that as workload-specific benchmark evidence, not as a universal ranking of all
+rule-engine use cases.
 
 ### Example: Automated Classification (Expert Systems)
 
@@ -422,6 +531,8 @@ expose variables, not raw constants.
 
 With data like this:
 
+<div class="multi-lang">
+
 ```clojure
 (d/transact! conn
   [{:user/id "u1" :user/total-spent 6000 :user/order-count 25}
@@ -438,6 +549,57 @@ With data like this:
 ;;      ["u2" :silver]
 ;;      ["u3" :silver]}
 ```
+
+```java
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity()
+        .put("user/id", "u1")
+        .put("user/total-spent", 6000L)
+        .put("user/order-count", 25L))
+    .entity(Tx.entity()
+        .put("user/id", "u2")
+        .put("user/total-spent", 6000L)
+        .put("user/order-count", 1L))
+    .entity(Tx.entity()
+        .put("user/id", "u3")
+        .put("user/total-spent", 1L)
+        .put("user/order-count", 25L)));
+
+Object result = conn.query("[:find ?id ?tier " +
+    ":in $ % " +
+    ":where [?u :user/id ?id] " +
+    "       (vip-status ?u ?tier)]",
+    reasoningRules);
+```
+
+```python
+conn.transact([
+    {":user/id": "u1", ":user/total-spent": 6000, ":user/order-count": 25},
+    {":user/id": "u2", ":user/total-spent": 6000, ":user/order-count": 1},
+    {":user/id": "u3", ":user/total-spent": 1,    ":user/order-count": 25}])
+
+result = conn.query('[:find ?id ?tier '
+    ':in $ % '
+    ':where [?u :user/id ?id] '
+    '       (vip-status ?u ?tier)]',
+    reasoning_rules)
+```
+
+```javascript
+await conn.transact([
+  { ":user/id": "u1", ":user/total-spent": 6000, ":user/order-count": 25 },
+  { ":user/id": "u2", ":user/total-spent": 6000, ":user/order-count": 1 },
+  { ":user/id": "u3", ":user/total-spent": 1,    ":user/order-count": 25 }
+]);
+
+const result = await conn.query('[:find ?id ?tier ' +
+    ':in $ % ' +
+    ':where [?u :user/id ?id] ' +
+    '       (vip-status ?u ?tier)]',
+    reasoningRules);
+```
+
+</div>
 
 By querying `(vip-status ?u ?tier)`, you are treating Datalevin as an **Expert
 System**. The database takes the base facts (amount spent, order count) and
@@ -549,6 +711,8 @@ const result = await conn.query('[:find ?name ' +
 
 With a small hierarchy:
 
+<div class="multi-lang">
+
 ```clojure
 (d/transact! conn
   [{:db/id -1 :employee/name "Alice"}
@@ -566,26 +730,91 @@ With a small hierarchy:
 ;; => #{["Bob"] ["Cara"] ["Dee"] ["Eli"]}
 ```
 
-Here is the same example worked through as Datalog evaluation.
+```java
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity()
+        .put("db/id", -1L)
+        .put("employee/name", "Alice"))
+    .entity(Tx.entity()
+        .put("db/id", -2L)
+        .put("employee/name", "Bob")
+        .put("employee/manager", -1L))
+    .entity(Tx.entity()
+        .put("db/id", -3L)
+        .put("employee/name", "Cara")
+        .put("employee/manager", -2L))
+    .entity(Tx.entity()
+        .put("db/id", -4L)
+        .put("employee/name", "Dee")
+        .put("employee/manager", -1L))
+    .entity(Tx.entity()
+        .put("db/id", -5L)
+        .put("employee/name", "Eli")
+        .put("employee/manager", -3L)));
+
+Object result = conn.query("[:find ?name " +
+    ":in $ % ?boss-name " +
+    ":where [?boss :employee/name ?boss-name] " +
+    "       (reports-to ?sub ?boss) " +
+    "       [?sub :employee/name ?name]]",
+    orgRules, "Alice");
+```
+
+```python
+conn.transact([
+    {":db/id": -1, ":employee/name": "Alice"},
+    {":db/id": -2, ":employee/name": "Bob",  ":employee/manager": -1},
+    {":db/id": -3, ":employee/name": "Cara", ":employee/manager": -2},
+    {":db/id": -4, ":employee/name": "Dee",  ":employee/manager": -1},
+    {":db/id": -5, ":employee/name": "Eli",  ":employee/manager": -3}])
+
+result = conn.query('[:find ?name '
+    ':in $ % ?boss-name '
+    ':where [?boss :employee/name ?boss-name] '
+    '       (reports-to ?sub ?boss) '
+    '       [?sub :employee/name ?name]]',
+    org_rules, 'Alice')
+```
+
+```javascript
+await conn.transact([
+  { ":db/id": -1, ":employee/name": "Alice" },
+  { ":db/id": -2, ":employee/name": "Bob",  ":employee/manager": -1 },
+  { ":db/id": -3, ":employee/name": "Cara", ":employee/manager": -2 },
+  { ":db/id": -4, ":employee/name": "Dee",  ":employee/manager": -1 },
+  { ":db/id": -5, ":employee/name": "Eli",  ":employee/manager": -3 }
+]);
+
+const result = await conn.query('[:find ?name ' +
+    ':in $ % ?boss-name ' +
+    ':where [?boss :employee/name ?boss-name] ' +
+    '       (reports-to ?sub ?boss) ' +
+    '       [?sub :employee/name ?name]]',
+    orgRules, 'Alice');
+```
+
+</div>
+
+Here is the same example worked through as Datalog evaluation. Figure 9.1 shows
+the steps visually.
+
+![Recursive rule fixpoint: from the employee/manager facts, round 1 derives the direct reports (bob→alice, cara→bob, dee→alice, eli→cara), round 2 adds the indirect reports cara→alice and eli→bob, round 3 adds eli→alice, and round 4 produces no new tuples, reaching a fixpoint; the reports-to relation is the union of all rounds](/images/diagrams/recursive-fixpoint.svg)
 
 The stored facts are the **EDB** (extensional database): facts that are directly
 present in Datalevin. Written as `[e a v]` datoms with names instead of entity
 ids, the `:employee/manager` facts are:
 
-```text
-[[bob  :employee/manager alice]
- [cara :employee/manager bob]
- [dee  :employee/manager alice]
- [eli  :employee/manager cara]]
+```text pdf-keep
+[bob  :employee/manager alice]
+[cara :employee/manager bob]
+[dee  :employee/manager alice]
+[eli  :employee/manager cara]
 ```
 
 The rule predicate `reports-to` is the **IDB** (intensional database): tuples
 derived by applying rules to EDB facts and to previously derived IDB tuples.
 Before evaluation starts, there are no derived `reports-to` tuples:
-
-```text
-IDB round 0: {}
-```
+`IDB round 0 = {}`.
 
 Round 1 applies the base rule:
 
@@ -596,8 +825,7 @@ Round 1 applies the base rule:
 
 Every direct manager fact becomes a direct `reports-to` tuple:
 
-```text
-new IDB round 1:
+```text pdf-keep
 (reports-to bob  alice)
 (reports-to cara bob)
 (reports-to dee  alice)
@@ -614,23 +842,21 @@ Round 2 applies the recursive rule using the tuples discovered in round 1:
 
 This produces the next layer of indirect reports:
 
-```text
-new IDB round 2:
+```text pdf-keep
 (reports-to cara alice)  ; [cara :employee/manager bob] + (reports-to bob alice)
 (reports-to eli  bob)    ; [eli :employee/manager cara] + (reports-to cara bob)
 ```
 
 Round 3 repeats the recursive step with the new round-2 tuples:
 
-```text
-new IDB round 3:
+```text pdf-keep
 (reports-to eli alice)   ; [eli :employee/manager cara] + (reports-to cara alice)
 ```
 
 Round 4 produces no new tuples, so evaluation has reached a **fixpoint**. The
 complete derived `reports-to` relation is the union of all IDB rounds:
 
-```text
+```text pdf-keep
 (reports-to bob  alice)
 (reports-to cara bob)
 (reports-to dee  alice)
@@ -640,11 +866,9 @@ complete derived `reports-to` relation is the union of all IDB rounds:
 (reports-to eli  alice)
 ```
 
-![Recursive rule fixpoint: from the employee/manager facts, round 1 derives the direct reports (bob→alice, cara→bob, dee→alice, eli→cara), round 2 adds the indirect reports cara→alice and eli→bob, round 3 adds eli→alice, and round 4 produces no new tuples, reaching a fixpoint; the reports-to relation is the union of all rounds](/images/diagrams/recursive-fixpoint.svg)
-
 The query asks only for tuples whose boss is Alice, so it returns Bob, Cara,
 Dee, and Eli. Chapter 21 explains how Datalevin evaluates recursive rules
-efficiently; the step-by-step table here is the conceptual model.
+efficiently; the step-by-step illustration here is the conceptual model.
 
 Datalevin's Datalog engine handles the recursive expansion and ensures that the
 query terminates (preventing infinite loops even if your data has cycles).
@@ -728,7 +952,8 @@ const distanceRules = await interop().readEdn('[[(distance-squared ?p1 ?p2 ?d2) 
 
 </div>
 
-You can use this rule in different ways:
+This rule computes the distance between two points. You can use this rule in
+different ways:
 
 - **Filter**: compute `?dist2`, then constrain it with a predicate such as
   `[(= ?dist2 100)]`.
@@ -736,6 +961,8 @@ You can use this rule in different ways:
   squared distance to `?dist2`.
 
 For filtering, let the rule compute the squared distance, then test it:
+
+<div class="multi-lang">
 
 ```clojure
 (d/q '[:find ?name-a ?name-b
@@ -747,8 +974,42 @@ For filtering, let the rule compute the squared distance, then test it:
      db distance-rules)
 ```
 
+```java
+Object result = conn.query("[:find ?name-a ?name-b " +
+    ":in $ % " +
+    ":where [?a :point/name ?name-a] " +
+    "       [?b :point/name ?name-b] " +
+    "       (distance-squared ?a ?b ?dist2) " +
+    "       [(= ?dist2 100)]]",
+    distanceRules);
+```
+
+```python
+result = conn.query('[:find ?name-a ?name-b '
+    ':in $ % '
+    ':where [?a :point/name ?name-a] '
+    '       [?b :point/name ?name-b] '
+    '       (distance-squared ?a ?b ?dist2) '
+    '       [(= ?dist2 100)]]',
+    distance_rules)
+```
+
+```javascript
+const result = await conn.query('[:find ?name-a ?name-b ' +
+    ':in $ % ' +
+    ':where [?a :point/name ?name-a] ' +
+    '       [?b :point/name ?name-b] ' +
+    '       (distance-squared ?a ?b ?dist2) ' +
+    '       [(= ?dist2 100)]]',
+    distanceRules);
+```
+
+</div>
+
 For calculation, leave the distance variable unbound and include it in
 `:find`:
+
+<div class="multi-lang">
 
 ```clojure
 (d/q '[:find ?name ?dist2
@@ -758,6 +1019,35 @@ For calculation, leave the distance variable unbound and include it in
               (distance-squared ?origin ?p ?dist2)]
      db distance-rules)
 ```
+
+```java
+Object result = conn.query("[:find ?name ?dist2 " +
+    ":in $ % " +
+    ":where [?origin :point/name \"origin\"] " +
+    "       [?p :point/name ?name] " +
+    "       (distance-squared ?origin ?p ?dist2)]",
+    distanceRules);
+```
+
+```python
+result = conn.query('[:find ?name ?dist2 '
+    ':in $ % '
+    ':where [?origin :point/name "origin"] '
+    '       [?p :point/name ?name] '
+    '       (distance-squared ?origin ?p ?dist2)]',
+    distance_rules)
+```
+
+```javascript
+const result = await conn.query('[:find ?name ?dist2 ' +
+    ':in $ % ' +
+    ':where [?origin :point/name "origin"] ' +
+    '       [?p :point/name ?name] ' +
+    '       (distance-squared ?origin ?p ?dist2)]',
+    distanceRules);
+```
+
+</div>
 
 The first query uses the computed third column as a filter. The second query
 returns it as data. The rule body is the same in both cases.
@@ -780,6 +1070,8 @@ price, plus one candidate for each applicable discount. The final
 exists.
 
 <!-- pdf-listing: Rule-based product pricing abstraction -->
+
+<div class="multi-lang">
 
 ```clojure
 (def pricing-rules
@@ -811,6 +1103,86 @@ exists.
        (price-candidate ?user ?product ?better)
        [(< ?better ?price)])]])
 ```
+
+```java
+Object pricingRules = Datalevin.edn("["
+    + "[(price-candidate ?user ?product ?price) "
+    + "[?product :product/base-price ?price]] "
+    + "[(discount-rate ?user ?product ?rate) "
+    + "[?user :user/tier :gold] "
+    + "[(ground 0.20) ?rate]] "
+    + "[(discount-rate ?user ?product ?rate) "
+    + "[?product :product/category :clearance] "
+    + "[(ground 0.15) ?rate]] "
+    + "[(discount-rate ?user ?product ?rate) "
+    + "[?user :user/bulk-eligible? true] "
+    + "[?product :product/bulk? true] "
+    + "[(ground 0.10) ?rate]] "
+    + "[(price-candidate ?user ?product ?price) "
+    + "[?product :product/base-price ?base] "
+    + "(discount-rate ?user ?product ?rate) "
+    + "[(- 1.0 ?rate) ?multiplier] "
+    + "[(* ?base ?multiplier) ?price]] "
+    + "[(calculated-price ?user ?product ?price) "
+    + "(price-candidate ?user ?product ?price) "
+    + "(not-join [?user ?product ?price] "
+    + "  (price-candidate ?user ?product ?better) "
+    + "  [(< ?better ?price)])]]");
+```
+
+```python
+pricing_rules = interop().read_edn('['
+    '[(price-candidate ?user ?product ?price) '
+    '[?product :product/base-price ?price]] '
+    '[(discount-rate ?user ?product ?rate) '
+    '[?user :user/tier :gold] '
+    '[(ground 0.20) ?rate]] '
+    '[(discount-rate ?user ?product ?rate) '
+    '[?product :product/category :clearance] '
+    '[(ground 0.15) ?rate]] '
+    '[(discount-rate ?user ?product ?rate) '
+    '[?user :user/bulk-eligible? true] '
+    '[?product :product/bulk? true] '
+    '[(ground 0.10) ?rate]] '
+    '[(price-candidate ?user ?product ?price) '
+    '[?product :product/base-price ?base] '
+    '(discount-rate ?user ?product ?rate) '
+    '[(- 1.0 ?rate) ?multiplier] '
+    '[(* ?base ?multiplier) ?price]] '
+    '[(calculated-price ?user ?product ?price) '
+    '(price-candidate ?user ?product ?price) '
+    '(not-join [?user ?product ?price] '
+    '  (price-candidate ?user ?product ?better) '
+    '  [(< ?better ?price)])]]')
+```
+
+```javascript
+const pricingRules = await interop().readEdn('['
+    + '[(price-candidate ?user ?product ?price) '
+    + '[?product :product/base-price ?price]] '
+    + '[(discount-rate ?user ?product ?rate) '
+    + '[?user :user/tier :gold] '
+    + '[(ground 0.20) ?rate]] '
+    + '[(discount-rate ?user ?product ?rate) '
+    + '[?product :product/category :clearance] '
+    + '[(ground 0.15) ?rate]] '
+    + '[(discount-rate ?user ?product ?rate) '
+    + '[?user :user/bulk-eligible? true] '
+    + '[?product :product/bulk? true] '
+    + '[(ground 0.10) ?rate]] '
+    + '[(price-candidate ?user ?product ?price) '
+    + '[?product :product/base-price ?base] '
+    + '(discount-rate ?user ?product ?rate) '
+    + '[(- 1.0 ?rate) ?multiplier] '
+    + '[(* ?base ?multiplier) ?price]] '
+    + '[(calculated-price ?user ?product ?price) '
+    + '(price-candidate ?user ?product ?price) '
+    + '(not-join [?user ?product ?price] '
+    + '  (price-candidate ?user ?product ?better) '
+    + '  [(< ?better ?price)])]]');
+```
+
+</div>
 
 This example uses floating-point prices to keep the arithmetic readable. In a
 production money model, prefer integer cents or a decimal representation and
@@ -888,3 +1260,22 @@ By mastering rules, you can build expressive and maintainable data models that
 reflect the true complexity of your domain logic. For a deep dive into using
 these patterns for graph data, see **Chapter 13: Graph Modeling and Relationship
 Design**.
+
+## References
+
+[1] Stuart Russell and Peter Norvig, *Artificial Intelligence: A Modern
+Approach*, 4th US ed., Pearson, 2020. https://aima.cs.berkeley.edu/
+
+[2] Charles L. Forgy, "Rete: A Fast Algorithm for the Many Pattern/Many Object
+Pattern Match Problem," *Artificial Intelligence*, 19(1):17-37, 1982.
+https://doi.org/10.1016/0004-3702(82)90020-0
+
+[3] Peter Jackson, *Introduction to Expert Systems*, 3rd ed., Addison-Wesley,
+1998.
+
+[4] Michael Kifer, Georg Lausen, and James Wu, *OpenRuleBench: An Analysis of
+the Performance of Rule Engines*, 2009.
+https://www3.cs.stonybrook.edu/~kifer/TechReports/OpenRuleBench09.pdf
+
+[5] Datalevin project, OpenRuleBench benchmark implementation.
+https://github.com/datalevin/datalevin/tree/master/benchmarks/openrulebench

@@ -34,7 +34,7 @@ a fact:
 [101 :user/email "alice@example.com"]
 ```
 
-The implementation of datom is a richer Datom object. A full Datom has five fields:
+The implementation of a datom is a richer Datom object. A full Datom has five fields:
 
 | Field | Meaning |
 | :--- | :--- |
@@ -103,7 +103,7 @@ Keeping full transaction history is not free. It increases storage, widens the
 indexes the system must maintain, and makes reads and writes account for old
 states as well as current state. That tradeoff can be right for domains such as
 financial ledgers, audit stores, event logs, or analytical systems where history
-is the product. It is a poor default for a small embedded or operational
+is the product. It is a poor default for an embedded or operational
 database whose common path is "store the latest state and query it quickly."
 
 This point matters especially for the agent-memory use cases in Part VI. A
@@ -161,10 +161,11 @@ The EAV index is sorted primarily by the **entity id**, then by the
 
 - **Structure**: `E -> A -> V`
 - **Primary Use Case**: "Give me everything about Entity 101."
-- **Query Role**: This index powers the **Pull API** and any join where the
-  Entity is already known. Because all attributes for a single entity are stored
-  contiguously in the B+Tree, retrieving a complete "document" for an entity is
-  a single localized scan.
+- **Query Role**: This index powers the **Pull API**. In a query, the EAV index
+  is scanned for attribute values when the entity is already known. Because all
+  attributes for a single entity are stored contiguously in the B+Tree,
+  retrieving a complete "document" for an entity is a single localized range
+  scan.
 
 ### 1.4 AVE (Attribute-Value-Entity)
 
@@ -179,12 +180,18 @@ and finally by the **entity id**.
   default**. Unlike other Datalog databases, you do not need to explicitly
   opt-in to indexing.
 
+Together, EAV and AVE make common Datalog patterns line up with sorted access
+paths. Figure 15.1 shows the mapping: entity-known patterns favor EAV, while
+attribute/value patterns and value ranges favor AVE.
+
+![Query pattern to index choice: a pattern's known positions, when they form a leading prefix of an index sort key, pick the index. Entity-known patterns use EAV prefix scans; attribute-and-value patterns use AVE prefix scans; an attribute with a value range uses an AVE range scan via index-range](/images/diagrams/pattern-to-index.svg)
+
 ---
 
 ## 2. Leveraging the AVE Index for Range Queries
 
-Because the AVE index is sorted by Value, it is the engine behind all comparison
-and range operations in Datalog.
+Because the AVE index is sorted by Value, it is the engine behind all value
+comparison and range operations in Datalog.
 
 When you write a query like `[(> ?age 21)]`, the Datalevin query optimizer
 doesn't scan the entire database. Instead, it:
@@ -201,8 +208,8 @@ efficient join order (see Chapter 21).
 
 ## 3. Reverse Relationships: The "Missing" VAE Index
 
-Some Datalog databases  include a **VAE (Value-Attribute-Entity)**
-index specifically for reverse references. This increase write and storage
+Some Datalog databases include a **VAE (Value-Attribute-Entity)**
+index specifically for reverse references. This increases the write and storage
 burden. Datalevin chooses a simpler approach.
 
 In Datalevin, a reference (`:db.type/ref`) is just a value that happens to be an
@@ -224,7 +231,7 @@ can treat the indexes as **programmable capabilities**.
 
 Most non-Clojure examples earlier in the book use high-level convenience
 methods such as `conn.query`, `conn.transact`, and `conn.pull`. Direct index
-access is lower-level, but the Java, Python, and JavaScript bindings now expose
+access is lower-level, but the Java, Python, and JavaScript bindings expose
 the common index reads as high-level connection methods too. The Clojure
 examples below use `datalevin.core` as `d`; Java examples assume a
 `Connection conn`; Python examples assume a `Connection conn`; JavaScript
@@ -234,33 +241,7 @@ Direct index APIs return datoms in index order. They are best for simple, known
 access paths where you want the index itself, not the Datalog planner, to be the
 API boundary.
 
-### 4.1 Choosing an Index Access Function
-
-| Function | Use it when | Index behavior |
-| --- | --- | --- |
-| `datoms` | You know the target index and a prefix of its sort key. | Scans `:eav` or `:ave` in that index's natural order. |
-| `search-datoms` | You have an `(e, a, v)` pattern with wildcards. | Chooses an efficient index for the supplied components. |
-| `count-datoms` | You only need the number of matching datoms. | Counts the same wildcard pattern without materializing results. |
-| `cardinality` | You need the number of distinct values currently present for one attribute. | Counts unique values for that attribute through the AVE index. |
-| `seek-datoms` | You need a forward cursor starting at a lower bound. | Starts at the first datom greater than or equal to the supplied index key. |
-| `rseek-datoms` | You need a reverse cursor starting near an upper bound. | Same as `seek-datoms`, but walks backward. |
-| `index-range` | You need all values of one attribute between two bounds. | Scans the AVE range for one attribute. |
-
-![Choosing a direct index API as a top-down decision flow: if you only need a count use count-datoms or cardinality; else if you know the index and a key prefix use datoms; else if you have an (e a v) wildcard pattern use search-datoms; else if you want one attribute's values in a range use index-range; else if you need a cursor from a bound use seek-datoms or rseek-datoms](/images/diagrams/index-api-decision.svg)
-
-For `:eav`, the positional components are `c1 = e`, `c2 = a`, and `c3 = v`. For
-`:ave`, they are `c1 = a`, `c2 = v`, and `c3 = e`.
-
-![Query pattern to index choice: a pattern's known positions, when they form a leading prefix of an index sort key, pick the index. Entity-known patterns use EAV prefix scans; attribute-and-value patterns use AVE prefix scans; an attribute with a value range uses an AVE range scan via index-range](/images/diagrams/pattern-to-index.svg)
-
-The two attribute-scoped value lookups are both range scans for the same reason.
-Fixing the attribute pins the leading bytes of the AVE key, so LMDB has a known
-lower and upper byte bound to scan between. Reading every value of an attribute
-walks from that attribute's minimum encoded value to its maximum; a bounded
-predicate such as `[(< 20 ?age 30)]` just tightens those bounds. Neither case
-scans the whole index.
-
-### 4.2 Prefix Scans with `datoms`
+### 4.1 Prefix Scans with `datoms`
 
 Use `datoms` when you already know whether the lookup is entity-local (`:eav`)
 or value-local (`:ave`).
@@ -313,7 +294,7 @@ await conn.datoms(':ave', { c1: ':user/age', c2: 30 });
 
 </div>
 
-### 4.3 Wildcard Lookup with `search-datoms`
+### 4.2 Wildcard Lookup with `search-datoms`
 
 Use `search-datoms` when you want to describe the logical datom pattern as `(e,
 a, v)` and let Datalevin choose the index. A `nil` / `None` / `null` component
@@ -372,7 +353,7 @@ await conn.searchDatoms({
 
 </div>
 
-### 4.4 Counting with `count-datoms`
+### 4.3 Counting with `count-datoms`
 
 Use `count-datoms` when a query path needs selectivity, pagination totals, or a
 cheap existence check.
@@ -416,7 +397,7 @@ await conn.countDatoms({ attr: ':user/age', value: 30 });
 `count-datoms` is more direct than `(count (search-datoms ...))` because it does
 not have to allocate the matching datoms.
 
-### 4.5 Cardinality and Size Helpers
+### 4.4 Cardinality and Size Helpers
 
 Use `cardinality` when you need the number of distinct values currently present
 for one attribute. Do not confuse this with the schema property
@@ -500,7 +481,7 @@ statistics for one attribute or all attributes:
 (d/analyze db)
 ```
 
-### 4.6 Cursor Scans with `seek-datoms` and `rseek-datoms`
+### 4.5 Cursor Scans with `seek-datoms` and `rseek-datoms`
 
 Use `seek-datoms` when you want to start at an index key and continue forward.
 If no datom exactly matches the supplied components, Datalevin starts at the
@@ -587,7 +568,7 @@ The `n` argument is positional. If you want to limit a scan that only binds
 (d/seek-datoms db :ave :user/age 30 nil 10)
 ```
 
-### 4.7 Range Scans with `index-range`
+### 4.6 Range Scans with `index-range`
 
 Use `index-range` for the most common AVE range pattern: one attribute, lower
 bound, upper bound.
@@ -628,7 +609,7 @@ const entityIds = datoms.map((datom) => datom[':e']);
 
 </div>
 
-### 4.8 Reading Datom Fields
+### 4.7 Reading Datom Fields
 
 Clojure datoms have dedicated accessors for the logical triple and keyword
 lookup for transaction metadata. Python and JavaScript convert datoms to maps
@@ -681,6 +662,37 @@ These functions are intentionally low-level. Prefer Datalog for joins, rules,
 result shaping, and complex predicates. Reach for direct index access when the
 shape is simple enough that the index order itself is the query plan.
 
+### 4.8 Choosing an Index Access Function
+
+After seeing the individual APIs, the choice can be summarized as a question
+about which parts of the datom are known and whether you need values or only a
+count. Figure 15.2 lays this out as a decision chart; it is about API choice,
+not query planning.
+
+![Choosing a direct index API as a top-down decision flow: if you only need a count use count-datoms or cardinality; else if you know the index and a key prefix use datoms; else if you have an (e a v) wildcard pattern use search-datoms; else if you want one attribute's values in a range use index-range; else if you need a cursor from a bound use seek-datoms or rseek-datoms](/images/diagrams/index-api-decision.svg)
+
+More details are summarized in the table below:
+
+| Function | Use it when | Index behavior |
+| --- | --- | --- |
+| `datoms` | You know the target index and a prefix of its sort key. | Scans `:eav` or `:ave` in that index's natural order. |
+| `search-datoms` | You have an `(e, a, v)` pattern with wildcards. | Chooses an efficient index for the supplied components. |
+| `count-datoms` | You only need the number of matching datoms. | Counts the same wildcard pattern without materializing results. |
+| `cardinality` | You need the number of distinct values currently present for one attribute. | Counts unique values for that attribute through the AVE index. |
+| `seek-datoms` | You need a forward cursor starting at a lower bound. | Starts at the first datom greater than or equal to the supplied index key. |
+| `rseek-datoms` | You need a reverse cursor starting near an upper bound. | Same as `seek-datoms`, but walks backward. |
+| `index-range` | You need all values of one attribute between two bounds. | Scans the AVE range for one attribute. |
+
+For `:eav`, the positional components are `c1 = e`, `c2 = a`, and `c3 = v`. For
+`:ave`, they are `c1 = a`, `c2 = v`, and `c3 = e`.
+
+The two attribute-scoped value lookups are both range scans for the same reason.
+Fixing the attribute pins the leading bytes of the AVE key, so LMDB has a known
+lower and upper byte bound to scan between. Reading every value of an attribute
+walks from that attribute's minimum encoded value to its maximum; a bounded
+predicate such as `[(< 20 ?age 30)]` just tightens those bounds. Neither case
+scans the whole index.
+
 ---
 
 ## 5. Physical Representation and DUPSORT
@@ -692,6 +704,8 @@ efficiently.
 - **In EAV**: The Key is `E`, and the Values are `(A, V)` pairs.
 - **In AVE**: The Key is `(A, V)`, and the Values are `E` (entity ids).
 
+Figures 15.3 and 15.4 show this nesting for each index.
+
 ![EAV DUPSORT nesting: the entity id is the key, and its sorted attribute/value pairs are stored as nested duplicate values, so the entity id is not repeated for every datom](/images/diagrams/dupsort-eav.svg)
 
 ![AVE DUPSORT nesting: the attribute/value pair is the key, and the matching entity ids are stored as a sorted list of nested duplicate values](/images/diagrams/dupsort-ave.svg)
@@ -702,7 +716,7 @@ Thinking in terms of traditional database storage models:
   pairs, analogous to a row where all column values are stored together.
   Retrieving an entity is a single key lookup.
 - **AVE is a column store**: Each `(A, V)` combination (key) maps to a tightly
-  packed list of entity ids—the "row IDs" that share that column value. This is
+  packed list of entity ids — the "row IDs" that share that column value. This is
   ideal for analytical queries that scan a column.
 
 This nested storage eliminates redundant prefixes. In EAV, an entity with 10

@@ -104,6 +104,9 @@
   :patterns ["logical databases?" "logical view" "logic programming"]}
  {:term "lookup ref"}
  {:term "LSN" :index "WAL!LSN"}
+ {:term "major page fault"
+  :index "monitoring!major page faults"
+  :patterns ["major page faults?" "majflt/s" "maj_flt"]}
  {:term "mapsize"}
  {:term "MCP"}
  {:term "memory-mapped storage"
@@ -113,6 +116,9 @@
  {:term "not-join" :index "Datalog!not-join"}
  {:term "operating envelope" :index "agent memory!operating envelope"}
  {:term "order statistics" :index "DLMDB!order statistics"}
+ {:term "page cache"
+  :index "LMDB!page cache"
+  :patterns ["page cache" "Page Cache"]}
  {:term "path index" :index "idoc!path index"}
  {:term "predicate" :index "Datalog!predicate"}
  {:term "prefix compression" :index "DLMDB!prefix compression"}
@@ -129,6 +135,9 @@
  {:term "re-index"}
  {:term "recursive pull" :index "pull!recursive pull"}
  {:term "replication"}
+ {:term "resident set size"
+  :index "monitoring!resident set size"
+  :patterns ["resident set size" "\\bRSS\\b"]}
  {:term "reverse reference" :index "references!reverse reference"}
  {:term "reverse pull" :index "pull!reverse pull"}
  {:term "rules" :index "Datalog!rules"}

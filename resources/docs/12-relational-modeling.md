@@ -11,9 +11,13 @@ Because Datalevin prefers normalized data, industry-standard
 design your database.
 
 While SQL databases require "Object-Relational Mapping" (ORM) to bridge the gap
-between your mental model and rigid tables, Datalevin’s fact-based model maps
+between your mental model and rigid tables, Datalevin's fact-based model maps
 almost 1:1 to how we reason about the world. This chapter explores how to apply
 classic relational modeling patterns to a Datalog-powered triplestore.
+
+The Java, Python, and JavaScript snippets in this chapter assume an open
+connection named `conn` when a transaction or query is shown. Schema snippets
+show the shape to pass when opening a connection or updating a schema.
 
 ---
 
@@ -44,7 +48,7 @@ Singular namespacing makes Datalog queries feel like natural sentences:
 ### 1.2 Adjectives (Attributes)
 
 Adjectives are properties that describe an entity. These are the attributes
-already shown above. Attributes have value-type: strings, longs, booleans,
+already shown above. Attributes have value types: strings, longs, booleans,
 instants, keywords, and other types.
 
 - **Example**: `:product/color "Red"`, `:order/status :status/pending`.
@@ -60,7 +64,7 @@ attributes whose value type is `:db.type/ref`.
 
 ## 2. Normalization: The Path to Performance
 
-In a document-oriented database, you are often taught to denormalize—to
+In a document-oriented database, you are often taught to denormalize — to
 "pre-join" data into nested documents. In Datalevin, this is an anti-pattern.
 **Normalize by default.**
 
@@ -107,6 +111,8 @@ domain has one. Use Datalevin's internal entity ids for storage and joins, but
 put natural identifiers in unique attributes so transactions, imports, and APIs
 can use lookup refs.
 
+<div class="multi-lang">
+
 ```clojure
 {:user/id      {:db/valueType :db.type/string
                 :db/unique    :db.unique/identity}
@@ -115,6 +121,42 @@ can use lookup refs.
  :invoice/uuid {:db/valueType :db.type/uuid
                 :db/unique    :db.unique/identity}}
 ```
+
+```java
+Schema identitySchema = Datalevin.schema()
+    .attr("user/id", Schema.attribute()
+        .valueType(Schema.ValueType.STRING)
+        .unique(Schema.Unique.IDENTITY))
+    .attr("product/sku", Schema.attribute()
+        .valueType(Schema.ValueType.STRING)
+        .unique(Schema.Unique.IDENTITY))
+    .attr("invoice/uuid", Schema.attribute()
+        .valueType(Schema.ValueType.UUID)
+        .unique(Schema.Unique.IDENTITY));
+```
+
+```python
+identity_schema = {
+    ":user/id": {":db/valueType": ":db.type/string",
+                 ":db/unique": ":db.unique/identity"},
+    ":product/sku": {":db/valueType": ":db.type/string",
+                     ":db/unique": ":db.unique/identity"},
+    ":invoice/uuid": {":db/valueType": ":db.type/uuid",
+                      ":db/unique": ":db.unique/identity"}}
+```
+
+```javascript
+const identitySchema = {
+  ":user/id": {":db/valueType": ":db.type/string",
+               ":db/unique": ":db.unique/identity"},
+  ":product/sku": {":db/valueType": ":db.type/string",
+                   ":db/unique": ":db.unique/identity"},
+  ":invoice/uuid": {":db/valueType": ":db.type/uuid",
+                    ":db/unique": ":db.unique/identity"}
+};
+```
+
+</div>
 
 Prefer stable identifiers such as account IDs, SKUs, slugs, or UUIDs. Avoid
 using mutable labels such as display names as identities unless the domain
@@ -126,7 +168,7 @@ ER diagrams distinguish one-to-one, one-to-many, and many-to-many
 relationships. Datalevin represents these with reference attributes and
 cardinality, but it does not enforce all ER participation constraints for you.
 
-- **One-to-many**: Put a cardinality-one ref on the "many" side, such as
+- **One-to-many**: Put a cardinality-one ref on the many side, such as
   `:order/user` or `:comment/post`.
 - **Many-to-many**: Use an associative entity when the relationship is queried
   directly, may grow large, or has attributes of its own.
@@ -141,7 +183,7 @@ Chapter 11, Section 2.2.
 
 This distinction matters in Datalevin because absence is a normal fact shape.
 A query for users without an active subscription is a query over missing
-relationship facts. `nil`/ `null` is not a valid value in Datalevin.
+relationship facts. `nil`/`null` is not a valid value in Datalevin.
 
 ### 3.3 Promote Relationships That Have Attributes
 
@@ -229,17 +271,62 @@ When users ask for a "custom index" in a Datalog database, they often mean:
 "I want to find or upsert an entity by several fields together." That is the
 job of `:db/tupleAttrs`.
 
+<div class="multi-lang">
+
 ```clojure
 {:price/vendor     {:db/valueType :db.type/string}
  :price/sku        {:db/valueType :db.type/string}
  :price/region     {:db/valueType :db.type/string}
+ :price/cents      {:db/valueType :db.type/long}
  :price/vendor+sku+region
  {:db/tupleAttrs [:price/vendor :price/sku :price/region]
   :db/unique     :db.unique/identity}}
 ```
 
+```java
+Schema priceSchema = Datalevin.schema()
+    .attr("price/vendor", Schema.attribute()
+        .valueType(Schema.ValueType.STRING))
+    .attr("price/sku", Schema.attribute()
+        .valueType(Schema.ValueType.STRING))
+    .attr("price/region", Schema.attribute()
+        .valueType(Schema.ValueType.STRING))
+    .attr("price/cents", Schema.attribute()
+        .valueType(Schema.ValueType.LONG))
+    .attr("price/vendor+sku+region", Schema.attribute()
+        .tupleAttrs("price/vendor", "price/sku", "price/region")
+        .unique(Schema.Unique.IDENTITY));
+```
+
+```python
+price_schema = {
+    ":price/vendor": {":db/valueType": ":db.type/string"},
+    ":price/sku": {":db/valueType": ":db.type/string"},
+    ":price/region": {":db/valueType": ":db.type/string"},
+    ":price/cents": {":db/valueType": ":db.type/long"},
+    ":price/vendor+sku+region": {
+        ":db/tupleAttrs": [":price/vendor", ":price/sku", ":price/region"],
+        ":db/unique": ":db.unique/identity"}}
+```
+
+```javascript
+const priceSchema = {
+  ":price/vendor": {":db/valueType": ":db.type/string"},
+  ":price/sku": {":db/valueType": ":db.type/string"},
+  ":price/region": {":db/valueType": ":db.type/string"},
+  ":price/cents": {":db/valueType": ":db.type/long"},
+  ":price/vendor+sku+region": {
+    ":db/tupleAttrs": [":price/vendor", ":price/sku", ":price/region"],
+    ":db/unique": ":db.unique/identity"}
+};
+```
+
+</div>
+
 The application writes the component attributes. Datalevin derives the tuple
 value and keeps it consistent when components change:
+
+<div class="multi-lang">
 
 ```clojure
 (d/transact! conn
@@ -253,6 +340,44 @@ value and keeps it consistent when components change:
         [:price/vendor+sku+region ["acme" "SKU-42" "us-west"]])
 ```
 
+```java
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity()
+        .put("price/vendor", "acme")
+        .put("price/sku", "SKU-42")
+        .put("price/region", "us-west")
+        .put("price/cents", 1999L)));
+
+Map<?, ?> price = conn.pull(
+    "[:price/cents]",
+    List.of("price/vendor+sku+region",
+            List.of("acme", "SKU-42", "us-west")));
+```
+
+```python
+conn.transact([{":price/vendor": "acme",
+                ":price/sku": "SKU-42",
+                ":price/region": "us-west",
+                ":price/cents": 1999}])
+
+price = conn.pull(
+    "[:price/cents]",
+    [":price/vendor+sku+region", ["acme", "SKU-42", "us-west"]])
+```
+
+```javascript
+await conn.transact([{":price/vendor": "acme",
+                      ":price/sku": "SKU-42",
+                      ":price/region": "us-west",
+                      ":price/cents": 1999}]);
+
+const price = await conn.pull(
+  "[:price/cents]",
+  [":price/vendor+sku+region", ["acme", "SKU-42", "us-west"]]);
+```
+
+</div>
+
 This is not a stored application tuple. It is a derived composite access path
 over separate facts. Use it when the separate facts are meaningful on their
 own and the combination needs identity or lookup behavior. Component attributes
@@ -264,6 +389,8 @@ from the actual component values.
 Stored tuple values are different. Use them when the tuple itself is a compact
 value object and its parts are not usually joined independently.
 
+<div class="multi-lang">
+
 ```clojure
 {:place/latlon {:db/valueType :db.type/tuple
                 :db/tupleType :db.type/double}
@@ -273,11 +400,44 @@ value object and its parts are not usually joined independently.
   :db/tupleTypes [:db.type/double :db.type/keyword]}}
 ```
 
+```java
+Schema tupleSchema = Datalevin.schema()
+    .attr("place/latlon", Schema.attribute()
+        .valueType(Schema.ValueType.TUPLE)
+        .tupleType(Schema.ValueType.DOUBLE))
+    .attr("reading/value+unit", Schema.attribute()
+        .valueType(Schema.ValueType.TUPLE)
+        .tupleTypes(Schema.ValueType.DOUBLE, Schema.ValueType.KEYWORD));
+```
+
+```python
+tuple_schema = {
+    ":place/latlon": {":db/valueType": ":db.type/tuple",
+                      ":db/tupleType": ":db.type/double"},
+    ":reading/value+unit": {":db/valueType": ":db.type/tuple",
+                            ":db/tupleTypes": [":db.type/double",
+                                               ":db.type/keyword"]}}
+```
+
+```javascript
+const tupleSchema = {
+  ":place/latlon": {":db/valueType": ":db.type/tuple",
+                    ":db/tupleType": ":db.type/double"},
+  ":reading/value+unit": {":db/valueType": ":db.type/tuple",
+                          ":db/tupleTypes": [":db.type/double",
+                                             ":db.type/keyword"]}
+};
+```
+
+</div>
+
 `:place/latlon` is homogeneous: every element is a double. `:reading/value+unit`
 is heterogeneous: the first position is a double and the second is a keyword.
 
 If you frequently ask "which places are north of this latitude?" or "which
 readings use this unit?", model those parts as ordinary attributes instead:
+
+<div class="multi-lang">
 
 ```clojure
 {:place/lat {:db/valueType :db.type/double}
@@ -286,6 +446,37 @@ readings use this unit?", model those parts as ordinary attributes instead:
  :reading/value {:db/valueType :db.type/double}
  :reading/unit  {:db/valueType :db.type/keyword}}
 ```
+
+```java
+Schema separateSchema = Datalevin.schema()
+    .attr("place/lat", Schema.attribute()
+        .valueType(Schema.ValueType.DOUBLE))
+    .attr("place/lon", Schema.attribute()
+        .valueType(Schema.ValueType.DOUBLE))
+    .attr("reading/value", Schema.attribute()
+        .valueType(Schema.ValueType.DOUBLE))
+    .attr("reading/unit", Schema.attribute()
+        .valueType(Schema.ValueType.KEYWORD));
+```
+
+```python
+separate_schema = {
+    ":place/lat": {":db/valueType": ":db.type/double"},
+    ":place/lon": {":db/valueType": ":db.type/double"},
+    ":reading/value": {":db/valueType": ":db.type/double"},
+    ":reading/unit": {":db/valueType": ":db.type/keyword"}}
+```
+
+```javascript
+const separateSchema = {
+  ":place/lat": {":db/valueType": ":db.type/double"},
+  ":place/lon": {":db/valueType": ":db.type/double"},
+  ":reading/value": {":db/valueType": ":db.type/double"},
+  ":reading/unit": {":db/valueType": ":db.type/keyword"}
+};
+```
+
+</div>
 
 Separate attributes give the query planner direct facts and indexes for each
 part. A stored tuple is best when the application normally treats the whole
@@ -315,20 +506,33 @@ should be derived from facts, and stored tuples should be reserved for values.
 ## 5. A Worked ER Example: Course Enrollment
 
 Consider a small school registration system. In an ER diagram you would likely
-draw three strong entity types and one associative entity:
+draw several strong entity types, one scheduled offering, and one associative
+entity:
 
 - `Student`: identified by a student id.
 - `Course`: identified by a course code.
 - `Term`: identified by an academic term id.
-- `Enrollment`: the fact that a student is enrolled in a course during a term.
+- `Instructor`: identified by an instructor id.
+- `CourseOffering`: a particular section of a course in a term, taught by an
+  instructor.
+- `Enrollment`: the fact that a student is enrolled in a course offering.
 
-`Enrollment` is not just a many-to-many link. It has attributes of its own:
-status, grade, enrollment time, and perhaps the source system that created the
-record. That makes it a proper entity in Datalevin.
+Figure 12.1 is an ER diagram showing the relationships among the entities.
 
-![ER model for course enrollment: Student, Course, and Term are strong entities, each with a unique key; Enrollment is an associative entity whose refs (:enrollment/student, :enrollment/course, :enrollment/term) are one-to-many relationships to them, plus its own attributes and a composite unique key over student, course, and term](/images/diagrams/er-course-enrollment.svg)
+![ER model for course enrollment: Student, Course, Term, and Instructor are strong entities; CourseOffering joins Course, Term, and Instructor for a scheduled section; Enrollment joins Student to CourseOffering and carries status, grade, enrollment time, and a composite unique key over student and offering](/images/diagrams/er-course-enrollment.svg)
 
-<!-- pdf-listing: Course enrollment schema with an associative entity -->
+The important modeling move is to separate the catalog course from the thing a
+student actually enrolls in. `CS101` is a course. `CS101, Fall 2026, Section
+001` is a course offering. `Enrollment` is not just a many-to-many link between
+student and course; it has attributes of its own: status, grade, enrollment
+time, and perhaps the source system that created the record. That makes it a
+proper entity in Datalevin.
+
+Listing 12.1 shows the actual schema.
+
+<!-- pdf-listing: Course enrollment schema with scheduled offerings -->
+
+<div class="multi-lang">
 
 ```clojure
 (def school-schema
@@ -344,15 +548,32 @@ record. That makes it a proper entity in Datalevin.
                     :db/unique    :db.unique/identity}
    :term/starts-at {:db/valueType :db.type/instant}
 
-   ;; Refs are the relationship edges used by ordinary joins.
-   :enrollment/student {:db/valueType :db.type/ref}
-   :enrollment/course  {:db/valueType :db.type/ref}
-   :enrollment/term    {:db/valueType :db.type/ref}
+   :instructor/id   {:db/valueType :db.type/string
+                     :db/unique    :db.unique/identity}
+   :instructor/name {:db/valueType :db.type/string}
 
-   ;; Optional: enforce one enrollment per student/course/term.
+   ;; A scheduled section of a catalog course.
+   :course-offering/id         {:db/valueType :db.type/string
+                                :db/unique    :db.unique/identity}
+   :course-offering/course     {:db/valueType :db.type/ref}
+   :course-offering/term       {:db/valueType :db.type/ref}
+   :course-offering/instructor {:db/valueType :db.type/ref}
+   :course-offering/section    {:db/valueType :db.type/string}
+   :course-offering/capacity   {:db/valueType :db.type/long}
+
+   ;; Optional: enforce one offering per course/term/section.
+   :course-offering/key        {:db/tupleAttrs [:course-offering/course
+                                                :course-offering/term
+                                                :course-offering/section]
+                                :db/unique     :db.unique/identity}
+
+   ;; Enrollment is the relationship between a student and an offering.
+   :enrollment/student     {:db/valueType :db.type/ref}
+   :enrollment/offering    {:db/valueType :db.type/ref}
+
+   ;; Optional: enforce one enrollment per student/offering.
    :enrollment/key         {:db/tupleAttrs [:enrollment/student
-                                            :enrollment/course
-                                            :enrollment/term]
+                                            :enrollment/offering]
                             :db/unique     :db.unique/identity}
 
    :enrollment/status      {:db/valueType :db.type/keyword}
@@ -360,71 +581,433 @@ record. That makes it a proper entity in Datalevin.
    :enrollment/enrolled-at {:db/valueType :db.type/instant}})
 ```
 
-The refs are the relationship model. `?enrollment` points directly to the
-student, course, and term entities, and ordinary joins recover the corresponding
-domain identifiers when needed. There is no need to copy `:student/id`,
-`:course/code`, or `:term/id` onto the enrollment just to make later queries
-convenient. If you need uniqueness for the relationship, derive a composite
-tuple from the refs themselves.
+```java
+Schema schoolSchema = Datalevin.schema()
+    .attr("student/id", Schema.attribute()
+        .valueType(Schema.ValueType.STRING)
+        .unique(Schema.Unique.IDENTITY))
+    .attr("student/name", Schema.attribute()
+        .valueType(Schema.ValueType.STRING))
+    .attr("course/code", Schema.attribute()
+        .valueType(Schema.ValueType.STRING)
+        .unique(Schema.Unique.IDENTITY))
+    .attr("course/title", Schema.attribute()
+        .valueType(Schema.ValueType.STRING))
+    .attr("term/id", Schema.attribute()
+        .valueType(Schema.ValueType.STRING)
+        .unique(Schema.Unique.IDENTITY))
+    .attr("term/starts-at", Schema.attribute()
+        .valueType(Schema.ValueType.INSTANT))
+    .attr("instructor/id", Schema.attribute()
+        .valueType(Schema.ValueType.STRING)
+        .unique(Schema.Unique.IDENTITY))
+    .attr("instructor/name", Schema.attribute()
+        .valueType(Schema.ValueType.STRING))
+    .attr("course-offering/id", Schema.attribute()
+        .valueType(Schema.ValueType.STRING)
+        .unique(Schema.Unique.IDENTITY))
+    .attr("course-offering/course", Schema.attribute()
+        .valueType(Schema.ValueType.REF))
+    .attr("course-offering/term", Schema.attribute()
+        .valueType(Schema.ValueType.REF))
+    .attr("course-offering/instructor", Schema.attribute()
+        .valueType(Schema.ValueType.REF))
+    .attr("course-offering/section", Schema.attribute()
+        .valueType(Schema.ValueType.STRING))
+    .attr("course-offering/capacity", Schema.attribute()
+        .valueType(Schema.ValueType.LONG))
+    .attr("course-offering/key", Schema.attribute()
+        .tupleAttrs("course-offering/course",
+                    "course-offering/term",
+                    "course-offering/section")
+        .unique(Schema.Unique.IDENTITY))
+    .attr("enrollment/student", Schema.attribute()
+        .valueType(Schema.ValueType.REF))
+    .attr("enrollment/offering", Schema.attribute()
+        .valueType(Schema.ValueType.REF))
+    .attr("enrollment/key", Schema.attribute()
+        .tupleAttrs("enrollment/student", "enrollment/offering")
+        .unique(Schema.Unique.IDENTITY))
+    .attr("enrollment/status", Schema.attribute()
+        .valueType(Schema.ValueType.KEYWORD))
+    .attr("enrollment/grade", Schema.attribute()
+        .valueType(Schema.ValueType.STRING))
+    .attr("enrollment/enrolled-at", Schema.attribute()
+        .valueType(Schema.ValueType.INSTANT));
+```
+
+```python
+school_schema = {
+    ":student/id": {":db/valueType": ":db.type/string",
+                    ":db/unique": ":db.unique/identity"},
+    ":student/name": {":db/valueType": ":db.type/string"},
+    ":course/code": {":db/valueType": ":db.type/string",
+                     ":db/unique": ":db.unique/identity"},
+    ":course/title": {":db/valueType": ":db.type/string"},
+    ":term/id": {":db/valueType": ":db.type/string",
+                 ":db/unique": ":db.unique/identity"},
+    ":term/starts-at": {":db/valueType": ":db.type/instant"},
+    ":instructor/id": {":db/valueType": ":db.type/string",
+                       ":db/unique": ":db.unique/identity"},
+    ":instructor/name": {":db/valueType": ":db.type/string"},
+    ":course-offering/id": {":db/valueType": ":db.type/string",
+                            ":db/unique": ":db.unique/identity"},
+    ":course-offering/course": {":db/valueType": ":db.type/ref"},
+    ":course-offering/term": {":db/valueType": ":db.type/ref"},
+    ":course-offering/instructor": {":db/valueType": ":db.type/ref"},
+    ":course-offering/section": {":db/valueType": ":db.type/string"},
+    ":course-offering/capacity": {":db/valueType": ":db.type/long"},
+    ":course-offering/key": {
+        ":db/tupleAttrs": [":course-offering/course",
+                           ":course-offering/term",
+                           ":course-offering/section"],
+        ":db/unique": ":db.unique/identity"},
+    ":enrollment/student": {":db/valueType": ":db.type/ref"},
+    ":enrollment/offering": {":db/valueType": ":db.type/ref"},
+    ":enrollment/key": {
+        ":db/tupleAttrs": [":enrollment/student", ":enrollment/offering"],
+        ":db/unique": ":db.unique/identity"},
+    ":enrollment/status": {":db/valueType": ":db.type/keyword"},
+    ":enrollment/grade": {":db/valueType": ":db.type/string"},
+    ":enrollment/enrolled-at": {":db/valueType": ":db.type/instant"}}
+```
+
+```javascript
+const schoolSchema = {
+  ":student/id": {":db/valueType": ":db.type/string",
+                  ":db/unique": ":db.unique/identity"},
+  ":student/name": {":db/valueType": ":db.type/string"},
+  ":course/code": {":db/valueType": ":db.type/string",
+                   ":db/unique": ":db.unique/identity"},
+  ":course/title": {":db/valueType": ":db.type/string"},
+  ":term/id": {":db/valueType": ":db.type/string",
+               ":db/unique": ":db.unique/identity"},
+  ":term/starts-at": {":db/valueType": ":db.type/instant"},
+  ":instructor/id": {":db/valueType": ":db.type/string",
+                     ":db/unique": ":db.unique/identity"},
+  ":instructor/name": {":db/valueType": ":db.type/string"},
+  ":course-offering/id": {":db/valueType": ":db.type/string",
+                          ":db/unique": ":db.unique/identity"},
+  ":course-offering/course": {":db/valueType": ":db.type/ref"},
+  ":course-offering/term": {":db/valueType": ":db.type/ref"},
+  ":course-offering/instructor": {":db/valueType": ":db.type/ref"},
+  ":course-offering/section": {":db/valueType": ":db.type/string"},
+  ":course-offering/capacity": {":db/valueType": ":db.type/long"},
+  ":course-offering/key": {
+    ":db/tupleAttrs": [":course-offering/course",
+                       ":course-offering/term",
+                       ":course-offering/section"],
+    ":db/unique": ":db.unique/identity"},
+  ":enrollment/student": {":db/valueType": ":db.type/ref"},
+  ":enrollment/offering": {":db/valueType": ":db.type/ref"},
+  ":enrollment/key": {
+    ":db/tupleAttrs": [":enrollment/student", ":enrollment/offering"],
+    ":db/unique": ":db.unique/identity"},
+  ":enrollment/status": {":db/valueType": ":db.type/keyword"},
+  ":enrollment/grade": {":db/valueType": ":db.type/string"},
+  ":enrollment/enrolled-at": {":db/valueType": ":db.type/instant"}
+};
+```
+
+</div>
+
+The refs are the relationship model. `?offering` points to the course, term,
+and instructor entities. `?enrollment` points to the student and offering
+entities. Ordinary joins recover the corresponding domain identifiers when
+needed. There is no need to copy `:course/code`, `:term/id`, or
+`:instructor/id` onto the enrollment just to make later queries convenient. If
+you need uniqueness for either relationship, derive a composite tuple from the
+refs themselves.
+
+<div class="multi-lang">
 
 ```clojure
 (d/transact! conn
   [{:student/id "s-100" :student/name "Ada"}
    {:course/code "CS101" :course/title "Intro to Databases"}
    {:term/id "2026-fall"}
+   {:instructor/id "i-10" :instructor/name "Grace Hopper"}
+
+   {:course-offering/id         "2026-fall-CS101-001"
+    :course-offering/course     [:course/code "CS101"]
+    :course-offering/term       [:term/id "2026-fall"]
+    :course-offering/instructor [:instructor/id "i-10"]
+    :course-offering/section    "001"
+    :course-offering/capacity   30}
 
    {:enrollment/student     [:student/id "s-100"]
-    :enrollment/course      [:course/code "CS101"]
-    :enrollment/term        [:term/id "2026-fall"]
+    :enrollment/offering    [:course-offering/id "2026-fall-CS101-001"]
     :enrollment/status      :enrollment.status/active}])
 ```
 
+```java
+Object courseRef = Datalevin.listOf(Datalevin.kw("course/code"), "CS101");
+Object termRef = Datalevin.listOf(Datalevin.kw("term/id"), "2026-fall");
+Object instructorRef = Datalevin.listOf(Datalevin.kw("instructor/id"), "i-10");
+Object offeringRef = Datalevin.listOf(
+    Datalevin.kw("course-offering/id"),
+    "2026-fall-CS101-001");
+
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity()
+        .put("student/id", "s-100")
+        .put("student/name", "Ada"))
+    .entity(Tx.entity()
+        .put("course/code", "CS101")
+        .put("course/title", "Intro to Databases"))
+    .entity(Tx.entity()
+        .put("term/id", "2026-fall"))
+    .entity(Tx.entity()
+        .put("instructor/id", "i-10")
+        .put("instructor/name", "Grace Hopper"))
+    .entity(Tx.entity()
+        .put("course-offering/id", "2026-fall-CS101-001")
+        .put("course-offering/course", courseRef)
+        .put("course-offering/term", termRef)
+        .put("course-offering/instructor", instructorRef)
+        .put("course-offering/section", "001")
+        .put("course-offering/capacity", 30L))
+    .entity(Tx.entity()
+        .put("enrollment/student",
+             Datalevin.listOf(Datalevin.kw("student/id"), "s-100"))
+        .put("enrollment/offering", offeringRef)
+        .put("enrollment/status",
+             Datalevin.kw("enrollment.status/active"))));
+```
+
+```python
+from datalevin import interop
+
+kw = interop().keyword
+
+conn.transact([
+    {":student/id": "s-100", ":student/name": "Ada"},
+    {":course/code": "CS101", ":course/title": "Intro to Databases"},
+    {":term/id": "2026-fall"},
+    {":instructor/id": "i-10", ":instructor/name": "Grace Hopper"},
+    {":course-offering/id": "2026-fall-CS101-001",
+     ":course-offering/course": [kw(":course/code"), "CS101"],
+     ":course-offering/term": [kw(":term/id"), "2026-fall"],
+     ":course-offering/instructor": [kw(":instructor/id"), "i-10"],
+     ":course-offering/section": "001",
+     ":course-offering/capacity": 30},
+    {":enrollment/student": [kw(":student/id"), "s-100"],
+     ":enrollment/offering": [kw(":course-offering/id"),
+                              "2026-fall-CS101-001"],
+     ":enrollment/status": kw(":enrollment.status/active")}])
+```
+
+```javascript
+import { interop } from "datalevin-node";
+
+const raw = interop();
+const courseCode = await raw.keyword(":course/code");
+const termId = await raw.keyword(":term/id");
+const instructorId = await raw.keyword(":instructor/id");
+const studentId = await raw.keyword(":student/id");
+const offeringId = await raw.keyword(":course-offering/id");
+const active = await raw.keyword(":enrollment.status/active");
+
+await conn.transact([
+  {":student/id": "s-100", ":student/name": "Ada"},
+  {":course/code": "CS101", ":course/title": "Intro to Databases"},
+  {":term/id": "2026-fall"},
+  {":instructor/id": "i-10", ":instructor/name": "Grace Hopper"},
+  {":course-offering/id": "2026-fall-CS101-001",
+   ":course-offering/course": [courseCode, "CS101"],
+   ":course-offering/term": [termId, "2026-fall"],
+   ":course-offering/instructor": [instructorId, "i-10"],
+   ":course-offering/section": "001",
+   ":course-offering/capacity": 30},
+  {":enrollment/student": [studentId, "s-100"],
+   ":enrollment/offering": [offeringId, "2026-fall-CS101-001"],
+   ":enrollment/status": active}
+]);
+```
+
+</div>
+
 To update that enrollment later, find the relationship entity by joining through
-the domain identifiers:
+the domain identifiers. Notice that the query moves from course and term to the
+offering, then from offering and student to enrollment:
+
+<div class="multi-lang">
 
 ```clojure
 (let [enrollment
       (d/q '[:find ?enrollment .
-             :in $ ?student-id ?course-code ?term-id
+             :in $ ?student-id ?course-code ?term-id ?section
              :where
              [?student :student/id ?student-id]
              [?course :course/code ?course-code]
              [?term :term/id ?term-id]
+             [?offering :course-offering/course ?course]
+             [?offering :course-offering/term ?term]
+             [?offering :course-offering/section ?section]
              [?enrollment :enrollment/student ?student]
-             [?enrollment :enrollment/course ?course]
-             [?enrollment :enrollment/term ?term]]
+             [?enrollment :enrollment/offering ?offering]]
            (d/db conn)
            "s-100"
            "CS101"
-           "2026-fall")]
+           "2026-fall"
+           "001")]
   (d/transact! conn
     [[:db/add enrollment :enrollment/grade "A"]]))
 ```
 
+```java
+Object enrollment = conn.query(
+    "[:find ?enrollment . " +
+    " :in $ ?student-id ?course-code ?term-id ?section " +
+    " :where [?student :student/id ?student-id] " +
+    "        [?course :course/code ?course-code] " +
+    "        [?term :term/id ?term-id] " +
+    "        [?offering :course-offering/course ?course] " +
+    "        [?offering :course-offering/term ?term] " +
+    "        [?offering :course-offering/section ?section] " +
+    "        [?enrollment :enrollment/student ?student] " +
+    "        [?enrollment :enrollment/offering ?offering]]",
+    "s-100",
+    "CS101",
+    "2026-fall",
+    "001");
+
+conn.transact(Datalevin.tx()
+    .add(enrollment, "enrollment/grade", "A"));
+```
+
+```python
+enrollment = conn.query("""
+[:find ?enrollment .
+ :in $ ?student-id ?course-code ?term-id ?section
+ :where
+ [?student :student/id ?student-id]
+ [?course :course/code ?course-code]
+ [?term :term/id ?term-id]
+ [?offering :course-offering/course ?course]
+ [?offering :course-offering/term ?term]
+ [?offering :course-offering/section ?section]
+ [?enrollment :enrollment/student ?student]
+ [?enrollment :enrollment/offering ?offering]]
+""", "s-100", "CS101", "2026-fall", "001")
+
+conn.transact([[":db/add", enrollment, ":enrollment/grade", "A"]])
+```
+
+```javascript
+const enrollment = await conn.query(
+  `[:find ?enrollment .
+    :in $ ?student-id ?course-code ?term-id ?section
+    :where
+    [?student :student/id ?student-id]
+    [?course :course/code ?course-code]
+    [?term :term/id ?term-id]
+    [?offering :course-offering/course ?course]
+    [?offering :course-offering/term ?term]
+    [?offering :course-offering/section ?section]
+    [?enrollment :enrollment/student ?student]
+    [?enrollment :enrollment/offering ?offering]]`,
+  "s-100",
+  "CS101",
+  "2026-fall",
+  "001");
+
+await conn.transact([[":db/add", enrollment, ":enrollment/grade", "A"]]);
+```
+
+</div>
+
 The read query uses the same ref edges:
 
+<div class="multi-lang">
+
 ```clojure
-(d/q '[:find ?student-name ?course-title ?status
+(d/q '[:find ?student-name ?course-title ?section ?instructor-name ?status
        :in $ ?term-id
        :where
        [?term :term/id ?term-id]
-       [?enrollment :enrollment/term ?term]
+       [?offering :course-offering/term ?term]
+       [?offering :course-offering/course ?course]
+       [?offering :course-offering/section ?section]
+       [?offering :course-offering/instructor ?instructor]
+       [?enrollment :enrollment/offering ?offering]
        [?enrollment :enrollment/student ?student]
-       [?enrollment :enrollment/course ?course]
        [?enrollment :enrollment/status ?status]
        [?student :student/name ?student-name]
-       [?course :course/title ?course-title]]
+       [?course :course/title ?course-title]
+       [?instructor :instructor/name ?instructor-name]]
      (d/db conn)
      "2026-fall")
 ```
 
-This example illustrates the three layers that often appear together in a real
+```java
+Object enrollments = conn.query(
+    "[:find ?student-name ?course-title ?section ?instructor-name ?status " +
+    " :in $ ?term-id " +
+    " :where [?term :term/id ?term-id] " +
+    "        [?offering :course-offering/term ?term] " +
+    "        [?offering :course-offering/course ?course] " +
+    "        [?offering :course-offering/section ?section] " +
+    "        [?offering :course-offering/instructor ?instructor] " +
+    "        [?enrollment :enrollment/offering ?offering] " +
+    "        [?enrollment :enrollment/student ?student] " +
+    "        [?enrollment :enrollment/status ?status] " +
+    "        [?student :student/name ?student-name] " +
+    "        [?course :course/title ?course-title] " +
+    "        [?instructor :instructor/name ?instructor-name]]",
+    "2026-fall");
+```
+
+```python
+enrollments = conn.query("""
+[:find ?student-name ?course-title ?section ?instructor-name ?status
+ :in $ ?term-id
+ :where
+ [?term :term/id ?term-id]
+ [?offering :course-offering/term ?term]
+ [?offering :course-offering/course ?course]
+ [?offering :course-offering/section ?section]
+ [?offering :course-offering/instructor ?instructor]
+ [?enrollment :enrollment/offering ?offering]
+ [?enrollment :enrollment/student ?student]
+ [?enrollment :enrollment/status ?status]
+ [?student :student/name ?student-name]
+ [?course :course/title ?course-title]
+ [?instructor :instructor/name ?instructor-name]]
+""", "2026-fall")
+```
+
+```javascript
+const enrollments = await conn.query(
+  `[:find ?student-name ?course-title ?section ?instructor-name ?status
+    :in $ ?term-id
+    :where
+    [?term :term/id ?term-id]
+    [?offering :course-offering/term ?term]
+    [?offering :course-offering/course ?course]
+    [?offering :course-offering/section ?section]
+    [?offering :course-offering/instructor ?instructor]
+    [?enrollment :enrollment/offering ?offering]
+    [?enrollment :enrollment/student ?student]
+    [?enrollment :enrollment/status ?status]
+    [?student :student/name ?student-name]
+    [?course :course/title ?course-title]
+    [?instructor :instructor/name ?instructor-name]]`,
+  "2026-fall");
+```
+
+</div>
+
+This example illustrates the layers that often appear together in a real
 model:
 
-1.  **Domain entities** such as students, courses, and terms.
-2.  **Relationship entities** such as enrollments, line items, memberships, and
+1.  **Domain entities** such as students, courses, terms, and instructors.
+2.  **Scheduled or contextual entities** such as course offerings, reservations,
+    shipments, or price lists. These are real things in the domain, not just
+    attributes copied onto another entity.
+3.  **Relationship entities** such as enrollments, line items, memberships, and
     assignments.
-3.  **Composite identities** for relationship entities that need upsert,
+4.  **Composite identities** for relationship entities that need upsert,
     lookup, or import stability.
 
 Use composite identities as constraints and access paths, not as a reason to
@@ -494,20 +1077,23 @@ and used to generate documentation automatically.
 
 ## 7. From Tables to Facts: Migrating SQL Models
 
-Migrating from SQL to Datalevin is not a rejection of relational algebra. It is
-a rejection of treating SQL text and table-shaped containers as the only
-reasonable interface to relational data. Datalevin keeps the relational idea
-that facts can be joined by shared values, but represents the data as explicit
-datoms that can be joined, traversed, pulled, counted, sampled, and indexed in
-several ways.
+Migrating from SQL to Datalevin is not a rejection of relational algebra. In a
+sense, it is a migration to a better implementation of relational algebra by
+rejecting the SQL user interface and container-centered storage. Datalevin keeps the
+relational idea that facts can be joined by shared values, but represents the
+data as explicit datoms that can be joined, traversed, pulled, counted, sampled,
+and indexed in several ways.
 
-That distinction matters. If a SQL database adds JSON, text search, vector
-indexes, or graph-like extensions, it may reduce the number of services you run,
-but the application is still written against a table-first language and a
-planner that must estimate joins over row or column containers. Datalevin starts
-from facts and uses Datalog as the surface language, so migration is not merely
-a change of syntax; it is a change in what the database exposes as its basic
-unit of reasoning.
+When a SQL database adds JSON, text search, vector indexes, or graph-like
+extensions, it may reduce the number of services you run, but the application is
+still written against a container-first language and a planner that must
+estimate joins over row or column containers. Datalevin starts from facts and
+uses Datalog as the surface language, so migration is not merely a change of
+syntax; it is a change in what the database exposes as its basic unit of
+reasoning.
+
+Figure 12.2 shows the conceptual steps that are often involved in such a
+migration.
 
 ![From SQL tables to Datalog joins: a SQL orders row decomposes into datoms on entity 2001, where its NULL discount_code column produces no datom at all; its customer_id foreign key becomes an :order/customer ref edge to the customer entity; and a Datalog query joins by sharing the variable ?c between the order and customer patterns, with no JOIN keyword](/images/diagrams/sql-to-datalog.svg)
 
@@ -628,6 +1214,19 @@ For an existing SQL application, migrate in this order:
 
 ### 7.6 Example: A Normalized E-commerce Schema
 
+Suppose the SQL source has four familiar tables: `products`, `customers`,
+`orders`, and `line_items`. A direct migration might be tempted to make an
+order entity contain a nested list of products, quantities, and prices. That
+would recreate an object graph, not a normalized relational model.
+
+In Datalevin, keep the same conceptual separation that made the SQL model
+useful. Products and customers are stable domain entities. Orders are events or
+business records that point to customers. Line items are relationship entities:
+each one connects one order to one product and carries facts about that
+relationship, such as quantity. The result is still relational, but the joins
+are expressed as Datalog variable sharing over refs rather than SQL `JOIN`
+clauses over table names.
+
 <div class="multi-lang">
 
 ```clojure
@@ -732,6 +1331,28 @@ const ecommerceSchema = {
 
 </div>
 
+The key decision is the `:line-item/` namespace. A line item is not a product
+attribute and not an order attribute; it is the relationship between an order
+and a product. Modeling it as its own entity lets the application ask precise
+questions: which products appeared in paid orders, which customers bought a
+given SKU, how many units of each product were sold, or which orders contain
+backordered items. Those queries can start from whichever fact is selective and
+join through the two refs.
+
+The schema also shows how migration preserves stable identifiers without
+exposing Datalevin entity ids. `:product/sku`, `:customer/id`, and `:order/id`
+are unique identity attributes, so imported rows and application commands can
+use lookup refs. `:order/customer`, `:line-item/order`, and
+`:line-item/product` store entity ids internally, but callers can transact them
+using the domain keys they already have.
+
+This is intentionally only the starting point. A production schema might add
+order status, timestamps, shipment entities, payment attempts, discounts,
+inventory reservations, or a composite `:line-item/key` over order and product
+when the domain allows only one line per product per order. The modeling rule is
+the same: keep durable nouns as entities, represent foreign keys as refs, and
+promote relationships with their own facts into relationship entities.
+
 ---
 
 ## Summary: Relational Best Practices
@@ -758,6 +1379,6 @@ remains clean, performant, and understandable as your domain complexity grows.
 
 ## References
 
-[1] Peter P. Chen, ["The Entity-Relationship Model - Toward a Unified
+[1] Peter P. Chen, ["The Entity-Relationship Model: Toward a Unified
 View of Data"](https://doi.org/10.1145/320434.320440), *ACM Transactions on
 Database Systems* 1, no. 1, 1976, pp. 9-36.

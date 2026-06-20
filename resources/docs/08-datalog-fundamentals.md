@@ -491,11 +491,13 @@ keys.
 
 ### 2.2 Aggregation
 
-Datalog supports aggregate functions directly in the `:find` clause. SQL uses a
-separate `GROUP BY` clause; Datalog groups by the non-aggregate variables in
-`:find`. The grouping key is implicit. For example, `:find ?city (count ?e)`
-groups by `?city`; there is no separate `GROUP BY ?city` clause. If `:find` has
-only aggregate expressions, the whole result is one group.
+Datalog supports aggregate functions directly in the `:find` clause, which
+return results after some additional computation on the found result set. SQL
+uses a separate `GROUP BY` clause to do this; Datalog groups by the
+non-aggregate variables in `:find`. The grouping key is implicit. For example,
+`:find ?city (count ?e)` groups by `?city` and returns the count per city; there
+is no separate `GROUP BY ?city` clause. If `:find` has only aggregate
+expressions, the whole result is one group.
 
 <div class="multi-lang">
 
@@ -696,7 +698,7 @@ const result = await conn.query('[:find ?name ?age ' +
 
 </div>
 
-This returns only users who are older than 30. Notice that the predicate
+This returns only users who are older than 30. Notice that the single predicate
 function call is wrapped in a vector form.
 
 ### 4.2 Binding Clauses
@@ -744,7 +746,13 @@ const result = await conn.query('[:find ?order-id ?total ' +
 
 </div>
 
+`?total` is a new variable that would take the result of `(+ ?subtotal ?tax)` as
+its value. Note that this binding clause vector has two elements. Read from left
+to right: the value flows from the function call into the bound variable.
+
 ### 4.3 Qualification of Functions and Predicates
+
+The resolution of functions follows these rules:
 
 -   **Built-in Functions/Predicates**: Common built-in functions and predicates
     (like `+`, `-`, `*`, `/`, `>`, `<`, `like`, `re-find`, `empty?`, `true?`) do
@@ -769,6 +777,9 @@ const result = await conn.query('[:find ?order-id ?total ' +
                   [(my-app.queries/is-adult? ?age)]] ; Fully qualified custom function
          db)
     ```
+
+The `is-adult?` function is not built-in, so its namespace must be included to
+qualify it; otherwise, the function cannot be found.
 
 ---
 
@@ -862,51 +873,62 @@ the final `:find` result is still a set.
 ### 5.2 `:having`: Filtering Aggregated Results
 
 Similar to SQL's `HAVING` clause, `:having` allows you to filter results that
-have been aggregated in the `:find` clause.
+have been aggregated in the `:find` clause by applying additional conditions.
 
 <div class="multi-lang">
 
 ```clojure
-;; Find cities with more than 10 active users
-(d/q '[:find ?city (count ?e)
-       :where [?e :user/city ?city]
-              [?e :user/active? true]
-       :having [(> (count ?e) 10)]]
+;; Find customers whose total spend and largest order both pass thresholds.
+(d/q '[:find ?customer (sum ?total) (max ?total)
+       :with ?order
+       :where [?order :order/customer ?customer]
+              [?order :order/total ?total]
+       :having [(> (sum ?total) 1000)]
+               [(>= (max ?total) 250)]]
      db)
 ```
 
 ```java
-// Find cities with more than 10 active users
-Object result = conn.query("[:find ?city (count ?e) " +
-    ":where [?e :user/city ?city] " +
-    "       [?e :user/active? true] " +
-    ":having [(> (count ?e) 10)]]");
+// Find customers whose total spend and largest order both pass thresholds.
+Object result = conn.query("[:find ?customer (sum ?total) (max ?total) " +
+    ":with ?order " +
+    ":where [?order :order/customer ?customer] " +
+    "       [?order :order/total ?total] " +
+    ":having [(> (sum ?total) 1000)] " +
+    "        [(>= (max ?total) 250)]]");
 ```
 
 ```python
-# Find cities with more than 10 active users
-result = conn.query('[:find ?city (count ?e) '
-    ':where [?e :user/city ?city] '
-    '       [?e :user/active? true] '
-    ':having [(> (count ?e) 10)]]')
+# Find customers whose total spend and largest order both pass thresholds.
+result = conn.query('[:find ?customer (sum ?total) (max ?total) '
+    ':with ?order '
+    ':where [?order :order/customer ?customer] '
+    '       [?order :order/total ?total] '
+    ':having [(> (sum ?total) 1000)] '
+    '        [(>= (max ?total) 250)]]')
 ```
 
 ```javascript
-// Find cities with more than 10 active users
-const result = await conn.query('[:find ?city (count ?e) ' +
-    ':where [?e :user/city ?city] ' +
-    '       [?e :user/active? true] ' +
-    ':having [(> (count ?e) 10)]]');
+// Find customers whose total spend and largest order both pass thresholds.
+const result = await conn.query('[:find ?customer (sum ?total) (max ?total) ' +
+    ':with ?order ' +
+    ':where [?order :order/customer ?customer] ' +
+    '       [?order :order/total ?total] ' +
+    ':having [(> (sum ?total) 1000)] ' +
+    '        [(>= (max ?total) 250)]]');
 ```
 
 </div>
 
+Multiple `:having` predicates are conjunctive: a group is returned only if all
+of them are true. In the example above, `:with ?order` preserves each order as a
+distinct contributing row, so repeated order totals are still included in the
+sum.
+
 ### 5.3 `:order-by`: Sorting Results
 
 The `:order-by` clause sorts your results based on specified variables. You can
-specify ascending or descending order. When sorting by aggregate output,
-`:order-by` can also use zero-based result column indices, such as `:order-by [1
-:desc 0 :asc]`.
+specify ascending or descending order.
 
 <div class="multi-lang">
 
@@ -944,6 +966,55 @@ const result = await conn.query('[:find ?name ?age ' +
 ```
 
 </div>
+
+When sorting by aggregate output, `:order-by` can also use zero-based result
+column indices. This is useful because aggregate expressions are result
+columns, not variables you can name later in `:order-by`:
+
+<div class="multi-lang">
+
+```clojure
+;; Sort customers by total spend descending, then customer name ascending.
+(d/q '[:find ?customer (sum ?total)
+       :with ?order
+       :where [?order :order/customer ?customer]
+              [?order :order/total ?total]
+       :order-by [1 :desc 0 :asc]]
+     db)
+```
+
+```java
+// Sort customers by total spend descending, then customer name ascending.
+Object result = conn.query("[:find ?customer (sum ?total) " +
+    ":with ?order " +
+    ":where [?order :order/customer ?customer] " +
+    "       [?order :order/total ?total] " +
+    ":order-by [1 :desc 0 :asc]]");
+```
+
+```python
+# Sort customers by total spend descending, then customer name ascending.
+result = conn.query('[:find ?customer (sum ?total) '
+    ':with ?order '
+    ':where [?order :order/customer ?customer] '
+    '       [?order :order/total ?total] '
+    ':order-by [1 :desc 0 :asc]]')
+```
+
+```javascript
+// Sort customers by total spend descending, then customer name ascending.
+const result = await conn.query('[:find ?customer (sum ?total) ' +
+    ':with ?order ' +
+    ':where [?order :order/customer ?customer] ' +
+    '       [?order :order/total ?total] ' +
+    ':order-by [1 :desc 0 :asc]]');
+```
+
+</div>
+
+Here column `0` is `?customer`, and column `1` is `(sum ?total)`. The
+`:order-by` clause sorts by total spend first, then uses customer as a stable
+tie-breaker.
 
 ### 5.4 `:limit` and `:offset`: Pagination
 
@@ -1026,11 +1097,11 @@ parameterize query options such as `:limit`, `:offset`, or `:order-by`:
        (d/db conn)))
 ```
 
-In map form, the query clauses are ordinary Clojure data. Quote static query
+In map form, the query clauses are ordinary data. Quote static query
 fragments such as `:find`, `:in`, `:where`, and `:order-by`, but leave runtime
 values such as `limit` and `offset` unquoted. This avoids string concatenation
 and keeps pagination, sorting, and optional clauses easy to assemble with normal
-Clojure data operations.
+data operations.
 
 The same ordering rules apply in both forms: an `:order-by` variable must appear
 in the query's result columns. When ordering by an aggregate result, use the
@@ -1209,6 +1280,8 @@ nested `q` approach.
 
 ![Nested q versus not-join for "London users with no orders": the nested-q anti-pattern produces N candidate rows and runs an inner subquery once per row (N invocations whose cost scales with the candidates), while not-join folds the positive clause and a planned negative pattern into one query graph evaluated by the planner with index lookups as a single optimized query](/images/diagrams/subquery-vs-notjoin.svg)
 
+Figure 8.3 shows the different approaches visually.
+
 ---
 
 ## 8. Flexible Data Sources: Beyond a Single Database
@@ -1222,6 +1295,8 @@ multiple data sources, enabling cross-database joins and ad-hoc data analysis.
 You can pass multiple Datalevin databases to a single query, referenced by
 different symbols in `:in`:
 
+<div class="multi-lang">
+
 ```clojure
 ;; Join across two databases: a user db and an orders db
 (d/q '[:find ?name ?order-total
@@ -1233,10 +1308,53 @@ different symbols in `:in`:
      user-db order-db 100)
 ```
 
-The Clojure `d/q` API accepts each database source explicitly. The Java,
-Python, and JavaScript `conn.query` convenience APIs automatically supply the
-connection database as `$`; use lower-level interop when a non-Clojure program
-needs to supply every database source explicitly.
+```java
+// Join across two databases: a user db and an orders db.
+Object result = usersConn.query(
+    "[:find ?name ?order-total " +
+    " :in $users $orders ?min-total " +
+    " :where [$users ?e :user/name ?name] " +
+    "        [$orders ?order :order/customer ?e] " +
+    "        [$orders ?order :order/total ?order-total] " +
+    "        [(> ?order-total ?min-total)]]",
+    ordersConn,
+    100);
+```
+
+```python
+# Join across two databases: a user db and an orders db.
+result = users_conn.query(
+    '[:find ?name ?order-total '
+    ' :in $users $orders ?min-total '
+    ' :where [$users ?e :user/name ?name] '
+    '        [$orders ?order :order/customer ?e] '
+    '        [$orders ?order :order/total ?order-total] '
+    '        [(> ?order-total ?min-total)]]',
+    orders_conn,
+    100)
+```
+
+```javascript
+// Join across two databases: a user db and an orders db.
+const result = await usersConn.query(
+  '[:find ?name ?order-total ' +
+  ' :in $users $orders ?min-total ' +
+  ' :where [$users ?e :user/name ?name] ' +
+  '        [$orders ?order :order/customer ?e] ' +
+  '        [$orders ?order :order/total ?order-total] ' +
+  '        [(> ?order-total ?min-total)]]',
+  ordersConn,
+  100
+);
+```
+
+</div>
+
+`$users` and `$orders` stand for two different databases. The triple patterns
+accept an extra position in front for a source database symbol. In Clojure,
+`d/q` accepts each database source explicitly. In Java, Python, and JavaScript,
+the receiver connection supplies the first source listed in `:in`, and
+additional Datalevin connections can be passed as query inputs.
 
 This is invaluable when:
 
@@ -1353,8 +1471,8 @@ expressive, powerful, and highly performant queries, trusting that Datalevin's
 optimizer will find the most efficient path to your data.
 
 In the next chapter, we will explore **Rules and Recursion**, which allow you to
-encapsulate this logic for reuse and traverse complex, hierarchical data
-structures.
+encapsulate this logic for reuse and traverse complex, hierarchical, or
+graph-shaped data structures.
 
 ## References
 

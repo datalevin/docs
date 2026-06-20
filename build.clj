@@ -174,6 +174,26 @@
         (= lang "clj")
         (= lang "{.clojure}"))))
 
+(defn- pdf-keep-text-fence?
+  [info]
+  (let [info (-> info str/trim str/lower-case)
+        lang (-> info (str/split #"\s+") first)]
+    (and (contains? #{"text" "plain" "{.text" "{.plain"} lang)
+         (re-find #"(?<![\w-])pdf-keep(?![\w-])" info))))
+
+(defn- console-fence?
+  [info]
+  (let [lang (-> info str/trim (str/split #"\s+") first str/lower-case)]
+    (contains? #{"console" "{.console}"} lang)))
+
+(defn- pdf-fence-info
+  [info]
+  (cond
+    (clojure-fence? info) "clojure"
+    (pdf-keep-text-fence? info) "text"
+    (console-fence? info) "text"
+    :else nil))
+
 (defn- keep-clojure-fences-only
   [markdown]
   (let [{:keys [lines keep? in-code?]}
@@ -186,9 +206,9 @@
                (cond-> state
                  keep? (update :lines conj line)))
              (if-let [[_ indent info] (re-matches #"^(\s*)```(.*)$" line)]
-               (let [keep-code? (clojure-fence? info)]
-                 (cond-> (assoc state :in-code? true :keep? keep-code?)
-                   keep-code? (update :lines conj (str indent "```clojure"))))
+               (let [fence-info (pdf-fence-info info)]
+                 (cond-> (assoc state :in-code? true :keep? (some? fence-info))
+                   fence-info (update :lines conj (str indent "```" fence-info))))
                (update state :lines conj line))))
          {:lines [] :keep? true :in-code? false}
          (str/split-lines markdown))]
@@ -1069,8 +1089,9 @@
 (defn reviewer-pdf
   "Build target/pdf/datalevin-reviewer.pdf with a TOC and terminology index.
 
-   The generated Markdown keeps Clojure fenced code blocks only. Non-Clojure
-   fenced blocks remain in the web book but are omitted from this PDF source."
+   The generated Markdown keeps Clojure fenced code blocks and command-line
+   console fences. Other non-Clojure fenced blocks remain in the web book but
+   are omitted from this PDF source."
   [_]
   (write-reviewer-source nil)
   (convert-svg-assets!)

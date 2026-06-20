@@ -252,8 +252,8 @@ Part IV treats indexes as capabilities. You will learn the core EAV and AVE
 indexes, full-text search, vector and embedding search, and hybrid queries that
 combine KV access, logic, text, and similarity.
 
-Part V is about performance and operations. It covers batching, ingestion,
-durability, storage tuning, query planning, rules-engine execution, deployment,
+Part V is about performance and operations. It covers durability, storage
+tuning, batching, ingestion, query planning, rules-engine execution, deployment,
 security, replication, monitoring, and production checklists.
 
 Part VI applies the database to intelligent systems. It develops a line from

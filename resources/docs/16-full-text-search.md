@@ -6,12 +6,39 @@ part: "IV — Indexes as Capabilities"
 
 # Chapter 16: Full-Text Search: Queries and Ranking
 
-Most databases require a separate engine like Lucene, Elasticsearch or Solr for
+Most databases require a separate engine like Lucene, Elasticsearch, or Solr for
 full-text search. Datalevin includes a high-performance, integrated search
 engine built directly on top of its KV substrate. In the default synchronous
 indexing mode, your search index is transactionally consistent with your data
 and stored in the same LMDB data file. For heavier ingestion workloads,
 full-text domains can opt into asynchronous indexing.
+
+This is a deliberate design choice. Lucene is an excellent general-purpose
+information-retrieval library, and systems such as Elasticsearch and Solr build
+large search platforms around it. Datalevin has a narrower goal: make search a
+native secondary index of an embedded logical database. For that goal, an
+integrated engine has practical advantages. Search updates can participate in
+the same transaction boundary as datom updates, backup and restore stay within
+one LMDB environment, query results can be datoms that join directly with
+Datalog clauses, and the application does not need to operate or reconcile a
+separate search index beside the database.
+
+The tradeoff is intentional. Datalevin is not trying to replace the Lucene
+ecosystem for every search problem. If an application needs a large distributed
+search cluster, a specialized Lucene analyzer stack, or search features outside
+Datalevin's scope, using a dedicated search system can be the right choice.
+Datalevin's built-in engine is for the common case where search should be a
+transactional capability of the database itself.
+
+The performance case is workload-specific, but not hypothetical. The Datalevin
+project includes a self-published benchmark against Apache Lucene 8.10.1 on a
+processed English Wikipedia dataset, using 4.1 million articles and 40,000 real
+Web queries from the TREC 2009 Million Query Track [4]. On the reported
+single-machine setup, Datalevin had lower mean and median query latency and
+about 75% higher search throughput. Lucene indexed the same corpus faster, and
+Datalevin had worse tail latency on very broad queries. Treat this as evidence
+for that workload and configuration, not a general claim that Datalevin is
+faster than Lucene for every search use case.
 
 This chapter explains how to enable full-text search, craft powerful search
 queries using boolean logic, and understand the underlying ranking algorithm.
@@ -20,7 +47,15 @@ queries using boolean logic, and understand the underlying ranking algorithm.
 
 ## 1. Enabling Full-Text Search
 
-To search for text within an attribute, declare `:db/fulltext true` in your
+Full-text search is search over text rather than exact database values. Instead
+of asking whether one stored value equals another, a full-text engine breaks
+text documents into searchable terms, normalizes those terms, records where they
+occur, and ranks matching documents by relevance. This is what lets a user
+search for words, phrases, prefixes, or boolean combinations across longer
+fields such as titles, comments, articles, documentation pages, and messages.
+Full-text search is also used for searching logs and other textual information.
+
+To enable full-text search for an attribute, declare `:db/fulltext true` in your
 schema:
 
 <div class="multi-lang">
@@ -77,23 +112,411 @@ const schema = {
 
 </div>
 
+With this schema, normal transactions update two things: the ordinary Datalog
+datoms and the full-text index entries for the marked attributes. When a value
+is added to `:post/title` or `:post/content`, Datalevin converts the value to
+text, runs the configured analyzer, records the resulting searchable terms, and
+links those terms back to the matching datom. When such a value is retracted or
+replaced, the corresponding index entries are updated as part of transaction
+processing. In the default synchronous indexing mode, a committed transaction is
+immediately visible to `fulltext` queries.
+
 The concept of search domains and `:db.fulltext/autoDomain` will be explained in
-section 3.
+Section 5.
 
 The examples use `:db.type/string` because full-text search is usually applied
 to human text. It is not a hard requirement of `:db/fulltext`: during
-transaction processing, Datalevin calls `str` on the value before sending it to
-the analyzer. Embedding search is different; `:db/embedding` requires a string
-attribute.
+transaction processing, Datalevin converts the value to string before sending it
+to the analyzer.
 
 ---
 
-## 2. Querying with `fulltext`
+## 2. The Default Analyzer Pipeline
 
-The `fulltext` function returns matching datoms as `[e a v]` triples, ordered
-by relevance. In a query, `fulltext` behaves like a relation-producing
-function: it takes a database and a search expression, then yields rows that can
-be joined with ordinary Datalog clauses through shared variables such as `?e`.
+An analyzer is the function that turns source text into search terms. During
+indexing, Datalevin stores the analyzer output in the inverted index. During
+querying, Datalevin analyzes the query text in the same term space, so the
+stored terms and query terms can be compared.
+
+That "same term space" requirement is important. For ordinary full-text search,
+the index analyzer and the query analyzer should be the same analyzer. If
+documents are stemmed, lowercased, or filtered one way at index time but queries
+are analyzed another way at search time, the query may look for terms that were
+never stored, or may miss phrase and proximity matches because positions no
+longer mean the same thing.
+
+The default English analyzer performs three steps:
+
+1. **Tokenization**: split text on whitespace and English punctuation.
+2. **Normalization**: lowercase token text.
+3. **Stop-word removal**: remove common English words such as `"the"` and
+   `"in"`.
+
+The analyzer output is a sequence of `[term position offset]` triples. The
+**term** is what is stored in the full-text index. The **position** is the token
+number used for phrase and proximity matching. The **offset** is the character
+offset in the original text, used for highlighting.
+
+For example, the default English analyzer treats this text:
+
+```text pdf-keep
+Running runners in databases
+```
+
+conceptually like this:
+
+| Original token | Indexed term | Position | Offset |
+| --- | --- | ---: | ---: |
+| `Running` | `running` | 0 | 0 |
+| `runners` | `runners` | 1 | 8 |
+| `in` | filtered stop word | 2 | 16 |
+| `databases` | `databases` | 3 | 19 |
+
+Notice that stop-word removal does not renumber the surrounding terms. The
+removed token leaves a position gap. That matters for phrase search: phrases
+match analyzed terms at consecutive positions, so analyzer choices affect both
+what terms are searchable and which phrase queries can match.
+
+---
+
+## 3. Customizing Analyzers
+
+The default analyzer is intentionally conservative. Applications often need
+different behavior: stemming for morphology, prefix terms for autocomplete,
+ngrams for substring-style matching, or different token filters for a specific
+language or corpus.
+
+Custom analyzers can be provided when creating a standalone search engine or
+configuring a Datalog full-text domain. The `:analyzer` option is the **index
+analyzer**: Datalevin applies it to document text before storing terms in the
+inverted index. The `:query-analyzer` option is the **query analyzer**:
+Datalevin applies it to the user's search text before matching it against the
+index. If `:query-analyzer` is omitted, the query side uses the same analyzer as
+the index side.
+
+The usual rule is simple: use the same analyzer for indexing and querying. A
+separate `:query-analyzer` is an advanced option. It should produce terms that
+are intentionally compatible with the indexed terms, not an unrelated analysis
+pipeline. Utility functions for stemming, ngrams, stop-word removal, and
+regular-expression tokenization are in `datalevin.search-utils`.
+
+Datalevin includes built-in stemmers for 30 languages; the language is selected
+by name when creating a stemming token filter, as in the English example below.
+
+As shown in Figure 16.1, a custom analyzer is still a pipeline from text to
+`[term position offset]` triples. The example pipeline lowercases terms, removes
+the stop word `"in"`, and stems the remaining terms.
+
+![Analyzer pipeline: document d1 "Running runners in databases" is split by a regexp tokenizer into tokens with positions and offsets; token filters lower-case, drop the stop word "in", and stem the rest, preserving positions to yield ["run" 0 0], ["runner" 1 8], ["databas" 3 19]; a second document d2 "database run" runs through the same analyzer, and both are indexed by term in the inverted index, which maps each term to the documents and positions where it appears (run to d1·0 and d2·1, runner to d1·1, databas to d1·3 and d2·0)](/images/diagrams/analyzer-pipeline.svg)
+
+Clojure can pass analyzer functions directly. Java, Python, and JavaScript use
+the same analyzer model through runtime UDFs: register a host-language function
+with kind `:analyzer` or `:query-analyzer`, pass the UDF registry in
+`:runtime-opts :udf-registry`, and put the descriptor in the full-text domain
+options. In all languages, the analyzer callable receives one string and returns
+a sequence of `[term position offset]` triples.
+
+### 3.1 Stemming and Stop Words
+
+The `datalevin.search-utils` namespace provides tokenizer and token-filter
+functions for building analyzers. The next example creates an analyzer that
+splits on non-word characters, lowercases tokens, removes English stop words,
+and applies English stemming:
+
+```clojure
+(require '[datalevin.search-utils :as su])
+
+(def stem-analyzer
+  (su/create-analyzer
+    {:tokenizer (su/create-regexp-tokenizer #"\W+")
+     :token-filters [su/lower-case-token-filter
+                     su/en-stop-words-token-filter
+                     (su/create-stemming-token-filter "english")]}))
+
+(mapv vec (stem-analyzer "Running runners in databases"))
+;; => [["run" 0 0] ["runner" 1 8] ["databas" 3 19]]
+```
+
+Use the analyzer in Datalog full-text options when the search domain should use
+the same normalization at index time and query time:
+
+```clojure
+(def conn
+  (d/create-conn
+    "/tmp/posts"
+    {:post/body {:db/valueType :db.type/string
+                 :db/fulltext  true}}
+    {:search-opts {:analyzer stem-analyzer}}))
+
+(d/transact! conn
+  [{:db/id 10 :post/body "Runners are running fast"}
+   {:db/id 11 :post/body "Databases store data"}])
+
+(d/q '[:find [?e ...]
+       :where [(fulltext $ "run") [[?e _ _]]]]
+     (d/db conn))
+;; => [10]
+```
+
+### 3.2 Prefix and N-Gram Indexing
+
+Autocomplete is a controlled exception to the "same analyzer" rule. Apply
+`prefix-token-filter` at index time, but use a normal query analyzer that still
+produces compatible lowercase terms. This indexes `"search"` as `"s"`, `"se"`,
+`"sea"`, and so on, while a query for `"sea"` remains a single token that can
+match one of the indexed prefixes.
+
+```clojure
+(def prefix-index-analyzer
+  (su/create-analyzer
+    {:tokenizer (su/create-regexp-tokenizer #"\W+")
+     :token-filters [su/lower-case-token-filter
+                     su/prefix-token-filter]}))
+
+(def query-analyzer
+  (su/create-analyzer
+    {:tokenizer (su/create-regexp-tokenizer #"\W+")
+     :token-filters [su/lower-case-token-filter]}))
+
+(def engine
+  (d/new-search-engine
+    (d/open-kv "/tmp/search-autocomplete")
+    {:analyzer       prefix-index-analyzer
+     :query-analyzer query-analyzer}))
+
+(d/add-doc engine 1 "search")
+(d/search engine "sea")
+;; => (1)
+```
+
+For fuzzy or substring-style matching, use ngrams. The example below indexes
+3-character grams, so `"Datalevin"` contributes tokens such as `"dat"`, `"ata"`,
+`"tal"`, and `"ale"`.
+
+In practice, prefer ngrams of 3 characters or longer unless the domain is small
+and tightly controlled. One- and two-character grams generate many short,
+high-frequency tokens, which makes posting lists less selective and can grow the
+full-text index quickly.
+
+```clojure
+(def trigram-analyzer
+  (su/create-analyzer
+    {:tokenizer (su/create-regexp-tokenizer #"\W+")
+     :token-filters [su/lower-case-token-filter
+                     (su/create-min-length-token-filter 3)
+                     (su/create-ngram-token-filter 3)]}))
+
+(def trigram-engine
+  (d/new-search-engine
+    (d/open-kv "/tmp/search-trigrams")
+    {:analyzer       trigram-analyzer
+     :query-analyzer trigram-analyzer}))
+
+(d/add-doc trigram-engine 1 "Datalevin")
+(d/add-doc trigram-engine 2 "Search")
+(d/search trigram-engine "tale")
+;; => (1)
+```
+
+### 3.3 Analyzer UDFs from Java, Python, and JavaScript
+
+For Datalog full-text domains, `:analyzer` and `:query-analyzer` may be normal
+Clojure functions, UDF descriptor maps, or registered UDF id keywords. The UDF
+route is what gives Java, Python, and JavaScript analyzer parity with Clojure.
+
+Analyzer UDFs run during full-text indexing, including normal transactions,
+re-indexing, and DB-open recovery for pending async jobs. Query-analyzer UDFs
+run during `fulltext` query evaluation. The registry is process-local runtime
+state: the descriptor can be stored in options, but the process that indexes or
+queries must register the callable implementation before opening or using the
+database.
+
+The pattern is the same in each binding:
+
+1. Create a UDF registry.
+2. Create an analyzer descriptor with kind `:analyzer`.
+3. Optionally create a query-analyzer descriptor with kind `:query-analyzer`.
+4. Register host-language functions that return `[term position offset]`
+   triples.
+5. Pass the registry in `:runtime-opts`.
+6. Put the descriptors in the target search domain's `:analyzer` and
+   `:query-analyzer` options.
+
+Here is the shape in the non-Clojure bindings. The tokenizer implementation is
+intentionally simple: the index analyzer stores only hashtag terms, while the
+query analyzer splits ordinary query text on whitespace.
+
+<div class="multi-lang">
+
+```java
+UdfRegistry registry = Datalevin.udfRegistry();
+UdfDescriptor analyzer = Datalevin.analyzerUdf("text/hashtags");
+UdfDescriptor queryAnalyzer =
+    Datalevin.queryAnalyzerUdf("text/plain-query");
+
+registry.analyzer("text/hashtags", args ->
+    hashtagTokens((String) args.get(0)));       // [[term, pos, offset], ...]
+
+registry.queryAnalyzer("text/plain-query", args ->
+    plainTokens((String) args.get(0)));         // [[term, pos, offset], ...]
+
+Connection conn = Datalevin.createConn(
+    "/tmp/fulltext-udf",
+    schema,
+    Map.of(
+        ":runtime-opts", Map.of(":udf-registry", registry),
+        ":search-domains",
+        Map.of("text",
+               RetrievalOptions.searchDomain()
+                   .indexPosition(true)
+                   .prop("analyzer", analyzer)
+                   .prop("query-analyzer", queryAnalyzer)
+                   .build())));
+```
+
+```python
+import re
+from datalevin import (
+    connect, create_udf_registry, search_domain, udf_descriptor
+)
+
+registry = create_udf_registry()
+analyzer = udf_descriptor(":text/hashtags", kind=":analyzer")
+query_analyzer = udf_descriptor(":text/plain-query",
+                                kind=":query-analyzer")
+
+@registry.analyzer_udf(":text/hashtags")
+def hashtags(text):
+    return [[m.group(0)[1:], pos, m.start()]
+            for pos, m in enumerate(re.finditer(r"#\w+", text))]
+
+@registry.query_analyzer_udf(":text/plain-query")
+def plain_query(text):
+    return [[token, pos, pos]
+            for pos, token in enumerate(text.split())]
+
+conn = connect(
+    "/tmp/fulltext-udf",
+    schema=schema,
+    opts={
+        ":runtime-opts": {":udf-registry": registry},
+        ":search-domains": {
+            "text": search_domain(
+                index_position=True,
+                extra={
+                    ":analyzer": analyzer,
+                    ":query-analyzer": query_analyzer,
+                })
+        },
+    })
+```
+
+```javascript
+import {
+  connect,
+  createUdfRegistry,
+  searchDomain,
+  udfDescriptor
+} from "datalevin-node";
+
+const registry = await createUdfRegistry();
+const analyzer = udfDescriptor(":text/hashtags", { kind: ":analyzer" });
+const queryAnalyzer =
+  udfDescriptor(":text/plain-query", { kind: ":query-analyzer" });
+
+await registry.analyzerUdf(":text/hashtags", (text) => {
+  const tokens = [];
+  const pattern = /#\w+/g;
+  const source = String(text);
+  let match;
+  while ((match = pattern.exec(source)) !== null) {
+    tokens.push([match[0].slice(1), tokens.length, match.index]);
+  }
+  return tokens;
+});
+
+await registry.queryAnalyzerUdf(":text/plain-query", (text) =>
+  String(text).trim().split(/\s+/).filter(Boolean)
+    .map((token, position) => [token, position, position]));
+
+const conn = await connect("/tmp/fulltext-udf", {
+  schema,
+  opts: {
+    ":runtime-opts": { ":udf-registry": registry },
+    ":search-domains": {
+      text: searchDomain({
+        indexPosition: true,
+        extra: {
+          ":analyzer": analyzer,
+          ":query-analyzer": queryAnalyzer
+        }
+      })
+    }
+  }
+});
+```
+
+</div>
+
+When the analyzer is used for Datalog full-text indexing, transaction code can
+stay ordinary. The custom domain analyzer controls what terms are indexed, and
+the custom query analyzer controls how the user's query is translated into the
+same term space:
+
+<div class="multi-lang">
+
+```java
+conn.transact(List.of(
+    Map.of(":db/id", 1L, ":text", "alpha #needle"),
+    Map.of(":db/id", 2L, ":text", "needle without hash")));
+
+conn.query(
+    "[:find [?e ...] :in $ ?q "
+    + ":where [(fulltext $ :text ?q) [[?e ?a ?v]]]]",
+    "needle");
+// => [1]
+```
+
+```python
+conn.transact([
+    {":db/id": 1, ":text": "alpha #needle"},
+    {":db/id": 2, ":text": "needle without hash"},
+])
+
+conn.query(
+    "[:find [?e ...] :in $ ?q "
+    ":where [(fulltext $ :text ?q) [[?e ?a ?v]]]]",
+    "needle")
+# => [1]
+```
+
+```javascript
+await conn.transact([
+  { ":db/id": 1, ":text": "alpha #needle" },
+  { ":db/id": 2, ":text": "needle without hash" }
+]);
+
+await conn.query(
+  "[:find [?e ...] :in $ ?q " +
+  ":where [(fulltext $ :text ?q) [[?e ?a ?v]]]]",
+  "needle"
+);
+// => [1]
+```
+
+</div>
+
+---
+
+## 4. Querying with `fulltext`
+
+In a Datalog query, the built-in `fulltext` function returns matching datoms as
+`[e a v]` triples, ordered by relevance. These triples can then be destructured
+and bound into variables in the query.
+
+In a query, `fulltext` behaves like a relation-producing function: it takes a
+database and a search expression, then yields rows that can be joined with
+ordinary Datalog clauses through shared variables such as `?e`.
 
 <div class="multi-lang">
 
@@ -154,12 +577,12 @@ await conn.fulltextDatoms("red fox", { opts: { ":top": 10 } });
 
 </div>
 
-### 2.1 Attribute-Specific Search
+### 4.1 Attribute-Specific Search
 
 To search within a specific attribute, that attribute must have
 `:db.fulltext/autoDomain true` in the schema. An auto domain is a separate
 per-attribute full-text index, so `:post/title` can be searched without also
-searching `:post/content`; section 3 explains domains in detail.
+searching `:post/content`; Section 5 explains domains in detail.
 
 <div class="multi-lang">
 
@@ -194,7 +617,7 @@ await conn.query('[:find ?e ?a ?v ' +
 
 </div>
 
-### 2.2 Search Options
+### 4.2 Search Options
 
 Pass an option map as the last argument:
 
@@ -245,7 +668,7 @@ component variables.
 Scores are relevance scores for one full-text query. Higher scores mean a better
 match within that query, but scores are not stable identifiers and should not be
 compared across unrelated queries, domains, analyzers, or ranking modes.
-`:texts` are the original text, available only when the search engine stores raw
+`:texts` are the original texts, available only when the search engine stores raw
 text with `:include-text? true`.
 
 `:offsets` report where matched terms occur in the original document text. They
@@ -262,6 +685,8 @@ text only when the domain option `:include-text? true` is enabled. That option
 is required for `:display :texts`, `:display :texts+offsets`, and search-engine
 re-indexing.
 
+<div class="multi-lang">
+
 ```clojure
 (d/create-conn
   "/tmp/search-db"
@@ -274,8 +699,63 @@ re-indexing.
   {:search-domains {"public" {:include-text? true}}})
 ```
 
+```java
+Connection conn = Datalevin.createConn(
+    "/tmp/search-db",
+    schema,
+    Map.of("search-opts",
+           RetrievalOptions.searchDomain()
+               .includeText(true)
+               .build()));
+
+Connection publicConn = Datalevin.createConn(
+    "/tmp/search-db",
+    schema,
+    Map.of("search-domains",
+           Map.of("public",
+                  RetrievalOptions.searchDomain()
+                      .includeText(true)
+                      .build())));
+```
+
+```python
+conn = connect(
+    "/tmp/search-db",
+    schema=schema,
+    opts={":search-opts": search_domain(include_text=True)}
+)
+
+public_conn = connect(
+    "/tmp/search-db",
+    schema=schema,
+    opts={":search-domains": {
+        "public": search_domain(include_text=True)
+    }}
+)
+```
+
+```javascript
+const conn = await connect("/tmp/search-db", {
+  schema,
+  opts: { ":search-opts": searchDomain({ includeText: true }) }
+});
+
+const publicConn = await connect("/tmp/search-db", {
+  schema,
+  opts: {
+    ":search-domains": {
+      public: searchDomain({ includeText: true })
+    }
+  }
+});
+```
+
+</div>
+
 When `:display` is not `:refs`, destructure the extra values in the returned
 tuple. For example, relevance scores use `[e a v score]`:
+
+<div class="multi-lang">
 
 ```clojure
 (d/q '[:find ?e ?score
@@ -286,9 +766,331 @@ tuple. For example, relevance scores use `[e a v score]`:
      "database")
 ```
 
+```java
+conn.query("[:find ?e ?score " +
+           " :in $ ?q " +
+           " :where [(fulltext $ ?q " +
+           "                  {:top 5 :display :refs+scores}) " +
+           "         [[?e _ _ ?score]]]]",
+           "database");
+```
+
+```python
+conn.query('[:find ?e ?score '
+           ' :in $ ?q '
+           ' :where [(fulltext $ ?q '
+           '                  {:top 5 :display :refs+scores}) '
+           '         [[?e _ _ ?score]]]]',
+           "database")
+```
+
+```javascript
+await conn.query('[:find ?e ?score ' +
+                 ' :in $ ?q ' +
+                 ' :where [(fulltext $ ?q ' +
+                 '                  {:top 5 :display :refs+scores}) ' +
+                 '         [[?e _ _ ?score]]]]',
+                 "database");
+```
+
+</div>
+
+### 4.3 Search Expressions and Boolean Logic
+
+Datalevin uses EDN data structures for search expressions, enabling
+arbitrary boolean combinations of search terms. A string query is analyzed into
+search terms; a structured expression lets you say how those terms should
+combine. A **term** is the normalized token produced by the analyzer, not
+necessarily the exact word typed by the user. For example, a stemming analyzer
+may turn `"running"` into `"run"`.
+
+The simplest expression is a plain string, which the analyzer splits into terms.
+To control how those terms combine, wrap them in one of three boolean operators,
+`:and`, `:or`, and `:not`:
+
+<div class="multi-lang">
+
+```clojure
+[:and "clojure" "database"]              ; both terms
+[:or "fox" "red"]                        ; either term
+[:not "java"]                            ; exclude term
+[:and "clojure" [:not "java"]]           ; clojure but not java
+```
+
+```java
+String bothTerms = "[:and \"clojure\" \"database\"]";
+String eitherTerm = "[:or \"fox\" \"red\"]";
+String excludeTerm = "[:not \"java\"]";
+String clojureNotJava = "[:and \"clojure\" [:not \"java\"]]";
+```
+
+```python
+both_terms = '[:and "clojure" "database"]'
+either_term = '[:or "fox" "red"]'
+exclude_term = '[:not "java"]'
+clojure_not_java = '[:and "clojure" [:not "java"]]'
+```
+
+```javascript
+const bothTerms = '[:and "clojure" "database"]';
+const eitherTerm = '[:or "fox" "red"]';
+const excludeTerm = '[:not "java"]';
+const clojureNotJava = '[:and "clojure" [:not "java"]]';
+```
+
+</div>
+
+Each operator takes one or more sub-expressions, where a sub-expression can be a
+bare term, a phrase map (Section 4.4), or another nested operator:
+
+- `:and` matches documents that satisfy *every* sub-expression.
+- `:or` matches documents that satisfy *at least one* sub-expression.
+- `:not` excludes documents that satisfy its sub-expression. It is a filter, so
+  combine it with at least one positive term; on its own it has nothing to
+  retrieve or rank.
+
+A search expression goes in the same argument position as a plain query string.
+For example, to find posts that mention Clojure but not Java:
+
+<div class="multi-lang">
+
+```clojure
+(d/q '[:find ?e ?a ?v
+       :where [(fulltext $ [:and "clojure" [:not "java"]])
+               [[?e ?a ?v]]]]
+     db)
+```
+
+```java
+conn.query("[:find ?e ?a ?v " +
+           " :where [(fulltext $ [:and \"clojure\" [:not \"java\"]]) " +
+           "         [[?e ?a ?v]]]]");
+```
+
+```python
+conn.query('[:find ?e ?a ?v '
+           ' :where [(fulltext $ [:and "clojure" [:not "java"]]) '
+           '         [[?e ?a ?v]]]]')
+```
+
+```javascript
+await conn.query('[:find ?e ?a ?v ' +
+                 ' :where [(fulltext $ [:and "clojure" [:not "java"]]) ' +
+                 '         [[?e ?a ?v]]]]');
+```
+
+</div>
+
+When a query is a plain string with several words, the terms are combined with
+coverage-based ranking (Section 8.3): documents that match more of the terms
+rank higher, but no term is strictly required. Reach for the boolean operators
+when you need explicit control over how terms must combine rather than relying
+on ranking alone.
+
+### 4.4 Phrase Search
+
+Phrase search looks for analyzed terms that appear at consecutive token
+positions in the same order. A phrase query for `"little lamb"` should match
+text such as `"Mary had a little lamb"` but not `"the little boy has a lamb"`,
+where `"little"` and `"lamb"` occur apart. The phrase text is analyzed by the
+query analyzer before matching, so analyzer choices such as stemming and
+stop-word removal affect phrase behavior.
+
+Phrases are encoded as maps inside the search expression:
+
+<div class="multi-lang">
+
+```clojure
+[:and {:phrase "little lamb"} "fleece"]
+```
+
+```java
+String expression = "[:and {:phrase \"little lamb\"} \"fleece\"]";
+```
+
+```python
+expression = '[:and {:phrase "little lamb"} "fleece"]'
+```
+
+```javascript
+const expression = '[:and {:phrase "little lamb"} "fleece"]';
+```
+
+</div>
+
+Phrase search is enabled by an index option, not by a special query option. The
+search engine must store term positions, which means the relevant full-text
+domain or standalone search engine must be created with `:index-position? true`.
+For Datalog full-text search, set this in `:search-opts` for the default
+`"datalevin"` domain or in `:search-domains` for a named domain:
+
+<div class="multi-lang">
+
+```clojure
+(d/create-conn
+  "/tmp/search-phrases"
+  schema
+  {:search-domains {"public" {:index-position? true}}})
+```
+
+```java
+Connection conn = Datalevin.createConn(
+    "/tmp/search-phrases",
+    schema,
+    Map.of("search-domains",
+           Map.of("public",
+                  RetrievalOptions.searchDomain()
+                      .indexPosition(true)
+                      .build())));
+```
+
+```python
+conn = connect(
+    "/tmp/search-phrases",
+    schema=schema,
+    opts={":search-domains": {
+        "public": search_domain(index_position=True)
+    }}
+)
+```
+
+```javascript
+const conn = await connect("/tmp/search-phrases", {
+  schema,
+  opts: {
+    ":search-domains": {
+      public: searchDomain({ indexPosition: true })
+    }
+  }
+});
+```
+
+</div>
+
+For the standalone search engine, pass the same option when creating the engine:
+
+<div class="multi-lang">
+
+```clojure
+(def lmdb (d/open-kv "/tmp/search-phrases"))
+(d/new-search-engine lmdb {:index-position? true})
+```
+
+```java
+KV kv = Datalevin.openKV("/tmp/search-phrases");
+SearchEngine engine = Datalevin.newSearchEngine(
+    kv,
+    RetrievalOptions.searchDomain()
+        .indexPosition(true)
+        .build());
+```
+
+```python
+kv = open_kv("/tmp/search-phrases")
+engine = new_search_engine(
+    kv,
+    search_domain(index_position=True)
+)
+```
+
+```javascript
+const kv = await openKv("/tmp/search-phrases");
+const engine = await newSearchEngine(
+  kv,
+  searchDomain({ indexPosition: true })
+);
+```
+
+</div>
+
+At query time, the usual search options still apply. The phrase is part of the
+query expression; result count, domain selection, display mode, and proximity
+ranking parameters go in the options map. Common keys include `:top`,
+`:domains`, `:display`, `:proximity-expansion`, and `:proximity-max-dist`.
+The proximity options affect ranking of candidate results when positions are
+indexed; they do not turn phrase matching on or off.
+
+<div class="multi-lang">
+
+```clojure
+(d/q '[:find ?e ?a ?v
+       :where [(fulltext $ {:phrase "little lamb"}
+                         {:domains ["public"]
+                          :top 10})
+               [[?e ?a ?v]]]]
+     db)
+```
+
+```java
+conn.query("[:find ?e ?a ?v " +
+           " :where [(fulltext $ {:phrase \"little lamb\"} " +
+           "                  {:domains [\"public\"] " +
+           "                   :top 10}) " +
+           "         [[?e ?a ?v]]]]");
+```
+
+```python
+conn.query('[:find ?e ?a ?v '
+           ' :where [(fulltext $ {:phrase "little lamb"} '
+           '                  {:domains ["public"] '
+           '                   :top 10}) '
+           '         [[?e ?a ?v]]]]')
+```
+
+```javascript
+await conn.query('[:find ?e ?a ?v ' +
+                 ' :where [(fulltext $ {:phrase "little lamb"} ' +
+                 '                  {:domains ["public"] ' +
+                 '                   :top 10}) ' +
+                 '         [[?e ?a ?v]]]]');
+```
+
+</div>
+
+Using a phrase query against a search engine that was not created with
+`:index-position? true` raises an error.
+
+### 4.5 Complex Expressions
+
+Boolean operators can be arbitrarily nested to express complex search
+requirements:
+
+<div class="multi-lang">
+
+```clojure
+[:or
+ "fox"
+ {:phrase "red fox"}
+ [:and "black" "sheep" [:not "yellow"]]]
+```
+
+```java
+String expression =
+    "[:or \"fox\" " +
+    "      {:phrase \"red fox\"} " +
+    "      [:and \"black\" \"sheep\" [:not \"yellow\"]]]";
+```
+
+```python
+expression = (
+    '[:or "fox" '
+    '      {:phrase "red fox"} '
+    '      [:and "black" "sheep" [:not "yellow"]]]'
+)
+```
+
+```javascript
+const expression =
+  '[:or "fox" ' +
+  '      {:phrase "red fox"} ' +
+  '      [:and "black" "sheep" [:not "yellow"]]]';
+```
+
+</div>
+
 ---
 
-## 3. Search Domains
+## 5. Search Domains
 
 A search domain is a named full-text index. Each domain has its own search
 engine, term statistics, analyzer settings, position index setting, and indexing
@@ -306,9 +1108,11 @@ There are two separate decisions:
 - Schema properties assign attributes to domains.
 - Store options configure the search engine used by each domain.
 
+Figure 16.2 shows an example of assigning attributes to search domains.
+
 ![Search domain membership: :post/title (domains public + autoDomain) belongs to the named domain public and its own attribute domain post/title; :post/body belongs to public; :post/draft belongs to private; :note/body, with no domain keys, belongs to the default datalevin domain — showing the default, named, and automatic attribute domain kinds and that one attribute can join several domains](/images/diagrams/search-domains.svg)
 
-### 3.1 Assigning Attributes to Domains
+### 5.1 Assigning Attributes to Domains
 
 Full-text attributes enter domains according to these rules:
 
@@ -427,11 +1231,13 @@ In this schema, `:post/title` is indexed in `"public"` and `"post/title"`,
 `:post/body` is indexed in `"public"`, `:post/draft` is indexed in
 `"private"`, and `:note/body` is indexed in the default `"datalevin"` domain.
 
-### 3.2 Configuring Domains
+### 5.2 Configuring Domains
 
 Use `:search-domains` to configure named domains. A domain mentioned in schema
 but omitted from `:search-domains` is still created with default search-engine
 settings. Use `:search-opts` for the default `"datalevin"` domain.
+
+<div class="multi-lang">
 
 ```clojure
 (def conn
@@ -447,16 +1253,74 @@ settings. Use `:search-opts` for the default `"datalevin"` domain.
       "post/title" {:index-position? true}}}))
 ```
 
+```java
+Connection conn = Datalevin.createConn(
+    "/tmp/search-domains",
+    searchSchema,
+    Map.of(
+        "search-opts",
+        RetrievalOptions.searchDomain()
+            .indexPosition(true)
+            .build(),
+        "search-domains",
+        Map.of(
+            "public",
+            RetrievalOptions.searchDomain()
+                .indexPosition(true)
+                .build(),
+            "private",
+            RetrievalOptions.searchDomain()
+                .indexingMode("async")
+                .build(),
+            "post/title",
+            RetrievalOptions.searchDomain()
+                .indexPosition(true)
+                .build())));
+```
+
+```python
+conn = connect(
+    "/tmp/search-domains",
+    schema=search_schema,
+    opts={
+        ":search-opts": search_domain(index_position=True),
+        ":search-domains": {
+            "public": search_domain(index_position=True),
+            "private": search_domain(indexing_mode="async"),
+            "post/title": search_domain(index_position=True)
+        }
+    }
+)
+```
+
+```javascript
+const conn = await connect("/tmp/search-domains", {
+  schema: searchSchema,
+  opts: {
+    ":search-opts": searchDomain({ indexPosition: true }),
+    ":search-domains": {
+      public: searchDomain({ indexPosition: true }),
+      private: searchDomain({ indexingMode: "async" }),
+      "post/title": searchDomain({ indexPosition: true })
+    }
+  }
+});
+```
+
+</div>
+
 Use per-domain configuration when search surfaces need different behavior. For
 example, a public documentation domain may enable phrase search with
 `:index-position? true`, while a high-ingestion private domain may use
 `:indexing-mode :async`. Autocomplete can be another domain over the same
 attribute with a prefix analyzer.
 
-### 3.3 Querying Domains
+### 5.3 Querying Domains
 
 An unqualified `fulltext` call searches all full-text domains in the database.
 Use `:domains` to limit the query to one or more named domains:
+
+<div class="multi-lang">
 
 ```clojure
 ;; Search every full-text domain.
@@ -480,6 +1344,74 @@ Use `:domains` to limit the query to one or more named domains:
      db)
 ```
 
+```java
+// Search every full-text domain.
+conn.query("[:find ?e ?a ?v " +
+           " :where [(fulltext $ \"clojure\") [[?e ?a ?v]]]]");
+
+// Search only public text.
+conn.query("[:find ?e ?a ?v " +
+           " :where [(fulltext $ \"clojure\" " +
+           "                  {:domains [\"public\"]}) " +
+           "         [[?e ?a ?v]]]]");
+
+// Search only private drafts.
+conn.query("[:find ?e ?a ?v " +
+           " :where [(fulltext $ \"roadmap\" " +
+           "                  {:domains [\"private\"]}) " +
+           "         [[?e ?a ?v]]]]");
+
+// Search only :post/title through its auto-created attribute domain.
+conn.query("[:find ?e ?v " +
+           " :where [(fulltext $ :post/title \"clojure\") [[?e _ ?v]]]]");
+```
+
+```python
+# Search every full-text domain.
+conn.query('[:find ?e ?a ?v '
+           ' :where [(fulltext $ "clojure") [[?e ?a ?v]]]]')
+
+# Search only public text.
+conn.query('[:find ?e ?a ?v '
+           ' :where [(fulltext $ "clojure" '
+           '                  {:domains ["public"]}) '
+           '         [[?e ?a ?v]]]]')
+
+# Search only private drafts.
+conn.query('[:find ?e ?a ?v '
+           ' :where [(fulltext $ "roadmap" '
+           '                  {:domains ["private"]}) '
+           '         [[?e ?a ?v]]]]')
+
+# Search only :post/title through its auto-created attribute domain.
+conn.query('[:find ?e ?v '
+           ' :where [(fulltext $ :post/title "clojure") [[?e _ ?v]]]]')
+```
+
+```javascript
+// Search every full-text domain.
+await conn.query('[:find ?e ?a ?v ' +
+                 ' :where [(fulltext $ "clojure") [[?e ?a ?v]]]]');
+
+// Search only public text.
+await conn.query('[:find ?e ?a ?v ' +
+                 ' :where [(fulltext $ "clojure" ' +
+                 '                  {:domains ["public"]}) ' +
+                 '         [[?e ?a ?v]]]]');
+
+// Search only private drafts.
+await conn.query('[:find ?e ?a ?v ' +
+                 ' :where [(fulltext $ "roadmap" ' +
+                 '                  {:domains ["private"]}) ' +
+                 '         [[?e ?a ?v]]]]');
+
+// Search only :post/title through its auto-created attribute domain.
+await conn.query('[:find ?e ?v ' +
+                 ' :where [(fulltext $ :post/title "clojure") [[?e _ ?v]]]]');
+```
+
+</div>
+
 The attribute-specific form is a convenience for querying the attribute domain.
 It is available only when the attribute has `:db.fulltext/autoDomain true`.
 Domain-specific search is more general: it can search any named domain, including
@@ -492,162 +1424,495 @@ the attribute without the leading colon, such as `"post/title"`.
 
 ---
 
-## 4. Search Expressions and Boolean Logic
+## 6. Standalone Search Engine
 
-Datalevin uses Clojure data structures for search expressions, enabling
-arbitrary boolean combinations. A string query is analyzed into search terms; a
-structured expression lets you say how those terms should combine. A **term** is
-the normalized token produced by the analyzer, not necessarily the exact word
-typed by the user. For example, a stemming analyzer may turn `"running"` into
-`"run"`.
+Datalevin can be used as a standalone search engine outside of Datalog from the
+embedded bindings:
+
+<div class="multi-lang">
 
 ```clojure
-[:and "clojure" "database"]              ; both terms
-[:or "fox" "red"]                        ; either term
-[:not "java"]                            ; exclude term
-[:and "clojure" [:not "java"]]           ; clojure but not java
+(def lmdb (d/open-kv "/tmp/search-db"))
+(def engine (d/new-search-engine lmdb {:index-position? true}))
+
+(d/add-doc engine 1 "The quick red fox jumped over the lazy red dogs.")
+(d/add-doc engine 2 "Mary had a little lamb whose fleece was red as fire.")
+
+(d/search engine "red")
+;=> (1 2)
+
+(d/search engine "red" {:display :offsets})
+;=> ([1 (["red" [10 39]])] [2 (["red" [40]])])
 ```
 
-### 4.1 Phrase Search
+```java
+KV kv = Datalevin.openKV("/tmp/search-db");
+SearchEngine engine = Datalevin.newSearchEngine(
+    kv,
+    RetrievalOptions.searchDomain()
+        .indexPosition(true)
+        .build());
 
-Phrases are encoded as maps. Requires `:index-position? true` at index time:
+engine.addDoc(1, "The quick red fox jumped over the lazy red dogs.");
+engine.addDoc(2, "Mary had a little lamb whose fleece was red as fire.");
+
+engine.search("red");
+// => [1, 2]
+
+engine.search(
+    "red",
+    RetrievalOptions.search()
+        .display("offsets")
+        .build());
+// => [[1, [["red", [10, 39]]]], [2, [["red", [40]]]]]
+```
+
+```python
+from datalevin import new_search_engine, open_kv, search_domain
+
+kv = open_kv("/tmp/search-db")
+engine = new_search_engine(kv, search_domain(index_position=True))
+
+engine.add_doc(1, "The quick red fox jumped over the lazy red dogs.")
+engine.add_doc(2, "Mary had a little lamb whose fleece was red as fire.")
+
+engine.search("red")
+# => [1, 2]
+
+engine.search("red", opts={":display": ":offsets"})
+# => [[1, [["red", [10, 39]]]], [2, [["red", [40]]]]]
+```
+
+```javascript
+import { newSearchEngine, openKv, searchDomain } from "datalevin-node";
+
+const kv = await openKv("/tmp/search-db");
+const engine = await newSearchEngine(
+  kv,
+  searchDomain({ indexPosition: true })
+);
+
+await engine.addDoc(1, "The quick red fox jumped over the lazy red dogs.");
+await engine.addDoc(2, "Mary had a little lamb whose fleece was red as fire.");
+
+await engine.search("red");
+// => [1, 2]
+
+await engine.search("red", { ":display": ":offsets" });
+// => [[1, [["red", [10, 39]]]], [2, [["red", [40]]]]]
+```
+
+</div>
+
+Standalone search engines follow the same rule: by default they store the
+`doc-ref` and the inverted index, assuming the application can recover the
+source document from `doc-ref`. Enable `:include-text? true` when the search
+engine should keep raw text for `:display :texts`, `:display :texts+offsets`, or
+`re-index`:
+
+<div class="multi-lang">
 
 ```clojure
-[:and {:phrase "little lamb"} "fleece"]
+(def engine
+  (d/new-search-engine
+    lmdb
+    {:include-text? true
+     :index-position? true}))
 ```
 
-### 4.2 Complex Expressions
+```java
+SearchEngine engine = Datalevin.newSearchEngine(
+    kv,
+    RetrievalOptions.searchDomain()
+        .includeText(true)
+        .indexPosition(true)
+        .build());
+```
 
-Boolean operators can be arbitrarily nested:
+```python
+engine = new_search_engine(
+    kv,
+    search_domain(include_text=True, index_position=True)
+)
+```
+
+```javascript
+const engine = await newSearchEngine(
+  kv,
+  searchDomain({ includeText: true, indexPosition: true })
+);
+```
+
+</div>
+
+**Document References**: Full-text search returns document references by
+default. In Datalog's `fulltext`, the document reference is the datom `[e a v]`.
+In standalone mode, the `doc-ref` can be anything — numbers, strings,
+maps — whatever uniquely identifies a document in your application. This
+flexibility lets you index external content without storing it in the search
+index.
+
+### 6.1 Document Lifecycle and Bulk Loading
+
+The standalone search engine exposes the normal lifecycle operations you expect
+from a search index:
+
+<div class="multi-lang">
 
 ```clojure
-[:or "fox" "red" [:and "black" "sheep" [:not "yellow"]]]
+(d/doc-indexed? engine 1)
+;=> true
+
+(d/doc-count engine)
+;=> 2
+
+(d/remove-doc engine 2)
+
+(d/clear-docs engine)
 ```
+
+```java
+engine.docIndexed(1);
+// => true
+
+engine.docCount();
+// => 2
+
+engine.removeDoc(2);
+
+engine.clearDocs();
+```
+
+```python
+engine.doc_indexed(1)
+# => True
+
+engine.doc_count()
+# => 2
+
+engine.remove_doc(2)
+
+engine.clear_docs()
+```
+
+```javascript
+await engine.docIndexed(1);
+// => true
+
+await engine.docCount();
+// => 2
+
+await engine.removeDoc(2);
+
+await engine.clearDocs();
+```
+
+</div>
+
+`add-doc` checks for an existing `doc-ref` by default and updates the index when
+the document is already present. During a trusted initial import, pass `false`
+as the fourth argument to skip that existence check:
+
+<div class="multi-lang">
+
+```clojure
+(d/add-doc engine doc-ref doc-text false)
+```
+
+```java
+engine.addDoc(docRef, docText, false);
+```
+
+```python
+engine.add_doc(doc_ref, doc_text, check_exist=False)
+```
+
+```javascript
+await engine.addDoc(docRef, docText, { checkExist: false });
+```
+
+</div>
+
+For larger embedded imports, use `search-index-writer`, `write`, and `commit`.
+The Java, Python, and JavaScript bindings expose the same standalone search
+writer as `SearchIndexWriter` / `search_index_writer` / `searchIndexWriter`.
+The writer batches index changes and flushes final term metadata on `commit`,
+so call `commit` before relying on search results:
+
+<!-- pdf-listing: Bulk loading a standalone full-text search index -->
+
+<div class="multi-lang">
+
+```clojure
+(def lmdb (d/open-kv "/tmp/search-db"))
+(def writer
+  (d/search-index-writer
+    lmdb
+    {:domain "docs"
+     :index-position? true
+     :include-text? true}))
+
+(doseq [[doc-ref doc-text] docs]
+  (d/write writer doc-ref doc-text))
+
+(d/commit writer)
+
+(def engine
+  (d/new-search-engine
+    lmdb
+    {:domain "docs"
+     :index-position? true
+     :include-text? true}))
+```
+
+```java
+KV kv = Datalevin.openKV("/tmp/search-db");
+Map<Object, Object> opts = RetrievalOptions.searchDomain()
+    .domain("docs")
+    .indexPosition(true)
+    .includeText(true)
+    .build();
+
+SearchIndexWriter writer = Datalevin.searchIndexWriter(kv, opts);
+for (Map.Entry<Object, String> doc : docs.entrySet()) {
+    writer.write(doc.getKey(), doc.getValue());
+}
+writer.commit();
+
+SearchEngine engine = Datalevin.newSearchEngine(kv, opts);
+```
+
+```python
+from datalevin import (
+    new_search_engine,
+    open_kv,
+    search_domain,
+    search_index_writer,
+)
+
+kv = open_kv("/tmp/search-db")
+opts = search_domain(
+    domain="docs",
+    index_position=True,
+    include_text=True
+)
+
+writer = search_index_writer(kv, opts)
+for doc_ref, doc_text in docs:
+    writer.write(doc_ref, doc_text)
+writer.commit()
+
+engine = new_search_engine(kv, opts)
+```
+
+```javascript
+import {
+  newSearchEngine,
+  openKv,
+  searchDomain,
+  searchIndexWriter
+} from "datalevin-node";
+
+const kv = await openKv("/tmp/search-db");
+const opts = searchDomain({
+  domain: "docs",
+  indexPosition: true,
+  includeText: true
+});
+
+const writer = await searchIndexWriter(kv, opts);
+for (const [docRef, docText] of docs) {
+  await writer.write(docRef, docText);
+}
+await writer.commit();
+
+const engine = await newSearchEngine(kv, opts);
+```
+
+</div>
+
+The bulk writer is an embedded local API. It is not available through the
+Datalevin client/server API; use Datalog full-text attributes and normal
+transactions there, or run the writer in a local indexing process.
 
 ---
 
-## 5. Analyzers: Tokenization and Normalization
+## 7. Asynchronous Indexing
 
-When you transact a value into a full-text attribute, Datalevin first converts
-the value with `str`, then passes the resulting text through an **Analyzer**:
+Full-text indexing is synchronous by default: a transaction updates source
+datoms and the full-text index before returning. This preserves read-your-writes
+behavior for `fulltext`.
 
-1. **Tokenization**: Breaking text into terms
-2. **Normalization**: Lowercasing, punctuation handling
-3. **Stop-word removal**: Filtering common words (optional)
+For high-ingestion workloads, a search domain can opt into async indexing:
 
-Custom analyzers can be provided via the `:analyzer` option when creating a
-search engine. Utility functions for stemming, ngrams, and more are in
-`datalevin.search-utils`.
-
-An analyzer turns text into `[term position offset]` triples. The term is the
-searchable token. The position is the token number inside the document, used for
-phrase and proximity scoring. The offset is the character offset in the original
-text, used for highlighting.
-
-![Analyzer pipeline: document d1 "Running runners in databases" is split by a regexp tokenizer into tokens with positions and offsets; token filters lower-case, drop the stop word "in", and stem the rest, preserving positions to yield ["run" 0 0], ["runner" 1 8], ["databas" 3 19]; a second document d2 "database run" runs through the same analyzer, and both are indexed by term in the inverted index, which maps each term to the documents and positions where it appears (run to d1·0 and d2·1, runner to d1·1, databas to d1·3 and d2·0)](/images/diagrams/analyzer-pipeline.svg)
-
-### 5.1 Analyzer Pipelines with `datalevin.search-utils`
-
-The `datalevin.search-utils` namespace provides tokenizer and token-filter
-functions for building analyzers. An analyzer returns tokens as `[term position
-offset]` triples.
-
-```clojure
-(require '[datalevin.search-utils :as su])
-
-(def stem-analyzer
-  (su/create-analyzer
-    {:tokenizer (su/create-regexp-tokenizer #"\W+")
-     :token-filters [su/lower-case-token-filter
-                     su/en-stop-words-token-filter
-                     (su/create-stemming-token-filter "english")]}))
-
-(mapv vec (stem-analyzer "Running runners in databases"))
-;; => [["run" 0 0] ["runner" 1 8] ["databas" 3 19]]
-```
-
-Use the analyzer in Datalog full-text options when the search domain should use
-the same normalization at index time and query time:
+<div class="multi-lang">
 
 ```clojure
 (def conn
   (d/create-conn
-    "/tmp/posts"
-    {:post/body {:db/valueType :db.type/string
-                 :db/fulltext  true}}
-    {:search-opts {:analyzer stem-analyzer}}))
-
-(d/transact! conn
-  [{:db/id 10 :post/body "Runners are running fast"}
-   {:db/id 11 :post/body "Databases store data"}])
-
-(d/q '[:find [?e ...]
-       :where [(fulltext $ "run") [[?e _ _]]]]
-     (d/db conn))
-;; => [10]
+    "/tmp/search-db"
+    {:post/content {:db/valueType :db.type/string
+                    :db/fulltext  true}}
+    {:search-opts {:indexing-mode :async}}))
 ```
 
-### 5.2 Prefix and N-Gram Indexing
+```java
+Connection conn = Datalevin.createConn(
+    "/tmp/search-db",
+    Datalevin.schema()
+        .attr("post/content",
+              Schema.attribute()
+                  .valueType(Schema.ValueType.STRING)
+                  .fulltext(true)),
+    Map.of("search-opts",
+           RetrievalOptions.searchDomain()
+               .indexingMode("async")
+               .build()));
+```
 
-For autocomplete, apply `prefix-token-filter` at index time, but use a normal
-query analyzer. This indexes `"search"` as `"s"`, `"se"`, `"sea"`, and so on,
-while a query for `"sea"` remains a single token.
+```python
+schema = {
+    ":post/content": {
+        ":db/valueType": ":db.type/string",
+        ":db/fulltext": True
+    }
+}
+
+conn = connect(
+    "/tmp/search-db",
+    schema=schema,
+    opts={":search-opts": search_domain(indexing_mode="async")}
+)
+```
+
+```javascript
+const schema = {
+  ":post/content": {
+    ":db/valueType": ":db.type/string",
+    ":db/fulltext": true
+  }
+};
+
+const conn = await connect("/tmp/search-db", {
+  schema,
+  opts: {
+    ":search-opts": searchDomain({ indexingMode: "async" })
+  }
+});
+```
+
+</div>
+
+or per domain, when the attribute is assigned to that domain:
+
+<div class="multi-lang">
 
 ```clojure
-(def prefix-index-analyzer
-  (su/create-analyzer
-    {:tokenizer (su/create-regexp-tokenizer #"\W+")
-     :token-filters [su/lower-case-token-filter
-                     su/prefix-token-filter]}))
-
-(def query-analyzer
-  (su/create-analyzer
-    {:tokenizer (su/create-regexp-tokenizer #"\W+")
-     :token-filters [su/lower-case-token-filter]}))
-
-(def engine
-  (d/new-search-engine
-    (d/open-kv "/tmp/search-autocomplete")
-    {:analyzer       prefix-index-analyzer
-     :query-analyzer query-analyzer}))
-
-(d/add-doc engine 1 "search")
-(d/search engine "sea")
-;; => (1)
+(def conn
+  (d/create-conn
+    "/tmp/search-db"
+    {:post/content {:db/valueType :db.type/string
+                    :db/fulltext  true
+                    :db.fulltext/domains ["content"]}}
+    {:search-domains
+     {"content" {:index-position? true
+                 :indexing-mode   :async}}}))
 ```
 
-For fuzzy or substring-style matching, use ngrams. The example below indexes
-3-character grams, so `"Datalevin"` contributes tokens such as `"dat"`, `"ata"`,
-`"tal"`, and `"ale"`.
-
-In practice, prefer ngrams of 3 characters or longer unless the domain is small
-and tightly controlled. One- and two-character grams generate many short,
-high-frequency tokens, which makes posting lists less selective and can grow the
-full-text index quickly.
-
-```clojure
-(def trigram-analyzer
-  (su/create-analyzer
-    {:tokenizer (su/create-regexp-tokenizer #"\W+")
-     :token-filters [su/lower-case-token-filter
-                     (su/create-min-length-token-filter 3)
-                     (su/create-ngram-token-filter 3)]}))
-
-(def trigram-engine
-  (d/new-search-engine
-    (d/open-kv "/tmp/search-trigrams")
-    {:analyzer       trigram-analyzer
-     :query-analyzer trigram-analyzer}))
-
-(d/add-doc trigram-engine 1 "Datalevin")
-(d/add-doc trigram-engine 2 "Search")
-(d/search trigram-engine "tale")
-;; => (1)
+```java
+Connection conn = Datalevin.createConn(
+    "/tmp/search-db",
+    Datalevin.schema()
+        .attr("post/content",
+              Schema.attribute()
+                  .valueType(Schema.ValueType.STRING)
+                  .fulltext(true)
+                  .prop("db.fulltext/domains", List.of("content"))),
+    Map.of("search-domains",
+           Map.of("content",
+                  RetrievalOptions.searchDomain()
+                      .indexPosition(true)
+                      .indexingMode("async")
+                      .build())));
 ```
+
+```python
+schema = {
+    ":post/content": {
+        ":db/valueType": ":db.type/string",
+        ":db/fulltext": True,
+        ":db.fulltext/domains": ["content"]
+    }
+}
+
+conn = connect(
+    "/tmp/search-db",
+    schema=schema,
+    opts={":search-domains": {
+        "content": search_domain(index_position=True,
+                                 indexing_mode="async")
+    }}
+)
+```
+
+```javascript
+const schema = {
+  ":post/content": {
+    ":db/valueType": ":db.type/string",
+    ":db/fulltext": true,
+    ":db.fulltext/domains": ["content"]
+  }
+};
+
+const conn = await connect("/tmp/search-db", {
+  schema,
+  opts: {
+    ":search-domains": {
+      content: searchDomain({
+        indexPosition: true,
+        indexingMode: "async"
+      })
+    }
+  }
+});
+```
+
+</div>
+
+In async mode, Datalevin commits the source datoms and a durable secondary-index
+job atomically. An in-process worker applies the search index update after
+commit and after DB-open recovery. Queries over that index are eventually
+consistent until the worker catches up. Use `secondary-index-status` or
+`process-secondary-index-jobs!` to observe or manually process pending work, and
+use `wait-for-secondary-index` when an application needs to wait for a specific
+transaction's index work.
 
 ---
 
-## 6. Ranking: TF-IDF and T-Wand Algorithm
+## 8. Implementation Details
+
+Because Datalevin implements full-text search on its own KV substrate instead of
+embedding Lucene, the storage layout and ranking algorithm are part of the
+database design. This section explains the main pieces.
+
+### 8.1 Storage Layout
+
+The search indices are stored in LMDB sub-databases:
+
+- `terms` — map of term → term-info (id, max-weight, doc-frequency list)
+- `docs` — map of document id → doc reference and norm
+- `positions` — inverted lists for proximity (optional)
+- `rawtext` — original document text (optional, only when `:include-text? true`)
+
+An **inverted index** maps from a term to the documents that contain it. A
+**document frequency list** is the posting list for one term: the set of
+documents where the term appears, plus enough statistics to rank them. A
+**norm** is a precomputed document-length normalization factor used during
+ranking. Datalevin loads norms into memory on initialization and loads term
+information as queries need it. Document frequency lists use compressed bitmaps
+(Roaring Bitmaps) for efficient intersection and union operations.
+
+### 8.2 Scoring: TF-IDF and the Vector Space Model
 
 Full-text ranking uses a different kind of vector from Chapter 17's embedding
 vectors. In the full-text **Vector Space Model**, a document is a sparse vector
@@ -657,7 +1922,7 @@ vector?
 
 Datalevin uses TF-IDF weighting described by Manning, Raghavan, and Schütze in
 *Introduction to Information Retrieval* [1], with the `lnu.ltn` weighting
-schema. The important ideas are:
+scheme. The important ideas are:
 
 - **Term frequency (TF)**: a term that appears more often in a document is more
   important to that document, with logarithmic damping so repetition does not
@@ -678,10 +1943,15 @@ weighting:
 This weighting scheme handles document length well without penalizing longer
 documents.
 
-### 6.1 T-Wand Algorithm
+This subsection defines the score. The next subsection explains how Datalevin
+uses that score to retrieve the top results without scoring every matching
+document.
 
-Datalevin uses **Tiered WAND** (T-Wand), described in the T-Wand blog post [3].
-To understand what T-Wand adds, first understand ordinary WAND [2].
+### 8.3 Top-k Retrieval: T-Wand Algorithm
+
+Datalevin uses **Tiered WAND** (T-Wand) to find the highest-scoring documents
+efficiently. The algorithm is described in the T-Wand blog post [3]. To
+understand what T-Wand adds, first understand ordinary WAND [2].
 
 WAND is a top-k retrieval algorithm. A query such as `"red fox database"` has
 one posting iterator per query term. Each iterator walks the document references
@@ -728,9 +1998,10 @@ then its best possible final coverage is `h + r`. If `h + r < t`, the candidate
 can no longer reach the tier and can be discarded before exact scoring. Combined
 with WAND's score upper bounds, this lets Datalevin avoid both low-coverage
 candidates and high-coverage candidates that still cannot enter the current
-top-k result set.
+top-k result set. This new pruning rule is the main technical innovation of the
+T-Wand algorithm.
 
-### 6.2 Term Proximity Scoring
+### 8.4 Term Proximity Scoring
 
 When `:index-position? true` is enabled, a two-stage ranking applies:
 
@@ -746,173 +2017,13 @@ contributing to a proximity span.
 
 ---
 
-## 7. Standalone Search Engine
-
-Datalevin can be used as a standalone search engine outside of Datalog from
-embedded Clojure:
-
-```clojure
-(def lmdb (d/open-kv "/tmp/search-db"))
-(def engine (d/new-search-engine lmdb {:index-position? true}))
-
-(d/add-doc engine 1 "The quick red fox jumped over the lazy red dogs.")
-(d/add-doc engine 2 "Mary had a little lamb whose fleece was red as fire.")
-
-(d/search engine "red")
-;=> (1 2)
-
-(d/search engine "red" {:display :offsets})
-;=> ([1 (["red" [10 39]])] [2 (["red" [40]])])
-```
-
-Standalone search engines follow the same rule: by default they store the
-`doc-ref` and the inverted index, assuming the application can recover the
-source document from `doc-ref`. Enable `:include-text? true` when the search
-engine should keep raw text for `:display :texts`, `:display :texts+offsets`, or
-`re-index`:
-
-```clojure
-(def engine
-  (d/new-search-engine
-    lmdb
-    {:include-text? true
-     :index-position? true}))
-```
-
-**Document References**: Full-text search returns document references by
-default. In Datalog's `fulltext`, the document reference is the datom `[e a v]`.
-In standalone mode, the `doc-ref` can be anything—numbers, strings,
-maps—whatever uniquely identifies a document in your application. This
-flexibility lets you index external content without storing it in the search
-index.
-
-### 7.1 Document Lifecycle and Bulk Loading
-
-The standalone search engine exposes the normal lifecycle operations you expect
-from a search index:
-
-```clojure
-(d/doc-indexed? engine 1)
-;=> true
-
-(d/doc-count engine)
-;=> 2
-
-(d/remove-doc engine 2)
-
-(d/clear-docs engine)
-```
-
-`add-doc` checks for an existing `doc-ref` by default and updates the index when
-the document is already present. During a trusted initial import, pass `false`
-as the fourth argument to skip that existence check:
-
-```clojure
-(d/add-doc engine doc-ref doc-text false)
-```
-
-For larger embedded imports, use `search-index-writer`, `write`, and `commit`.
-The Java, Python, and JavaScript bindings expose the same standalone search
-writer as `SearchIndexWriter` / `search_index_writer` / `searchIndexWriter`.
-The writer batches index changes and flushes final term metadata on `commit`,
-so call `commit` before relying on search results:
-
-<!-- pdf-listing: Bulk loading a standalone full-text search index -->
-
-```clojure
-(def lmdb (d/open-kv "/tmp/search-db"))
-(def writer
-  (d/search-index-writer
-    lmdb
-    {:domain "docs"
-     :index-position? true
-     :include-text? true}))
-
-(doseq [[doc-ref doc-text] docs]
-  (d/write writer doc-ref doc-text))
-
-(d/commit writer)
-
-(def engine
-  (d/new-search-engine
-    lmdb
-    {:domain "docs"
-     :index-position? true
-     :include-text? true}))
-```
-
-The bulk writer is an embedded local API. It is not available through the
-Datalevin client/server API; use Datalog full-text attributes and normal
-transactions there, or run the writer in a local indexing process.
-
----
-
-## 8. Implementation Details
-
-The search indices are stored in LMDB sub-databases:
-
-- `terms` — map of term → term-info (id, max-weight, doc-frequency list)
-- `docs` — map of document id → doc reference and norm
-- `positions` — inverted lists for proximity (optional)
-- `rawtext` — original document text (optional, only when `:include-text? true`)
-
-An **inverted index** maps from a term to the documents that contain it. A
-**document frequency list** is the posting list for one term: the set of
-documents where the term appears, plus enough statistics to rank them. A
-**norm** is a precomputed document-length normalization factor used during
-ranking. Datalevin loads norms into memory on initialization and loads term
-information as queries need it. Document frequency lists use compressed bitmaps
-(Roaring Bitmaps) for efficient intersection and union operations.
-
----
-
-## 9. Asynchronous Indexing
-
-Full-text indexing is synchronous by default: a transaction updates source
-datoms and the full-text index before returning. This preserves read-your-writes
-behavior for `fulltext`.
-
-For high-ingestion workloads, a search domain can opt into async indexing:
-
-```clojure
-(def conn
-  (d/create-conn
-    "/tmp/search-db"
-    {:post/content {:db/valueType :db.type/string
-                    :db/fulltext  true}}
-    {:search-opts {:indexing-mode :async}}))
-```
-
-or per domain, when the attribute is assigned to that domain:
-
-```clojure
-(def conn
-  (d/create-conn
-    "/tmp/search-db"
-    {:post/content {:db/valueType :db.type/string
-                    :db/fulltext  true
-                    :db.fulltext/domains ["content"]}}
-    {:search-domains
-     {"content" {:index-position? true
-                 :indexing-mode   :async}}}))
-```
-
-In async mode, Datalevin commits the source datoms and a durable secondary-index
-job atomically. An in-process worker applies the search index update after
-commit and after DB-open recovery. Queries over that index are eventually
-consistent until the worker catches up. Use `secondary-index-status` or
-`process-secondary-index-jobs!` to observe or manually process pending work, and
-use `wait-for-secondary-index` when an application needs to wait for a specific
-transaction's index work.
-
----
-
 ## Summary
 
 Full-text search in Datalevin is a first-class capability: tightly integrated,
 high-performance, and synchronous by default. Enable `:db/fulltext`, use the
-`fulltext` function with Clojure-style boolean expressions, and leverage search
-domains for organized indexing, without operating a separate search cluster.
+`fulltext` function with Clojure-style boolean expressions, choose analyzers
+that match your data, and leverage search domains for organized indexing,
+without operating a separate search cluster.
 
 ---
 
@@ -932,3 +2043,6 @@ domains for organized indexing, without operating a separate search cluster.
 
 [3] Huahai Yang, [T-Wand: Beat Lucene in Less Than 600 Lines of Code](https://yyhh.org/blog/2021/11/t-wand-beat-lucene-in-less-than-600-lines-of-code/),
    yyhh.org, November 5, 2021.
+
+[4] Datalevin project, "Datalevin Search Benchmark,"
+   https://github.com/datalevin/datalevin/tree/master/benchmarks/search-bench.

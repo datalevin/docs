@@ -7,8 +7,8 @@ part: "IV — Indexes as Capabilities"
 # Chapter 17: Vector Search: Embeddings and Similarity Queries
 
 In the era of Large Language Models (LLMs), a database is not just a place to
-store structured facts, but also a repository for semantic meanings, which are
-often measured by vector similarity. Datalevin provides two related
+store structured facts, but also a repository for semantic meaning, where
+relatedness is often measured by vector similarity. Datalevin provides two related
 similarity-search features:
 
 - `:db.type/vec` stores user-supplied dense vectors and indexes them for
@@ -37,11 +37,11 @@ have already been normalized by the model or application.
 
 ---
 
-## 1. Configuring Vector Search
+## 1. Configuring Vector Indexes
 
 To store vectors in Datalevin, define an attribute with type `:db.type/vec`.
 Vector dimensions and similarity metrics are configured at the domain level (see
-1.2):
+Section 1.2):
 
 <div class="multi-lang">
 
@@ -108,6 +108,11 @@ const conn = await connect(
 
 </div>
 
+With this schema, a transaction that adds or replaces `:embedding` stores the
+vector as the datom value and updates the corresponding HNSW vector index. The
+datom remains ordinary Datalog data, while the vector index is a secondary index
+used by `vec-neighbors`.
+
 ### 1.1 Vector Options
 
 Configure these in `:vector-opts`:
@@ -171,10 +176,294 @@ those are separate indexes.
 
 ---
 
-## 2. Similarity Search with `vec-neighbors`
+## 2. Text Embedding Indexes
 
-The `vec-neighbors` function returns matching datoms as `[e a v]` triples,
-ordered by similarity:
+Use `:db/embedding true` when the source data is text and you want Datalevin to
+maintain the embedding vector index for you. Unlike `:db.type/vec`, the stored
+datom remains the original string. The embedding vector is a secondary index
+detail.
+
+An embedding index has two moving parts:
+
+- An **embedding provider** turns text into vectors. It may be the built-in
+  local llama.cpp provider or an OpenAI-compatible HTTP provider.
+- A **vector index** stores those generated vectors and finds nearest neighbors.
+
+Figure 17.1 shows the text embedding indexing pipeline.
+
+The provider, model, dimensions, metric, and quantization together define an
+embedding space. Values from different embedding spaces should not be mixed in
+one domain.
+
+![Text embedding indexing pipeline: on write, transacting :doc/text stores the datom as-is in the Datalog store (the text stays the source of truth) and also sends the text through the embedding provider to a vector that is inserted into the HNSW index keyed to the entity — the vector is only a secondary index, unlike :db.type/vec which stores the vector itself; on query, embedding-neighbors runs the query text through the same provider and embedding space to a query vector, the HNSW index does nearest-neighbor search, and the nearest entities' stored :doc/text is pulled](/images/diagrams/embedding-index-pipeline.svg)
+
+<div class="multi-lang">
+
+```clojure
+(def embedding-schema
+  {:doc/id   {:db/valueType :db.type/string
+              :db/unique    :db.unique/identity}
+   :doc/text {:db/valueType            :db.type/string
+              :db/embedding            true
+              :db.embedding/domains    ["docs"]
+              :db.embedding/autoDomain true}})
+
+(def conn
+  (d/create-conn
+    "/tmp/embedding-db"
+    embedding-schema
+    {:embedding-opts {:provider    :default
+                      :metric-type :cosine}}))
+```
+
+```java
+Schema embeddingSchema = Datalevin.schema()
+    .attr("doc/id",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .unique(Schema.Unique.IDENTITY))
+    .attr("doc/text",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .prop("db/embedding", true)
+              .prop("db.embedding/domains", List.of("docs"))
+              .prop("db.embedding/autoDomain", true));
+
+Connection conn = Datalevin.createConn(
+    "/tmp/embedding-db",
+    embeddingSchema,
+    Map.of("embedding-opts", Map.of(
+        "provider", ":default",
+        "metric-type", ":cosine"
+    ))
+);
+```
+
+```python
+from datalevin import connect
+
+embedding_schema = {
+    ":doc/id": {
+        ":db/valueType": ":db.type/string",
+        ":db/unique": ":db.unique/identity",
+    },
+    ":doc/text": {
+        ":db/valueType": ":db.type/string",
+        ":db/embedding": True,
+        ":db.embedding/domains": ["docs"],
+        ":db.embedding/autoDomain": True,
+    },
+}
+
+conn = connect(
+    "/tmp/embedding-db",
+    schema=embedding_schema,
+    opts={":embedding-opts": {":provider": ":default",
+                              ":metric-type": ":cosine"}},
+)
+```
+
+```javascript
+import { connect } from "datalevin-node";
+
+const embeddingSchema = {
+  ':doc/id': {
+    ':db/valueType': ':db.type/string',
+    ':db/unique': ':db.unique/identity'
+  },
+  ':doc/text': {
+    ':db/valueType': ':db.type/string',
+    ':db/embedding': true,
+    ':db.embedding/domains': ['docs'],
+    ':db.embedding/autoDomain': true
+  }
+};
+
+const conn = await connect('/tmp/embedding-db', {
+  schema: embeddingSchema,
+  opts: { ':embedding-opts': { ':provider': ':default',
+                               ':metric-type': ':cosine' } }
+});
+```
+
+</div>
+
+With this schema, a transaction that adds or replaces `:doc/text` stores the
+string datom as-is, sends the text through the configured embedding provider,
+and inserts the resulting vector into the embedding domain's HNSW index. The
+generated vector is not the source of truth; it is a secondary index derived
+from the stored text.
+
+The built-in default provider uses a bundled CPU-only llama.cpp embedder. If no
+model path is supplied, Datalevin uses `multilingual-e5-small-Q8_0.gguf`; the
+model is downloaded under the database root on first use when missing. GGUF is
+the local model file format used by llama.cpp. For larger models or hosted
+embedding APIs, use an OpenAI-compatible provider:
+
+<div class="multi-lang">
+
+```clojure
+{:embedding-opts
+ {:provider           :openai-compatible
+  :model              "text-embedding-3-small"
+  :base-url           "https://api.openai.com/v1"
+  :api-key-env        "OPENAI_API_KEY"
+  :request-dimensions 1536
+  :metric-type        :cosine}}
+```
+
+```java
+Map<String, Object> opts = Map.of(
+    "embedding-opts", Map.of(
+        "provider", ":openai-compatible",
+        "model", "text-embedding-3-small",
+        "base-url", "https://api.openai.com/v1",
+        "api-key-env", "OPENAI_API_KEY",
+        "request-dimensions", 1536,
+        "metric-type", ":cosine"
+    )
+);
+```
+
+```python
+opts = {
+    ":embedding-opts": {
+        ":provider": ":openai-compatible",
+        ":model": "text-embedding-3-small",
+        ":base-url": "https://api.openai.com/v1",
+        ":api-key-env": "OPENAI_API_KEY",
+        ":request-dimensions": 1536,
+        ":metric-type": ":cosine",
+    }
+}
+```
+
+```javascript
+const opts = {
+  ':embedding-opts': {
+    ':provider': ':openai-compatible',
+    ':model': 'text-embedding-3-small',
+    ':base-url': 'https://api.openai.com/v1',
+    ':api-key-env': 'OPENAI_API_KEY',
+    ':request-dimensions': 1536,
+    ':metric-type': ':cosine'
+  }
+};
+```
+
+</div>
+
+### 2.1 Direct Embedding Provider API
+
+Most applications use `:db/embedding` and let Datalevin embed string datoms
+during transactions. The direct provider API is useful when application code
+needs embeddings before a transaction, wants to check token counts, or needs to
+truncate text to a model limit:
+
+The Clojure API exposes the generic embedding-provider interface used by
+embedding domains. Java, Python, and JavaScript expose direct local llama.cpp
+embedder handles; configure hosted OpenAI-compatible providers through
+`:embedding-opts`, as shown above.
+
+<div class="multi-lang">
+
+```clojure
+(def provider
+  (d/new-embedding-provider
+    {:provider    :openai-compatible
+     :model       "text-embedding-3-small"
+     :base-url    "https://api.openai.com/v1"
+     :api-key-env "OPENAI_API_KEY"}))
+
+(try
+  {:metadata   (d/embedding-metadata provider)
+   :dimensions (d/embedding-dimensions provider)
+   :tokens     (d/token-count provider "Datalevin vector search")
+   :vectors    (d/embed-texts
+                 provider
+                 [(d/truncate-text provider
+                                   "Datalevin vector search"
+                                   512)])}
+  (finally
+    (d/close-embedding-provider provider)))
+```
+
+```java
+try (LlamaEmbedder embedder =
+         Datalevin.newLlamaEmbedder("/models/embed.gguf")) {
+    int dimensions = embedder.dimensions();
+    int tokens = embedder.tokenCount("Datalevin vector search");
+    float[] vector = embedder.embed(
+        embedder.truncateText("Datalevin vector search", 512));
+}
+```
+
+```python
+from datalevin import new_llama_embedder
+
+with new_llama_embedder("/models/embed.gguf") as embedder:
+    result = {
+        "dimensions": embedder.dimensions(),
+        "tokens": embedder.token_count("Datalevin vector search"),
+        "vectors": [
+            embedder.embed(
+                embedder.truncate_text("Datalevin vector search", 512)
+            )
+        ],
+    }
+```
+
+```javascript
+import { newLlamaEmbedder } from "datalevin-node";
+
+const embedder = await newLlamaEmbedder("/models/embed.gguf");
+try {
+  const result = {
+    dimensions: await embedder.dimensions(),
+    tokens: await embedder.tokenCount("Datalevin vector search"),
+    vectors: [
+      await embedder.embed(
+        await embedder.truncateText("Datalevin vector search", 512)
+      )
+    ]
+  };
+} finally {
+  await embedder.close();
+}
+```
+
+</div>
+
+`embed-text` returns one float array. `embed-texts` returns one float array per
+input string. `token-count`, `token-counts`, `truncate-item`, and
+`truncate-text` are the Clojure provider helpers for preparing inputs before
+indexing or prompt assembly. The local llama.cpp wrappers expose the same
+concepts as language-native methods such as `embed`, `tokenCount` /
+`token_count`, and `truncateText` / `truncate_text`.
+
+Important rules:
+- `:db/embedding` applies to string attributes.
+- If no embedding domain is specified, the attribute participates in the default
+  `"datalevin"` embedding domain.
+- `:db/embedding` may coexist with `:db/fulltext` on the same attribute.
+- Changing embedding-related schema on populated attributes requires an explicit
+  rebuild workflow. In practice, changing the provider, model, dimensions,
+  metric, or quantization means old indexed vectors were produced in a different
+  embedding space; rebuild or re-index before relying on search results.
+
+---
+
+## 3. Querying Vector and Embedding Indexes
+
+Once the vector or embedding index exists, Datalog queries use neighbor
+functions to turn similarity search results into ordinary query rows. Raw vector
+attributes use `vec-neighbors`; text embedding attributes use
+`embedding-neighbors`.
+
+### 3.1 Similarity Search with `vec-neighbors`
+
+The Datalog built-in `vec-neighbors` function takes a query vector and returns
+matching datoms as `[e a v]` triples, ordered by similarity:
 
 <div class="multi-lang">
 
@@ -220,14 +509,22 @@ await conn.query(
 
 </div>
 
-### 2.1 Search Options
+The reference to a vector, the `vec-ref`, is the datom itself. Similar to
+`fulltext`, the returned triples are destructured and bound to variables, so
+Datalog joins can use them.
+
+### 3.2 Search Options
+
+Both neighbor functions accept these common options:
 
 - `:top` — Number of results (default 10)
 - `:domains` — List of domains to search
 - `:display` — Result format:
   - `:refs` (default) — `[e a v]` triples
   - `:refs+dists` — `[e a v dist]` with the metric distance
-- `:vec-filter` — Predicate function to filter by vec-ref
+
+For raw vector search, `vec-neighbors` also accepts `:vec-filter`, a predicate
+function to filter by vec-ref.
 
 When `:display :refs+dists` is used, `dist` is a metric distance. Datalevin
 returns nearest neighbors first. Lower distances usually mean closer neighbors,
@@ -235,7 +532,7 @@ but the numeric scale depends on the metric, model, quantization, and domain.
 Do not compare vector distances directly with full-text scores or distances
 from a different embedding space.
 
-### 2.2 Domain-Specific Search
+### 3.3 Domain-Specific Vector Search
 
 The attribute-specific form searches the attribute domain:
 
@@ -339,178 +636,11 @@ await conn.query(
 
 </div>
 
----
+### 3.4 Text Search with `embedding-neighbors`
 
-## 3. Text Embedding Indexes
-
-Use `:db/embedding true` when the source data is text and you want Datalevin to
-maintain the embedding vector index for you. Unlike `:db.type/vec`, the stored
-datom remains the original string. The embedding vector is a secondary index
-detail.
-
-An embedding index has two moving parts:
-
-- An **embedding provider** turns text into vectors. It may be the built-in
-  local llama.cpp provider or an OpenAI-compatible HTTP provider.
-- A **vector index** stores those generated vectors and finds nearest neighbors.
-
-The provider, model, dimensions, metric, and quantization together define an
-embedding space. Values from different embedding spaces should not be mixed in
-one domain.
-
-![Text embedding indexing pipeline: on write, transacting :doc/text stores the datom as-is in the Datalog store (the text stays the source of truth) and also sends the text through the embedding provider to a vector that is inserted into the HNSW index keyed to the entity — the vector is only a secondary index, unlike :db.type/vec which stores the vector itself; on query, embedding-neighbors runs the query text through the same provider and embedding space to a query vector, the HNSW index does nearest-neighbor search, and the nearest entities' stored :doc/text is pulled](/images/diagrams/embedding-index-pipeline.svg)
-
-<div class="multi-lang">
-
-```clojure
-(def embedding-schema
-  {:doc/id   {:db/valueType :db.type/string
-              :db/unique    :db.unique/identity}
-   :doc/text {:db/valueType            :db.type/string
-              :db/embedding            true
-              :db.embedding/domains    ["docs"]
-              :db.embedding/autoDomain true}})
-
-(def conn
-  (d/create-conn
-    "/tmp/embedding-db"
-    embedding-schema
-    {:embedding-opts {:provider    :default
-                      :metric-type :cosine}}))
-```
-
-```java
-Schema embeddingSchema = Datalevin.schema()
-    .attr("doc/id",
-          Schema.attribute()
-              .valueType(Schema.ValueType.STRING)
-              .unique(Schema.Unique.IDENTITY))
-    .attr("doc/text",
-          Schema.attribute()
-              .valueType(Schema.ValueType.STRING)
-              .prop("db/embedding", true)
-              .prop("db.embedding/domains", List.of("docs"))
-              .prop("db.embedding/autoDomain", true));
-
-Connection conn = Datalevin.createConn(
-    "/tmp/embedding-db",
-    embeddingSchema,
-    Map.of("embedding-opts", Map.of(
-        "provider", ":default",
-        "metric-type", ":cosine"
-    ))
-);
-```
-
-```python
-from datalevin import connect
-
-embedding_schema = {
-    ":doc/id": {
-        ":db/valueType": ":db.type/string",
-        ":db/unique": ":db.unique/identity",
-    },
-    ":doc/text": {
-        ":db/valueType": ":db.type/string",
-        ":db/embedding": True,
-        ":db.embedding/domains": ["docs"],
-        ":db.embedding/autoDomain": True,
-    },
-}
-
-conn = connect(
-    "/tmp/embedding-db",
-    schema=embedding_schema,
-    opts={":embedding-opts": {":provider": ":default",
-                              ":metric-type": ":cosine"}},
-)
-```
-
-```javascript
-import { connect } from "datalevin-node";
-
-const embeddingSchema = {
-  ':doc/id': {
-    ':db/valueType': ':db.type/string',
-    ':db/unique': ':db.unique/identity'
-  },
-  ':doc/text': {
-    ':db/valueType': ':db.type/string',
-    ':db/embedding': true,
-    ':db.embedding/domains': ['docs'],
-    ':db.embedding/autoDomain': true
-  }
-};
-
-const conn = await connect('/tmp/embedding-db', {
-  schema: embeddingSchema,
-  opts: { ':embedding-opts': { ':provider': ':default',
-                               ':metric-type': ':cosine' } }
-});
-```
-
-</div>
-
-The built-in default provider uses a bundled CPU-only llama.cpp embedder. If no
-model path is supplied, Datalevin uses `multilingual-e5-small-Q8_0.gguf`; the
-model is downloaded under the database root on first use when missing. GGUF is
-the local model file format used by llama.cpp. For larger models or hosted
-embedding APIs, use an OpenAI-compatible provider:
-
-<div class="multi-lang">
-
-```clojure
-{:embedding-opts
- {:provider           :openai-compatible
-  :model              "text-embedding-3-small"
-  :base-url           "https://api.openai.com/v1"
-  :api-key-env        "OPENAI_API_KEY"
-  :request-dimensions 1536
-  :metric-type        :cosine}}
-```
-
-```java
-Map<String, Object> opts = Map.of(
-    "embedding-opts", Map.of(
-        "provider", ":openai-compatible",
-        "model", "text-embedding-3-small",
-        "base-url", "https://api.openai.com/v1",
-        "api-key-env", "OPENAI_API_KEY",
-        "request-dimensions", 1536,
-        "metric-type", ":cosine"
-    )
-);
-```
-
-```python
-opts = {
-    ":embedding-opts": {
-        ":provider": ":openai-compatible",
-        ":model": "text-embedding-3-small",
-        ":base-url": "https://api.openai.com/v1",
-        ":api-key-env": "OPENAI_API_KEY",
-        ":request-dimensions": 1536,
-        ":metric-type": ":cosine",
-    }
-}
-```
-
-```javascript
-const opts = {
-  ':embedding-opts': {
-    ':provider': ':openai-compatible',
-    ':model': 'text-embedding-3-small',
-    ':base-url': 'https://api.openai.com/v1',
-    ':api-key-env': 'OPENAI_API_KEY',
-    ':request-dimensions': 1536,
-    ':metric-type': ':cosine'
-  }
-};
-```
-
-</div>
-
-Query with `embedding-neighbors`. The query input is text, not a vector:
+Query an embedding index with `embedding-neighbors`. The query input is text,
+not a vector. Datalevin embeds the query text with the same provider and
+embedding space configured for the target domain, then searches the HNSW index:
 
 <div class="multi-lang">
 
@@ -560,6 +690,8 @@ await conn.query(
 ```
 
 </div>
+
+### 3.5 Attribute-Specific Embedding Search
 
 Attribute-specific embedding search requires `:db.embedding/autoDomain true`:
 
@@ -615,58 +747,17 @@ await conn.query(
 
 </div>
 
-### 3.1 Direct Embedding Provider API
-
-Most applications use `:db/embedding` and let Datalevin embed string datoms
-during transactions. The direct provider API is useful when application code
-needs embeddings before a transaction, wants to check token counts, or needs to
-truncate text to a model limit:
-
-```clojure
-(def provider
-  (d/new-embedding-provider
-    {:provider    :openai-compatible
-     :model       "text-embedding-3-small"
-     :base-url    "https://api.openai.com/v1"
-     :api-key-env "OPENAI_API_KEY"}))
-
-(try
-  {:metadata   (d/embedding-metadata provider)
-   :dimensions (d/embedding-dimensions provider)
-   :tokens     (d/token-count provider "Datalevin vector search")
-   :vectors    (d/embed-texts
-                 provider
-                 [(d/truncate-text provider
-                                   "Datalevin vector search"
-                                   512)])}
-  (finally
-    (d/close-embedding-provider provider)))
-```
-
-`embed-text` returns one float array. `embed-texts` returns one float array per
-input string. `token-count`, `token-counts`, `truncate-item`, and
-`truncate-text` are provider helpers for preparing inputs before indexing or
-prompt assembly.
-
-Important rules:
-- `:db/embedding` applies to string attributes.
-- If no embedding domain is specified, the attribute participates in the default
-  `"datalevin"` embedding domain.
-- `:db/embedding` may coexist with `:db/fulltext` on the same attribute.
-- Changing embedding-related schema on populated attributes requires an explicit
-  rebuild workflow. In practice, changing the provider, model, dimensions,
-  metric, or quantization means old indexed vectors were produced in a different
-  embedding space; rebuild or re-index before relying on search results.
-
 ---
 
 ## 4. Standalone Vector Database
 
 Datalevin can be used as a standalone vector database:
 
-The standalone vector-index API is shown in Clojure. In Java, Python, and
-JavaScript, use the Datalog vector examples above unless the binding layer you
-are using exposes standalone vector-index handles.
+The standalone vector-index API is available from Clojure, Java, Python, and
+JavaScript. Use it when you want a KV-backed vector index without a Datalog
+schema attribute.
+
+<div class="multi-lang">
 
 ```clojure
 (def lmdb (d/open-kv "/tmp/vector-db"))
@@ -679,9 +770,56 @@ are using exposes standalone vector-index handles.
 ;=> ("cat" "dog")
 ```
 
+```java
+try (KV kv = Datalevin.openKV("/tmp/vector-db");
+     VectorIndex index =
+         Datalevin.newVectorIndex(
+             kv,
+             RetrievalOptions.vector(300).build())) {
+    index.addVec("cat", catVector);
+    index.addVec("dog", dogVector);
+
+    index.searchVec(queryVector, Map.of(":top", 2));
+    // => ["cat", "dog"]
+}
+```
+
+```python
+from datalevin import new_vector_index, open_kv, vector_options
+
+with open_kv("/tmp/vector-db") as kv:
+    index = new_vector_index(kv, vector_options(dimensions=300))
+    index.add_vec("cat", cat_vector)
+    index.add_vec("dog", dog_vector)
+
+    index.search_vec(query_vector, opts={":top": 2})
+    # => ["cat", "dog"]
+```
+
+```javascript
+import { newVectorIndex, openKv, vectorOptions } from "datalevin-node";
+
+const kv = await openKv("/tmp/vector-db");
+try {
+  const index = await newVectorIndex(
+    kv,
+    vectorOptions({ dimensions: 300 })
+  );
+  await index.addVec("cat", catVector);
+  await index.addVec("dog", dogVector);
+
+  await index.searchVec(queryVector, { ":top": 2 });
+  // => ["cat", "dog"]
+} finally {
+  await kv.close();
+}
+```
+
+</div>
+
 **Vector References**: In Datalog's `vec-neighbors`, results are datoms `[e a
-v]`. In standalone mode, `vec-ref` can be any Clojure data (under 512
-bytes)—strings, numbers, maps, or any identifier meaningful to your application.
+v]`. In standalone mode, `vec-ref` can be any bridge-supported value under 512
+bytes: strings, numbers, maps, or any identifier meaningful to your application.
 
 Multiple vectors can share the same `vec-ref`. For example, different image
 embeddings might all reference the same tag `"cat"`, or document chunks in a RAG
@@ -690,6 +828,8 @@ system might all reference the same document ID.
 ### 4.1 Vector Index Lifecycle and Introspection
 
 Standalone vector indexes also expose cleanup and inspection functions:
+
+<div class="multi-lang">
 
 ```clojure
 (d/vector-index-info index)
@@ -702,6 +842,44 @@ Standalone vector indexes also expose cleanup and inspection functions:
 
 (d/close-vector-index index)
 ```
+
+```java
+index.info();
+// => {size=2, dimensions=300, metric-type=:euclidean, ...}
+
+index.removeVec("dog");
+
+index.forceCheckpoint();
+index.checkpointState();
+
+index.close();
+```
+
+```python
+index.info()
+# => {":size": 2, ":dimensions": 300, ":metric-type": ":euclidean", ...}
+
+index.remove_vec("dog")
+
+index.force_checkpoint()
+index.checkpoint_state()
+
+index.close()
+```
+
+```javascript
+await index.info();
+// => { ":size": 2, ":dimensions": 300, ":metric-type": ":euclidean", ... }
+
+await index.removeVec("dog");
+
+await index.forceCheckpoint();
+await index.checkpointState();
+
+await index.close();
+```
+
+</div>
 
 `remove-vec` removes all vectors associated with a `vec-ref`.
 `clear-vector-index` closes the index and deletes all vectors.
@@ -735,11 +913,45 @@ HNSW builds a multi-layer graph where each node is a vector:
 - **Lower layers** have short-range connections for precision
 
 Search starts at the top layer and "zooms in" through descending layers to find
-nearest neighbors.
+nearest neighbors. Figure 17.2 shows the search process.
 
 ![HNSW multi-layer graph search: the sparse top layer has long-range links for fast skipping and the dense bottom layer holds every vector with short-range links; search starts at the entry point and descends layer by layer, hopping to closer nodes until it reaches the nearest neighbor in Layer 0](/images/diagrams/hnsw-layers.svg)
 
-### 5.2 Performance Trade-offs
+### 5.2 Storage Layout
+
+Datalevin does not store each HNSW graph edge as an ordinary datom or as a
+separate LMDB key. Each vector domain has a native usearch HNSW index, optimized
+for nearest-neighbor search. Datalevin keeps that native index open in memory
+while the database is open, and persists it into the same LMDB environment as
+checkpoint data.
+
+The durable storage has three main pieces:
+
+- A per-domain reference map, stored in an LMDB list database named like
+  `<domain>/vec-refs`, maps each application-level `vec-ref` to one or more
+  internal vector ids.
+- The serialized native HNSW index is stored as chunked blobs in the
+  `datalevin/vec-index` database. Chunking avoids requiring one large
+  contiguous byte buffer for very large indexes.
+- Checkpoint metadata is stored in `datalevin/vec-meta`. It records information
+  such as chunk count, total serialized bytes, checkpoint LSNs, and vector
+  replay state.
+
+On open, Datalevin reconstructs the in-memory native index from the LMDB
+checkpoint and reloads the `vec-id -> vec-ref` map from the per-domain reference
+database. If the transaction log is enabled, the checkpoint metadata also
+records the replay floor so Datalevin can apply vector changes that happened
+after the last checkpoint.
+
+This design keeps vector search fast while keeping the index tied to the same
+database lifecycle as the rest of Datalevin. Adding or removing a vector first
+updates the durable LMDB reference mapping, then mutates the native HNSW index.
+Periodic or explicit vector checkpoints serialize the native index back into
+LMDB. For `:db.type/vec`, the vector value is also the datom value in the
+Datalog store. For `:db/embedding`, the source datom remains text, and the
+generated embedding vector lives only in the secondary vector index.
+
+### 5.3 Performance Trade-offs
 
 - **`:connectivity`** (M) — Higher = better recall, more memory
 - **`:expansion-add`** (efConstruction) — Higher = better index quality, slower

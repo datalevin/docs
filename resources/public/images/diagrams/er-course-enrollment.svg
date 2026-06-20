@@ -1,115 +1,137 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="600" viewBox="0 0 1000 600" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="700" viewBox="0 0 1000 700" role="img" aria-labelledby="title desc">
   <title id="title">Entity-relationship model for course enrollment</title>
-  <desc id="desc">An entity-relationship diagram with three strong entities and one associative entity. Student has the unique key student/id and student/name. Course has the unique key course/code and course/title. Term has the unique key term/id and term/starts-at. Enrollment is an associative entity with foreign-key refs enrollment/student to Student, enrollment/course to Course, and enrollment/term to Term, plus its own attributes enrollment/status, enrollment/grade, and enrollment/enrolled-at, and a composite unique key over student, course, and term. Each relationship is one-to-many: one Student, Course, or Term relates to many Enrollments, shown with a single bar on the entity side and a crow's foot on the Enrollment side.</desc>
+  <desc id="desc">An entity-relationship diagram for a school registration model. Student, Course, Term, and Instructor are strong entities with unique identities. CourseOffering is a scheduled section that references Course, Term, and Instructor. Enrollment is an associative entity that references Student and CourseOffering and carries status, grade, enrollment time, and a unique composite key over student and offering.</desc>
   <defs>
     <style>
-      .card { fill: #ffffff; }
-      .ebody { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.8; }
-      .ehead-s { fill: #ecfeff; stroke: #0891b2; stroke-width: 1.8; }
-      .ehead-a { fill: #ccfbf1; stroke: #0f766e; stroke-width: 1.8; }
-      .hdiv-s { stroke: #0891b2; stroke-width: 1.4; }
-      .hdiv-a { stroke: #0f766e; stroke-width: 1.4; }
+      .card { fill: #ffffff; stroke: #e2e8f0; stroke-width: 2; }
+      .body { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.8; }
+      .head-strong { fill: #ecfeff; stroke: #0891b2; stroke-width: 1.8; }
+      .head-context { fill: #eef2ff; stroke: #4f46e5; stroke-width: 1.8; }
+      .head-assoc { fill: #ccfbf1; stroke: #0f766e; stroke-width: 1.8; }
+      .divider-strong { stroke: #0891b2; stroke-width: 1.4; }
+      .divider-context { stroke: #4f46e5; stroke-width: 1.4; }
+      .divider-assoc { stroke: #0f766e; stroke-width: 1.4; }
       .rel { fill: none; stroke: #64748b; stroke-width: 2; }
-      .crow { fill: none; stroke: #64748b; stroke-width: 2; stroke-linecap: round; }
       .title { fill: #0f172a; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 28px; font-weight: 720; }
       .caption { fill: #475569; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; font-weight: 450; }
-      .ent-s { fill: #0e7490; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 18px; font-weight: 720; }
-      .ent-a { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 18px; font-weight: 720; }
-      .stereo { fill: #5b8a93; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-style: italic; font-weight: 500; }
-      .attr { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 13.5px; font-weight: 450; }
-      .rlbl { fill: #475569; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; font-weight: 500; }
+      .entity-strong { fill: #0e7490; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 17px; font-weight: 720; }
+      .entity-context { fill: #4338ca; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 17px; font-weight: 720; }
+      .entity-assoc { fill: #0f766e; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 17px; font-weight: 720; }
+      .stereo { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11px; font-weight: 600; }
+      .attr { fill: #0f172a; font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12.7px; font-weight: 450; }
+      .cardinality { fill: #334155; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; font-weight: 720; }
       .pk { fill: #0f766e; }
       .fk { fill: #0891b2; }
       .uq { fill: #b45309; }
-      .tagt { fill: #ffffff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 10px; font-weight: 700; }
-      .legt { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12.5px; font-weight: 450; }
+      .tag { fill: #ffffff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 9.5px; font-weight: 760; }
+      .legend { fill: #64748b; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12.5px; font-weight: 450; }
     </style>
   </defs>
 
-  <!-- Figure card (transparent corners adapt to light/dark page) -->
-  <rect class="card" x="2" y="2" width="996" height="596" rx="18" stroke="#e2e8f0" stroke-width="2"/>
+  <rect class="card" x="2" y="2" width="996" height="696" rx="18"/>
 
   <text class="title" x="500" y="44" text-anchor="middle">ER Model: Course Enrollment</text>
-  <text class="caption" x="500" y="70" text-anchor="middle">Three strong entities and an associative entity; refs are the relationship edges.</text>
+  <text class="caption" x="500" y="70" text-anchor="middle">Catalog course, scheduled offering, and enrollment are separate facts.</text>
 
-  <!-- ===== Relationship edges (drawn under boxes) ===== -->
-  <path class="rel" d="M290 145 L640 235"/>
-  <path class="rel" d="M290 305 L640 305"/>
-  <path class="rel" d="M290 465 L640 375"/>
+  <!-- Relationship edges -->
+  <path class="rel" d="M280 165 C340 165 320 245 400 245 H825 V285"/>
+  <path class="rel" d="M280 335 L360 350"/>
+  <path class="rel" d="M280 505 C320 505 325 432 360 420"/>
+  <path class="rel" d="M505 220 L505 285"/>
+  <path class="rel" d="M640 390 L690 390"/>
 
-  <!-- one (tick) at entity end -->
-  <path class="crow" d="M303.8 155.8 L307.2 142.2"/>
-  <path class="crow" d="M306 298 L306 312"/>
-  <path class="crow" d="M303.8 454.2 L307.2 467.8"/>
+  <text class="cardinality" x="292" y="158">1</text>
+  <text class="cardinality" x="834" y="278">*</text>
+  <text class="cardinality" x="294" y="330">1</text>
+  <text class="cardinality" x="342" y="346">*</text>
+  <text class="cardinality" x="294" y="512">1</text>
+  <text class="cardinality" x="342" y="427">*</text>
+  <text class="cardinality" x="514" y="239">1</text>
+  <text class="cardinality" x="514" y="278">*</text>
+  <text class="cardinality" x="650" y="384">1</text>
+  <text class="cardinality" x="672" y="384">*</text>
 
-  <!-- many (crow's foot) at Enrollment end -->
-  <path class="crow" d="M624.5 231 L637.8 243.7 M624.5 231 L640 235 M624.5 231 L642.2 226.3"/>
-  <path class="crow" d="M624 305 L640 314 M624 305 L640 305 M624 305 L640 296"/>
-  <path class="crow" d="M624.5 379 L642.2 383.7 M624.5 379 L640 375 M624.5 379 L637.8 366.3"/>
+  <!-- Student -->
+  <rect class="body" x="40" y="110" width="240" height="110" rx="8"/>
+  <path class="head-strong" d="M40 118 a8 8 0 0 1 8 -8 h224 a8 8 0 0 1 8 8 v26 h-240 z"/>
+  <text class="entity-strong" x="56" y="135">Student</text>
+  <line class="divider-strong" x1="40" y1="144" x2="280" y2="144"/>
+  <text class="attr" x="56" y="171">student/id</text>
+  <rect class="pk" x="232" y="159" width="30" height="16" rx="8"/>
+  <text class="tag" x="247" y="171" text-anchor="middle">PK</text>
+  <text class="attr" x="56" y="199">student/name</text>
 
-  <!-- relationship labels -->
-  <text class="rlbl" x="455" y="176" text-anchor="middle">:enrollment/student</text>
-  <text class="rlbl" x="455" y="298" text-anchor="middle">:enrollment/course</text>
-  <text class="rlbl" x="455" y="414" text-anchor="middle">:enrollment/term</text>
+  <!-- Course -->
+  <rect class="body" x="40" y="280" width="240" height="110" rx="8"/>
+  <path class="head-strong" d="M40 288 a8 8 0 0 1 8 -8 h224 a8 8 0 0 1 8 8 v26 h-240 z"/>
+  <text class="entity-strong" x="56" y="305">Course</text>
+  <line class="divider-strong" x1="40" y1="314" x2="280" y2="314"/>
+  <text class="attr" x="56" y="341">course/code</text>
+  <rect class="pk" x="232" y="329" width="30" height="16" rx="8"/>
+  <text class="tag" x="247" y="341" text-anchor="middle">PK</text>
+  <text class="attr" x="56" y="369">course/title</text>
 
-  <!-- ===================== Student ===================== -->
-  <rect class="ebody" x="40" y="90" width="250" height="110" rx="8"/>
-  <path class="ehead-s" d="M40 98 a8 8 0 0 1 8 -8 h234 a8 8 0 0 1 8 8 v26 h-250 z"/>
-  <text class="ent-s" x="56" y="115">Student</text>
-  <line class="hdiv-s" x1="40" y1="124" x2="290" y2="124"/>
-  <text class="attr" x="56" y="151">student/id</text>
-  <rect class="pk" x="244" y="139" width="30" height="16" rx="8"/>
-  <text class="tagt" x="259" y="151" text-anchor="middle">PK</text>
-  <text class="attr" x="56" y="180">student/name</text>
+  <!-- Term -->
+  <rect class="body" x="40" y="450" width="240" height="110" rx="8"/>
+  <path class="head-strong" d="M40 458 a8 8 0 0 1 8 -8 h224 a8 8 0 0 1 8 8 v26 h-240 z"/>
+  <text class="entity-strong" x="56" y="475">Term</text>
+  <line class="divider-strong" x1="40" y1="484" x2="280" y2="484"/>
+  <text class="attr" x="56" y="511">term/id</text>
+  <rect class="pk" x="232" y="499" width="30" height="16" rx="8"/>
+  <text class="tag" x="247" y="511" text-anchor="middle">PK</text>
+  <text class="attr" x="56" y="539">term/starts-at</text>
 
-  <!-- ===================== Course ===================== -->
-  <rect class="ebody" x="40" y="250" width="250" height="110" rx="8"/>
-  <path class="ehead-s" d="M40 258 a8 8 0 0 1 8 -8 h234 a8 8 0 0 1 8 8 v26 h-250 z"/>
-  <text class="ent-s" x="56" y="275">Course</text>
-  <line class="hdiv-s" x1="40" y1="284" x2="290" y2="284"/>
-  <text class="attr" x="56" y="311">course/code</text>
-  <rect class="pk" x="244" y="299" width="30" height="16" rx="8"/>
-  <text class="tagt" x="259" y="311" text-anchor="middle">PK</text>
-  <text class="attr" x="56" y="340">course/title</text>
+  <!-- Instructor -->
+  <rect class="body" x="380" y="110" width="250" height="110" rx="8"/>
+  <path class="head-strong" d="M380 118 a8 8 0 0 1 8 -8 h234 a8 8 0 0 1 8 8 v26 h-250 z"/>
+  <text class="entity-strong" x="396" y="135">Instructor</text>
+  <line class="divider-strong" x1="380" y1="144" x2="630" y2="144"/>
+  <text class="attr" x="396" y="171">instructor/id</text>
+  <rect class="pk" x="582" y="159" width="30" height="16" rx="8"/>
+  <text class="tag" x="597" y="171" text-anchor="middle">PK</text>
+  <text class="attr" x="396" y="199">instructor/name</text>
 
-  <!-- ===================== Term ===================== -->
-  <rect class="ebody" x="40" y="410" width="250" height="110" rx="8"/>
-  <path class="ehead-s" d="M40 418 a8 8 0 0 1 8 -8 h234 a8 8 0 0 1 8 8 v26 h-250 z"/>
-  <text class="ent-s" x="56" y="435">Term</text>
-  <line class="hdiv-s" x1="40" y1="444" x2="290" y2="444"/>
-  <text class="attr" x="56" y="471">term/id</text>
-  <rect class="pk" x="244" y="459" width="30" height="16" rx="8"/>
-  <text class="tagt" x="259" y="471" text-anchor="middle">PK</text>
-  <text class="attr" x="56" y="500">term/starts-at</text>
+  <!-- Course offering -->
+  <rect class="body" x="360" y="285" width="280" height="210" rx="8"/>
+  <path class="head-context" d="M360 293 a8 8 0 0 1 8 -8 h264 a8 8 0 0 1 8 8 v26 h-280 z"/>
+  <text class="entity-context" x="376" y="310">CourseOffering</text>
+  <text class="stereo" x="626" y="310" text-anchor="end">scheduled section</text>
+  <line class="divider-context" x1="360" y1="319" x2="640" y2="319"/>
+  <text class="attr" x="376" y="344">course-offering/id</text>
+  <rect class="pk" x="594" y="332" width="30" height="16" rx="8"/>
+  <text class="tag" x="609" y="344" text-anchor="middle">PK</text>
+  <text class="attr" x="376" y="370">course-offering/course</text>
+  <rect class="fk" x="594" y="358" width="30" height="16" rx="8"/>
+  <text class="tag" x="609" y="370" text-anchor="middle">FK</text>
+  <text class="attr" x="376" y="396">course-offering/term</text>
+  <rect class="fk" x="594" y="384" width="30" height="16" rx="8"/>
+  <text class="tag" x="609" y="396" text-anchor="middle">FK</text>
+  <text class="attr" x="376" y="422">course-offering/instructor</text>
+  <rect class="fk" x="594" y="410" width="30" height="16" rx="8"/>
+  <text class="tag" x="609" y="422" text-anchor="middle">FK</text>
+  <text class="attr" x="376" y="448">course-offering/section</text>
+  <text class="attr" x="376" y="474">course-offering/capacity</text>
 
-  <!-- ===================== Enrollment (associative) ===================== -->
-  <rect class="ebody" x="640" y="185" width="320" height="240" rx="8"/>
-  <path class="ehead-a" d="M640 193 a8 8 0 0 1 8 -8 h304 a8 8 0 0 1 8 8 v26 h-320 z"/>
-  <text class="ent-a" x="656" y="210">Enrollment</text>
-  <text class="stereo" x="952" y="210" text-anchor="end">&#171;associative&#187;</text>
-  <line class="hdiv-a" x1="640" y1="219" x2="960" y2="219"/>
-  <text class="attr" x="656" y="245">enrollment/student</text>
-  <rect class="fk" x="918" y="233" width="30" height="16" rx="8"/>
-  <text class="tagt" x="933" y="245" text-anchor="middle">FK</text>
-  <text class="attr" x="656" y="273">enrollment/course</text>
-  <rect class="fk" x="918" y="261" width="30" height="16" rx="8"/>
-  <text class="tagt" x="933" y="273" text-anchor="middle">FK</text>
-  <text class="attr" x="656" y="301">enrollment/term</text>
-  <rect class="fk" x="918" y="289" width="30" height="16" rx="8"/>
-  <text class="tagt" x="933" y="301" text-anchor="middle">FK</text>
-  <text class="attr" x="656" y="329">enrollment/status</text>
-  <text class="attr" x="656" y="357">enrollment/grade</text>
-  <text class="attr" x="656" y="385">enrollment/enrolled-at</text>
-  <text class="attr" x="656" y="413">[student course term]</text>
-  <rect class="uq" x="916" y="401" width="32" height="16" rx="8"/>
-  <text class="tagt" x="932" y="413" text-anchor="middle">UQ</text>
+  <!-- Enrollment -->
+  <rect class="body" x="690" y="285" width="270" height="210" rx="8"/>
+  <path class="head-assoc" d="M690 293 a8 8 0 0 1 8 -8 h254 a8 8 0 0 1 8 8 v26 h-270 z"/>
+  <text class="entity-assoc" x="706" y="310">Enrollment</text>
+  <text class="stereo" x="946" y="310" text-anchor="end">associative</text>
+  <line class="divider-assoc" x1="690" y1="319" x2="960" y2="319"/>
+  <text class="attr" x="706" y="344">enrollment/student</text>
+  <rect class="fk" x="912" y="332" width="30" height="16" rx="8"/>
+  <text class="tag" x="927" y="344" text-anchor="middle">FK</text>
+  <text class="attr" x="706" y="370">enrollment/offering</text>
+  <rect class="fk" x="912" y="358" width="30" height="16" rx="8"/>
+  <text class="tag" x="927" y="370" text-anchor="middle">FK</text>
+  <text class="attr" x="706" y="396">enrollment/status</text>
+  <text class="attr" x="706" y="422">enrollment/grade</text>
+  <text class="attr" x="706" y="448">enrollment/enrolled-at</text>
+  <text class="attr" x="706" y="474">[student offering]</text>
+  <rect class="uq" x="910" y="462" width="32" height="16" rx="8"/>
+  <text class="tag" x="926" y="474" text-anchor="middle">UQ</text>
 
-  <!-- ===================== Legend ===================== -->
-  <path class="crow" d="M120 556 H170"/>
-  <path class="crow" d="M134 549 L134 563"/>
-  <text class="legt" x="182" y="560">one</text>
-  <path class="crow" d="M300 556 H350"/>
-  <path class="crow" d="M334 556 L350 549 M334 556 L350 556 M334 556 L350 563"/>
-  <text class="legt" x="362" y="560">many</text>
-  <text class="legt" x="470" y="560">PK unique identity &#183; FK :db.type/ref &#183; UQ composite unique key</text>
+  <!-- Legend -->
+  <text class="legend" x="500" y="625" text-anchor="middle">1-to-many refs are ordinary Datalevin facts. PK = unique identity, FK = :db.type/ref, UQ = composite unique tuple.</text>
+  <text class="legend" x="500" y="650" text-anchor="middle">Enrollment points to CourseOffering, so course, term, and instructor are joined through normalized ref edges.</text>
 </svg>

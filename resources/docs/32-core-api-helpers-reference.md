@@ -113,7 +113,12 @@ The pattern can also be supplied as an input variable:
 ```
 
 For multi-source queries, qualify the pull with the source that owns the entity
-ids being shaped:
+ids being shaped. In Clojure, pass the DB values in the same order as the
+source variables. In Java, Python, and JavaScript connection query helpers, the
+receiver connection supplies the first source and additional `Connection`
+objects can be passed as query inputs:
+
+<div class="multi-lang">
 
 ```clojure
 (d/q '[:find ?customer (pull $users ?customer [:user/name])
@@ -122,6 +127,36 @@ ids being shaped:
               [$orders ?order :order/customer-email ?email]]
      users-db orders-db)
 ```
+
+```java
+Object users = usersConn.query(
+    "[:find ?customer (pull $users ?customer [:user/name]) " +
+    " :in $users $orders " +
+    " :where [$users ?customer :user/email ?email] " +
+    "        [$orders ?order :order/customer-email ?email]]",
+    ordersConn);
+```
+
+```python
+users_conn.query(
+    '[:find ?customer (pull $users ?customer [:user/name]) '
+    ' :in $users $orders '
+    ' :where [$users ?customer :user/email ?email] '
+    '        [$orders ?order :order/customer-email ?email]]',
+    orders_conn)
+```
+
+```javascript
+const users = await usersConn.query(
+  '[:find ?customer (pull $users ?customer [:user/name]) ' +
+  ' :in $users $orders ' +
+  ' :where [$users ?customer :user/email ?email] ' +
+  '        [$orders ?order :order/customer-email ?email]]',
+  ordersConn
+);
+```
+
+</div>
 
 ---
 

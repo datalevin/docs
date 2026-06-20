@@ -6,10 +6,13 @@ part: "III — Modeling Across Paradigms"
 
 # Chapter 14: Document Modeling and Path-Based Access
 
-Datalevin gives you two ways to model document-shaped data:
-**logical documents**, built from normal datoms and component references, and
-**indexed documents** (`idoc`), stored as single values with automatic
-path-level indexes.
+Datalevin gives you two ways to model document-shaped data: **logical
+documents**, built from normal datoms and component references, and **indexed
+documents** (`idoc`), stored as single values with automatic path-level indexes.
+
+The difference is depicted in Figure 14.1.
+
+![Logical documents vs. idoc, modeling the same nested user data: the logical document (:db/isComponent) decomposes it into a user entity that owns separate profile and contact component entities plus tag datoms — many facts that join, pull, and update independently; the native idoc (:db.type/idoc) stores the whole nested map as one datom value on :user/metadata with an automatic path index over leaf paths like profile.name, profile.age, contact.email, and tags. The two models can coexist on the same entity](/images/diagrams/logical-vs-idoc.svg)
 
 Use logical documents when the nested structure is part of your core domain
 model. Use `idoc` when the nested structure is flexible metadata, imported JSON,
@@ -30,6 +33,7 @@ component attributes. A component reference stores a nested entity as ordinary
 datoms, but treats that entity as owned by its parent.
 
 ### Example: A Nested Blog Post
+
 <div class="multi-lang">
 
 ```clojure
@@ -183,19 +187,21 @@ await conn.pull(
 
 </div>
 
-### Aside: Ad Hoc Queries over Nested EDN
+### Aside: Ad Hoc Queries over Nested Data
 
 Sometimes you do not want to persist a nested value at all. You have a map from
 an API response, a fixture, or a one-off data export, and you want Datalog's
 joins and predicates for exploration. Chapter 8 showed that Datalevin can query
 an in-memory sequence of tuples. A small boundary helper can turn a nested
-EDN value into such a relation.
+value into such a relation.
 
-The following Clojure helper walks maps and vectors and emits one tuple for
-each leaf value. By default, the tuple is the path segments followed by the
-leaf value:
+The following helpers walk maps/objects and vectors/arrays and emit one tuple
+for each leaf value. By default, the tuple is the path segments followed by the
+leaf value.
 
-<!-- pdf-listing: Turning nested EDN leaves into Datalog tuples -->
+<!-- pdf-listing: Turning nested data leaves into Datalog tuples -->
+
+<div class="multi-lang">
 
 ```clojure
 (defn leaf-paths
@@ -233,7 +239,124 @@ leaf value:
      {:datalevin.docs/original x})))
 ```
 
+```java
+static List<List<Object>> leafPaths(Object root) {
+    return leafPaths(List.of(), root);
+}
+
+static List<List<Object>> leafPaths(List<Object> parent, Object x) {
+    if (x instanceof Map<?, ?> m) {
+        List<List<Object>> paths = new ArrayList<>();
+        for (Map.Entry<?, ?> entry : m.entrySet()) {
+            ArrayList<Object> next = new ArrayList<>(parent);
+            next.add(entry.getKey());
+            paths.addAll(leafPaths(next, entry.getValue()));
+        }
+        return paths;
+    }
+    if (x instanceof List<?> xs) {
+        List<List<Object>> paths = new ArrayList<>();
+        for (int i = 0; i < xs.size(); i++) {
+            ArrayList<Object> next = new ArrayList<>(parent);
+            next.add(i);
+            paths.addAll(leafPaths(next, xs.get(i)));
+        }
+        return paths;
+    }
+    return List.of(new ArrayList<>(parent));
+}
+
+static Object getIn(Object root, List<Object> path) {
+    Object cur = root;
+    for (Object step : path) {
+        if (cur instanceof Map<?, ?> m) {
+            cur = m.get(step);
+        } else if (cur instanceof List<?> xs) {
+            cur = xs.get(((Number) step).intValue());
+        } else {
+            throw new IllegalArgumentException("Cannot traverse " + step);
+        }
+    }
+    return cur;
+}
+
+static List<List<Object>> nestedToTuples(Object x, boolean paths) {
+    List<List<Object>> out = new ArrayList<>();
+    for (List<Object> path : leafPaths(x)) {
+        ArrayList<Object> tuple = new ArrayList<>(path);
+        tuple.add(getIn(x, path));
+        if (paths) {
+            ArrayList<Object> withPath = new ArrayList<>();
+            withPath.add(path);
+            withPath.addAll(tuple);
+            out.add(withPath);
+        } else {
+            out.add(tuple);
+        }
+    }
+    return out;
+}
+```
+
+```python
+def leaf_paths(root, path=()):
+    if isinstance(root, dict):
+        paths = []
+        for key, value in root.items():
+            paths.extend(leaf_paths(value, (*path, key)))
+        return paths
+    if isinstance(root, list):
+        paths = []
+        for i, value in enumerate(root):
+            paths.extend(leaf_paths(value, (*path, i)))
+        return paths
+    return [list(path)]
+
+
+def get_in(root, path):
+    cur = root
+    for step in path:
+        cur = cur[step]
+    return cur
+
+
+def nested_to_tuples(x, paths=False):
+    tuples = []
+    for path in leaf_paths(x):
+        tuple_ = [*path, get_in(x, path)]
+        tuples.append([path, *tuple_] if paths else tuple_)
+    return tuples
+```
+
+```javascript
+function leafPaths(root, path = []) {
+  if (Array.isArray(root)) {
+    return root.flatMap((value, i) => leafPaths(value, [...path, i]));
+  }
+  if (root !== null && typeof root === "object") {
+    return Object.entries(root).flatMap(([key, value]) =>
+      leafPaths(value, [...path, key]));
+  }
+  return [path];
+}
+
+function getIn(root, path) {
+  return path.reduce((cur, step) => cur[step], root);
+}
+
+function nestedToTuples(x, { paths = false } = {}) {
+  return leafPaths(x).map((path) => {
+    const tuple = [...path, getIn(x, path)];
+    return paths ? [path, ...tuple] : tuple;
+  });
+}
+```
+
+</div>
+
 For example:
+
+<div class="multi-lang">
 
 ```clojure
 (def order-doc
@@ -253,7 +376,70 @@ For example:
 ;;     [:lines 1 :qty 5]]
 ```
 
+```java
+Map<Object, Object> orderDoc = Map.of(
+    Datalevin.kw("order/id"), "o-1001",
+    Datalevin.kw("customer"), Map.of(
+        Datalevin.kw("email"), "ada@example.com",
+        Datalevin.kw("name"), "Ada"),
+    Datalevin.kw("lines"), List.of(
+        Map.of(Datalevin.kw("sku"), "book",
+               Datalevin.kw("qty"), 2),
+        Map.of(Datalevin.kw("sku"), "pen",
+               Datalevin.kw("qty"), 5)));
+
+List<List<Object>> tuples = nestedToTuples(orderDoc, false);
+// => [[:order/id "o-1001"]
+//     [:customer :email "ada@example.com"]
+//     [:customer :name "Ada"]
+//     [:lines 0 :sku "book"]
+//     [:lines 0 :qty 2]
+//     [:lines 1 :sku "pen"]
+//     [:lines 1 :qty 5]]
+```
+
+```python
+order_doc = {
+    ":order/id": "o-1001",
+    ":customer": {":email": "ada@example.com",
+                  ":name": "Ada"},
+    ":lines": [{":sku": "book", ":qty": 2},
+               {":sku": "pen", ":qty": 5}]}
+
+tuples = nested_to_tuples(order_doc)
+# => [[":order/id", "o-1001"],
+#     [":customer", ":email", "ada@example.com"],
+#     [":customer", ":name", "Ada"],
+#     [":lines", 0, ":sku", "book"],
+#     [":lines", 0, ":qty", 2],
+#     [":lines", 1, ":sku", "pen"],
+#     [":lines", 1, ":qty", 5]]
+```
+
+```javascript
+const orderDoc = {
+  ":order/id": "o-1001",
+  ":customer": {":email": "ada@example.com",
+                ":name": "Ada"},
+  ":lines": [{":sku": "book", ":qty": 2},
+             {":sku": "pen", ":qty": 5}]
+};
+
+const tuples = nestedToTuples(orderDoc);
+// => [[":order/id", "o-1001"],
+//     [":customer", ":email", "ada@example.com"],
+//     [":customer", ":name", "Ada"],
+//     [":lines", 0, ":sku", "book"],
+//     [":lines", 0, ":qty", 2],
+//     [":lines", 1, ":sku", "pen"],
+//     [":lines", 1, ":qty", 5]]
+```
+
+</div>
+
 Now the vector index in the path can be used as a join key:
+
+<div class="multi-lang">
 
 ```clojure
 (d/q '[:find ?sku ?qty
@@ -264,9 +450,43 @@ Now the vector index in the path can be used as a join key:
 ;; => #{["book" 2] ["pen" 5]}
 ```
 
-When `:paths?` is true, the full path is also carried as the first element of
-each tuple. This is useful when a query result should drive a later `get-in`,
-`assoc-in`, or `update-in`:
+```java
+Object lines = conn.query(
+    "[:find ?sku ?qty " +
+    " :in $ $data " +
+    " :where [$data :lines ?i :sku ?sku] " +
+    "        [$data :lines ?i :qty ?qty]]",
+    tuples);
+// => #{["book" 2] ["pen" 5]}
+```
+
+```python
+lines = conn.query(
+    '[:find ?sku ?qty '
+    ' :in $ $data '
+    ' :where [$data :lines ?i :sku ?sku] '
+    '        [$data :lines ?i :qty ?qty]]',
+    tuples)
+# => #{["book" 2] ["pen" 5]}
+```
+
+```javascript
+const lines = await conn.query(
+  "[:find ?sku ?qty " +
+  " :in $ $data " +
+  " :where [$data :lines ?i :sku ?sku] " +
+  "        [$data :lines ?i :qty ?qty]]",
+  tuples);
+// => #{["book" 2] ["pen" 5]}
+```
+
+</div>
+
+When the paths option is true, the full path is also carried as the first
+element of each tuple. This is useful when a query result should drive a later
+path lookup or update:
+
+<div class="multi-lang">
 
 ```clojure
 (def tuples-with-paths (nested->tuples order-doc {:paths? true}))
@@ -279,6 +499,44 @@ each tuple. This is useful when a query result should drive a later `get-in`,
 ;;      [[:lines 1 :sku] "pen"]}
 ```
 
+```java
+List<List<Object>> tuplesWithPaths = nestedToTuples(orderDoc, true);
+
+Object paths = conn.query(
+    "[:find ?path ?sku " +
+    " :in $ $data " +
+    " :where [$data ?path :lines ?i :sku ?sku]]",
+    tuplesWithPaths);
+// => #{[[:lines 0 :sku] "book"]
+//      [[:lines 1 :sku] "pen"]}
+```
+
+```python
+tuples_with_paths = nested_to_tuples(order_doc, paths=True)
+
+paths = conn.query(
+    '[:find ?path ?sku '
+    ' :in $ $data '
+    ' :where [$data ?path :lines ?i :sku ?sku]]',
+    tuples_with_paths)
+# => #{[[:lines 0 :sku] "book"]
+#      [[:lines 1 :sku] "pen"]}
+```
+
+```javascript
+const tuplesWithPaths = nestedToTuples(orderDoc, {paths: true});
+
+const paths = await conn.query(
+  "[:find ?path ?sku " +
+  " :in $ $data " +
+  " :where [$data ?path :lines ?i :sku ?sku]]",
+  tuplesWithPaths);
+// => #{[[:lines 0 :sku] "book"]
+//      [[:lines 1 :sku] "pen"]}
+```
+
+</div>
+
 This technique is for ad hoc analysis and local transformation. It does not
 create attributes, schema, indexes, lookup refs, or durable entities. If the
 nested data is part of the application's long-lived domain model, turn it into
@@ -290,8 +548,9 @@ that should be stored and searched by path, use `:db.type/idoc`.
 ## 2. Native Indexed Documents with `idoc`
 
 An `idoc` stores a nested document as one datom value, while Datalevin maintains
-an index for paths inside the document. This gives you document-database style
-path queries without giving up Datalog joins or transactions.
+an index for paths inside the document, as shown in Figure 14.2. This gives you
+document-database style path queries without giving up Datalog joins or
+transactions.
 
 ![Indexed documents: a nested idoc value is flattened to a path-to-value index whose leaf paths are queried with idoc-match and idoc-get](/images/diagrams/idoc-path-index.svg)
 
@@ -381,9 +640,75 @@ const schema = {
 
 Supported `:db/idocFormat` values are `:edn` (the default), `:json`, and
 `:markdown`. If `:db/domain` is omitted, Datalevin derives a domain from the
-attribute name, for example `:user/metadata` becomes `"user_metadata"`.
+attribute name without the leading colon; for example, `:user/metadata` becomes
+`"user/metadata"`.
 
-### 2.2 Transacting Documents
+### 2.2 `idoc` Domains
+
+An `idoc` domain is the namespace for one path index. Internally, each domain has
+its own document-reference map, path dictionary, and inverted path index. That
+domain name is what lets Datalevin find the correct path index when
+`idoc-match` runs.
+
+This is related to, but not the same as, full-text, vector, or embedding
+domains. Those indexes use domain lists or store-level domain maps to configure
+retrieval and indexing behavior, and some support default or automatic domains.
+`idoc` has no `:db.idoc/domains` list or `autoDomain` flag. An `idoc` attribute
+has one `idoc` domain, selected by `:db/domain` or derived from the attribute
+name. Several `idoc` attributes may intentionally share the same domain, but
+that is an index design choice, not a ranking or retrieval policy.
+
+Most application queries should name the idoc attribute, as in
+`(idoc-match $ :user/metadata {:theme "dark"})`. Attribute-scoped queries are
+explicit and avoid searching unrelated document indexes. Domain-scoped queries
+are useful when several idoc attributes share an index domain or when query code
+receives the domain name as configuration:
+
+<div class="multi-lang">
+
+```clojure
+(d/q '[:find ?e ?a
+       :where
+       [(idoc-match $ {:status "active"} {:domains ["profiles"]})
+        [[?e ?a _]]]]
+     db)
+```
+
+```java
+Object profiles = conn.query(
+    "[:find ?e ?a " +
+    " :where [(idoc-match $ {:status \"active\"} " +
+    "                    {:domains [\"profiles\"]}) " +
+    "         [[?e ?a _]]]]");
+```
+
+```python
+profiles = conn.query(
+    '[:find ?e ?a '
+    ' :where [(idoc-match $ {:status "active"} '
+    '                    {:domains ["profiles"]}) '
+    '         [[?e ?a _]]]]')
+```
+
+```javascript
+const profiles = await conn.query(
+  "[:find ?e ?a " +
+  " :where [(idoc-match $ {:status \"active\"} " +
+  "                    {:domains [\"profiles\"]}) " +
+  "         [[?e ?a _]]]]");
+```
+
+</div>
+
+If neither an attribute nor `:domains` is supplied, `idoc-match` searches all
+`idoc` domains in the database. That is convenient for exploratory queries, but
+it is usually too broad for application query paths.
+
+Keep `idoc` domains format-coherent. In particular, Markdown idocs normalize
+heading text into path segments, so they should usually live in their own
+domains instead of sharing a domain with EDN or JSON idocs.
+
+### 2.3 Transacting Documents
 
 Idoc values must be document-like maps. Nested vectors are treated as arrays.
 
@@ -447,11 +772,13 @@ Document rules:
 - For `:edn` format, string payloads are read as EDN and must yield a map.
 - JSON and Markdown attributes accept string payloads in those formats.
 
-### 2.3 Markdown Documents
+### 2.4 Markdown Documents
 
 Markdown idocs are useful when the source data is authored as prose but you
 still want to query by section. Datalevin parses Markdown headings into nested
 map paths and stores the section text as values.
+
+<div class="multi-lang">
 
 ```clojure
 (d/transact! conn
@@ -469,12 +796,91 @@ Run `clj -M:dev`.
 Set `:index-position? true` for phrase search."}])
 ```
 
-The parsed idoc value is equivalent to:
+```java
+String markdown = "# Guide\n\n" +
+    "## Install\n\n" +
+    "Run `clj -M:dev`.\n\n" +
+    "## Configure Search\n\n" +
+    "Set `:index-position? true` for phrase search.";
+
+conn.transact(Datalevin.tx()
+    .entity(Tx.entity(201)
+        .put("doc/title", "Search Guide")
+        .put("doc/markdown", markdown)));
+```
+
+```python
+markdown = """# Guide
+
+## Install
+
+Run `clj -M:dev`.
+
+## Configure Search
+
+Set `:index-position? true` for phrase search."""
+
+conn.transact([
+    {":db/id": 201,
+     ":doc/title": "Search Guide",
+     ":doc/markdown": markdown}
+])
+```
+
+```javascript
+const markdown = `# Guide
+
+## Install
+
+Run \`clj -M:dev\`.
+
+## Configure Search
+
+Set \`:index-position? true\` for phrase search.`;
+
+await conn.transact([
+  {":db/id": 201,
+   ":doc/title": "Search Guide",
+   ":doc/markdown": markdown}
+]);
+```
+
+</div>
+
+The parsed idoc value is equivalent to the following nested structure:
+
+<div class="multi-lang">
 
 ```clojure
 {:guide {:install "Run clj -M:dev."
          :configure-search "Set :index-position? true for phrase search."}}
 ```
+
+```java
+Map<Object, Object> parsed = Map.of(
+    Datalevin.kw("guide"), Map.of(
+        Datalevin.kw("install"), "Run clj -M:dev.",
+        Datalevin.kw("configure-search"),
+        "Set :index-position? true for phrase search."));
+```
+
+```python
+parsed = {
+    ":guide": {
+        ":install": "Run clj -M:dev.",
+        ":configure-search": "Set :index-position? true for phrase search."}}
+```
+
+```javascript
+const parsed = {
+  ":guide": {
+    ":install": "Run clj -M:dev.",
+    ":configure-search": "Set :index-position? true for phrase search."
+  }
+};
+```
+
+</div>
 
 Heading text is normalized to keyword-like paths: case is folded, leading
 numbering is removed, punctuation is dropped, and spaces become hyphens. Inline
@@ -482,6 +888,8 @@ Markdown markup is stripped from the stored text. Content before the first
 heading is rejected, because Datalevin needs a heading path for the text.
 
 You can match a section and extract its text in the same query:
+
+<div class="multi-lang">
 
 ```clojure
 (d/q '[:find ?title ?install
@@ -494,8 +902,42 @@ You can match a section and extract its text in the same query:
      db)
 ```
 
+```java
+Object sections = conn.query(
+    "[:find ?title ?install " +
+    " :where [?e :doc/title ?title] " +
+    "        [(idoc-match $ :doc/markdown " +
+    "                     {:guide {:install \"Run clj -M:dev.\"}}) " +
+    "         [[?e _ ?doc]]] " +
+    "        [(idoc-get ?doc :guide :install) ?install]]");
+```
+
+```python
+sections = conn.query(
+    '[:find ?title ?install '
+    ' :where [?e :doc/title ?title] '
+    '        [(idoc-match $ :doc/markdown '
+    '                     {:guide {:install "Run clj -M:dev."}}) '
+    '         [[?e _ ?doc]]] '
+    '        [(idoc-get ?doc :guide :install) ?install]]')
+```
+
+```javascript
+const sections = await conn.query(
+  "[:find ?title ?install " +
+  " :where [?e :doc/title ?title] " +
+  "        [(idoc-match $ :doc/markdown " +
+  "                     {:guide {:install \"Run clj -M:dev.\"}}) " +
+  "         [[?e _ ?doc]]] " +
+  "        [(idoc-get ?doc :guide :install) ?install]]");
+```
+
+</div>
+
 For Markdown idocs, query paths are normalized too. This means string paths
 that look like headings work:
+
+<div class="multi-lang">
 
 ```clojure
 (d/q '[:find ?e
@@ -507,11 +949,42 @@ that look like headings work:
      db)
 ```
 
+```java
+Object matches = conn.query(
+    "[:find ?e " +
+    " :where [(idoc-match $ :doc/markdown " +
+    "          {\"Guide\" {\"Configure Search\" " +
+    "                    \"Set :index-position? true for phrase search.\"}}) " +
+    "         [[?e _ _]]]]");
+```
+
+```python
+matches = conn.query(
+    '[:find ?e '
+    ' :where '
+    ' [(idoc-match $ :doc/markdown '
+    '              {"Guide" {"Configure Search" '
+    '                        "Set :index-position? true for phrase search."}}) '
+    '  [[?e _ _]]]]')
+```
+
+```javascript
+const matches = await conn.query(
+  `[:find ?e
+    :where
+    [(idoc-match $ :doc/markdown
+                 {"Guide" {"Configure Search"
+                           "Set :index-position? true for phrase search."}})
+     [[?e _ _]]]]`);
+```
+
+</div>
+
 Use Markdown idocs for section-level lookup over authored documents. If a
 section needs independent identity, permissions, relationships, or versioning,
 model it as normal component entities instead.
 
-### 2.4 Patching Documents
+### 2.5 Patching Documents
 
 Use `:db.fn/patchIdoc` for partial updates when you do not want to resend the
 whole document.
@@ -566,31 +1039,7 @@ Datalevin can identify which value should be patched.
 
 ---
 
-## 3. Choosing Between Logical Documents and `idoc`
-
-| Feature | Logical document (`:db/isComponent`) | Native `idoc` |
-| :--- | :--- | :--- |
-| **Storage** | Decomposed into many datoms | Stored as one datom value |
-| **Schema** | Attributes are declared explicitly | Nested fields can evolve freely |
-| **Indexing** | Standard EAV/AVE and attribute indexes | Automatic path-level indexing |
-| **Querying** | Datalog joins, pull, entity API | `idoc-match` and `idoc-get` |
-| **Updates** | Fine-grained datom updates | `patchIdoc` or full replacement |
-| **Best for** | Core domain state and relationships | Flexible metadata and imported documents |
-
-![Logical documents vs. idoc, modeling the same nested user data: the logical document (:db/isComponent) decomposes it into a user entity that owns separate profile and contact component entities plus tag datoms — many facts that join, pull, and update independently; the native idoc (:db.type/idoc) stores the whole nested map as one datom value on :user/metadata with an automatic path index over leaf paths like profile.name, profile.age, contact.email, and tags. The two models can coexist on the same entity](/images/diagrams/logical-vs-idoc.svg)
-
-Use logical documents when nested data needs type checking, referential
-integrity, joins to other entities, or independent updates as facts. Use `idoc`
-when nested data is sparse, user-defined, imported from another document store,
-or expected to change shape frequently.
-
-These models can coexist on the same entity. A product can have structured facts
-for price and inventory, component entities for variants, full-text fields for
-descriptions, and an idoc attribute for merchant-specific metadata.
-
----
-
-## 4. Querying Path-Indexed Documents
+## 3. Querying Path-Indexed Documents
 
 Use `idoc-match` inside Datalog to find entities with matching nested document
 content. It returns matching datoms as `[e a v]` triples, so the result can be
@@ -681,7 +1130,7 @@ await conn.query('[:find ?e ' +
 
 </div>
 
-### 4.1 Logical Combinators
+### 3.1 Logical Combinators
 
 Use `[:and ...]`, `[:or ...]`, and `[:not ...]` inside query maps:
 
@@ -718,7 +1167,7 @@ await conn.query('[:find ?e ' +
 
 </div>
 
-### 4.2 Predicates and Ranges
+### 3.2 Predicates and Ranges
 
 Predicates can appear inline in query maps, or as path predicates supplied as
 query inputs:
@@ -808,7 +1257,7 @@ await conn.query('[:find ?e ' +
 
 Supported predicates are `nil?`, `>`, `>=`, `<`, and `<=`.
 
-### 4.3 Wildcard Paths
+### 3.3 Wildcard Paths
 
 Use wildcard path segments when the exact nested key is not known:
 
@@ -873,7 +1322,7 @@ await conn.query('[:find ?e ' +
 `:?` matches exactly one path segment. `:*` matches any depth, including zero
 segments.
 
-### 4.4 Null Matching
+### 3.4 Null Matching
 
 To match null values, use `(nil?)`:
 
@@ -908,7 +1357,7 @@ await conn.query('[:find ?e ' +
 JSON keys are strings, so JSON documents should be matched with `"middle"`, not
 `:middle`.
 
-### 4.5 Extracting Values with `idoc-get`
+### 3.5 Extracting Values with `idoc-get`
 
 `idoc-get` extracts a nested value from an idoc document inside a Datalog query:
 
@@ -945,7 +1394,7 @@ When a path traverses arrays, `idoc-get` returns a vector of matching values.
 
 ---
 
-## 5. How `idoc` Indexes Work
+## 4. How `idoc` Indexes Work
 
 Datalevin stores the idoc itself as the datom value. The path index stores
 references into those datoms, so path queries can narrow candidates quickly
@@ -953,6 +1402,7 @@ without duplicating full documents.
 
 - Each idoc domain maintains a document-reference map, a path dictionary, and an
   inverted index.
+- The domain name is used as the namespace for those internal idoc index DBIs.
 - Indexing is synchronous during transactions, so committed idoc queries see the
   committed document state.
 - Path ids are 32-bit integers.
@@ -962,6 +1412,28 @@ This implementation detail matters for modeling: idoc gives you fast path
 filters, but the document remains one value from the perspective of ordinary
 datoms. If a nested field deserves identity, constraints, independent history, or
 joins as a first-class fact, model that part with normal attributes instead.
+
+---
+
+## 5. Choosing Between Logical Documents and `idoc`
+
+| Feature | Logical document (`:db/isComponent`) | Native `idoc` |
+| :--- | :--- | :--- |
+| **Storage** | Decomposed into many datoms | Stored as one datom value |
+| **Schema** | Attributes are declared explicitly | Nested fields can evolve freely |
+| **Indexing** | Standard EAV/AVE and attribute indexes | Automatic path-level indexing |
+| **Querying** | Datalog joins, pull, entity API | `idoc-match` and `idoc-get` |
+| **Updates** | Fine-grained datom updates | `patchIdoc` or full replacement |
+| **Best for** | Core domain state and relationships | Flexible metadata and imported documents |
+
+Use logical documents when nested data needs type checking, referential
+integrity, joins to other entities, or independent updates as facts. Use `idoc`
+when nested data is sparse, user-defined, imported from another document store,
+or expected to change shape frequently.
+
+These models can coexist on the same entity. A product can have structured facts
+for price and inventory, component entities for variants, full-text fields for
+descriptions, and an idoc attribute for merchant-specific metadata.
 
 ---
 

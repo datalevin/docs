@@ -34,7 +34,7 @@ Although you open a directory, the main LMDB data lives in a single
 memory-mapped data file inside that directory, conventionally `data.mdb`.
 Auxiliary files, such as `lock.mdb`, track reader/lock state, and Datalevin may
 create additional support files for features such as WAL. DBIs are named logical
-sub-databases inside the same store; opening more DBIs does not create one data
+sub-databases inside the same file; opening more DBIs does not create one data
 file per DBI.
 
 Like a Datalog connection, a KV handle is a stateful resource. A normal
@@ -96,7 +96,8 @@ Some common options for `open-kv` include:
 
 - `:mapsize`: The maximum size the database can grow to (in MiB).
 - `:max-dbs`: The maximum number of named sub-databases (DBIs).
-- `:max-readers`: The maximum number of concurrent reader threads. The current default is 1024.
+- `:max-readers`: The maximum number of concurrent reader threads. The current
+  default is 1024.
 - `:wal?`: Set to `true` to enable WAL mode that benefits from
   concurrent writers. WAL is **disabled by default** for both local KV stores
   and local embedded Datalog stores. Non-HA async read replicas require WAL on
@@ -108,8 +109,9 @@ Some common options for `open-kv` include:
   old WAL segments.
 - `:temp?`: Set to `true` to create a temporary store that is deleted on JVM
   exit. It automatically enables `:nosync`, bypassing the `msync` overhead.
-- `:inmemory?`: Set to `true` to create a KV store in memory. There is no file persistence
-  and data is lost on close. This is even faster than a `:temp?` store.
+- `:inmemory?`: Set to `true` to create a KV store in memory. There is no file
+  persistence and data is lost on close. This is even faster than a `:temp?`
+  store.
 - `:spill-opts`: Control when eager range APIs spill large intermediate results
   to temporary disk storage. Common keys are `:spill-threshold`, a heap-pressure
   percentage, and `:spill-root`, the directory for temporary spill files. Set
@@ -149,7 +151,7 @@ const memKv = await openKv(null, { ":inmemory?": true });
 Datalevin allows multiple KV sub-databases (DBIs) to reside in the same KV
 store. Each DBI requires a unique string name. A DBI needs to be opened
 before use, and DBI opening is idempotent, i.e. it is OK to open a DBI multiple
-times.
+times. There is no need to close a DBI.
 
 A KV transaction is scoped to one store. It may write to several DBIs in that
 store atomically, because they share the same underlying LMDB transaction. It
@@ -160,7 +162,8 @@ DBIs. Use distinct names for your KV DBIs and do not write directly to internal
 Datalog DBIs such as `datalevin/eav` or `datalevin/ave`; those are maintained
 by the Datalog engine.
 
-There are two types of DBI:
+There are two types of DBI, regular DBI and list DBI. Figure 10.1 shows the
+differences.
 
 ![Regular DBI vs. list DBI: a regular DBI (open-dbi) maps one key to one value, such as "u-100" to "Alice"; a list DBI (open-list-dbi, using LMDB DUPSORT) maps one key to many sorted values, such as "post-1" to clojure, database, lmdb](/images/diagrams/dbi-regular-vs-list.svg)
 
@@ -229,7 +232,7 @@ await kv.openListDbi("tags");
 
 While LMDB deals with raw bytes, Datalevin adds a layer of encoded data types to
 ensure correct sorting and efficient storage. These types can be specified as
-`key-type` or `val-type` in KV operations.
+`key-type` or `val-type` parameters in KV operations.
 
 KV type validation is separate from Datalog schema validation. In Datalog,
 `:db/valueType` belongs to an attribute schema. In the KV API, types are passed
@@ -237,13 +240,14 @@ as operation descriptors or DBI options for keys and values. A DBI opened with
 `:validate-data? true` checks KV writes against those key/value types instead
 of checking Datalog attributes.
 
-This section comes before transactions because KV writes are not just "put this
-Clojure value somewhere." A write must also tell Datalevin how to encode the
-key, and usually how to encode the value. The encoding determines equality,
-ordering, range-scan behavior, and whether a value can fit in an LMDB key
-position.
+KV writes are not just "put this Clojure value somewhere." A write must also
+tell Datalevin how to encode the key, and usually how to encode the value. The
+encoding determines equality, ordering, range-scan behavior, and whether a value
+can fit in an LMDB key position.
 
 ### 3.1 Scalar types
+
+Table below shows the scalar KV data types.
 
 | Type Keyword | Clojure/Java Type | Notes |
 | :--- | :--- | :--- |
@@ -263,14 +267,18 @@ position.
 | `:uuid` | `java.util.UUID` | |
 | `:bytes` | `byte[]` | Raw binary payloads. |
 
+If a data type is not specified, the default is `:data`, i.e. an EDN binary
+blob.
+
 ### 3.2 Tuple types
 
 Tuple types are composite KV type descriptors. They are used when a key or
 DUPSORT value needs to sort by more than one field, such as
 `[customer-id created-at]` or `[tenant-id order-total order-id]`.
 
-This is different from Datalog schema `:db.type/tuple`. In the KV API, a tuple
-type is written as a vector of scalar KV types:
+This is different from Datalog schema composite `:db.type/tuple`, but the same
+as the heterogeneous and homogeneous tuple types. In the KV API, a tuple type is
+written as a vector of scalar KV types:
 
 | Type Descriptor | Meaning |
 | :--- | :--- |
@@ -294,6 +302,8 @@ Tuples sort lexicographically by their encoded elements: first element first,
 then the second element to break ties, and so on. Put the field you most often
 range over or group by at the front of the tuple.
 
+<div class="multi-lang">
+
 ```clojure
 (def event-key-type [:string :instant])
 
@@ -302,12 +312,12 @@ range over or group by at the front of the tuple.
 (d/transact-kv kv
   [[:put "events"
     ["acct-42" #inst "2026-05-31T10:00:00.000-00:00"]
-    {:event/type :login}
+    {"event/type" "login"}
     event-key-type
     :data]
    [:put "events"
     ["acct-42" #inst "2026-05-31T12:00:00.000-00:00"]
-    {:event/type :purchase}
+    {"event/type" "purchase"}
     event-key-type
     :data]])
 
@@ -320,7 +330,98 @@ range over or group by at the front of the tuple.
   event-key-type)
 ```
 
+```java
+import datalevin.Datalevin;
+import datalevin.KVType;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+
+KVType eventKeyType = KVType.tuple(KVType.STRING, KVType.INSTANT);
+
+kv.openDbi("events");
+
+kv.transact(
+    "events",
+    List.of(
+        List.of(Datalevin.kw("put"),
+                List.of("acct-42", Instant.parse("2026-05-31T10:00:00Z")),
+                Map.of("event/type", "login")),
+        List.of(Datalevin.kw("put"),
+                List.of("acct-42", Instant.parse("2026-05-31T12:00:00Z")),
+                Map.of("event/type", "purchase"))),
+    eventKeyType,
+    KVType.DATA);
+
+// Scan one account for a time window.
+List<?> events = kv.getRange(
+    "events",
+    List.of(Datalevin.kw("closed"),
+            List.of("acct-42", Instant.parse("2026-05-31T00:00:00Z")),
+            List.of("acct-42", Instant.parse("2026-06-01T00:00:00Z"))),
+    eventKeyType,
+    KVType.DATA,
+    null,
+    null);
+```
+
+```python
+from datetime import datetime, timezone
+
+event_key_type = [":string", ":instant"]
+
+kv.open_dbi("events")
+
+kv.transact([
+    [":put",
+     ["acct-42", datetime(2026, 5, 31, 10, tzinfo=timezone.utc)],
+     {"event/type": "login"}],
+    [":put",
+     ["acct-42", datetime(2026, 5, 31, 12, tzinfo=timezone.utc)],
+     {"event/type": "purchase"}],
+], dbi_name="events", k_type=event_key_type, v_type=":data")
+
+# Scan one account for a time window.
+events = kv.get_range(
+    "events",
+    [":closed",
+     ["acct-42", datetime(2026, 5, 31, tzinfo=timezone.utc)],
+     ["acct-42", datetime(2026, 6, 1, tzinfo=timezone.utc)]],
+    k_type=event_key_type,
+    v_type=":data")
+```
+
+```javascript
+const eventKeyType = [":string", ":instant"];
+
+await kv.openDbi("events");
+
+await kv.transact([
+  [":put",
+    ["acct-42", new Date("2026-05-31T10:00:00Z")],
+    { "event/type": "login" }],
+  [":put",
+    ["acct-42", new Date("2026-05-31T12:00:00Z")],
+    { "event/type": "purchase" }]
+], {
+  dbiName: "events",
+  kType: eventKeyType,
+  vType: ":data"
+});
+
+// Scan one account for a time window.
+const events = await kv.getRange("events", [
+  ":closed",
+  ["acct-42", new Date("2026-05-31T00:00:00Z")],
+  ["acct-42", new Date("2026-06-01T00:00:00Z")]
+], { kType: eventKeyType, vType: ":data" });
+```
+
+</div>
+
 In list DBIs, tuple values are useful for sorted secondary lists:
+
+<div class="multi-lang">
 
 ```clojure
 (def score-type [:double :string])
@@ -334,6 +435,62 @@ In list DBIs, tuple values are useful for sorted secondary lists:
 (d/get-list kv "scores-by-board" "daily" :string score-type)
 ;; => ([87.0 "bob"] [98.5 "alice"])
 ```
+
+```java
+KVType scoreType = KVType.tuple(KVType.DOUBLE, KVType.STRING);
+
+kv.openListDbi("scores-by-board");
+
+kv.transact(
+    "scores-by-board",
+    List.of(
+        List.of(Datalevin.kw("put"), "daily", List.of(98.5, "alice")),
+        List.of(Datalevin.kw("put"), "daily", List.of(87.0, "bob"))),
+    KVType.STRING,
+    scoreType);
+
+List<?> scores = kv.getList(
+    "scores-by-board", "daily", KVType.STRING, scoreType);
+// => [[87.0, "bob"], [98.5, "alice"]]
+```
+
+```python
+score_type = [":double", ":string"]
+
+kv.open_list_dbi("scores-by-board")
+
+kv.transact([
+    [":put", "daily", [98.5, "alice"]],
+    [":put", "daily", [87.0, "bob"]],
+], dbi_name="scores-by-board", k_type=":string", v_type=score_type)
+
+scores = kv.get_list(
+    "scores-by-board", "daily", ":string", score_type)
+# => [[87.0, "bob"], [98.5, "alice"]]
+```
+
+```javascript
+const scoreType = [":double", ":string"];
+
+await kv.openListDbi("scores-by-board");
+
+await kv.transact([
+  [":put", "daily", [98.5, "alice"]],
+  [":put", "daily", [87.0, "bob"]]
+], {
+  dbiName: "scores-by-board",
+  kType: ":string",
+  vType: scoreType
+});
+
+const scores = await kv.getList("scores-by-board", "daily", {
+  kType: ":string",
+  vType: scoreType
+});
+// => [[87.0, "bob"], [98.5, "alice"]]
+```
+
+</div>
 
 Each tuple element can encode to at most 255 bytes. If the tuple is used as an
 LMDB key, the whole encoded key must still fit within Datalevin's 511-byte key
@@ -356,11 +513,15 @@ the maximum key size is **511 bytes**.
 
 ## 4. KV Operations
 
+Technically, writes to a KV store go through write transactions, and reads
+through read transactions. When we speak of a transaction, we mean a write
+transaction, and we call a read transaction a query.
+
 ### 4.1 Transactions
 
 Data is written to a KV store with `transact-kv`. One call applies a batch of
 operations atomically: either all items commit or none of them do. A single KV
-transaction may write several DBIs in the same store, but it cannot span two
+transaction may write to several DBIs in the same store, but it cannot span two
 different stores or database files.
 
 Transaction items are vectors. There are two common shapes.
@@ -386,7 +547,7 @@ write flags for specialized cases:
 
 | Flag | Meaning |
 | :--- | :--- |
-| `:append` | Hint that keys are inserted in sorted order. This can speed up bulk loading, but use it only when the input order is correct. |
+| `:append` | Hint that keys are inserted in sorted order. This can speed up bulk loading, but use it only when the input order is ascending. |
 | `:appenddup` | Like `:append`, but for sorted duplicate values in a `DUPSORT`/list DBI. |
 | `:nooverwrite` | Do not overwrite an existing key. The write fails if the key already exists. |
 | `:nodupdata` | In a duplicate-sorted DBI, do not add the same key/value pair twice. |
@@ -428,9 +589,12 @@ await kv.transact([
 
 </div>
 
-The **single-DBI shape** is used when every item targets the same DBI and uses
-the same key/value types. Pull the DBI name and types out to the function call,
-then each item contains only the operation, key, and value:
+The **single-DBI shape**, `(d/transact-kv kv dbi-name txs)` is used when every
+item targets the same DBI and uses the same key/value types. Pull the DBI name
+and types out to the function call, then each item contains only the operation,
+key, and value:
+
+<div class="multi-lang">
 
 ```clojure
 (d/transact-kv kv
@@ -442,7 +606,42 @@ then each item contains only the operation, key, and value:
   :string)
 ```
 
+```java
+kv.transact(
+    "people",
+    List.of(
+        List.of(Datalevin.kw("put"), 1L, "Alice"),
+        List.of(Datalevin.kw("put"), 2L, "Bob"),
+        List.of(Datalevin.kw("del"), 3L)),
+    "long",
+    "string");
+```
+
+```python
+kv.transact([
+    [":put", 1, "Alice"],
+    [":put", 2, "Bob"],
+    [":del", 3],
+], dbi_name="people", k_type=":long", v_type=":string")
+```
+
+```javascript
+await kv.transact([
+  [":put", 1, "Alice"],
+  [":put", 2, "Bob"],
+  [":del", 3]
+], {
+  dbiName: "people",
+  kType: ":long",
+  vType: ":string"
+});
+```
+
+</div>
+
 This call is equivalent to:
+
+<div class="multi-lang">
 
 ```clojure
 (d/transact-kv kv
@@ -450,6 +649,31 @@ This call is equivalent to:
    [:put "people" 2 "Bob" :long :string]
    [:del "people" 3 :long]])
 ```
+
+```java
+kv.transact(List.of(
+    List.of(Datalevin.kw("put"), "people", 1L, "Alice", "long", "string"),
+    List.of(Datalevin.kw("put"), "people", 2L, "Bob", "long", "string"),
+    List.of(Datalevin.kw("del"), "people", 3L, "long")));
+```
+
+```python
+kv.transact([
+    [":put", "people", 1, "Alice", ":long", ":string"],
+    [":put", "people", 2, "Bob", ":long", ":string"],
+    [":del", "people", 3, ":long"],
+])
+```
+
+```javascript
+await kv.transact([
+  [":put", "people", 1, "Alice", ":long", ":string"],
+  [":put", "people", 2, "Bob", ":long", ":string"],
+  [":del", "people", 3, ":long"]
+]);
+```
+
+</div>
 
 Use the self-contained shape when a batch touches multiple DBIs or mixed data
 types. Use the single-DBI shape when you are bulk-writing one typed DBI; it is
@@ -476,6 +700,21 @@ queries.
 ```java
 // Get all values for a key
 List<?> values = kv.getList("tags", "clojure", "string", "string");
+// => ["expressive", "fast"] ; sorted values
+```
+
+```python
+# Get all values for a key
+values = kv.get_list("tags", "clojure", ":string", ":string")
+# => ["expressive", "fast"] ; sorted values
+```
+
+```javascript
+// Get all values for a key
+const values = await kv.getList("tags", "clojure", {
+  kType: ":string",
+  vType: ":string"
+});
 // => ["expressive", "fast"] ; sorted values
 ```
 
@@ -523,14 +762,38 @@ range as a result collection. For very large ranges, Datalevin's spillable
 collections can move intermediate data to temporary disk storage under memory
 pressure. Configure this behavior with `:spill-opts` when opening the KV store:
 
+<div class="multi-lang">
+
 ```clojure
 (def kv
   (d/open-kv "/tmp/my-kv"
              {:spill-opts {:spill-threshold 100}}))
 ```
 
+```java
+KV kv = Datalevin.openKV(
+    "/tmp/my-kv",
+    Map.of("spill-opts", Map.of("spill-threshold", 100)));
+```
+
+```python
+kv = open_kv(
+    "/tmp/my-kv",
+    opts={":spill-opts": {":spill-threshold": 100}})
+```
+
+```javascript
+const kv = await openKv("/tmp/my-kv", {
+  ":spill-opts": { ":spill-threshold": 100 }
+});
+```
+
+</div>
+
 For a Datalog connection, pass the same setting through `:kv-opts`, because the
 Datalog store owns an underlying KV store:
+
+<div class="multi-lang">
 
 ```clojure
 (def conn
@@ -538,19 +801,44 @@ Datalog store owns an underlying KV store:
               {:kv-opts {:spill-opts {:spill-threshold 100}}}))
 ```
 
+```java
+Connection conn = Datalevin.getConn(
+    "/tmp/my-db",
+    schema,
+    Map.of("kv-opts",
+           Map.of("spill-opts",
+                  Map.of("spill-threshold", 100))));
+```
+
+```python
+conn = connect(
+    "/tmp/my-db",
+    schema=schema,
+    opts={":kv-opts": {":spill-opts": {":spill-threshold": 100}}})
+```
+
+```javascript
+const conn = await connect("/tmp/my-db", {
+  schema,
+  opts: { ":kv-opts": { ":spill-opts": { ":spill-threshold": 100 } } }
+});
+```
+
+</div>
+
 Set `:spill-threshold` to `100` to disable spill-to-disk. Use lower values to
 spill earlier under heap pressure. The `:spill-root` option can move temporary
 spill files away from the system temp directory. Spill files are implementation
 storage for large reads; they are not durable application data. If you want to
 process a large range without realizing it eagerly, prefer `range-seq` and close
-the returned sequence when finished.
+the returned sequence when finished. `range-seq` is useful when you want a lazy
+sequence.
 
-### 4.4 Visitor functions, `read-buffer`, and `put-buffer`
+### 4.4 Visitor and Filter Functions
 
-`range-seq` is useful when you want a lazy sequence. Sometimes you do not want a
-sequence at all: you want to stream over a range, update a counter, write to an
-output file, build a summary, or stop as soon as enough data has been seen. For
-those cases, use the visitor APIs.
+Sometimes you do not want a sequence at all: you want to stream over a range,
+update a counter, write to an output file, build a summary, or stop as soon as
+enough data has been seen. For those cases, use the visitor APIs.
 
 The main visitor functions are:
 
@@ -559,8 +847,11 @@ The main visitor functions are:
 - `visit-list`, which visits the values stored under one list-DBI key.
 - `visit-list-range`, which visits key-value pairs across a list-DBI range.
 
-Visitors return `nil` from the outer call and are intended for side effects. If
-a visitor returns `:datalevin/terminate-visit`, Datalevin stops the scan early.
+Visitors return `nil` from the outer call and are intended for side effects.
+
+In a visitor range scan, the supplied visitor callback is called on every key
+value in the range. When the callback returns `:datalevin/terminate-visit`,
+Datalevin stops the range scan early.
 
 By default, visitors run in **raw mode**. A raw `visit` callback receives an
 `IKV` object whose key and value are `java.nio.ByteBuffer`s. Use `d/k` and `d/v`
@@ -573,6 +864,13 @@ The raw callback argument depends on the visitor. `visit-key-range` receives a
 key buffer directly. `visit-list` receives a value buffer directly. `visit` and
 `visit-list-range` receive an `IKV` pair, because both key and value are
 available.
+
+Clojure exposes raw callbacks as `ByteBuffer` values or `IKV` key/value pairs.
+Java exposes `RawBuffer` and `RawKV` wrappers; Python and JavaScript expose
+analogous `RawBuffer` and `RawKV` objects with `read`, `read_key`/`readKey`,
+`read_value`/`readValue`, and byte-copy helpers. The regular-DBI raw `visit`
+example below is Clojure-focused, but the list-DBI raw visit and list-range
+filter APIs have Java, Python, and JavaScript parity and are shown after it.
 
 ```clojure
 (def kv (d/open-kv nil {:inmemory? true}))
@@ -627,9 +925,106 @@ an application value into a `ByteBuffer` using the same type descriptor. This is
 useful when a raw visitor or raw range predicate wants to compare encoded values
 without decoding every item.
 
-For example, using the earlier `scores-by-board` list DBI, you can encode a
-score cutoff once and compare raw list values against it. Raw byte comparison is
-meaningful here because both buffers use the same `score-type` descriptor:
+For raw visits over a single list key, the callback receives each raw list value
+buffer. Decode or copy what you need inside the callback:
+
+<div class="multi-lang">
+
+```clojure
+(d/visit-list kv "scores-by-board"
+  (fn [value-buf]
+    (println (d/read-buffer value-buf score-type)))
+  "daily"
+  :string
+  score-type
+  true)
+```
+
+```java
+kv.visitListRaw(
+    "scores-by-board",
+    raw -> System.out.println(raw.read(scoreType)),
+    "daily",
+    KVType.STRING);
+```
+
+```python
+kv.visit_list_raw(
+    "scores-by-board",
+    lambda raw: print(raw.read(score_type)),
+    "daily",
+    ":string")
+```
+
+```javascript
+await kv.visitListRaw("scores-by-board", async (raw) => {
+  console.log(await raw.read(scoreType));
+}, "daily", { kType: ":string" });
+```
+
+</div>
+
+Raw filters over list ranges receive a raw key/value pair. The predicate can
+decode only the parts it needs:
+
+<div class="multi-lang">
+
+```clojure
+(d/list-range-filter kv "scores-by-board"
+  (fn [kvp]
+    (let [[score _user] (d/read-buffer (d/v kvp) score-type)]
+      (>= score 90.0)))
+  [:all]
+  :string
+  [:all]
+  score-type
+  true)
+;; => [["daily" [98.5 "alice"]]]
+```
+
+```java
+List<?> highScores = kv.listRangeFilterRaw(
+    "scores-by-board",
+    raw -> {
+        List<?> row = (List<?>) raw.readValue(scoreType);
+        return ((Number) row.get(0)).doubleValue() >= 90.0;
+    },
+    List.of(Datalevin.kw("all")),
+    KVType.STRING,
+    List.of(Datalevin.kw("all")),
+    scoreType,
+    null,
+    null);
+```
+
+```python
+high_scores = kv.list_range_filter_raw(
+    "scores-by-board",
+    lambda raw: raw.read_value(score_type)[0] >= 90.0,
+    [":all"],
+    ":string",
+    [":all"],
+    score_type)
+```
+
+```javascript
+const highScores = await kv.listRangeFilterRaw(
+  "scores-by-board",
+  async (raw) => {
+    const [score] = await raw.readValue(scoreType);
+    return score >= 90.0;
+  },
+  [":all"],
+  { kType: ":string", vRange: [":all"], vType: scoreType }
+);
+```
+
+</div>
+
+If Clojure/JVM code needs to compare encoded bytes directly, it can use
+`put-buffer` to encode a cutoff once and compare raw list values against it.
+Raw byte comparison is meaningful here because both buffers use the same
+`score-type` descriptor:
 
 ```clojure
 (import '[java.nio ByteBuffer])
@@ -661,18 +1056,52 @@ the callback.
 Raw mode is the default because it avoids decoding data that the visitor may
 not need. If you prefer a simpler callback and are willing to decode every
 visited item, pass `false` as the final `raw-pred?` argument. In decoded mode,
-`visit` calls the visitor with two arguments, the decoded key and decoded value:
+regular `visit` calls the visitor with decoded key and decoded value arguments,
+while `visit-list` calls it with the decoded list value:
+
+<div class="multi-lang">
 
 ```clojure
-(d/visit kv "events"
-  (fn [[account at] n]
-    (println account at n))
-  [:closed ["acct-1" #inst "2026-06-01T00:00:00Z"]
-           ["acct-1" #inst "2026-06-30T00:00:00Z"]]
-  event-key
-  :long
+(d/visit-list kv "scores-by-board"
+  (fn [[score user]]
+    (println user score))
+  "daily"
+  :string
+  score-type
   false)
 ```
+
+```java
+kv.visitList(
+    "scores-by-board",
+    value -> {
+        List<?> row = (List<?>) value;
+        System.out.println(row.get(1) + " " + row.get(0));
+    },
+    "daily",
+    KVType.STRING,
+    scoreType);
+```
+
+```python
+kv.visit_list(
+    "scores-by-board",
+    lambda row: print(row[1], row[0]),
+    "daily",
+    ":string",
+    score_type)
+```
+
+```javascript
+await kv.visitList("scores-by-board", (row) => {
+  console.log(row[1], row[0]);
+}, "daily", {
+  kType: ":string",
+  vType: scoreType
+});
+```
+
+</div>
 
 Use decoded mode for clarity. Use raw mode when you are doing a very large scan,
 need to skip many items cheaply, or need direct control over decoding.
@@ -692,7 +1121,12 @@ for the KV layer:
 
 `sample-kv` is useful for quick inspection, smoke tests after import, or getting
 representative examples without scanning a whole DBI. By default it returns
-values only. Pass `false` as `ignore-key?` when you want `[key value]` pairs:
+values only. Pass `false` as `ignore-key?` when you want `[key value]` pairs.
+
+In Java, this helper is currently exposed through `DatalevinInterop.kvSample`;
+Python and JavaScript expose it as a method on the KV handle.
+
+<div class="multi-lang">
 
 ```clojure
 (d/open-dbi kv "people")
@@ -706,6 +1140,62 @@ values only. Pass `false` as `ignore-key?` when you want `[key value]` pairs:
 ;; => [[2 "Bob"] [1 "Alice"]] ; example only, samples are random
 ```
 
+```java
+import datalevin.DatalevinInterop;
+
+kv.openDbi("people");
+
+kv.transact(
+    "people",
+    List.of(
+        List.of(Datalevin.kw("put"), 1L, "Alice"),
+        List.of(Datalevin.kw("put"), 2L, "Bob"),
+        List.of(Datalevin.kw("put"), 3L, "Cara")),
+    "long",
+    "string");
+
+List<?> sample = DatalevinInterop.kvSample(
+    kv.handle(), "people", 2, "long", "string", false);
+// => [[2, "Bob"], [1, "Alice"]] ; example only, samples are random
+```
+
+```python
+kv.open_dbi("people")
+
+kv.transact([
+    [":put", 1, "Alice"],
+    [":put", 2, "Bob"],
+    [":put", 3, "Cara"],
+], dbi_name="people", k_type=":long", v_type=":string")
+
+sample = kv.sample_kv(
+    "people", 2, k_type=":long", v_type=":string", ignore_key=False)
+# => [[2, "Bob"], [1, "Alice"]] ; example only, samples are random
+```
+
+```javascript
+await kv.openDbi("people");
+
+await kv.transact([
+  [":put", 1, "Alice"],
+  [":put", 2, "Bob"],
+  [":put", 3, "Cara"]
+], {
+  dbiName: "people",
+  kType: ":long",
+  vType: ":string"
+});
+
+const sample = await kv.sampleKv("people", 2, {
+  kType: ":long",
+  vType: ":string",
+  ignoreKey: false
+});
+// => [[2, "Bob"], [1, "Alice"]] ; example only, samples are random
+```
+
+</div>
+
 If `n` is larger than the number of entries in the DBI, `sample-kv` returns
 `nil`.
 
@@ -714,8 +1204,11 @@ If `n` is larger than the number of entries in the DBI, `sample-kv` returns
 ## 5. Explicit Transaction `with-transaction-kv`
 
 `transact-kv` is the standard way to write data. However, for complex logic
-involving reads and writes that must be atomic, use the `with-transaction-kv`
-macro.
+involving reads and writes that must be atomic, use `with-transaction-kv` in
+Clojure or the corresponding explicit transaction helper in the host-language
+binding.
+
+<div class="multi-lang">
 
 ```clojure
 (d/open-dbi kv "counters")
@@ -730,7 +1223,59 @@ macro.
       :long)))
 ```
 
-This macro ensures that:
+```java
+kv.openDbi("counters");
+
+kv.withTransaction(tx -> {
+    Object value = tx.getValue(
+        "counters", "hits", "string", "long", true);
+    long current = value == null ? 0L : ((Number) value).longValue();
+
+    tx.transact(
+        "counters",
+        List.of(List.of(Datalevin.kw("put"), "hits", current + 1)),
+        "string",
+        "long");
+    return null;
+});
+```
+
+```python
+kv.open_dbi("counters")
+
+def increment(tx):
+    current = tx.get_value(
+        "counters", "hits", ":string", ":long", ignore_key=True) or 0
+    tx.transact(
+        [[":put", "hits", current + 1]],
+        dbi_name="counters",
+        k_type=":string",
+        v_type=":long")
+
+kv.with_transaction(increment)
+```
+
+```javascript
+await kv.openDbi("counters");
+
+await kv.withTransaction(async (tx) => {
+  const current = await tx.getValue("counters", "hits", {
+    kType: ":string",
+    vType: ":long",
+    ignoreKey: true
+  }) ?? 0;
+
+  await tx.transact([[":put", "hits", current + 1]], {
+    dbiName: "counters",
+    kType: ":string",
+    vType: ":long"
+  });
+});
+```
+
+</div>
+
+This helper ensures that:
 1. All reads and writes inside the block share the same transaction snapshot.
 2. The transaction is automatically committed at the end of the block.
 3. If an exception occurs, the transaction is safely aborted.

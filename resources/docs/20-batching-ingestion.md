@@ -1,21 +1,27 @@
 ---
 title: "Batching, Sorting, and High-Throughput Ingestion"
-chapter: 19
+chapter: 20
 part: "V — Performance and Operations"
 ---
 
-# Chapter 19: Batching, Sorting, and High-Throughput Ingestion
+# Chapter 20: Batching, Sorting, and High-Throughput Ingestion
+
+High write throughput is a different problem from low-latency reads or
+interactive transactions. This chapter collects the tools Datalevin offers for
+loading large volumes of data quickly: WAL mode and asynchronous transactions
+for durable online ingestion, non-durable LMDB flags for rebuildable imports,
+pre-sorting to keep B+Tree inserts cheap, and the `init-db`/`fill-db` bulk-load
+path that bypasses the transaction layer entirely. It closes with a decision
+flow for choosing among them. For the durability trade-offs behind these
+choices, see Chapter 19.
+
+---
 
 ## 1. High-Throughput Ingestion: The Infrastructure
 
 Ingesting large datasets requires a different strategy than standard interactive
 writes or OLTP. Datalevin provides several infrastructure features to support
-extreme throughput.
-
-![Choosing an ingestion strategy: if you can supply final prepared datoms, use bulk load (init-db / fill-db); otherwise, for a one-time rebuildable import use non-durable flags (:nosync / :writemap+:mapasync); otherwise, for interactive or modest write rates use normal transactions (transact!); otherwise use async transactions, with a sync checkpoint when you need durable checkpoints, or async plus WAL for the highest durable throughput](/images/diagrams/ingestion-strategy.svg)
-
-The decision flow above maps the situations to the strategies the rest of this
-chapter covers in detail.
+high throughput.
 
 ### 1.1 WAL Mode for Ingestion
 
@@ -23,10 +29,9 @@ For high-throughput ingestion where data must remain queryable as it arrives,
 enable **WAL mode**. WAL turns write pressure into sequential log appends while
 preserving LMDB's B+Tree read path.
 
-- **Benefit**: Sequential WAL appends are much faster than random B+Tree
-  flushes.
+- **Benefit**: Sequential WAL appends are faster than random B+Tree flushes.
 - **Durability policy**: Choose the WAL durability profile using the operational
-  guidance in Chapter 20, Section 1.4.2.
+  guidance in Chapter 19, Section 1.4.2.
 
 ### 1.2 Asynchronous Transactions
 
@@ -83,7 +88,9 @@ The batching is **adaptive**: the higher the write load, the bigger the batch
 size. This combines with manual batching for compound performance gains.
 
 An asynchronous transaction returns a future or promise that requires some
-programmatic management work.
+programmatic management work. One technique is to block and wait only on the
+last asynchronous transaction. Since async transactions are still committed in
+order, the last realized future indicates all prior calls are already committed.
 
 ### 1.3 Sync + Async Combo
 
@@ -135,9 +142,6 @@ await conn.transact([]);
 ```
 
 </div>
-
-Since async transactions are still committed in order, the last realized future
-indicates all prior calls are already committed.
 
 > **Note**: In the default direct LMDB commit path, writes are still coordinated
 > by the single-writer B+Tree transaction model. WAL mode changes the throughput
@@ -346,10 +350,10 @@ checks.
 upserts. They accept prepared `Datom` values. That means the subject entity id
 and every `:db.type/ref` value must already be the final numeric entity id.
 
-The Join Order Benchmark (JOB) uses a simple technique that works well for
-relational imports whose source tables already have integer primary keys:
-reserve a non-overlapping entity-id range for each source table, then convert
-every primary key and foreign key with the same function [1] [2]. For example:
+A simple technique works well for relational imports whose source tables already
+have integer primary keys: reserve a non-overlapping entity-id range for each
+source table, then convert every primary key and foreign key with the same
+function [1] [2]. For example:
 
 <!-- pdf-listing: Preparing stable entity ids for bulk datom ingestion -->
 
@@ -504,12 +508,27 @@ you reserved non-overlapping ranges up front.
 
 ---
 
+## 4. Choosing an Ingestion Strategy
+
+After the individual tools are clear, the decision flow in Figure 20.1
+summarizes when to use each ingestion path.
+
+![Choosing an ingestion strategy: if you can supply final prepared datoms, use bulk load (init-db / fill-db); otherwise, for a one-time rebuildable import use non-durable flags (:nosync / :writemap+:mapasync); otherwise, for interactive or modest write rates use normal transactions (transact!); otherwise use async transactions, with a sync checkpoint when you need durable checkpoints, or async plus WAL for the highest durable throughput](/images/diagrams/ingestion-strategy.svg)
+
+Use bulk load when you can prepare final datoms up front. Use non-durable LMDB
+flags only for rebuildable imports. Use normal transactions for interactive
+or modest write rates. Use async transactions, often with WAL, when online
+ingestion needs higher throughput; add explicit sync checkpoints when the
+application needs durable handoff points.
+
+---
+
 ## Summary: The Ingestion Checklist
 
 When you need to ingest data at scale, follow this checklist:
 
 1.  **Use WAL mode when OLTP data must stay queryable**: Choose the durability
-    profile using Chapter 20's operational guidance.
+    profile using Chapter 19's operational guidance.
 2.  **Use async transactions**: `d/transact-async` provides adaptive batching
     for orders-of-magnitude throughput improvement.
 3.  **Combine with manual batching**: The effects of auto-batching and manual
@@ -523,10 +542,10 @@ When you need to ingest data at scale, follow this checklist:
     possible bulk load into a database for static data sets.
 7.  **Use non-durable LMDB flags only for rebuildable imports**: `:nometasync`,
     `:nosync`, and `:writemap`/`:mapasync` can improve write speed, but they
-    change durability (i.e. crash behavior).
+    change durability (i.e., crash behavior).
 
 For the full durability discussion and maintenance implications, see Chapter
-20.
+19.
 
 By following these patterns, you can achieve extreme write throughput with
 Datalevin.

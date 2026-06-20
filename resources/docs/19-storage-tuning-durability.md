@@ -1,10 +1,10 @@
 ---
 title: "Durability, Database Maintenance, and Storage Tuning"
-chapter: 20
+chapter: 19
 part: "V — Performance and Operations"
 ---
 
-# Chapter 20: Durability, Database Maintenance, and Storage Tuning
+# Chapter 19: Durability, Database Maintenance, and Storage Tuning
 
 Performance and durability are the two sides of the same operational problem:
 the database must be fast, bounded, recoverable, and predictable under failure.
@@ -61,7 +61,7 @@ primarily limited by the speed of your disk's **synchronous flush (`msync`)**.
 
 ### 1.3 Non-Durable Environment Flags
 
-Chapter 19 shows the concrete LMDB environment flags for repeatable imports and
+Chapter 20 shows the concrete LMDB environment flags for repeatable imports and
 cache rebuilds. From an operations perspective, the rule is simple: every flag
 that reduces commit-time flushing changes the crash boundary. `:nometasync` is
 the least aggressive option because database integrity is retained, though the
@@ -72,7 +72,7 @@ system crash.
 Use these modes only when the data can be rebuilt from a durable source or when
 the application has an explicit recovery plan. For raw KV stores, call the KV
 `sync` operation at explicit checkpoints if you need to force a flush. For the
-full flag table, setup examples, and ingestion trade-offs, see Chapter 19.
+full flag table, setup examples, and ingestion trade-offs, see Chapter 20.
 
 ---
 
@@ -87,10 +87,31 @@ behavior.
 
 #### 1.4.1 The LSN Lifecycle
 
-In WAL mode, every transaction is assigned a **Log Sequence Number (LSN)**. This
-number is the canonical source of truth for the database's progress.
+In WAL mode, every transaction is assigned a **Log Sequence Number (LSN)**. LSNs
+are positive, strictly increasing commit positions in the WAL stream. They are
+the unit Datalevin uses for durability tracking, recovery replay, snapshots,
+replication, and WAL garbage collection.
+
+Figure 19.1 should be read from left to right. A transaction first becomes
+**committed** when Datalevin accepts it into the WAL commit stream and assigns
+an LSN. It becomes **durable** when the WAL record containing that LSN has
+reached the durability boundary selected by the current profile. It becomes
+**applied** when Datalevin knows the corresponding state is present in the LMDB
+file or covered by recovery-marker state. Later, `create-snapshot!` records a
+checkpoint that covers applied state, and `gc-txlog-segments!` can reclaim WAL
+segments that are older than all retention floors.
 
 ![The WAL LSN lifecycle: a transaction advances from committed to durable to applied (the three watermarks read with txlog-watermarks), then is checkpointed by create-snapshot! and finally reclaimed by gc-txlog-segments!](/images/diagrams/wal-lsn-lifecycle.svg)
+
+Each watermark answers a different operational question. Has Datalevin accepted
+the transaction into the WAL stream? Has the WAL record reached storage under
+the selected durability policy? Has the LMDB file or recovery-marker state
+caught up to that record? Under `:relaxed` group commit, a transaction can be
+committed before it is durable. A durable transaction can also be ahead of the
+applied marker until checkpoint work catches up. This is normal operational lag,
+not logical inconsistency: committed data is visible according to the
+transaction semantics of the open database, durable data survives the crash
+boundary, and unapplied durable WAL can be replayed during recovery.
 
 - **`:last-committed-lsn`**: The latest transaction that has been successfully
   committed in the database.
@@ -102,7 +123,97 @@ number is the canonical source of truth for the database's progress.
 By monitoring these watermarks with `txlog-watermarks`, you can precisely track
 the "lag" between application commits and physical disk durability.
 
+In Clojure, call `txlog-watermarks` on the local KV handle. For a Datalog
+connection, use `datalog-kv` to get the backing KV handle:
+
+<div class="multi-lang">
+
+```clojure
+(def conn
+  (d/get-conn "/data/app-db" schema {:wal? true}))
+
+(d/transact! conn [{:db/id -1 :event/name "started"}])
+
+(-> (d/txlog-watermarks (d/datalog-kv conn))
+    (select-keys [:wal?
+                  :durability-profile
+                  :last-committed-lsn
+                  :last-durable-lsn
+                  :last-applied-lsn]))
+;; => {:wal? true
+;;     :durability-profile :relaxed
+;;     :last-committed-lsn 1
+;;     :last-durable-lsn 1
+;;     :last-applied-lsn 1}
+```
+
+```java
+try (Connection conn = Datalevin.getConn(
+        "/data/app-db",
+        schema,
+        Map.of(":wal?", true))) {
+    conn.transact(List.of(
+        Map.of(":db/id", -1L, ":event/name", "started")));
+
+    Map<?, ?> watermarks = conn.txLogWatermarks();
+    // Inspect :last-committed-lsn, :last-durable-lsn, and :last-applied-lsn.
+}
+```
+
+```python
+with connect("/data/app-db",
+             schema=schema,
+             opts={":wal?": True}) as conn:
+    conn.transact([{":db/id": -1, ":event/name": "started"}])
+
+    watermarks = conn.tx_log_watermarks()
+    lsn_view = {
+        key: watermarks[key]
+        for key in [
+            ":last-committed-lsn",
+            ":last-durable-lsn",
+            ":last-applied-lsn",
+        ]
+    }
+```
+
+```javascript
+const conn = await connect("/data/app-db", {
+  schema,
+  opts: { ":wal?": true }
+});
+
+try {
+  await conn.transact([
+    { ":db/id": -1, ":event/name": "started" }
+  ]);
+
+  const watermarks = await conn.txLogWatermarks();
+  const lsnView = {
+    committed: watermarks[":last-committed-lsn"] ?? watermarks.lastCommittedLsn,
+    durable: watermarks[":last-durable-lsn"] ?? watermarks.lastDurableLsn,
+    applied: watermarks[":last-applied-lsn"] ?? watermarks.lastAppliedLsn
+  };
+} finally {
+  await conn.close();
+}
+```
+
+</div>
+
+If `:last-committed-lsn` is ahead of `:last-durable-lsn`, the WAL has accepted
+transactions that have not yet reached the selected durability boundary. If
+`:last-durable-lsn` is ahead of `:last-applied-lsn`, durable WAL records exist
+that are not yet covered by the LMDB applied marker or current snapshot state.
+Under `:strict`, the committed-to-durable gap is usually small or zero in steady
+state. Under `:relaxed`, short committed-to-durable lag is expected during group
+commit. The durable-to-applied gap is controlled by checkpoint and snapshot
+progress rather than only by the durability profile.
+
 #### 1.4.2 Durability Profiles
+
+WAL mode durability is specified with a database open-time option called
+durability profile.
 
 - **`:strict`**: The database waits for the WAL to be synced to disk for *every*
   transaction using a standard `fsync`. This is the default for consensus-lease
@@ -113,6 +224,61 @@ the "lag" between application commits and physical disk durability.
 - **`:extra`**: Uses even stricter durability guarantees (e.g.,
   `fcntl(F_FULLSYNC)` on macOS) to protect against hardware write-cache
   failures.
+
+Specify the profile in the same open-time options map that enables WAL. The
+following opens a local Datalog database with strict WAL durability:
+
+<div class="multi-lang">
+
+```clojure
+(def conn
+  (d/get-conn "/data/app-db"
+              schema
+              {:wal? true
+               :wal-durability-profile :strict}))
+```
+
+```java
+try (Connection conn = Datalevin.getConn(
+        "/data/app-db",
+        schema,
+        Map.of(":wal?", true,
+               ":wal-durability-profile", ":strict"))) {
+    // Use conn here.
+}
+```
+
+```python
+with connect("/data/app-db",
+             schema=schema,
+             opts={":wal?": True,
+                   ":wal-durability-profile": ":strict"}) as conn:
+    # Use conn here.
+    pass
+```
+
+```javascript
+const conn = await connect("/data/app-db", {
+  schema,
+  opts: {
+    ":wal?": true,
+    ":wal-durability-profile": ":strict"
+  }
+});
+
+try {
+  // Use conn here.
+} finally {
+  await conn.close();
+}
+```
+
+</div>
+
+Use the same option keys with `open-kv` / `openKV` / `open_kv` / `openKv` for
+raw KV stores. Change the profile value to `:relaxed` when the workload accepts
+a short crash-loss window for higher throughput, or to `:extra` when the
+platform-specific stronger flush is required.
 
 On startup, a WAL-enabled store compares the LSN applied to the LMDB file with
 the durable LSN in the log. If the log is ahead, Datalevin validates newer log
@@ -228,16 +394,25 @@ and Python, or as `{ retainFloorLsn: 5000 }` in JavaScript.
 
 ---
 
-### 1.6 Online Snapshots: `d/copy`
+### 1.6 Online Backup Copies: `d/copy`
 
 In other databases, backing up a live database can be tricky. If you simply copy
 the file while a write is happening, the copy might be corrupted.
 
-Datalevin's **`d/copy`** function creates a consistent snapshot from a Datalog
-connection or DB object, or from a KV handle. It can run while the database is
-actively used, so readers can continue accessing the source while the copy is
-being made. The Java, Python, and JavaScript bindings expose `copy` directly on
-both connection and KV handles.
+Datalevin's **`d/copy`** function creates a transactionally consistent backup
+copy from a Datalog connection or DB object, or from a KV handle. This is the
+ordinary online backup path: use it when you want a recoverable point-in-time
+copy of the current database without changing the source. It can run while the
+database is active. Readers can continue using the source, and writers do not
+have to stop for the copy to be consistent.
+
+This section is about the default, non-compacting copy. It preserves the
+database content and layout closely enough for fast backup creation. If the goal
+is to reclaim free pages after large deletes or to rewrite the destination into
+a smaller file, use the compacting form in Section 1.7.1.
+
+The Java, Python, and JavaScript bindings expose `copy` directly on both
+connection and KV handles.
 
 <div class="multi-lang">
 
@@ -295,12 +470,13 @@ $ dtlv -d /data/companydb copy /backup/companydb-2024-01-15
 
 </div>
 
-- **Live Backups**: You can run `copy` while the database is being actively
-  queried and written to.
-- **Consistency**: The copy represents a single, transactionally consistent
-  point in time.
-- **Zero-Impact**: Because of LMDB's MVCC architecture, the copy doesn't block
-  writers or other readers.
+- **Backup purpose**: Use ordinary `copy` for routine online backup when the
+  destination does not need compaction.
+- **Consistency**: The copy represents a single transactionally consistent point
+  in time.
+- **Operational impact**: LMDB's MVCC architecture lets the copy run while the
+  source remains available. A long-running copy still consumes I/O and can keep
+  older pages live until it finishes, so schedule large copies deliberately.
 
 ---
 
@@ -311,9 +487,12 @@ maintenance, backup, and migration.
 
 #### 1.7.1 Compacting with `d/copy`
 
-LMDB's copy functionality can create a compacted copy of the database. This
-reclaims free pages left by deleted data in the destination copy and improves
-B+Tree locality.
+The compacting form of `copy` uses the same consistency guarantees as Section
+1.6, but it serves a different maintenance purpose. LMDB reuses deleted pages
+inside the source file; it does not shrink the file in place. A compacting copy
+rewrites live pages into a new destination, leaving free pages behind. Use it
+after large deletes, after major data reshaping, or before archiving a smaller
+backup artifact.
 
 ```clojure
 ;; Copy and compact a Datalog database
@@ -326,50 +505,67 @@ B+Tree locality.
 In Java and Python, pass `true` / `True` as the compact argument to `copy`. In
 JavaScript, pass `{ compact: true }`.
 
-The copy operation can run **regardless of whether the database is currently in
-use**; readers can continue accessing the source while the copy is being made.
+Compaction is not an in-place operation. It creates a new compacted destination.
+If you want the compacted copy to replace the production database, treat that as
+a controlled maintenance step: stop writers, close the old connection, move or
+restore the compacted directory into place, and reopen.
 
-#### 1.7.2 The `dtlv` Command Line Tool
+#### 1.7.2 The `dtlv` Command-Line Tool
 
-The `dtlv` CLI tool provides interactive and batch database operations:
+The `dtlv` CLI tool is the operator entry point for maintenance tasks. Use it
+when a backup, compaction, dump/load, or inspection task belongs in a shell
+script or runbook rather than in application code. The command-specific help is
+usually the best reference while operating a system:
 
 ```console
-# Interactive REPL
-$ dtlv
-
-# Backup with compaction
-$ dtlv -d /data/companydb -c copy /backup/companydb-2024-01-15
-
-# Dump database to file
-$ dtlv -d /data/companydb -g -f ~/dump.edn dump
-
-# Load dump into new database
-$ dtlv -d /data/newdb -f ~/dump.edn -g load
+$ dtlv help
+$ dtlv help copy
+$ dtlv help dump
+$ dtlv help load
 
 # View database statistics
 $ dtlv -d /data/companydb stat
-
-# List sub-databases
-$ dtlv -d /data/companydb -l dump
 ```
 
-Key options:
-- `-c, --compact`: Compact while copying
-- `-g, --datalog`: Dump/load as Datalog database
-- `-n, --nippy`: Use Nippy binary format for faster serialization
+The examples above this section showed `dtlv copy` for backup and compaction.
+The next section covers `dtlv dump` and `dtlv load`.
 
 #### 1.7.3 Dump and Load Formats
 
-Datalevin supports multiple dump/load formats:
+Dump/load is a logical export/import path. Use it when you need a portable data
+file, a version-independent migration path, or a way to move data into a new
+database directory. For routine same-version backups, `copy` is usually simpler
+and faster.
 
-- **EDN (default)**: Human-readable, version-independent text format
-- **Nippy**: Binary format for faster serialization of large databases
+Datalevin supports two dump/load encodings:
+
+- **EDN (default)**: Human-readable, version-independent text.
+- **Nippy**: Binary serialization for faster dump/load of large databases.
+
+For a Datalog database, pass `-g` / `--datalog`:
 
 ```console
-# Binary dump/load (faster)
-$ dtlv -d /data/companydb -g -n -f ~/backup.nippy dump
-$ dtlv -d /data/newdb -g -n -f ~/backup.nippy load
+# EDN Datalog dump/load
+$ dtlv -d /data/companydb -g -f ~/company.edn dump
+$ dtlv -d /data/newdb -g -f ~/company.edn load
+
+# Nippy Datalog dump/load
+$ dtlv -d /data/companydb -g -n -f ~/company.nippy dump
+$ dtlv -d /data/newdb -g -n -f ~/company.nippy load
 ```
+
+For a named KV sub-database, omit `-g` and pass the DBI name to `dump` or
+`load`:
+
+```console
+# EDN dump/load for a named KV DBI
+$ dtlv -d /data/companydb -f ~/sales.edn dump sales
+$ dtlv -d /data/newdb -f ~/sales.edn load sales
+```
+
+Use `-n` / `--nippy` when speed and file size matter more than human
+inspectability. Keep EDN when the dump needs to be reviewed, transformed, or
+stored as a long-lived interchange artifact.
 
 ---
 
@@ -412,7 +608,8 @@ migration detects Datalog stores by their `datalevin/eav` DBI; if the same file
 also contains extra KV DBIs, dump and load those manually.
 
 #### 1.9.2 Manual Migration
-For older databases, use the command line tool:
+
+For older databases, use the command-line tool:
 
 ```console
 # 1. Backup and compact with old version
@@ -467,20 +664,18 @@ memory management.
 This section covers the best practices for tuning Datalevin's memory and storage
 parameters for maximum performance and stability.
 
----
-
 ### 2.1 The LMDB Map: `:mapsize`
 
 The most critical parameter for Datalevin is **`:mapsize`**. This is the
-OS allocated size for the memory mapped database file, which defines the
+OS-allocated size for the memory-mapped database file, which defines the
 maximum size the file can grow to in the address space.
 
 #### 2.1.1 Virtual Memory vs. Resident Memory
 
 Unlike a traditional Java heap, the `:mapsize` is a **virtual memory**
-reservation. Setting a 1TB mapsize does *not* mean the database will consume 1TB
-of RAM. It simply means the OS will reserve a 1TB "address space" for the
-database file.
+reservation, as shown in Figure 19.2. Setting a 1TB mapsize does *not* mean the
+database will consume 1TB of RAM. It simply means the OS will reserve a 1TB
+"address space" for the database file.
 
 ![mapsize, address space, and the page cache as three nested scales: :mapsize reserves a large virtual address space (not disk, not RAM, safe to set generously); the database file grows on disk up to that mapsize (pre-size to avoid a costly auto-resize); and only the hot working set is resident in RAM via the OS page cache (zero-copy reads, outside the JVM heap). Each layer is a subset of the one above](/images/diagrams/mapsize-address-space.svg)
 
@@ -545,6 +740,64 @@ own buffer pool. Instead, it relies on the **Operating System Page Cache**.
 > to hold your **active working set** (the most frequently queried data) in the
 > OS Page Cache.
 
+#### 2.2.1 Monitoring Page Cache Usage
+
+There is no Datalevin buffer-pool hit ratio to watch, because Datalevin does
+not own the buffer pool. The useful signals come from the operating system:
+whether the LMDB data file is resident, whether queries cause major page faults,
+whether the machine is swapping, and whether reads are blocked on storage.
+
+On Linux, start with the host-level view:
+
+```console
+# Overall memory. Watch "available" and "buff/cache".
+$ free -h
+
+# Swap and I/O pressure. Sustained si/so or high wa is a warning sign.
+$ vmstat 1
+```
+
+Then look at the Datalevin process:
+
+```console
+# VSZ can be large because of :mapsize. RSS is resident memory.
+$ ps -o pid,vsz,rss,maj_flt,comm -p "$DATALEVIN_PID"
+
+# Per-process page faults. Sustained majflt/s under normal queries means the
+# active working set is not staying resident in RAM.
+$ pidstat -r -p "$DATALEVIN_PID" 1
+```
+
+If the Linux `fincore` tool is available, inspect the LMDB data file directly:
+
+```console
+# Show how much of the mapped data file is currently in the page cache.
+$ fincore /data/companydb/data.mdb
+```
+
+The interpretation is more important than any single number. A large virtual
+size is expected when `:mapsize` is large, and by itself is not a problem. A
+healthy steady-state read workload should show enough `available` memory, little
+or no swap activity, low sustained `majflt/s`, and low disk read pressure after
+the working set has warmed. If major faults and disk reads remain high during
+ordinary repeated queries, the hot working set is larger than available RAM or
+other processes are evicting Datalevin's file-backed pages.
+
+On macOS, the built-in tools are less direct, but the same logic applies:
+
+```console
+$ vm_stat 1
+$ memory_pressure
+```
+
+Watch page-ins, swap activity, and memory pressure while running representative
+queries. For an exact per-file residency check on either Linux or macOS, use a
+tool such as `vmtouch` when it is available:
+
+```console
+$ vmtouch /data/companydb/data.mdb
+```
+
 ---
 
 ### 2.3 Reader Threads and Locking: `:max-readers`
@@ -562,7 +815,7 @@ Datalevin also tracks cached reader transactions and the owning thread so reader
 slots can be released when threads disappear. This reduces the common LMDB
 failure mode where abandoned thread pools exhaust reader slots. Virtual-thread
 handling is hardened by disabling thread-local read reuse for short-lived
-virtual threads, the lightweight JVM threads introduced by Project Loom.
+virtual threads, the lightweight JVM threads.
 
 <div class="multi-lang">
 
@@ -601,9 +854,9 @@ keys is identical. Some KV workloads with long structured keys can therefore see
 large savings. Datalevin's Datalog indexes also benefit, but the effect is more
 modest than the largest KV cases because the shared part is usually a portion of
 the encoded 8-byte entity id in EAV and a portion of the encoded 4-byte
-attribute id in AVE.
-The `DUPSORT` nesting described in Chapter 15 is the main reason Datalog indexes
-avoid repeating full entity ids or full `(A, V)` prefixes.
+attribute id in AVE. The `DUPSORT` nesting described in Chapter 15 is the main
+reason Datalog indexes avoid repeating full entity ids or full `(A, V)`
+prefixes.
 
 - **Reduces Storage Size**: Workload dependent; high reductions are possible
   when key prefixes are substantial, while Datalog index savings are usually

@@ -48,9 +48,9 @@ Part IV — Indexes as Capabilities
 
 Part V — Performance and Operations
 
-19. Batching, Sorting, and High-Throughput Ingestion
+19. Durability, Database Maintenance, and Storage Tuning
 
-20. Durability, Database Maintenance, and Storage Tuning
+20. Batching, Sorting, and High-Throughput Ingestion
 
 21. Query Planning, Recursive Evaluation, and Diagnostics
 

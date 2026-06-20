@@ -411,15 +411,15 @@ maximum performance and will not appear in the transaction log.
 
 WAL mode has durability profiles that decide when appended log records are
 forced to storage. Those choices are operational policy, not storage
-fundamentals. Chapter 20 covers `:strict`, `:relaxed`, `:extra`, group commit,
+fundamentals. Chapter 19 covers `:strict`, `:relaxed`, `:extra`, group commit,
 LSN watermarks, snapshots, and WAL garbage collection.
 
 WAL mode also introduces operational APIs such as `create-snapshot!`,
 `gc-txlog-segments!`, `txlog-watermarks`, and `open-tx-log`. Those functions
 matter for long-running services, replication, and low-level change capture, but
-they are not storage fundamentals. Chapter 19 discusses batching and ingestion,
-Chapter 20 covers storage tuning and durability choices, and Chapter 22 covers
-deployment and production operations.
+they are not storage fundamentals. Chapter 19 covers storage tuning and
+durability choices, Chapter 20 discusses batching and ingestion, and Chapter
+22 covers deployment and production operations.
 
 ---
 

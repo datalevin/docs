@@ -652,8 +652,11 @@ const users = await conn.query(
 
 </div>
 
-In embedded Clojure multi-source queries, a pull expression can name the source
-to pull from:
+In multi-source queries, a pull expression can name the source to pull from. In
+the connection query helpers, the receiver connection supplies the first source
+listed in `:in`; additional Datalevin connections can be passed as query inputs.
+
+<div class="multi-lang">
 
 ```clojure
 (d/q '[:find ?user (pull $users ?user [:user/name])
@@ -662,6 +665,36 @@ to pull from:
               [$orders ?order :order/customer-email ?email]]
      users-db orders-db)
 ```
+
+```java
+Object users = usersConn.query(
+    "[:find ?user (pull $users ?user [:user/name]) " +
+    " :in $users $orders " +
+    " :where [$users ?user :user/email ?email] " +
+    "        [$orders ?order :order/customer-email ?email]]",
+    ordersConn);
+```
+
+```python
+users = users_conn.query(
+    '[:find ?user (pull $users ?user [:user/name]) '
+    ' :in $users $orders '
+    ' :where [$users ?user :user/email ?email] '
+    '        [$orders ?order :order/customer-email ?email]]',
+    orders_conn)
+```
+
+```javascript
+const users = await usersConn.query(
+  '[:find ?user (pull $users ?user [:user/name]) ' +
+  ' :in $users $orders ' +
+  ' :where [$users ?user :user/email ?email] ' +
+  '        [$orders ?order :order/customer-email ?email]]',
+  ordersConn
+);
+```
+
+</div>
 
 ---
 

@@ -1996,102 +1996,116 @@
    :source "18-hybrid-queries.md:277",
    :preview
    "(d/q '[:find ?title ?dist :in $ ?search-term ?target-vec ?category :where ;; full-text sea"},
-  "19-batching-ingestion#clojure-001"
+  "20-batching-ingestion#clojure-001"
   {:status :fragment,
    :reason
    "Illustrative chapter code that depends on surrounding setup, prior snippets, expected-output comments, or fixtures.",
-   :source "19-batching-ingestion.md:35",
+   :source "20-batching-ingestion.md:35",
    :preview
    ";; Fire multiple async transactions (def f1 (d/transact-async conn batch-1)) (def f2 (d/tr"},
-  "19-batching-ingestion#clojure-002"
+  "20-batching-ingestion#clojure-002"
   {:status :fragment,
    :reason
    "Illustrative chapter code that depends on surrounding setup, prior snippets, expected-output comments, or fixtures.",
-   :source "19-batching-ingestion.md:90",
+   :source "20-batching-ingestion.md:90",
    :preview
    ";; Async writes for throughput (d/transact-async conn batch-1) (d/transact-async conn batc"},
-  "19-batching-ingestion#clojure-003"
+  "20-batching-ingestion#clojure-003"
   {:status :fragment,
    :reason
    "Illustrative chapter code that depends on surrounding setup, prior snippets, expected-output comments, or fixtures.",
-   :source "19-batching-ingestion.md:168",
+   :source "20-batching-ingestion.md:168",
    :preview
    "(require '[datalevin.core :as d]) (require '[datalevin.constants :as c]) ;; Raw KV store f"},
-  "19-batching-ingestion#clojure-004"
+  "20-batching-ingestion#clojure-004"
   {:status :fragment,
    :reason
    "Illustrative chapter code that depends on surrounding setup, prior snippets, expected-output comments, or fixtures.",
-   :source "19-batching-ingestion.md:264",
+   :source "20-batching-ingestion.md:264",
    :preview
    ";; Sort data by Entity ID (let [sorted-datoms (sort-by :db/id raw-data)] (doseq [batch (pa"},
-  "19-batching-ingestion#clojure-005"
+  "20-batching-ingestion#clojure-005"
   {:status :fragment,
    :reason
    "Illustrative chapter code that depends on surrounding setup, prior snippets, expected-output comments, or fixtures.",
-   :source "19-batching-ingestion.md:305",
+   :source "20-batching-ingestion.md:305",
    :preview
    "(let [db (d/db conn) previous-limit (d/datalog-index-cache-limit db)] (try (d/datalog-inde"},
-  "19-batching-ingestion#clojure-006"
+  "20-batching-ingestion#clojure-006"
   {:status :fragment,
    :reason
    "Illustrative chapter code that depends on surrounding setup, prior snippets, expected-output comments, or fixtures.",
-   :source "19-batching-ingestion.md:349",
+   :source "20-batching-ingestion.md:349",
    :preview
    "(def schema {:user/id {:db/valueType :db.type/long :db/unique :db.unique/identity} :user/n"},
-  "19-batching-ingestion#clojure-007"
+  "20-batching-ingestion#clojure-007"
   {:status :fragment,
    :reason
    "Illustrative chapter code that depends on surrounding setup, prior snippets, expected-output comments, or fixtures.",
-   :source "19-batching-ingestion.md:474",
+   :source "20-batching-ingestion.md:474",
    :preview
    "(def db (-> (d/empty-db \"/tmp/import-db\" schema {:closed-schema? true}) (d/fill-db (mapcat"},
-  "20-storage-tuning-durability#clojure-001"
+  "19-storage-tuning-durability#clojure-001"
   {:status :external,
    :reason
    "Requires a particular runtime, server, network service, credential, operator path, or external integration.",
-   :source "20-storage-tuning-durability.md:143",
+   :source "19-storage-tuning-durability.md:112",
+   :preview
+   "(def conn (d/get-conn \"/data/app-db\" schema {:wal? true})) (d/transact! conn [{:db/id -1"},
+  "19-storage-tuning-durability#clojure-002"
+  {:status :external,
+   :reason
+   "Requires a particular runtime, server, network service, credential, operator path, or external integration.",
+   :source "19-storage-tuning-durability.md:212",
+   :preview
+   "(def conn (d/get-conn \"/data/app-db\" schema {:wal? true :wal-durability-profile :strict}))"},
+  "19-storage-tuning-durability#clojure-003"
+  {:status :external,
+   :reason
+   "Requires a particular runtime, server, network service, credential, operator path, or external integration.",
+   :source "19-storage-tuning-durability.md:288",
    :preview
    "(def kv (d/open-kv \"/data/app-kv\" {:wal? true :snapshot-scheduler? true})) (d/txlog-waterm"},
-  "20-storage-tuning-durability#clojure-002"
+  "19-storage-tuning-durability#clojure-004"
   {:status :fragment,
    :reason
    "Illustrative chapter code that depends on surrounding setup, prior snippets, expected-output comments, or fixtures.",
-   :source "20-storage-tuning-durability.md:216",
+   :source "19-storage-tuning-durability.md:361",
    :preview
    ";; Reclaim disk space (d/gc-txlog-segments! kv) ;; Keep WAL records from LSN 5000 onward ("},
-  "20-storage-tuning-durability#clojure-003"
+  "19-storage-tuning-durability#clojure-005"
   {:status :fragment,
    :reason
    "Illustrative chapter code that depends on surrounding setup, prior snippets, expected-output comments, or fixtures.",
-   :source "20-storage-tuning-durability.md:244",
+   :source "19-storage-tuning-durability.md:389",
    :preview
    ";; Copy a live Datalog database from a connection (d/copy @conn \"/path/to/backup-db\") ;; C"},
-  "20-storage-tuning-durability#clojure-004"
+  "19-storage-tuning-durability#clojure-006"
   {:status :fragment,
    :reason
    "Illustrative chapter code that depends on surrounding setup, prior snippets, expected-output comments, or fixtures.",
-   :source "20-storage-tuning-durability.md:318",
+   :source "19-storage-tuning-durability.md:463",
    :preview
    ";; Copy and compact a Datalog database (d/copy @conn \"/path/to/compact-backup-db\" true) ;;"},
-  "20-storage-tuning-durability#clojure-005"
+  "19-storage-tuning-durability#clojure-007"
   {:status :fragment,
    :reason
    "Illustrative chapter code that depends on surrounding setup, prior snippets, expected-output comments, or fixtures.",
-   :source "20-storage-tuning-durability.md:383",
+   :source "19-storage-tuning-durability.md:528",
    :preview
    ";; Re-index a Datalog connection with existing schema/options (def reindexed-conn (d/re-in"},
-  "20-storage-tuning-durability#clojure-006"
+  "19-storage-tuning-durability#clojure-008"
   {:status :fragment,
    :reason
    "Illustrative chapter code that depends on surrounding setup, prior snippets, expected-output comments, or fixtures.",
-   :source "20-storage-tuning-durability.md:493",
+   :source "19-storage-tuning-durability.md:641",
    :preview
    ";; Set mapsize to 128 GiB (in MiB) (d/get-conn path schema {:kv-opts {:mapsize 131072}})"},
-  "20-storage-tuning-durability#clojure-007"
+  "19-storage-tuning-durability#clojure-009"
   {:status :fragment,
    :reason
    "Illustrative chapter code that depends on surrounding setup, prior snippets, expected-output comments, or fixtures.",
-   :source "20-storage-tuning-durability.md:567",
+   :source "19-storage-tuning-durability.md:715",
    :preview "(d/get-conn path schema {:kv-opts {:max-readers 512}})"},
   "21-query-optimization-profiling#clojure-001"
   {:status :fragment,

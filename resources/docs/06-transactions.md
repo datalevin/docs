@@ -420,7 +420,7 @@ event occur?"
 Automatic timestamps also store only the current created/updated values. For a
 full audit trail, model audit events explicitly or use transaction-log based
 operations, if WAL mode is enabled, such as the txlog tools covered in
-Chapter 20.
+Chapter 19.
 
 ### 2.4 Tempids
 
@@ -1673,7 +1673,7 @@ As introduced in Chapter 4, **WAL (Write-Ahead Log) mode** increases write
 performance, especially for concurrent writers, by recording transactions in a
 sequential log before applying them to LMDB.
 
-- **Durability Policy**: Chapter 20 covers the choice of WAL durability profile,
+- **Durability Policy**: Chapter 19 covers the choice of WAL durability profile,
   including crash-loss windows, group commit, and operational maintenance.
 - **Bulk Loading**: Note that bulk load operations like `init-db` and `fill-db`
   bypass the WAL for maximum performance and will not appear in the transaction
@@ -1734,7 +1734,7 @@ allowing Datalevin to achieve both high throughput during busy periods and low
 latency when the system is quiet.
 
 WAL mode and asynchronous transactions can be used together to achieve
-best-in-class Online Transaction Processing (OLTP) performance. Chapter 19
+best-in-class Online Transaction Processing (OLTP) performance. Chapter 20
 shows the ingestion patterns in all four bindings.
 
 ---
