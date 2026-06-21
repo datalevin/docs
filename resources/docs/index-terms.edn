@@ -1,6 +1,9 @@
 [
  {:term "ACID"}
  {:term "agent memory"}
+ {:term "anti-join"
+  :index "Datalog!anti-join"
+  :patterns ["anti-join" "anti-joins"]}
  {:term "analyzer" :index "full-text search!analyzer"}
  {:term "append-only log"}
  {:term "approximate nearest-neighbor"
@@ -103,6 +106,8 @@
  {:term "logical database"
   :patterns ["logical databases?" "logical view" "logic programming"]}
  {:term "lookup ref"}
+ {:term "lost in the middle"
+  :index "agent memory!lost in the middle"}
  {:term "LSN" :index "WAL!LSN"}
  {:term "major page fault"
   :index "monitoring!major page faults"
@@ -122,6 +127,7 @@
  {:term "path index" :index "idoc!path index"}
  {:term "predicate" :index "Datalog!predicate"}
  {:term "prefix compression" :index "DLMDB!prefix compression"}
+ {:term "primacy effect" :index "agent memory!primacy effect"}
  {:term "provenance"}
  {:term "pull"}
  {:term "pull pattern" :index "pull!pattern"}
@@ -135,6 +141,7 @@
  {:term "re-index"}
  {:term "recursive pull" :index "pull!recursive pull"}
  {:term "replication"}
+ {:term "recency effect" :index "agent memory!recency effect"}
  {:term "resident set size"
   :index "monitoring!resident set size"
   :patterns ["resident set size" "\\bRSS\\b"]}
@@ -145,6 +152,10 @@
  {:term "schema-on-write" :index "schema!schema-on-write"}
  {:term "semantic memory" :index "agent memory!semantic memory"}
  {:term "server mode"}
+ {:term "serial-position effect" :index "agent memory!serial-position effect"}
+ {:term "sideways information passing"
+  :index "query planner!sideways information passing"
+  :patterns ["sideways information passing" "SIP"]}
  {:term "single writer"
   :index "concurrency!single writer"
   :patterns ["single[- ]writer"]}

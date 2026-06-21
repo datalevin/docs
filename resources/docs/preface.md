@@ -384,8 +384,7 @@ grounded in real systems.
 This book has already benefited from volunteer reviewers in the Datalevin
 community who read draft chapters, ran examples, questioned unclear
 explanations, found inconsistent terminology, and pointed out places where the
-book assumed too much background. I am grateful for the contributions:
-[reviewer names].
+book assumed too much background. I am grateful for their contributions.
 
 ## Notes
 

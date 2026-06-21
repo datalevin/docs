@@ -20,7 +20,6 @@ conventions needed to read and write the examples in the rest of the book. The
 official EDN specification is maintained at the [edn-format
 repository](https://github.com/edn-format/edn).
 
----
 
 ## 1. EDN at a Glance
 
@@ -64,12 +63,11 @@ Commas are optional whitespace in EDN. The following maps are equivalent:
 Datalevin examples usually omit commas because aligned whitespace makes larger
 schemas and transactions easier to scan.
 
----
 
 ## 2. Common Literal Forms
 
 | EDN form | Meaning | Datalevin use |
-| :--- | :--- | :--- |
+| --- | --- | ------ |
 | `nil` | Absence of a value | Query results, optional arguments, API options. |
 | `true`, `false` | Booleans | Schema flags such as `:db/fulltext true`. |
 | `42`, `-7` | Integers | Entity ids, counters, ranks, limits. |
@@ -89,7 +87,6 @@ key-value pairs. A vector is just an ordered collection. A list is just another
 ordered collection, though Datalevin often gives lists a special meaning inside
 query and rule forms.
 
----
 
 ## 3. Keywords
 
@@ -104,6 +101,8 @@ and many API flags:
 :order.status/paid
 :eav
 :closed
+:string
+:long
 ```
 
 A keyword may be unqualified, such as `:eav`, or qualified with a slash, such as
@@ -120,13 +119,23 @@ Use qualified keywords for application attributes:
 :invoice/customer
 ```
 
-Use unqualified keywords for small local options only when the surrounding API
-expects them:
+Use unqualified keywords when the surrounding API defines them as local
+operators, modes, flags, or type descriptors. Datalevin's key-value API uses
+unqualified keywords for KV encoding types and range operators in transactions
+and queries:
 
 ```clojure
 [:find ?e :where [?e :user/email]]
 [:closed "a" "m"]
+[:put "users" "u1" {:name "Ada"} :string :data]
+[:closed 10 20]
+[:string :instant]
 ```
+
+Here `:string`, `:data`, and `:instant` are KV type descriptors, while
+`:closed` is a range operator. These are intentionally separate from Datalog
+schema value types such as `:db.type/string`, which appear under
+`:db/valueType`.
 
 Do not quote keywords as strings in Clojure examples. These are different
 values:
@@ -139,7 +148,6 @@ values:
 Datalevin's JSON and non-Clojure APIs sometimes encode keywords as strings at
 the language boundary, but the logical value is still a keyword.
 
----
 
 ## 4. Symbols and Datalog Variables
 
@@ -185,7 +193,6 @@ evaluate symbols such as `?name`. In Java, Python, JavaScript, and other client
 languages, the same query is commonly passed as an EDN string or constructed
 with an interop helper.
 
----
 
 ## 5. Vectors, Lists, Maps, and Sets
 
@@ -263,7 +270,6 @@ Sets are written with `#{...}` and represent unordered unique values:
 A plain `{...}` form is a map, not a set. Use `#{...}` when the value is a
 collection of unique elements without associated values.
 
----
 
 ## 6. Tagged Literals
 
@@ -297,7 +303,6 @@ wrapper for keywords, UUIDs, and instants. If you send raw JSON strings where th
 database expects typed values, Datalevin may store strings instead of UUID,
 instant, or keyword values.
 
----
 
 ## 7. EDN in Datalevin
 
@@ -418,7 +423,6 @@ Datalevin command-line dump/load workflows can use EDN files. EDN is useful for
 this because it preserves Datalevin-specific values such as keywords, UUIDs,
 instants, and sets without inventing JSON conventions for each type.
 
----
 
 ## 8. EDN and JSON
 
@@ -446,7 +450,6 @@ This is why the book's Clojure examples can express Datalevin data directly:
 The equivalent JSON representation needs conventions for keyword, set, UUID, and
 instant values. Datalevin's non-Clojure clients provide helpers for those cases.
 
----
 
 ## 9. Reading and Printing EDN Safely
 
@@ -472,7 +475,6 @@ For Datalevin APIs, prefer passing native values when you are already in
 Clojure. Use EDN strings mainly at language boundaries, in configuration files,
 or when an API explicitly asks for an EDN form.
 
----
 
 ## 10. Common Mistakes
 
@@ -526,7 +528,6 @@ Do not treat tagged literals as plain strings:
 "00000000-0000-0000-0000-000000000001"        ;; string value
 ```
 
----
 
 ## 11. Quick Reference
 
@@ -550,7 +551,6 @@ structures the database consumes. Once the literal forms are familiar, schemas,
 transactions, queries, rules, and indexed documents all read as variations on
 the same small notation.
 
----
 
 ## References
 

@@ -23,7 +23,6 @@ and integrity.
 Figure 5.1 depicts the lifecycle of schema evolution for an application. The
 detailed description of each stage comes in the following sections.
 
----
 
 ## 1. Attributes: The Schema-on-Write Model
 
@@ -121,7 +120,6 @@ nested documents (Chapter 14). Composite indexes over several attributes use
 `:db/tupleAttrs`, not a special stored data type; Chapter 11 explains that
 pattern. For a complete list of acceptable value types, please see Appendix C.
 
----
 
 ## 2. Attribute Properties
 
@@ -142,7 +140,8 @@ below lists some example attribute properties.
 
 > **Note on Indexing**: Unlike some other Datalog databases, Datalevin indexes **every attribute** by default in the AVE (Attribute-Value-Entity) index. You do not need to specify a `:db/index` property to enable fast lookups.
 
-Appendix C includes a complete description of acceptable properties in the schema.
+Appendix C includes a complete reference for the schema properties that
+Datalevin interprets.
 
 **Example Schema Definition:**
 
@@ -285,7 +284,6 @@ for the attribute, but they differ in how a duplicate write is handled:
 Chapter 6 shows lookup refs and upserts in transactions; Chapter 11 goes deeper
 into identity modeling.
 
----
 
 ## 3. Namespaces: Semantic Grouping
 
@@ -538,7 +536,6 @@ examples use strings such as `"user/email"` and Datalevin converts them to
 keywords. In Python and JavaScript examples, colon-prefixed strings such as
 `":user/email"` represent the same keyword values at the binding boundary.
 
----
 
 ## 4. Entities and Ids
 
@@ -658,7 +655,6 @@ the application address that user as `[:user/email "alice@example.com"]`
 without ever knowing the internal id. Chapter 11 also introduces `:db/ident`,
 a built-in identity attribute for system-wide named entities such as enums.
 
----
 
 ## 5. Schema Workflow in Practice
 
@@ -680,7 +676,6 @@ following:
    `{:validate-data? true}` to check values against their declared types.
    Chapter 11 covers both options.
 
----
 
 ## Summary
 

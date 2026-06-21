@@ -1,10 +1,10 @@
 ---
-title: "Vector Search: Embeddings and Similarity Queries"
+title: "Vector Search"
 chapter: 17
 part: "IV — Indexes as Capabilities"
 ---
 
-# Chapter 17: Vector Search: Embeddings and Similarity Queries
+# Chapter 17: Vector Search
 
 In the era of Large Language Models (LLMs), a database is not just a place to
 store structured facts, but also a repository for semantic meaning, where
@@ -35,7 +35,6 @@ vectors that are closest under a chosen metric. The metric defines what
 distance compares geometric distance, and dot product is often used when vectors
 have already been normalized by the model or application.
 
----
 
 ## 1. Configuring Vector Indexes
 
@@ -174,7 +173,6 @@ Configure defaults with `:vector-opts` and `:embedding-opts`; use
 domain string can appear in full-text, vector, and embedding configuration, but
 those are separate indexes.
 
----
 
 ## 2. Text Embedding Indexes
 
@@ -451,7 +449,6 @@ Important rules:
   metric, or quantization means old indexed vectors were produced in a different
   embedding space; rebuild or re-index before relying on search results.
 
----
 
 ## 3. Querying Vector and Embedding Indexes
 
@@ -747,7 +744,6 @@ await conn.query(
 
 </div>
 
----
 
 ## 4. Standalone Vector Database
 
@@ -886,7 +882,6 @@ await index.close();
 `close-vector-index` only releases index resources. `vector-index-info` reports
 size, memory, configuration, hardware, domain, and checkpoint metadata.
 
----
 
 ## 5. The Core Engine: HNSW
 
@@ -965,7 +960,6 @@ a query. If search results look unstable or miss obvious neighbors, raise
 `:expansion-search` first; if newly inserted data has poor recall, tune
 `:connectivity` and `:expansion-add` before rebuilding.
 
----
 
 ## 6. Hybrid Retrieval: Combining Logic and Similarity
 
@@ -1032,7 +1026,6 @@ This is essential for **Retrieval-Augmented Generation (RAG)**: find
 semantically similar documents, then filter by metadata, access control, or
 recency.
 
----
 
 ## 7. Asynchronous Vector and Embedding Indexing
 
@@ -1139,7 +1132,6 @@ stalled work. Use `secondary-index-status` and `process-secondary-index-jobs!`
 to inspect or manually process pending work, and use
 `wait-for-secondary-index` to wait for a transaction's index work.
 
----
 
 ## Summary
 
@@ -1148,7 +1140,6 @@ and `vec-neighbors` when your application owns vectors directly; use
 `:db/embedding` and `embedding-neighbors` when Datalevin should embed string
 datoms and maintain the vector index for you.
 
----
 
 ## References
 

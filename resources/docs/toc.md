@@ -4,82 +4,82 @@
 
 Part I — Foundations: A Multi-Paradigm Database
 
-1. Why Datalevin: Logic, Graphs, and Key–Value in One Engine
+1. Why Datalevin
 
 2. Your First Datalevin Session
 
-3. The Datalevin Mental Model: Values, Facts, and Relationships
+3. Datalevin Mental Model
 
-4. Storage Fundamentals: LMDB, Key–Value Layout, and Persistence
+4. Storage Fundamentals
 
-5. Attributes, Entities and Namespaces
+5. Attributes, Entities, and Namespaces
 
 Part II — Core APIs: Datalog First, KV When Needed
 
 6. Transactions and Atomic Updates
 
-7. Reading Data: Lookup, Pull, and Entity APIs
+7. Reading Data
 
-8. Datalog Fundamentals: Queries as Logic
+8. Datalog Fundamentals
 
-9. Rules, Recursion, and Derived Knowledge
+9. Rules and Recursion
 
-10. Using Datalevin as a Key–Value Store
+10. Key–Value Store
 
 Part III — Modeling Across Paradigms
 
-11. Schema Design and Attribute Semantics
+11. Schema Design
 
-12. Relational Modeling Patterns
+12. Relational Modeling
 
-13. Graph Modeling and Relationship Design
+13. Graph Modeling
 
-14. Document Modeling and Path-Based Access
+14. Document Modeling
 
 Part IV — Indexes as Capabilities
 
-15. Core Index Architecture: EAV and AVE
+15. Index Architecture
 
-16. Full-Text Search: Queries and Ranking
+16. Full-Text Search
 
-17. Vector Search: Embeddings and Similarity Queries
+17. Vector Search
 
-18. Combining Indexes: Hybrid Queries Across KV, Logic, and Search
+18. Hybrid Queries
 
 Part V — Performance and Operations
 
-19. Durability, Database Maintenance, and Storage Tuning
+19. Durability and Maintenance
 
-20. Batching, Sorting, and High-Throughput Ingestion
+20. High-Throughput Ingestion
 
-21. Query Planning, Recursive Evaluation, and Diagnostics
+21. Query Planning and Diagnostics
 
-22. Testing, Deployment, and Production Operations
+22. Production Operations
 
 Part VI — Datalevin for Intelligent Systems
 
-23. Persistent Agent Memory Architectures
+23. Agent Memory Architectures
 
 24. Episodic, Semantic, and Working Memory
 
 25. Recall and Context Assembly
 
-26. Apperception, Truth Maintenance, and Long-Term State
+26. Apperception and Truth Maintenance
 
-27. Building Stateful AI Applications
+27. Stateful AI Applications
 
 Part VII — Appendices
 
-28. Appendix A: Installation, Runtimes, and Deployment Modes
+28. Appendix A: Installation and Runtime
 
 29. Appendix B: EDN Format
 
 30. Appendix C: Datalog Schema Reference
 
-31. Appendix D: Datalog Built-In Functions Reference
+31. Appendix D: Datalog Built-Ins
 
-32. Appendix E: Core API Helpers Reference
+32. Appendix E: Core API Helpers
 
-33. Appendix F: Key-Value API Reference
+33. Appendix F: Key-Value API
 
-34. Appendix G: datalevin.client API Reference
+34. Appendix G: Client API

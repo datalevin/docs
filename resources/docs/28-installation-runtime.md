@@ -1,17 +1,16 @@
 ---
-title: "Appendix A: Installation, Runtimes, and Deployment Modes"
+title: "Appendix A: Installation and Runtime"
 chapter: 28
 part: "VII — Appendices"
 ---
 
-# Appendix A: Installation, Runtimes, and Deployment Modes
+# Appendix A: Installation and Runtime
 
 This appendix collects setup material that would otherwise interrupt the main
 chapters. Use Chapter 2 for the first embedded session. Use this appendix when
 you need platform requirements, package coordinates, server startup commands,
 `dtlv`, Docker, Babashka, MCP, or troubleshooting notes.
 
----
 
 ## 1. Choose a Mode
 
@@ -34,7 +33,6 @@ and uses the same transactions, schema, and Datalog queries as the other modes.
 | MCP server | An AI client or agent needs local database tools. | `dtlv` and an MCP-compliant client. |
 | Replication or HA | You need read scaling or automatic failover. | Server mode, WAL, and Chapter 22. |
 
----
 
 ## 2. Supported Platforms
 
@@ -58,7 +56,6 @@ native feature. Vector and embedding search depend on vector-index native code;
 they are supported on Linux x86_64, Linux ARM64, and macOS ARM64, while Windows
 support is experimental.
 
----
 
 ## 3. Runtime Requirements
 
@@ -113,12 +110,12 @@ java --add-opens=java.base/java.nio=ALL-UNNAMED \
      -cp target/classes:your-dependencies.jar your.main.Class
 ```
 
----
 
 ## 4. Native Dependencies
 
-Datalevin bundles its non-JVM native libraries for the supported platforms. If
-loading fails with `java.lang.UnsatisfiedLinkError`, first confirm that the
+Datalevin bundles its non-JVM native libraries for the supported platforms.
+
+If loading fails with `java.lang.UnsatisfiedLinkError`, first confirm that the
 system `libc` for your OS is present. Some Linux distributions may not include
 it by default.
 
@@ -133,7 +130,6 @@ sudo apt-get install libgomp1
 brew install libomp llvm
 ```
 
----
 
 ## 5. Embedded Language Packages
 
@@ -141,15 +137,44 @@ Use the language-specific documentation and package pages below for API details,
 current package metadata, and additional examples:
 
 - **Clojure:** [Clojure API documentation on cljdoc](https://cljdoc.org/d/datalevin/datalevin).
-- **Java:** [JavaDoc](https://javadoc.io/doc/org.datalevin/datalevin-java/latest/datalevin/package-summary.html).
+- **Java:** [JavaDoc](https://javadoc.io/doc/org.datalevin/datalevin-java/latest/datalevin/package-summary.html),
+  plus [Java server JavaDoc](https://javadoc.io/doc/org.datalevin/datalevin-java-server/latest/)
+  for the optional in-process server artifact.
 - **Python:** [PyPI package page for `datalevin`](https://pypi.org/project/datalevin/).
 - **Node.js:** [npm package page for `datalevin-node`](https://www.npmjs.com/package/datalevin-node).
+
+The default Java artifact, `org.datalevin:datalevin-java`, is for embedded
+database use and `dtlv://` client connections. Java applications that need to
+host a Datalevin server in-process should add the separate
+`org.datalevin:datalevin-java-server` artifact. Python and Node.js packages are
+embedded/client libraries; run `dtlv`, Docker, or the standalone JVM jar when
+those applications need a server process.
 
 For the current cross-language API surface, use Datalevin's
 [language compatibility matrix](https://github.com/datalevin/datalevin/blob/master/doc/language-compatibility.md)
 as the source of truth. This book does not reproduce that matrix.
 
-The notable gaps to keep in mind while reading are:
+The short version is that the parity story is now broad. Clojure, Java, Python,
+and JavaScript all expose the main Datalog connection, query, pull, explain,
+transaction, async transaction, listener, simulated transaction, datom/index
+read, bulk load, Datalog-backed KV, re-index, full-text, vector, idoc, search
+writer, UDF, snapshot, WAL, remote client, replica, and HA administration
+surfaces. The examples in the main chapters therefore use the same conceptual
+API across languages: transaction data goes in, queries and pull patterns come
+out, and operational APIs are available without dropping to a raw JSON/exec
+escape hatch.
+
+For quick orientation, the main areas look like this:
+
+| Area | Cross-language status |
+| ------ | ------------------ |
+| Datalog basics | Clojure, Java, Python, and JavaScript all support open, query, pull, explain, transactions, async transactions, listeners, simulated transactions, datoms, index reads, bulk load, Datalog-backed KV, and re-index. |
+| KV APIs | All four support ordinary KV operations, list DB operations, range helpers, raw-buffer scans, stats, copy, sync, environment flag updates, and KV transaction callbacks. |
+| Search/vector/idoc | All four support Datalog full-text, custom analyzers through UDFs, vector search, idoc schema/options, standalone search/vector indexes, search index writers, and search re-indexing. |
+| Operations | All four support backup/copy, sync, snapshots, tx log watermarks and GC, tx log inspection, remote clients, replica status, and HA membership administration. |
+| UDFs and data helpers | All four support UDF registries, query/predicate/transaction UDFs, analyzer UDFs, EDN helpers, and schema/transaction construction helpers where the host language needs them. |
+
+The remaining notable differences to keep in mind while reading are:
 
 - Clojure, Java, and Python expose the Datalog transaction callback API
   (`with-transaction`, `withTransaction`, and `with_transaction`). JavaScript
@@ -160,8 +185,10 @@ The notable gaps to keep in mind while reading are:
   JavaScript support lazy entity reads, but staged entity-object mutation should
   be written as transaction maps, datom forms, or binding transaction builders.
 
-The dependency examples below use released package version
-`{{datalevin-version}}`.
+This book targets the Datalevin 1.0.x release line, the same target shown in
+Chapter 22. The dependency examples below use `{{datalevin-version}}` where a
+package manager, Babashka pod, or standalone-jar filename requires a released
+version string.
 
 <div class="multi-lang">
 
@@ -181,6 +208,13 @@ The dependency examples below use released package version
   <version>{{datalevin-version}}</version>
 </dependency>
 
+<!-- Add only when hosting a Datalevin server inside a Java process. -->
+<dependency>
+  <groupId>org.datalevin</groupId>
+  <artifactId>datalevin-java-server</artifactId>
+  <version>{{datalevin-version}}</version>
+</dependency>
+
 // Gradle Kotlin DSL
 repositories {
     mavenCentral()
@@ -188,6 +222,8 @@ repositories {
 
 dependencies {
     implementation("org.datalevin:datalevin-java:{{datalevin-version}}")
+    // Optional in-process server hosting API.
+    implementation("org.datalevin:datalevin-java-server:{{datalevin-version}}")
 }
 ```
 
@@ -203,7 +239,6 @@ npm install datalevin-node
 
 </div>
 
----
 
 ## 6. Install `dtlv`
 
@@ -245,7 +280,6 @@ docker run --rm \
   huahaiy/datalevin serv --host 0.0.0.0 -r /data -p 8898
 ```
 
----
 
 ## 7. Standalone Server Mode
 
@@ -278,13 +312,51 @@ java --add-opens=java.base/java.nio=ALL-UNNAMED \
      -jar datalevin-{{datalevin-version}}-standalone.jar serv --host 0.0.0.0 -r /data/dtlv
 ```
 
-In Clojure/JVM applications, server mode can also be embedded in the host
-process with `datalevin.server/create`, `datalevin.server/start`, and
-`datalevin.server/stop`. This lets an application keep local embedded access
-while exposing a `dtlv://` endpoint for tools, workers, or non-JVM clients. See
-Chapter 22 for the lifecycle pattern.
+In Clojure applications that depend on the full Datalevin library rather than
+the embedded-only artifacts, server mode can also be started in the host process
+with `datalevin.server/create`, `datalevin.server/start`, and
+`datalevin.server/stop`.
 
----
+Java applications can do the same with the opt-in
+`org.datalevin:datalevin-java-server` artifact, which provides
+`datalevin.DatalevinServer`.
+
+<div class="multi-lang">
+
+```clojure
+(require '[datalevin.server :as srv])
+
+(def server
+  (srv/create {:host "127.0.0.1"
+               :port 8898
+               :root "/data/dtlv"}))
+
+(srv/start server)
+;; Later, during application shutdown:
+(srv/stop server)
+```
+
+```java
+import datalevin.DatalevinServer;
+
+import java.util.Map;
+
+try (DatalevinServer server = DatalevinServer.create(Map.of(
+        "host", "127.0.0.1",
+        "port", 8898,
+        "root", "/data/dtlv",
+        "verbose", true))) {
+    server.start();
+    // Connect clients with dtlv:// URIs while the server is running.
+}
+```
+
+</div>
+
+For production deployment, `dtlv`, Docker, or the standalone JVM jar remains a
+cleaner operational boundary when the server should live independently from the
+application process.
+
 
 ## 8. Connect to a Server
 
@@ -333,7 +405,6 @@ key-value store. Database names must be unique within a server.
 Once connected to a server, the same transaction and query APIs used in embedded
 mode can be used with the remote connection.
 
----
 
 ## 9. Smoke Test the Server
 
@@ -353,7 +424,6 @@ depending on the client surface. In Clojure, `@conn` dereferences the connection
 and returns the current database value, the same value you would get from
 `(d/db conn)` in namespace-qualified application code.
 
----
 
 ## 10. Replication and High Availability
 
@@ -376,7 +446,6 @@ Chapter 22 covers the details: server behavior, client tuning, async read
 replicas, the Raft-backed control plane, bounded leases, replica lag checks,
 fencing hooks that stop stale leaders from accepting writes, and HA operations.
 
----
 
 ## 11. Command Line and Scripts
 
@@ -398,7 +467,6 @@ EOF
 This creates a local database under `/tmp/dtlv-cli`, writes one fact, queries
 it, and closes the connection.
 
----
 
 ## 12. Babashka Pod
 
@@ -442,7 +510,6 @@ and call it from a query:
 ;; => #{["hello world"]}
 ```
 
----
 
 ## 13. MCP Server
 
@@ -511,7 +578,6 @@ claude mcp add --transport stdio datalevin -- dtlv mcp
 Restart the client, then ask it to inspect a local Datalevin database path or a
 remote `dtlv://` database URI.
 
----
 
 ## 14. Troubleshooting and Cleanup
 
@@ -532,7 +598,6 @@ into the book:
   `8898`, and the password in the URI matches `DATALEVIN_DEFAULT_PASSWORD`.
 - Keep MCP servers read-only until you deliberately need write tools.
 
----
 
 ## Summary
 

@@ -1,10 +1,10 @@
 ---
-title: "The Datalevin Mental Model: Values, Facts, and Relationships"
+title: "Datalevin Mental Model"
 chapter: 3
 part: "I — Foundations: A Multi-Paradigm Database"
 ---
 
-# Chapter 3: The Datalevin Mental Model: Values, Facts, and Relationships
+# Chapter 3: Datalevin Mental Model
 
 Transitioning to Datalevin often requires a fundamental shift in how you perceive
 data. If you are coming from a relational (SQL) or document (NoSQL) background,

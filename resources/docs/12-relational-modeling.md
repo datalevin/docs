@@ -1,10 +1,10 @@
 ---
-title: "Relational Modeling Patterns"
+title: "Relational Modeling"
 chapter: 12
 part: "III — Modeling Across Paradigms"
 ---
 
-# Chapter 12: Relational Modeling Patterns
+# Chapter 12: Relational Modeling
 
 Because Datalevin prefers normalized data, industry-standard
 **Entity-Relationship (ER) modeling** [1] is the most effective way to
@@ -15,11 +15,6 @@ between your mental model and rigid tables, Datalevin's fact-based model maps
 almost 1:1 to how we reason about the world. This chapter explores how to apply
 classic relational modeling patterns to a Datalog-powered triplestore.
 
-The Java, Python, and JavaScript snippets in this chapter assume an open
-connection named `conn` when a transaction or query is shown. Schema snippets
-show the shape to pass when opening a connection or updating a schema.
-
----
 
 ## 1. The Grammar of Data: Nouns, Verbs, and Adjectives
 
@@ -60,7 +55,6 @@ attributes whose value type is `:db.type/ref`.
 
 - **Example**: `:user/follows`, `:order/customer`, `:line-item/product`.
 
----
 
 ## 2. Normalization: The Path to Performance
 
@@ -70,12 +64,10 @@ In a document-oriented database, you are often taught to denormalize — to
 
 ### 2.1 The "Join Entity" Pattern
 
-As discussed in Chapter 11, for many-to-many relationships, it is often better
-to use a **Join Entity** than a `:db.cardinality/many` attribute.
-
-In ER terms, this is an **Associative Entity**. If you have `Users` and
-`Groups`, instead of a list of group IDs on the user, create a `Membership`
-entity.
+Chapter 11 gives the Datalevin decision framework for many-to-many
+relationships. In ER terms, the normalized version is an **associative entity**:
+the relationship is promoted to its own entity. If you have `Users` and
+`Groups`, a `Membership` entity records the user's membership in a group.
 
 ```clojure
 ;; Associative Entity: Membership
@@ -84,19 +76,11 @@ entity.
  :membership/role  :role/admin}
 ```
 
-This approach allows you to:
+The ER point is that membership is not just a pointer; it can have its own role,
+join time, inviter, validity interval, or audit facts. For the performance trade
+offs between small `:db.cardinality/many` refs and join entities, use Chapter
+11, Section 2.2.
 
-1.  **Attach Metadata to the Relationship**: You can record *when* a user joined
-    a group, or *who* invited them.
-2.  **Optimize Query Execution**: Datalevin's query optimizer can jump to a
-    specific membership record faster than scanning a large list of IDs inside a
-    single user entity.
-3.  **Avoid Large Many-Valued Properties**: A `:db.cardinality/many` attribute
-    stores each member as a separate datom, not as one compact collection. For
-    large relationship sets, the repeated entity/attribute structure and index
-    entries are real storage overhead.
-
----
 
 ## 3. ER Design Decisions in Datalevin
 
@@ -247,7 +231,6 @@ When you do store a derived fact, document the source of truth and update rule
 with `:db/doc`. Future readers should be able to tell whether `:order/total` is
 authoritative, cached, or a historical snapshot.
 
----
 
 ## 4. Choosing Between Similar Shapes
 
@@ -501,7 +484,6 @@ Ask these questions before reaching for a tuple:
 The short version: relationships should remain facts, composite identities
 should be derived from facts, and stored tuples should be reserved for values.
 
----
 
 ## 5. A Worked ER Example: Course Enrollment
 
@@ -1015,7 +997,6 @@ duplicate facts. When the relationship is already expressed by refs, Datalevin's
 joins are the natural way to move from external domain keys to the relationship
 entity.
 
----
 
 ## 6. Documenting the Schema: `:db/doc`
 
@@ -1073,7 +1054,6 @@ const schema = {
 Think of `:db/doc` as "comments that live in the database." They can be queried
 and used to generate documentation automatically.
 
----
 
 ## 7. From Tables to Facts: Migrating SQL Models
 
@@ -1353,7 +1333,6 @@ when the domain allows only one line per product per order. The modeling rule is
 the same: keep durable nouns as entities, represent foreign keys as refs, and
 promote relationships with their own facts into relationship entities.
 
----
 
 ## Summary: Relational Best Practices
 

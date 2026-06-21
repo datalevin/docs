@@ -10,7 +10,6 @@ This appendix is a compact reference for Datalevin Datalog schema maps. For
 design guidance, see Chapter 5 and Chapter 11. For specialized index behavior,
 see the full-text, vector, embedding, and idoc chapters.
 
----
 
 ## 1. Schema Shape
 
@@ -60,7 +59,6 @@ Use `update-schema` to change schema:
 (d/update-schema conn nil nil {:old/name :new/name})
 ```
 
----
 
 ## 2. Defaults and Built-Ins
 
@@ -78,7 +76,6 @@ Use `update-schema` to change schema:
 - Use the store option `{:closed-schema? true}` to reject transactions that
   mention attributes not already defined in the schema.
 
----
 
 ## 3. Schema-Related Store Options
 
@@ -100,11 +97,10 @@ Pass these options when opening or creating a database:
              :closed-schema? true})
 ```
 
----
 
 ## 4. Attribute Properties
 
-All the acceptable attributes properties are the following:
+The public schema properties that Datalevin interprets are the following:
 
 | Property | Values | Meaning |
 | :--- | :--- | :--- |
@@ -121,11 +117,18 @@ All the acceptable attributes properties are the following:
 | `:db.embedding/autoDomain` | `true`, `false` | Adds an attribute-specific embedding domain using vector-domain naming. |
 | `:db.vec/domains` | sequence of strings | Adds a `:db.type/vec` attribute to explicit vector domains. |
 | `:db/idocFormat` | `:edn`, `:json`, `:markdown` | Format hint for `:db.type/idoc`; defaults to `:edn`. |
+| `:db/domain` | string | Explicit idoc domain for a `:db.type/idoc` attribute. If omitted, Datalevin derives the idoc domain from the attribute name. |
 | `:db/tupleAttrs` | non-empty sequence of attribute keywords | Derived composite index entry maintained from other attributes. |
 | `:db/tupleType` | single non-tuple value type | Homogeneous tuple element type. |
 | `:db/tupleTypes` | sequence of more than one non-tuple value type | Heterogeneous tuple element types. |
 
----
+The schema map may also contain metadata or compatibility keys that Datalevin
+stores but does not use as behavioral schema controls. In particular,
+`:db/index` is not needed because Datalevin maintains AVE entries for every
+attribute by default, and `:db/noHistory` does not enable Datomic-style history
+behavior. Treat such keys as inert metadata unless a Datalevin feature
+explicitly documents them.
+
 
 ## 5. Value Types
 
@@ -153,7 +156,6 @@ There is no `:db.type/uri`; store URI values as strings.
 If `:db/valueType` is omitted, Datalevin stores values as serialized EDN data,
 which is flexible but not as useful for ordered range access.
 
----
 
 ## 6. Identity and Uniqueness
 
@@ -182,7 +184,6 @@ entity instead of creating a duplicate.
 (d/transact! conn [{:db/ident :order.status/shipped}])
 ```
 
----
 
 ## 7. References and Components
 
@@ -199,7 +200,6 @@ Use `:db/isComponent true` only for owned children. Component entities are pulle
 
 `:db/isComponent true` without `:db/valueType :db.type/ref` is invalid.
 
----
 
 ## 8. Tuples
 
@@ -249,7 +249,6 @@ Rules for stored typed tuples:
 - `:db/tupleType` must be a single non-tuple value type.
 - `:db/tupleTypes` must contain more than one non-tuple value type.
 
----
 
 ## 9. Full-Text Schema Keys
 
@@ -279,7 +278,6 @@ index does not store a duplicate raw-text copy unless `:include-text? true` opts
 a domain into storing text for `:display :texts`, `:display :texts+offsets`,
 and re-indexing.
 
----
 
 ## 10. Vector and Embedding Schema Keys
 
@@ -315,7 +313,6 @@ Embedding rules:
 
 Store-level `:embedding-opts`, `:embedding-domains`, and `:embedding-providers` configure providers, dimensions, metric, and indexing mode.
 
----
 
 ## 11. Idoc Schema Keys
 
@@ -323,15 +320,23 @@ Use `:db.type/idoc` for nested document values that should be indexed by path:
 
 ```clojure
 {:doc/json {:db/valueType  :db.type/idoc
-            :db/idocFormat :json}
+            :db/idocFormat :json
+            :db/domain     "profiles"}
  :doc/edn  {:db/valueType :db.type/idoc}
  :doc/md   {:db/valueType  :db.type/idoc
             :db/idocFormat :markdown}}
 ```
 
-Allowed `:db/idocFormat` values are `:edn`, `:json`, and `:markdown`. The default is `:edn`.
+Allowed `:db/idocFormat` values are `:edn`, `:json`, and `:markdown`. The
+default is `:edn`.
 
----
+`:db/domain` names the idoc path index used for that attribute. If it is
+omitted, Datalevin derives the domain from the attribute name without the
+leading colon, so `:doc/edn` becomes `"doc/edn"`. Several idoc attributes may
+share a domain intentionally, but keep formats coherent: if attributes with
+different `:db/idocFormat` values share a domain, Datalevin treats the domain as
+mixed-format.
+
 
 ## 12. Schema Evolution
 
@@ -359,7 +364,6 @@ Important mutation rules:
 - Renaming changes the attribute identity in the schema and stored datoms.
 - Embedding schema changes on populated attributes require an explicit rebuild.
 
----
 
 ## 13. Datomic and DataScript Differences
 
@@ -372,7 +376,6 @@ Datalevin's Datalog model is familiar to Datomic and DataScript users, but the s
 - AVE indexing is automatic for every attribute; do not add `:db/index`.
 - Use `:db/ident` for named enum/system entities.
 
----
 
 ## 14. Minimal Production Template
 

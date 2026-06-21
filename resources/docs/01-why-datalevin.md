@@ -1,10 +1,10 @@
 ---
-title: "Why Datalevin: Logic, Graphs, and Key–Value in One Engine"
+title: "Why Datalevin"
 chapter: 1
 part: "I — Foundations: A Multi-Paradigm Database"
 ---
 
-# Chapter 1: Why Datalevin: Logic, Graphs, and Key–Value in One Engine
+# Chapter 1: Why Datalevin
 
 Modern applications often need several data capabilities at once: transactional
 updates, relational joins, graph traversal, document-style flexibility, and
@@ -411,16 +411,16 @@ intermediate rows than a good one.
 
 It should be noted that this kind of query is not exotic either. It appears
 whenever an application keeps data normalized and asks compositional questions:
-which documents can this user see, which orders match this
-product/vendor/shipment/refund/customer constraint, which clinical cases satisfy
-diagnosis/provider/prescription/coverage rules, or which papers connect authors,
-affiliations, topics, institutions, and collaborators. If a system never seems
-to have such queries, that is because the complexity has been moved into
-denormalized records, application-side filtering, or cache materialization
-rather than disappearing. That is to say, the lack of complex queries is a
-symptom of weak database capability, not a lack of demand for them. Developers
-have to deal with the complexities in application code because the database they
-use cannot handle them effectively.
+which documents can this user see, which orders match a constraint spanning
+products, vendors, shipments, refunds, and customers, which clinical cases
+satisfy rules spanning diagnoses, providers, prescriptions, and coverage, or
+which papers connect authors, affiliations, topics, institutions, and
+collaborators. If a system never seems to have such queries, that is because the
+complexity has been moved into denormalized records, application-side filtering,
+or cache materialization rather than disappearing. That is to say, the lack of
+complex queries is a symptom of weak database capability, not a lack of demand
+for them. Developers have to deal with the complexities in application code
+because the database they use cannot handle them effectively.
 
 Let us start with a concrete example. A Datalevin query for a production
 question might look like this:

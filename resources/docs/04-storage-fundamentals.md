@@ -1,10 +1,10 @@
 ---
-title: "Storage Fundamentals: LMDB, Key–Value Layout, and Persistence"
+title: "Storage Fundamentals"
 chapter: 4
 part: "I — Foundations: A Multi-Paradigm Database"
 ---
 
-# Chapter 4: Storage Fundamentals: LMDB, Key–Value Layout, and Persistence
+# Chapter 4: Storage Fundamentals
 
 Datalevin's query model is fact-centric, but its performance and reliability are
 grounded in its storage architecture. Unlike many databases that build custom
@@ -15,7 +15,6 @@ This chapter explores why Datalevin chose this foundation, how it extends LMDB
 into **DLMDB**, and how the physical layout of data supports efficient Datalog
 queries, secondary indexes, and high-throughput writes.
 
----
 
 ## 1. The Foundation: Why LMDB?
 
@@ -136,7 +135,6 @@ visible only when the root switch succeeds. In read-heavy workloads, throughput
 is often limited by CPU, memory bandwidth, or storage latency rather than by
 reader/writer lock contention.
 
----
 
 ## 2. B+Trees vs. LSM-Trees
 
@@ -176,7 +174,6 @@ building of secondary indexes (Section 5), which often require storing **large
 values**, a pattern that is often less suitable for LSM storage because large
 values can be rewritten repeatedly during compaction.
 
----
 
 ## 3. From LMDB to DLMDB
 
@@ -214,9 +211,8 @@ many datoms for the same attribute). DLMDB compresses data by sharing these
 prefixes, significantly reducing the on-disk footprint and improving CPU cache
 locality. Prefix compression happens on the page level.
 
----
 
-## 4. Physical Layout: The Nested Triple Index
+## 4. From Datoms to EAV and AVE
 
 At the logical level, a Datalevin fact is a datom: `[entity attribute value]`.
 At the storage level, the same datoms are encoded into sorted key-value entries.
@@ -229,34 +225,14 @@ Datalevin stores the primary Datalog indexes in two orders:
 
 ![From a datom to indexed access in the EAV and AVE orders](/images/diagrams/datom-eav-ave.svg)
 
-As shown in Figure 4.2, Datalevin puts the input set of datoms into two indexes
-simultaneously. Both indexes leverage LMDB's DUPSORT feature to break apart the
-datoms into two parts, and store the two parts in a nested fashion.
+As shown in Figure 4.2, Datalevin puts the same set of datoms into both indexes
+simultaneously. The important point for this chapter is the access pattern: EAV
+keeps facts for one entity close together, while AVE keeps facts for one
+attribute/value lookup or range close together. Chapter 15 explains the physical
+DUPSORT nesting behind these indexes, including how the key/value split saves
+space by avoiding repeated prefixes.
 
-### 4.1 Leveraging DUPSORT
-
-Instead of storing every triple as a completely separate flat key, Datalevin uses
-LMDB's `DUPSORT` feature to "nest" sorted values under one key. A DUPSORT
-database lets one key map to many sorted values. In Datalevin, that means common
-prefixes such as the entity id in EAV, or the attribute/value pair in AVE, do not
-have to be repeated for every matching datom.
-
-In EAV, the entity id is the key. The duplicate values under that key are sorted
-attribute/value pairs. This makes "what facts do we know about entity 101?" a
-single key lookup followed by a sequential read of that entity's facts.
-
-In AVE, the attribute and value form the key, and all the entities that share
-that value are stored in a sorted duplicate list. This makes
-finding "all people aged 30" extremely fast: it is a single key lookup followed
-by a sequential read of entity ids.
-
-The AVE index also makes reverse reference lookup cheap. A reference attribute is
-just an attribute whose value is another entity id. If orders point to customers
-with `:order/customer`, then "find all orders for customer `1001`" is an AVE
-lookup on the key `(:order/customer, 1001)`. Datalevin does not need a separate
-reverse-reference index for that case.
-
-### 4.2 Storing Raw Bytes
+### 4.1 Storing Raw Bytes
 
 All triples are encoded into raw bytes, using a header byte for different data
 types. Datalevin's binary encoding ensures that the binary sort order matches the
@@ -266,7 +242,6 @@ the storage engine use the same byte ordering for equality lookup, range lookup,
 and ordered iteration. This binary-logic ordering consistency is the key design
 feature that leads to Datalevin's simplicity.
 
----
 
 ## 5. Secondary Indexes and Blob Storage
 
@@ -327,7 +302,6 @@ This capability is what makes Datalevin a "multi-paradigm" database: it uses the
 same robust KV foundation to power everything from relational Datalog queries to
 modern vector searches.
 
----
 
 ## 6. The Key-Value API: Direct Access
 
@@ -351,7 +325,6 @@ pair is more efficient.
 
 The details of the KV API and its practical usage are covered in Chapter 10.
 
----
 
 ## 7. Persistence and Durability: WAL Mode
 
@@ -421,7 +394,6 @@ they are not storage fundamentals. Chapter 19 covers storage tuning and
 durability choices, Chapter 20 discusses batching and ingestion, and Chapter
 22 covers deployment and production operations.
 
----
 
 ## Summary
 

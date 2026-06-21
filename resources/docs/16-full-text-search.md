@@ -1,10 +1,10 @@
 ---
-title: "Full-Text Search: Queries and Ranking"
+title: "Full-Text Search"
 chapter: 16
 part: "IV — Indexes as Capabilities"
 ---
 
-# Chapter 16: Full-Text Search: Queries and Ranking
+# Chapter 16: Full-Text Search
 
 Most databases require a separate engine like Lucene, Elasticsearch, or Solr for
 full-text search. Datalevin includes a high-performance, integrated search
@@ -43,7 +43,6 @@ faster than Lucene for every search use case.
 This chapter explains how to enable full-text search, craft powerful search
 queries using boolean logic, and understand the underlying ranking algorithm.
 
----
 
 ## 1. Enabling Full-Text Search
 
@@ -129,7 +128,6 @@ to human text. It is not a hard requirement of `:db/fulltext`: during
 transaction processing, Datalevin converts the value to string before sending it
 to the analyzer.
 
----
 
 ## 2. The Default Analyzer Pipeline
 
@@ -177,7 +175,6 @@ removed token leaves a position gap. That matters for phrase search: phrases
 match analyzed terms at consecutive positions, so analyzer choices affect both
 what terms are searchable and which phrase queries can match.
 
----
 
 ## 3. Customizing Analyzers
 
@@ -506,7 +503,6 @@ await conn.query(
 
 </div>
 
----
 
 ## 4. Querying with `fulltext`
 
@@ -1088,7 +1084,6 @@ const expression =
 
 </div>
 
----
 
 ## 5. Search Domains
 
@@ -1422,7 +1417,6 @@ participate in the default `"datalevin"` domain. Attributes with
 `:db.fulltext/autoDomain true` also become their own search domain, named after
 the attribute without the leading colon, such as `"post/title"`.
 
----
 
 ## 6. Standalone Search Engine
 
@@ -1735,7 +1729,6 @@ The bulk writer is an embedded local API. It is not available through the
 Datalevin client/server API; use Datalog full-text attributes and normal
 transactions there, or run the writer in a local indexing process.
 
----
 
 ## 7. Asynchronous Indexing
 
@@ -1887,7 +1880,6 @@ consistent until the worker catches up. Use `secondary-index-status` or
 use `wait-for-secondary-index` when an application needs to wait for a specific
 transaction's index work.
 
----
 
 ## 8. Implementation Details
 
@@ -2015,7 +2007,6 @@ candidates before re-ranking, which can improve quality at higher cost.
 `:proximity-max-dist` controls how far apart terms may be while still
 contributing to a proximity span.
 
----
 
 ## Summary
 
@@ -2025,7 +2016,6 @@ high-performance, and synchronous by default. Enable `:db/fulltext`, use the
 that match your data, and leverage search domains for organized indexing,
 without operating a separate search cluster.
 
----
 
 ## References
 
@@ -2044,5 +2034,6 @@ without operating a separate search cluster.
 [3] Huahai Yang, [T-Wand: Beat Lucene in Less Than 600 Lines of Code](https://yyhh.org/blog/2021/11/t-wand-beat-lucene-in-less-than-600-lines-of-code/),
    yyhh.org, November 5, 2021.
 
-[4] Datalevin project, "Datalevin Search Benchmark,"
-   https://github.com/datalevin/datalevin/tree/master/benchmarks/search-bench.
+[4] Datalevin project, "Datalevin Search Benchmark."
+
+https://github.com/datalevin/datalevin/tree/master/benchmarks/search-bench

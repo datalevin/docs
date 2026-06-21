@@ -1,10 +1,10 @@
 ---
-title: "Building Stateful AI Applications"
+title: "Stateful AI Applications"
 chapter: 27
 part: "VI — Datalevin for Intelligent Systems"
 ---
 
-# Chapter 27: Building Stateful AI Applications
+# Chapter 27: Stateful AI Applications
 
 The true potential of AI is not found in isolated chat sessions, but in
 applications that maintain a persistent state. A "Stateful AI" application is
@@ -14,7 +14,6 @@ This chapter synthesizes the Part VI arc into practical application examples:
 memory architecture, concrete memory records, recall and context assembly,
 truth maintenance, and application-level task control.
 
----
 
 ## 1. Pattern: The "Database-as-Environment"
 
@@ -37,23 +36,14 @@ controller decides which task, agenda item, or exception should run next. Memory
 keeps the loop from starting over every turn, and plugins extend the loop with
 domain-specific skills.
 
-Datalevin is a good fit for this control layer because the agenda can be data.
-The agent can have a main stack for the active task, an agenda queue for planned
-work, an exception queue for urgent interruptions, and an ad-lib queue for
-opportunistic suggestions. These do not need to be separate systems. They can be
-task entities with different state, priority, and scheduling attributes.
+Datalevin is helpful in this control layer because the agenda can be data. For
+example, Juji's agent-platform [2] has a main stack for the active task, an
+agenda queue for planned work, an ad-lib queue for handling opportunistic
+contingencies, and an exception queue as the last resort of guardrails. In
+Datalevin, these can be task entities with different state, priority, and
+scheduling attributes. The important modeling point is that each control surface
+is durable, queryable state, regardless of the names your application uses.
 
-These names come from production agent-platform practice [2] rather than from a
-formal requirement of Datalevin. The important modeling point is that each
-control surface is durable, queryable state, regardless of the names your
-application uses.
-
-This is one important difference between a chatbot and an agentic application.
-A chatbot responds to the latest message. An agentic application can be
-interrupted, handle the interruption, and then resume the original agenda
-because the agenda and boundary state were durable.
-
----
 
 ## 2. Pattern: The Memory Loop
 
@@ -85,6 +75,8 @@ the shared environment that makes the loop resumable and inspectable.
 A minimal turn boundary can reuse the helper functions introduced in Chapters
 24 and 25. This does not call a model; it shows the durable state transition
 around one observed turn:
+
+<div class="multi-lang">
 
 ```clojure
 (defn memory-turn!
@@ -122,11 +114,130 @@ around one observed turn:
    :confidence 0.74})
 ```
 
+```java
+import datalevin.Connection;
+
+import java.util.List;
+import java.util.Map;
+import java.util.function.BiFunction;
+
+BiFunction<Connection, Map<String, Object>, Map<?, ?>> memoryTurn =
+    (c, input) -> {
+        Map<?, ?> recorded =
+            recordEpisodeAndCandidateFact.apply(c, input);
+
+        Object factId = recorded.get(":fact/id");
+        Object wmId = materializeWorkingMemory(
+            c,
+            input.get("session-id"),
+            List.of(Map.of(
+                "fact-id", factId,
+                "relevance", 1.0,
+                "reason", "Newly observed fact from this turn.",
+                "pinned?", false)));
+
+        return Map.of(
+            ":episode/id", recorded.get(":episode/id"),
+            ":fact/id", factId,
+            ":wm/id", wmId);
+    };
+
+memoryTurn.apply(conn, Map.of(
+    "user-id", "alice",
+    "session-id", "release-standup",
+    "summary", "Alice asked for release notes to emphasize migration risk.",
+    "fact-kind", ":preference/release-notes",
+    "fact-content",
+    "Alice prefers release notes that call out migration risk.",
+    "confidence", 0.74));
+```
+
+```python
+def memory_turn(conn, *, user_id, session_id, summary,
+                fact_kind, fact_content, confidence):
+    recorded = record_episode_and_candidate_fact(
+        conn,
+        user_id=user_id,
+        session_id=session_id,
+        summary=summary,
+        fact_kind=fact_kind,
+        fact_content=fact_content,
+        confidence=confidence)
+
+    fact_id = recorded[":fact/id"]
+    wm_id = materialize_working_memory(
+        conn,
+        session_id,
+        [{
+            "fact_id": fact_id,
+            "relevance": 1.0,
+            "reason": "Newly observed fact from this turn.",
+            "pinned": False,
+        }])
+
+    return {
+        ":episode/id": recorded[":episode/id"],
+        ":fact/id": fact_id,
+        ":wm/id": wm_id,
+    }
+
+memory_turn(
+    conn,
+    user_id="alice",
+    session_id="release-standup",
+    summary="Alice asked for release notes to emphasize migration risk.",
+    fact_kind=":preference/release-notes",
+    fact_content="Alice prefers release notes that call out migration risk.",
+    confidence=0.74)
+```
+
+```javascript
+async function memoryTurn(
+  conn,
+  { userId, sessionId, summary, factKind, factContent, confidence }
+) {
+  const recorded = await recordEpisodeAndCandidateFact(conn, {
+    userId,
+    sessionId,
+    summary,
+    factKind,
+    factContent,
+    confidence
+  });
+
+  const factId = recorded[":fact/id"];
+  const wmId = await materializeWorkingMemory(conn, sessionId, [
+    {
+      factId,
+      relevance: 1.0,
+      reason: "Newly observed fact from this turn.",
+      pinned: false
+    }
+  ]);
+
+  return {
+    ":episode/id": recorded[":episode/id"],
+    ":fact/id": factId,
+    ":wm/id": wmId
+  };
+}
+
+await memoryTurn(conn, {
+  userId: "alice",
+  sessionId: "release-standup",
+  summary: "Alice asked for release notes to emphasize migration risk.",
+  factKind: ":preference/release-notes",
+  factContent: "Alice prefers release notes that call out migration risk.",
+  confidence: 0.74
+});
+```
+
+</div>
+
 The application still decides when a candidate fact is promoted, rejected, or
 sent for review. Datalevin stores the records, links, and working-memory
 projection that make that decision auditable.
 
----
 
 ## 3. Example 1: The Adaptive Learning Assistant
 
@@ -191,11 +302,10 @@ Imagine an AI tutor that helps a student learn Clojure over six months.
 
 The tutor's advice is always based on the student's actual history.
 
----
 
 ## 4. Example 2: Multi-Agent Collaboration Workspace
 
-In a complex project, multiple agents might work together—one for coding, one
+In a complex project, multiple agents might work together — one for coding, one
 for testing, and one for documentation.
 
 - **Common Workspace**: All agents share a single Datalevin database.
@@ -208,7 +318,6 @@ for testing, and one for documentation.
 By sharing a transactionally consistent environment, agents can coordinate their
 efforts without complex message-passing protocols.
 
----
 
 ## 5. Example 3: The Self-Updating Knowledge Base
 
@@ -220,7 +329,6 @@ A documentation site (like this one!) that "learns" from user feedback.
 - **Synthesis**: The agent uses an LLM to draft a new `idoc` document addressing
   the gap and transacts it into the database for human review.
 
----
 
 ## 6. Example 4: MCP-Backed Agent Tools
 
@@ -238,7 +346,6 @@ server over Datalevin databases.
 
 This makes Datalevin useful as a durable tool substrate for agents: memory stays in a real database, while the tool boundary remains explicit.
 
----
 
 ## 7. Pattern: Durable Tasks and Board Projections
 
@@ -251,6 +358,8 @@ the agent can retry a failed step without rewriting the plan, and a human can
 inspect whether the task is still following the original objective. Stable step
 ids are important because later outputs, approvals, and boundary summaries need
 to point back to the same step even after display text changes.
+
+<div class="multi-lang">
 
 ```clojure
 {:task/id       #uuid "00000000-0000-0000-0000-000000000501"
@@ -277,8 +386,129 @@ to point back to the same step even after display text changes.
                  :outputs {}}}
 ```
 
+```java
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+Map<?, ?> task = Map.of(
+    ":task/id", UUID.fromString("00000000-0000-0000-0000-000000000501"),
+    ":task/type", ":task.type/task",
+    ":task/state", ":task.state/ready",
+    ":task/title", "Prepare weekly release report",
+    ":task/contract", Map.of(
+        ":kind", ":task",
+        ":version", 1,
+        ":goal", "Prepare weekly release report",
+        ":steps", List.of(
+            Map.of(
+                ":id", ":collect-data",
+                ":kind", ":tool",
+                ":tool", ":release-query"),
+            Map.of(
+                ":id", ":summarize",
+                ":kind", ":llm",
+                ":depends-on", ":collect-data"),
+            Map.of(
+                ":id", ":approve",
+                ":kind", ":approval"),
+            Map.of(
+                ":id", ":publish",
+                ":kind", ":tool",
+                ":tool", ":workspace-publish",
+                ":depends-on", ":approve"))),
+    ":task/runtime", Map.of(
+        ":current-step", ":collect-data",
+        ":attempts", Map.of(),
+        ":outputs", Map.of()));
+```
+
+```python
+from uuid import UUID
+
+task = {
+    ":task/id": UUID("00000000-0000-0000-0000-000000000501"),
+    ":task/type": ":task.type/task",
+    ":task/state": ":task.state/ready",
+    ":task/title": "Prepare weekly release report",
+    ":task/contract": {
+        ":kind": ":task",
+        ":version": 1,
+        ":goal": "Prepare weekly release report",
+        ":steps": [
+            {":id": ":collect-data",
+             ":kind": ":tool",
+             ":tool": ":release-query"},
+            {":id": ":summarize",
+             ":kind": ":llm",
+             ":depends-on": ":collect-data"},
+            {":id": ":approve",
+             ":kind": ":approval"},
+            {":id": ":publish",
+             ":kind": ":tool",
+             ":tool": ":workspace-publish",
+             ":depends-on": ":approve"},
+        ],
+    },
+    ":task/runtime": {
+        ":current-step": ":collect-data",
+        ":attempts": {},
+        ":outputs": {},
+    },
+}
+```
+
+```javascript
+import { readEdn } from "datalevin-node";
+
+const task = {
+  ":task/id": await readEdn(
+    '#uuid "00000000-0000-0000-0000-000000000501"'
+  ),
+  ":task/type": ":task.type/task",
+  ":task/state": ":task.state/ready",
+  ":task/title": "Prepare weekly release report",
+  ":task/contract": {
+    ":kind": ":task",
+    ":version": 1,
+    ":goal": "Prepare weekly release report",
+    ":steps": [
+      {
+        ":id": ":collect-data",
+        ":kind": ":tool",
+        ":tool": ":release-query"
+      },
+      {
+        ":id": ":summarize",
+        ":kind": ":llm",
+        ":depends-on": ":collect-data"
+      },
+      {
+        ":id": ":approve",
+        ":kind": ":approval"
+      },
+      {
+        ":id": ":publish",
+        ":kind": ":tool",
+        ":tool": ":workspace-publish",
+        ":depends-on": ":approve"
+      }
+    ]
+  },
+  ":task/runtime": {
+    ":current-step": ":collect-data",
+    ":attempts": {},
+    ":outputs": {}
+  }
+};
+```
+
+</div>
+
 A Kanban board, scheduler, or branch-worker queue should be a projection over
 tasks, not a separate store. For example:
+
+<div class="multi-lang">
 
 ```clojure
 {:task/id           #uuid "00000000-0000-0000-0000-000000000502"
@@ -288,6 +518,55 @@ tasks, not a separate store. For example:
  :task/claim-token  "opaque-worker-token"
  :task/claimed-by   [:agent/id :agent/release-writer]}
 ```
+
+```java
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+Map<?, ?> boardTask = Map.of(
+    ":task/id", UUID.fromString("00000000-0000-0000-0000-000000000502"),
+    ":task/board", Map.of(
+        ":visible?", true,
+        ":lane", ":board.lane/open",
+        ":priority", ":normal"),
+    ":task/claim-token", "opaque-worker-token",
+    ":task/claimed-by", List.of(":agent/id", ":agent/release-writer"));
+```
+
+```python
+from uuid import UUID
+
+board_task = {
+    ":task/id": UUID("00000000-0000-0000-0000-000000000502"),
+    ":task/board": {
+        ":visible?": True,
+        ":lane": ":board.lane/open",
+        ":priority": ":normal",
+    },
+    ":task/claim-token": "opaque-worker-token",
+    ":task/claimed-by": [":agent/id", ":agent/release-writer"],
+}
+```
+
+```javascript
+import { readEdn } from "datalevin-node";
+
+const boardTask = {
+  ":task/id": await readEdn(
+    '#uuid "00000000-0000-0000-0000-000000000502"'
+  ),
+  ":task/board": {
+    ":visible?": true,
+    ":lane": ":board.lane/open",
+    ":priority": ":normal"
+  },
+  ":task/claim-token": "opaque-worker-token",
+  ":task/claimed-by": [":agent/id", ":agent/release-writer"]
+};
+```
+
+</div>
 
 Workers can claim and update tasks transactionally. If a claimed task requires
 a token for later updates, Datalevin gives you an optimistic ownership check
@@ -302,6 +581,8 @@ All of those views use the same facts.
 Task boundaries should also be durable. When a task pauses, completes, or hands
 off to another agent, write a small boundary document:
 
+<div class="multi-lang">
+
 ```clojure
 {:task/id       #uuid "00000000-0000-0000-0000-000000000501"
  :task/boundary {:summary "Data was collected; approval is pending."
@@ -310,6 +591,53 @@ off to another agent, write a small boundary document:
                  :open-questions ["Should this go to the public changelog?"]}}
 ```
 
+```java
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+Map<?, ?> taskBoundary = Map.of(
+    ":task/id", UUID.fromString("00000000-0000-0000-0000-000000000501"),
+    ":task/boundary", Map.of(
+        ":summary", "Data was collected; approval is pending.",
+        ":resume-hint", "Resume at :approve.",
+        ":next-step", ":approve",
+        ":open-questions",
+        List.of("Should this go to the public changelog?")));
+```
+
+```python
+from uuid import UUID
+
+task_boundary = {
+    ":task/id": UUID("00000000-0000-0000-0000-000000000501"),
+    ":task/boundary": {
+        ":summary": "Data was collected; approval is pending.",
+        ":resume-hint": "Resume at :approve.",
+        ":next-step": ":approve",
+        ":open-questions": ["Should this go to the public changelog?"],
+    },
+}
+```
+
+```javascript
+import { readEdn } from "datalevin-node";
+
+const taskBoundary = {
+  ":task/id": await readEdn(
+    '#uuid "00000000-0000-0000-0000-000000000501"'
+  ),
+  ":task/boundary": {
+    ":summary": "Data was collected; approval is pending.",
+    ":resume-hint": "Resume at :approve.",
+    ":next-step": ":approve",
+    ":open-questions": ["Should this go to the public changelog?"]
+  }
+};
+```
+
+</div>
+
 This makes continuation safer than relying on chat history alone.
 
 Boundary documents are small on purpose. They are not a full transcript; they
@@ -317,7 +645,6 @@ are the minimum state needed for another turn, worker, or human to continue
 without guessing. A good boundary states what was done, why the task stopped,
 what should happen next, and which questions remain open.
 
----
 
 ## 8. Pattern: Tool Authority, Audit, and Usage Ledgers
 
@@ -329,6 +656,8 @@ arguments or credentials. For example, an email tool can receive a draft body
 from the model, but the system should decide whether sending is allowed, whether
 approval is required, and which credential proxy may be used. The audit record
 then captures the decision and the actor without exposing secrets to the model.
+
+<div class="multi-lang">
 
 ```clojure
 {:tool.call/id       #uuid "00000000-0000-0000-0000-000000000503"
@@ -345,8 +674,103 @@ then captures the decision and the actor without exposing secrets to the model.
  :audit.event/message "User approved email-send for this task."}
 ```
 
+```java
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+Map<?, ?> toolCall = Map.of(
+    ":tool.call/id",
+    UUID.fromString("00000000-0000-0000-0000-000000000503"),
+    ":tool.call/task",
+    List.of(":task/id",
+            UUID.fromString("00000000-0000-0000-0000-000000000501")),
+    ":tool.call/tool", ":email-send",
+    ":tool.call/decision", ":permission/approval-required",
+    ":tool.call/args", Map.of(
+        ":to", "team@example.com",
+        ":subject", "Release report"));
+
+Map<?, ?> auditEvent = Map.of(
+    ":audit.event/id",
+    UUID.fromString("00000000-0000-0000-0000-000000000504"),
+    ":audit.event/type", ":audit.type/tool-approved",
+    ":audit.event/task",
+    List.of(":task/id",
+            UUID.fromString("00000000-0000-0000-0000-000000000501")),
+    ":audit.event/actor", ":actor/user",
+    ":audit.event/message",
+    "User approved email-send for this task.");
+```
+
+```python
+from uuid import UUID
+
+tool_call = {
+    ":tool.call/id": UUID("00000000-0000-0000-0000-000000000503"),
+    ":tool.call/task": [
+        ":task/id",
+        UUID("00000000-0000-0000-0000-000000000501"),
+    ],
+    ":tool.call/tool": ":email-send",
+    ":tool.call/decision": ":permission/approval-required",
+    ":tool.call/args": {
+        ":to": "team@example.com",
+        ":subject": "Release report",
+    },
+}
+
+audit_event = {
+    ":audit.event/id": UUID("00000000-0000-0000-0000-000000000504"),
+    ":audit.event/type": ":audit.type/tool-approved",
+    ":audit.event/task": [
+        ":task/id",
+        UUID("00000000-0000-0000-0000-000000000501"),
+    ],
+    ":audit.event/actor": ":actor/user",
+    ":audit.event/message": "User approved email-send for this task.",
+}
+```
+
+```javascript
+import { readEdn } from "datalevin-node";
+
+const toolCall = {
+  ":tool.call/id": await readEdn(
+    '#uuid "00000000-0000-0000-0000-000000000503"'
+  ),
+  ":tool.call/task": [
+    ":task/id",
+    await readEdn('#uuid "00000000-0000-0000-0000-000000000501"')
+  ],
+  ":tool.call/tool": ":email-send",
+  ":tool.call/decision": ":permission/approval-required",
+  ":tool.call/args": {
+    ":to": "team@example.com",
+    ":subject": "Release report"
+  }
+};
+
+const auditEvent = {
+  ":audit.event/id": await readEdn(
+    '#uuid "00000000-0000-0000-0000-000000000504"'
+  ),
+  ":audit.event/type": ":audit.type/tool-approved",
+  ":audit.event/task": [
+    ":task/id",
+    await readEdn('#uuid "00000000-0000-0000-0000-000000000501"')
+  ],
+  ":audit.event/actor": ":actor/user",
+  ":audit.event/message": "User approved email-send for this task."
+};
+```
+
+</div>
+
 The same principle applies to LLM budgets. Record sanitized usage entries by
 scope so goals, tasks, sessions, and schedules can share enforcement:
+
+<div class="multi-lang">
 
 ```clojure
 {:limit.usage/id                #uuid "00000000-0000-0000-0000-000000000505"
@@ -359,6 +783,65 @@ scope so goals, tasks, sessions, and schedules can share enforcement:
  :limit.usage/cost-micros       1450}
 ```
 
+```java
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+Map<?, ?> usage = Map.of(
+    ":limit.usage/id",
+    UUID.fromString("00000000-0000-0000-0000-000000000505"),
+    ":limit.usage/scope", ":limit.scope/goal",
+    ":limit.usage/goal",
+    List.of(":goal/id",
+            UUID.fromString("00000000-0000-0000-0000-000000000506")),
+    ":limit.usage/provider", ":provider/openai",
+    ":limit.usage/model", "general-reasoner",
+    ":limit.usage/prompt-tokens", 3200,
+    ":limit.usage/completion-tokens", 680,
+    ":limit.usage/cost-micros", 1450);
+```
+
+```python
+from uuid import UUID
+
+usage = {
+    ":limit.usage/id": UUID("00000000-0000-0000-0000-000000000505"),
+    ":limit.usage/scope": ":limit.scope/goal",
+    ":limit.usage/goal": [
+        ":goal/id",
+        UUID("00000000-0000-0000-0000-000000000506"),
+    ],
+    ":limit.usage/provider": ":provider/openai",
+    ":limit.usage/model": "general-reasoner",
+    ":limit.usage/prompt-tokens": 3200,
+    ":limit.usage/completion-tokens": 680,
+    ":limit.usage/cost-micros": 1450,
+}
+```
+
+```javascript
+import { readEdn } from "datalevin-node";
+
+const usage = {
+  ":limit.usage/id": await readEdn(
+    '#uuid "00000000-0000-0000-0000-000000000505"'
+  ),
+  ":limit.usage/scope": ":limit.scope/goal",
+  ":limit.usage/goal": [
+    ":goal/id",
+    await readEdn('#uuid "00000000-0000-0000-0000-000000000506"')
+  ],
+  ":limit.usage/provider": ":provider/openai",
+  ":limit.usage/model": "general-reasoner",
+  ":limit.usage/prompt-tokens": 3200,
+  ":limit.usage/completion-tokens": 680,
+  ":limit.usage/cost-micros": 1450
+};
+```
+
+</div>
+
 With these records in Datalevin, policy enforcement becomes queryable state
 rather than scattered application logic.
 
@@ -368,23 +851,30 @@ schedule-level ceiling prevents recurring jobs from quietly consuming unlimited
 tokens. Because the ledger is sanitized, it can be used for policy and reporting
 without storing prompt text or secret-bearing tool payloads.
 
----
 
 ## 9. Capstone: A Documentation Feedback Memory Loop
 
 The examples above are patterns. This capstone ties them together in one small,
-runnable Clojure program. It is not the Datalevin documentation site's
-production code, and it does not call an LLM. Instead, it models the same
-application shape in miniature: readers search the docs, leave feedback, a
-background job detects a documentation gap, and the system creates a reviewable
-task with working memory.
+runnable program. This is not production code for a documentation site. Instead,
+it models the same application shape in miniature: readers search the docs,
+leave feedback, a background job detects a documentation gap, and the system
+creates a reviewable task with working memory. The memory loop is illustrated in
+Figure 27.1.
+
+![Capstone feedback memory loop: not-helpful search-feedback episodes are grouped into a candidate gap once they meet a threshold; the app accepts a current docs-gap fact (with evidence and supersession), opens a docs-gap-review task against it, and projects the fact and its evidence into working memory; resolving the task improves the docs and closes the loop with fewer failed searches. Boxes are stored in Datalevin; the dashed candidate-gap box is application-computed; transitions are application policy](/images/diagrams/capstone-memory-loop.svg)
 
 The important boundary remains the same as in Chapter 23. Datalevin stores the
 episodes, facts, task state, and working-memory projection. The application
 implements the extraction policy, thresholds, review workflow, and publication
 rules.
 
-![Capstone feedback memory loop: not-helpful search-feedback episodes are grouped into a candidate gap once they meet a threshold; the app accepts a current docs-gap fact (with evidence and supersession), opens a docs-gap-review task against it, and projects the fact and its evidence into working memory; resolving the task improves the docs and closes the loop with fewer failed searches. Boxes are stored in Datalevin; the dashed candidate-gap box is application-computed; transitions are application policy](/images/diagrams/capstone-memory-loop.svg)
+The full capstone is written as one Clojure program so it can be read and run as
+a single listing. The transaction data, queries, and task records are the same
+shapes shown above in Java, Python, and JavaScript. In Java and Python, the
+serialized read-modify-write portions map to `withTransaction` /
+`with_transaction`; in JavaScript, put those serialized commands behind a
+Datalevin-hosting service or transaction function and call that boundary from
+the client.
 
 The program below implements this loop end to end.
 
@@ -689,7 +1179,6 @@ Replacing the pure `gap-topic` function with an LLM extractor would not change
 the database model. It would only change the application policy that decides
 which candidate facts deserve review.
 
----
 
 ## Summary: The Path to Machine Intelligence
 
@@ -719,6 +1208,4 @@ database capabilities.
 [1] Stuart Russell and Peter Norvig, [*Artificial Intelligence: A Modern
 Approach*, 4th US ed.](https://aima.cs.berkeley.edu/), Pearson, 2020.
 
-[2] Michelle X. Zhou, Jie Lu, Huahai Yang, and Wenxi Chen,
-*Human-Centered Agentic AI: Fundamentals, Practice, Applications, and Future
-Directions*, ACM Press, in press.
+[2] [Juji Inc.](https://juji.io/).

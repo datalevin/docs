@@ -1,10 +1,10 @@
 ---
-title: "Reading Data: Lookup, Pull, and Entity APIs"
+title: "Reading Data"
 chapter: 7
 part: "II — Core APIs: Datalog First, KV When Needed"
 ---
 
-# Chapter 7: Reading Data: Lookup, Pull, and Entity APIs
+# Chapter 7: Reading Data
 
 Once data is in your database, you need a way to retrieve it in the shape your
 application actually uses. Datalevin gives you several read APIs, each with a
@@ -35,7 +35,6 @@ save a `db` object or an entity object and expect it to follow later
 transactions; if freshness matters after a write, get a new `db` from the
 connection before reading.
 
----
 
 ## 1. Reading by Identity with Lookup Refs
 
@@ -311,7 +310,6 @@ If a lookup ref does not resolve, `d/entid`, `d/entity`, and `d/pull` return
 without proving that the entity has datoms. Use a lookup ref, a query, or a
 specific attribute read when you need an existence check.
 
----
 
 ## 2. Pull: Fetching a Declared Shape
 
@@ -696,7 +694,6 @@ const users = await usersConn.query(
 
 </div>
 
----
 
 ## 3. Reverse Pull
 
@@ -780,7 +777,6 @@ Reverse navigation works best when the attribute is declared as
 `:db.type/ref`. Without that schema information, Datalevin cannot know that the
 value should be treated as an entity reference in higher-level navigation APIs.
 
----
 
 ## 4. Pull Pattern Options
 
@@ -1022,7 +1018,6 @@ the pulled value for that attribute. This is useful for small response-shaping
 steps. For transformations with business rules, error handling, or host-language
 portability requirements, prefer ordinary application code after the pull.
 
----
 
 ## 5. Recursive Pull and Component Trees
 
@@ -1164,7 +1159,6 @@ const order =
 
 Appendix E has the complete pull pattern syntax table.
 
----
 
 ## 6. Entity API: Lazy Map-Like Navigation
 
@@ -1573,7 +1567,6 @@ transaction data. For larger workflows, validation-heavy updates, or non-Clojure
 clients, explicit transaction maps and datom vectors are usually easier to audit
 and test.
 
----
 
 ## 7. Choosing the Right Read API
 
@@ -1607,7 +1600,6 @@ The main distinction is the shape of the problem:
 - Transactable Entity is for staging small Clojure-side updates before
   `d/transact!`.
 
----
 
 ## Summary
 

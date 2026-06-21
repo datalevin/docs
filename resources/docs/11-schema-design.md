@@ -1,10 +1,10 @@
 ---
-title: "Schema Design and Attribute Semantics"
+title: "Schema Design"
 chapter: 11
 part: "III — Modeling Across Paradigms"
 ---
 
-# Chapter 11: Schema Design and Attribute Semantics
+# Chapter 11: Schema Design
 
 While Chapter 5 introduced the mechanics of attributes and namespaces, this
 chapter dives into the *art* of schema design. In a multi-paradigm database like
@@ -15,14 +15,9 @@ A well-designed schema in Datalevin enables efficient joins, powerful graph
 traversals, full-text search, embedding search, vector search, and path-indexed
 documents.
 
-The Java, Python, and JavaScript snippets in this chapter assume an open
-connection named `conn`. Schema snippets show the shape to pass when opening a
-connection or updating a schema.
-
 For a compact reference of every Datalog schema property and its accepted
 values, see Appendix C, "Datalog Schema Reference."
 
----
 
 ## 1. The Power of Identity: `:db.unique/identity`
 
@@ -428,7 +423,6 @@ The advantage of using `:db/ident` over raw strings or keywords is that the enum
 itself is a full-fledged entity. You can attach additional metadata to it (like
 `:order.status/label "Shipped"`) without changing your data.
 
----
 
 ## 2. Modeling Relationships: References and Cardinality
 
@@ -583,7 +577,6 @@ By using `:db/retractEntity`, you ensure that no dangling `:db.type/ref`
 references point to a non-existent entity id, effectively maintaining reference
 integrity for declared references.
 
----
 
 ## 3. Attribute Properties: Search and Ownership
 
@@ -625,7 +618,6 @@ When a reference attribute is marked as `:db/isComponent true`, it signals a
 This is ideal for modeling "owned" data, like line items in an invoice or
 segments of a document.
 
----
 
 ## 4. Specialized Value Types
 
@@ -647,7 +639,6 @@ Use `:db.type/idoc` for nested maps that should be stored as one value but
 queried by path with `idoc-match`. This is useful for flexible metadata, JSON
 import, and Markdown-derived structures.
 
----
 
 ## 5. Best Practices: Designing for Evolution
 
@@ -1036,7 +1027,6 @@ new attribute, backfill it from the old one, move readers and writers, retract
 the old facts, then delete the old schema metadata. This is usually safer than
 trying to change the meaning of a populated attribute in place.
 
----
 
 ## Summary: The Schema Checklist
 
@@ -1073,7 +1063,6 @@ By thoughtfully applying these properties, you create a schema that is both
 flexible enough for rapid development and robust enough for complex,
 high-performance applications.
 
----
 
 ## Reference
 

@@ -1,28 +1,26 @@
 ---
-title: "Core Index Architecture: EAV and AVE"
+title: "Index Architecture"
 chapter: 15
 part: "IV — Indexes as Capabilities"
 ---
 
-# Chapter 15: Core Index Architecture: EAV and AVE
+# Chapter 15: Index Architecture
 
-In a traditional relational database, an index is an "extra" structure you
-create to speed up specific queries. In Datalevin, the index **is** the
-database. Every piece of information you transact is automatically decomposed
-into multiple sorted representations.
+Earlier chapters introduced the logical fact shape: a datom written as
+`[entity attribute value]`. This chapter asks the storage question: how should
+those facts be ordered so queries can find them quickly?
 
-This "index-first" architecture is what allows Datalog to perform complex joins
-and graph traversals with predictable, high-speed performance. This chapter
-explores the two primary workhorses of Datalevin: the **EAV** and **AVE**
-indexes.
+In Datalevin, the core indexes are not optional side structures added after the
+data. They are the database's primary representations of facts. Every datom is
+stored in sorted orders that make entity-local reads, attribute/value lookups,
+range scans, joins, and graph traversal efficient. The two workhorse indexes are
+**EAV** and **AVE**.
 
----
 
 ## 1. The Logic of Sorted Triples
 
-Every fact in Datalevin is a triple (a datom): `[Entity Attribute Value]`. To
-make searching efficient, Datalevin stores every datom in two different sorted
-orders within the underlying KV store (DLMDB).
+To make searching efficient, Datalevin stores each datom in two different
+sorted orders within the underlying KV store (DLMDB).
 
 ### 1.1 The Full Datom Object
 
@@ -111,19 +109,37 @@ useful agent memory is not an append-only transcript. It needs deletion, expiry,
 consolidation, summarization, and retraction. Human memory research treats
 forgetting as an adaptive feature of cognition: transience can reduce
 interference, support abstraction, and help a system stay responsive when the
-world changes [3]. An agent that can only accumulate memories will eventually
+world changes [4]. An agent that can only accumulate memories will eventually
 retrieve stale, irrelevant, or harmful context. Datalevin's current-state model
 makes forgetting a normal database operation rather than an exception to the
 model.
 
 When applications need temporal or provenance-aware data, the requirements are
-usually richer than "keep every transaction forever": valid time, bitemporal
-time, source confidence, derivation, user/process provenance, and
-semiring-style annotations are domain models, not just storage history [2].
-Datalevin's direction is to support that kind of explicit provenance rather than
-treating transaction history as the one built-in answer. In the meantime, model
+usually richer than "keep every transaction forever." A transaction id can tell
+you when a fact was asserted or retracted in the database, but it does not tell
+you why and how, e.g. why a rule fired, which source passages supported a RAG
+answer, how confidence should propagate through a derivation, which explanation
+justifies a query result, or how to maintain an annotated derived view
+incrementally.
+
+Datalevin's direction is therefore not to make transaction history the one
+built-in answer. The more general plan is to implement support for the
+Green-Karvounarakis-Tannen semiring provenance framework [2]. In that model,
+facts carry annotations from a chosen semiring; joins combine annotations with
+the semiring's multiplication, and alternative derivations combine them with
+addition. Temporal history becomes one concrete instance, for example with an
+interval semiring, but the point is broader than as-of history. The same
+framework can also support count provenance, why-provenance, confidence or
+probability propagation, min-cost explanations, rule-application tracing, RAG
+source attribution, debugging, and incremental view maintenance [2,3].
+
+This does not require changing Datalevin's datom storage format. The core fact
+remains `[e a v]`; provenance annotations are represented as additional datoms:
+source entities, derivation entities, intervals, confidence values, costs, rule
+identifiers, and links between derived facts and their supporting facts. Datalog
+can then query and propagate those annotations explicitly. In the meantime, model
 audit and provenance facts explicitly when the domain needs them, and keep the
-core indexes optimized for current OLTP state.
+core EAV and AVE indexes optimized for current OLTP state.
 
 ### 1.2 Why Sorted Indexes Speed Up Queries
 
@@ -186,7 +202,6 @@ attribute/value patterns and value ranges favor AVE.
 
 ![Query pattern to index choice: a pattern's known positions, when they form a leading prefix of an index sort key, pick the index. Entity-known patterns use EAV prefix scans; attribute-and-value patterns use AVE prefix scans; an attribute with a value range uses an AVE range scan via index-range](/images/diagrams/pattern-to-index.svg)
 
----
 
 ## 2. Leveraging the AVE Index for Range Queries
 
@@ -204,7 +219,6 @@ Because DLMDB supports **order statistics** (Chapter 4), the engine can even
 know how many items are in a range instantly, allowing it to pick the most
 efficient join order (see Chapter 21).
 
----
 
 ## 3. Reverse Relationships: The "Missing" VAE Index
 
@@ -221,7 +235,6 @@ Because **every attribute has an AVE index**, reverse navigation is just as fast
 as forward navigation. There is no need for a separate VAE index, which reduces
 on-disk storage size and write overhead.
 
----
 
 ## 4. Index-Level APIs: Direct Access
 
@@ -693,7 +706,6 @@ walks from that attribute's minimum encoded value to its maximum; a bounded
 predicate such as `[(< 20 ?age 30)]` just tightens those bounds. Neither case
 scans the whole index.
 
----
 
 ## 5. Physical Representation and DUPSORT
 
@@ -732,7 +744,6 @@ EAV and repeated `(A, V)` prefixes in AVE. This is separate from DLMDB's
 page-level prefix compression, which can provide additional savings depending on
 how much of neighboring encoded keys is actually shared.
 
----
 
 ## Summary: Indexes as Capabilities
 
@@ -757,10 +768,15 @@ similarity, which we will explore in the following chapters.
 B-Tree"](https://doi.org/10.1145/356770.356776), *ACM Computing Surveys* 11(2),
 121-137, 1979.
 
-[2] Camille Bourgaux, Pierre Bourhis, Liat Peterfreund, and Michael Thomazo,
+[2] Todd J. Green, Grigoris Karvounarakis, and Val Tannen, ["Provenance
+Semirings"](https://doi.org/10.1145/1265530.1265535), in *Proceedings of the
+Twenty-Sixth ACM SIGMOD-SIGACT-SIGART Symposium on Principles of Database
+Systems (PODS '07)*, ACM, 31-40, 2007.
+
+[3] Camille Bourgaux, Pierre Bourhis, Liat Peterfreund, and Michael Thomazo,
 ["Revisiting Semiring Provenance for
 Datalog"](https://arxiv.org/abs/2202.10766), arXiv:2202.10766, 2022.
 
-[3] Blake A. Richards and Paul W. Frankland, ["The Persistence and Transience
+[4] Blake A. Richards and Paul W. Frankland, ["The Persistence and Transience
 of Memory"](https://doi.org/10.1016/j.neuron.2017.04.037), *Neuron* 94(6),
 1071-1084, 2017.

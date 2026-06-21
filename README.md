@@ -147,14 +147,14 @@ target/datalevin-docs-standalone.jar
 
 The uberjar avoids resolving the production classpath on every boot and is the preferred deployment target on a 1 GB VM.
 
-## Build reviewer PDF
+## Build final PDF
 
-The reviewer PDF is generated from the Markdown chapters with a print-oriented
+The final PDF is generated from the Markdown chapters with a print-oriented
 preprocessing step. The generated PDF uses a page-numbered table of contents,
 adds an index from `resources/docs/index-terms.edn` and generated function
 entries, and keeps Clojure fenced code blocks only; Java, Python, JavaScript,
 shell, JSON, SQL, and other non-Clojure fenced blocks remain in the web book but
-are omitted from the reviewer PDF source.
+are omitted from the print PDF source.
 
 Prerequisites:
 
@@ -169,15 +169,15 @@ Prerequisites:
 Build it with:
 
 ```bash
-clojure -T:build reviewer-pdf
+clojure -T:build final-pdf
 ```
 
 This produces:
 
 ```bash
-target/pdf/datalevin-reviewer.md
-target/pdf/datalevin-reviewer.tex
-target/pdf/datalevin-reviewer.pdf
+target/pdf/datalevin-definitive-guide.md
+target/pdf/datalevin-definitive-guide.tex
+target/pdf/datalevin-definitive-guide.pdf
 ```
 
 Set `DATALEVIN_VERSION` to override the default version used for

@@ -1,20 +1,20 @@
 ---
-title: "Appendix D: Datalog Built-In Functions Reference"
+title: "Appendix D: Datalog Built-Ins"
 chapter: 31
 part: "VII — Appendices"
 ---
 
-# Appendix D: Datalog Built-In Functions Reference
+# Appendix D: Datalog Built-Ins
 
 This appendix lists the functions and predicates that Datalevin resolves
 without namespace qualification inside Datalog query clauses. It also lists the
-built-in aggregate functions available in `:find` and `:having`.
+built-in aggregate functions available in `:find` and `:having`, plus the
+special forms that appear only in `:find`.
 
 Most of these functions mirror `clojure.core`. Datalevin-specific functions are
 called out separately because they interact with the database, full-text search,
 vector indexes, idoc indexes, or runtime UDFs.
 
----
 
 ## 1. Where Built-Ins Can Appear
 
@@ -43,12 +43,32 @@ Aggregate functions appear in `:find` and `:having`:
 Fully qualified Clojure functions can also be used when they are available to
 the runtime, but they are not part of this built-in table.
 
----
+On the JVM, a symbol whose name starts with `.` is treated as a reflective
+instance-method call on its first argument:
+
+```clojure
+[(.toUpperCase ?name) ?upper]
+```
+
+This is useful for local Clojure/JVM queries, but it is not a portable
+cross-language pattern. Prefer documented built-ins or runtime UDFs when the
+query will cross process or language boundaries.
+
+Find-only forms appear in `:find`, not as ordinary `:where` clauses:
+
+| Form | Purpose |
+| --- | ------ |
+| `(pull ?e pattern)` | Pull a shaped map for each entity found by the query. |
+| `(pull $source ?e pattern)` | Pull from an explicit query source. |
+| `(sum ?x)`, `(count ?x)`, etc. | Built-in aggregate calls. |
+| `(+ (sum ?x) (sum ?y))` | Arithmetic expression over aggregate results. |
+| `(aggregate ?f ?x)` | Custom aggregate form, where `?f` is an aggregate function input. |
+
 
 ## 2. Predicates and Comparisons
 
 | Function | Purpose |
-| :--- | :--- |
+| --- | ------ |
 | `=` | Equality predicate. |
 | `==` | Numeric equality predicate. |
 | `not=` | Inequality predicate. |
@@ -79,12 +99,11 @@ the runtime, but they are not part of this built-in table.
 | `re-find` | Regex search. |
 | `re-matches` | Regex full-match test. |
 
----
 
 ## 3. Numeric Functions
 
 | Function | Purpose |
-| :--- | :--- |
+| --- | ------ |
 | `+` | Addition. |
 | `-` | Subtraction or numeric negation. |
 | `*` | Multiplication. |
@@ -99,12 +118,11 @@ the runtime, but they are not part of this built-in table.
 | `rand` | Random floating-point number. |
 | `rand-int` | Random integer below a bound. |
 
----
 
 ## 4. General Value and Collection Functions
 
 | Function | Purpose |
-| :--- | :--- |
+| --- | ------ |
 | `identity` | Return its argument unchanged. |
 | `ground` | Alias for `identity`; commonly used to bind constants or collections. |
 | `quote` | Return its argument unchanged; useful for nested query literals in EDN strings. |
@@ -147,12 +165,11 @@ Examples:
      db)
 ```
 
----
 
 ## 5. String and Regex Functions
 
 | Function | Purpose |
-| :--- | :--- |
+| --- | ------ |
 | `str` | Concatenate values as strings. |
 | `pr-str` | Print values readably to a string. |
 | `print-str` | Print values to a string using `print` semantics. |
@@ -164,7 +181,6 @@ Examples:
 | `re-matches` | Match an entire string against a regex. |
 | `re-seq` | Return a sequence of regex matches. |
 
----
 
 ## 6. Database-Aware Functions
 
@@ -172,7 +188,7 @@ These functions take a Datalevin DB object, usually `$`, or interact with
 Datalevin indexes and runtime facilities.
 
 | Function | Purpose |
-| :--- | :--- |
+| --- | ------ |
 | `get-else` | Return an entity attribute value or a non-`nil` default. |
 | `get-some` | Return the first present attribute and value from a list of attributes. |
 | `missing?` | True when an entity has no value for an attribute. |
@@ -306,7 +322,6 @@ UDF registry, and its kind must be usable as a query function or predicate.
 Clojure, Java, Python, and JavaScript use the same Datalog `udf` form; only the
 registry helper names differ by host language.
 
----
 
 ## 7. Aggregate Functions
 
@@ -335,6 +350,10 @@ Aggregate expressions can combine aggregate results:
      rows)
 ```
 
+Aggregate expressions are evaluated after grouping. The supported expression
+operators are `+`, `-`, `*`, `/`, `mod`, `rem`, and `quot`; arguments may be
+aggregate calls, constants, or nested aggregate expressions.
+
 Custom aggregate functions are also supported with the special aggregate form:
 
 ```clojure
@@ -344,7 +363,6 @@ Custom aggregate functions are also supported with the special aggregate form:
      my-aggregate-fn)
 ```
 
----
 
 ## 8. Complete Name Index
 
@@ -361,6 +379,15 @@ Query functions and predicates:
 `range`, `re-find`, `re-matches`, `re-pattern`, `re-seq`, `rem`, `set`,
 `some?`, `str`, `subs`, `true?`, `tuple`, `type`, `udf`, `untuple`,
 `vec-neighbors`, `vector`, `zero?`.
+
+Find-only forms:
+
+`pull`, `aggregate`, arithmetic aggregate expressions using `+`, `-`, `*`, `/`,
+`mod`, `rem`, and `quot`.
+
+JVM method-call forms:
+
+Symbols beginning with `.`, such as `.toUpperCase`.
 
 Aggregate functions:
 

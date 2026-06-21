@@ -1,10 +1,10 @@
 ---
-title: "Graph Modeling and Relationship Design"
+title: "Graph Modeling"
 chapter: 13
 part: "III — Modeling Across Paradigms"
 ---
 
-# Chapter 13: Graph Modeling and Relationship Design
+# Chapter 13: Graph Modeling
 
 In many databases, "graph" is a specialized mode or a separate engine. In
 Datalevin, the graph is the **native state**. Every `:db.type/ref` you define is
@@ -15,13 +15,6 @@ This chapter explores how to leverage Datalevin as a high-performance graph
 database, focusing on navigation, recursive patterns, and modeling complex
 relationships like those found in social networks.
 
-The Java, Python, and JavaScript snippets in this chapter assume an open
-connection named `conn`. Calling `conn.query` supplies the connection's current
-database as `$`; pass only additional `:in` values after the query string. Rule
-sets are EDN data, so non-Clojure snippets use EDN helpers such as
-`Datalevin.edn`, `interop().read_edn`, and `await interop().readEdn`.
-
----
 
 ## 1. Entities as Nodes, Refs as Edges
 
@@ -48,64 +41,25 @@ In Pull and entity navigation, Datalevin also supports reverse attributes such
 as `:user/_follows`. In Datalog queries, use the normal attribute and let the
 query optimizer choose the index from the bound variables.
 
----
 
 ## 2. Modeling Complex Edges (Associative Entities)
 
-In simple graphs, an edge is just a line between two nodes. But often, you need
-to store data *on* the edge itself (e.g., "When did these two people become
-friends?" or "What is the weight of this connection?").
-
-As discussed in the Relational Modeling chapter (Ch 12), the best way to model
-this is through an **Associative Entity** (or a "Join Entity"), as shown in
-Figure 13.2.
+In a simple graph, an edge can be a direct reference such as
+`:user/follows`. When the edge itself has facts, promote the edge to an entity.
+Graph literature often calls this a property edge; ER modeling calls it an
+associative entity; Chapter 11 calls it a join entity. The Datalevin shape is the
+same in all three vocabularies: ordinary entities connected by ordinary ref
+attributes.
 
 ![Reifying an edge into an associative entity: a simple user A :user/follows user B edge becomes a Follow entity that references user A as :follow/follower and user B as :follow/following, and carries properties such as created-at and strength on the relationship itself](/images/diagrams/associative-entity.svg)
 
-### Example: Weighted Social Connections
-Instead of a simple `:user/follows` ref, create a `Follow` entity:
+In the figure, the direct edge `A -> B` becomes a `Follow` entity with two refs,
+`:follow/follower` and `:follow/following`, plus facts such as
+`:follow/created-at` or `:follow/strength`. This gives you
+property-graph-style modeling [1] while keeping Datalevin's normalized fact
+representation. Chapter 12 shows the same move in ER examples such as
+memberships, line items, and enrollments.
 
-<div class="multi-lang">
-
-```clojure
-{:follow/follower  user-a-id
- :follow/following user-b-id
- :follow/created-at #inst "2024-01-01T00:00:00Z"
- :follow/strength   0.85}
-```
-
-```java
-Tx.entity()
-    .put("follow/follower", userAId)
-    .put("follow/following", userBId)
-    .put("follow/created-at", Instant.parse("2024-01-01T00:00:00Z"))
-    .put("follow/strength", 0.85);
-```
-
-```python
-from datetime import datetime, timezone
-
-follow = {":follow/follower": user_a_id,
-          ":follow/following": user_b_id,
-          ":follow/created-at": datetime(2024, 1, 1, tzinfo=timezone.utc),
-          ":follow/strength": 0.85}
-```
-
-```javascript
-const follow = {":follow/follower": userAId,
-                ":follow/following": userBId,
-                ":follow/created-at": new Date("2024-01-01T00:00:00Z"),
-                ":follow/strength": 0.85};
-```
-
-</div>
-
-This transforms a simple edge into a node that can hold any number of
-attributes, such as `created-at`, `strength`, and so on. Using an associative
-entity effectively gives you property-graph-style modeling [1] while keeping
-Datalevin's normalized fact representation.
-
----
 
 ## 3. Graph Traversal with Recursive Rules
 
@@ -645,9 +599,11 @@ memberships reached through several allowed path shapes.
 
 ### Excluding Graph Shapes with `not-join`
 
-Recommendation queries often need an anti-join: find the nodes reachable by one
-path, but exclude nodes reachable by another path. A common example is
-friends-of-friends who are not already direct friends.
+Recommendation queries often need an **anti-join**: keep candidates from one
+pattern only when no matching fact exists in another pattern. In graph terms,
+this means finding nodes reachable by one path, but excluding nodes reachable by
+another path. A common example is friends-of-friends who are not already direct
+friends.
 
 <div class="multi-lang">
 
@@ -728,7 +684,6 @@ outer variables. Here the exclusion is about the pair `?start` and `?person`;
 it should not depend on unrelated variables that happen to appear elsewhere in
 the query.
 
----
 
 ## 4. More Graph Problem Shapes
 
@@ -1776,7 +1731,6 @@ same-generation. This kind of query is useful for structural comparisons,
 lineage analysis, and rule-engine tests because the derived relation is about
 two moving positions in the graph, not one source-to-target path.
 
----
 
 ## 5. Example: Finding the Forum for a Message (LDBC-SNB IS6)
 
@@ -1983,7 +1937,6 @@ important modeling lesson is that "graph query" often means a mix of topology,
 time, text, taxonomy, and ranking, and these are all readily represented in
 Datalevin's native data model.
 
----
 
 ## Summary: Graph Design Principles
 

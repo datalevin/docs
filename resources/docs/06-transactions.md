@@ -20,7 +20,6 @@ below explain the details.
 
 ![The transaction lifecycle: input data, resolution and validation, datom changes, index updates, and the resulting report](/images/diagrams/transaction-lifecycle.svg)
 
----
 
 ## 1. The Transaction Model
 
@@ -134,10 +133,9 @@ wait for the returned future or promise before reading or issuing dependent
 writes. Treating async transactions as fire-and-forget can hide validation
 errors, constraint violations, and write failures until too late. For independent
 high-volume writes, async transactions let Datalevin batch work internally and
-improve throughput; Section 6.2 returns to that performance model, and Chapter
-19 shows ingestion patterns in all four bindings.
+improve throughput. Chapter 20 shows ingestion patterns in all four bindings,
+and Chapter 19 covers the durability profiles behind those choices.
 
----
 
 ## 2. Transacting Data
 
@@ -945,7 +943,6 @@ Use `:validate-data? true` at system boundaries where malformed user, JSON, or
 remote-client data should fail early. Chapter 11 covers schema validation,
 coercion, and schema evolution in more detail.
 
----
 
 ## 3. Observing Committed Transactions with `listen!`
 
@@ -1147,7 +1144,6 @@ await conn.listen((_report) => publishPendingEvents(conn), "event-publisher");
 This keeps the fact that the event happened inside the database transaction,
 while allowing delivery to be retried independently.
 
----
 
 ## 4. Atomic Read-Modify-Write with `with-transaction`
 
@@ -1327,7 +1323,6 @@ committed. If the block throws, both parts are aborted; in Clojure, an explicit
 `d/abort-transact` has the same effect. This only works for DBIs that live in
 the same local Datalevin store; it is not a cross-file transaction mechanism.
 
----
 
 ## 5. Transaction Functions
 
@@ -1659,85 +1654,22 @@ You can also call an installed function through `:db.fn/call`:
   [[:db.fn/call :user/rename "bob@example.com" "Bob V3"]])
 ```
 
----
 
-## 6. High-Throughput: WAL and Asynchronous Transactions
+## 6. Throughput and Durability Pointers
 
-While the default synchronous model is extremely safe, it can limit write
-throughput. For demanding workloads, Datalevin provides two advanced features:
-WAL mode and asynchronous transactions.
+The functions in this chapter define transaction semantics: what data can be
+transacted, how atomic read-modify-write works, how transaction functions run,
+and how committed transactions are observed. Throughput and durability tuning
+are operational choices layered on top of those semantics.
 
-### 6.1 WAL Mode
+When write throughput becomes the bottleneck, start with the ingestion recipes
+in Chapter 20: manual batching, `transact-async`, sorted input, non-durable
+flags for rebuildable imports, and `init-db`/`fill-db` for trusted prepared
+datoms. When the question is crash behavior, WAL profiles, snapshots, or
+recovery, use Chapter 19. These choices can change when a caller waits and
+where the durability boundary falls, but they do not change the logical rule
+that one transaction succeeds or fails as a unit.
 
-As introduced in Chapter 4, **WAL (Write-Ahead Log) mode** increases write
-performance, especially for concurrent writers, by recording transactions in a
-sequential log before applying them to LMDB.
-
-- **Durability Policy**: Chapter 19 covers the choice of WAL durability profile,
-  including crash-loss windows, group commit, and operational maintenance.
-- **Bulk Loading**: Note that bulk load operations like `init-db` and `fill-db`
-  bypass the WAL for maximum performance and will not appear in the transaction
-  log.
-- **Concurrent Throughput**: WAL allows multiple writer threads to achieve
-  higher aggregate throughput than a single thread.
-- **Explicit Opt-In**: Local embedded Datalog stores now default to `:wal?
-  false`. Enable WAL with `{:wal? true}` when the workload needs WAL throughput,
-  replay, or replication behavior.
-
-### 6.2 Asynchronous Transactions (`transact-async`)
-
-For the absolute highest throughput, use the async transaction API:
-`d/transact-async` in Clojure, `transactAsync` in Java and JavaScript, and
-`transact_async` in Python. Instead of waiting for the transaction to be
-confirmed, these calls return a future or promise immediately.
-
-<div class="multi-lang">
-
-```clojure
-(let [fut (d/transact-async conn [{:user/name "Charlie"}])]
-  ;; ... do other work ...
-  @fut) ; Dereference the future to wait for completion and get the result
-```
-
-```java
-CompletableFuture<Map<?, ?>> fut =
-    conn.transactAsync(Datalevin.tx()
-        .entity(Tx.entity().put("user/name", "Charlie")));
-
-// ... do other work ...
-Map<?, ?> report = fut.join();
-```
-
-```python
-future = conn.transact_async([
-    {":user/name": "Charlie"}])
-
-# ... do other work ...
-report = future.result(timeout=30)
-```
-
-```javascript
-const promise = conn.transactAsync([
-  { ":user/name": "Charlie" }
-]);
-
-// ... do other work ...
-const report = await promise;
-```
-
-</div>
-
-Under the hood, `transact-async` uses a powerful **adaptive batching** strategy.
-It collects multiple concurrent asynchronous transactions and commits them
-together in a batch. The batch size dynamically adjusts based on system load,
-allowing Datalevin to achieve both high throughput during busy periods and low
-latency when the system is quiet.
-
-WAL mode and asynchronous transactions can be used together to achieve
-best-in-class Online Transaction Processing (OLTP) performance. Chapter 20
-shows the ingestion patterns in all four bindings.
-
----
 
 ## Summary
 

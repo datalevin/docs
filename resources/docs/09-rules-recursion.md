@@ -1,10 +1,10 @@
 ---
-title: "Rules, Recursion, and Derived Knowledge"
+title: "Rules and Recursion"
 chapter: 9
 part: "II — Core APIs: Datalog First, KV When Needed"
 ---
 
-# Chapter 9: Rules, Recursion, and Derived Knowledge
+# Chapter 9: Rules and Recursion
 
 While simple Datalog queries are powerful for finding patterns, real-world
 applications often require complex, reusable logic. You might find yourself
@@ -24,13 +24,6 @@ evaluated. If you query `(is-active? ?e)`, Datalevin computes the entities that
 satisfy that rule for this query. If you need the result to become durable data,
 your application should explicitly transact the derived facts.
 
-The Java, Python, and JavaScript snippets in this chapter assume an open
-connection named `conn`. Calling `conn.query` supplies the connection's current
-database as `$`; pass only additional `:in` values after the query string. Rule
-sets are EDN data, so non-Clojure snippets use EDN helpers such as
-`Datalevin.edn`, `interop().read_edn`, and `await interop().readEdn`.
-
----
 
 ## 1. What are Rules?
 
@@ -111,7 +104,6 @@ second rule says: an entity belongs to `is-admin?` when it belongs to
 > **composition**. Use them to name common patterns and build more complex logic
 > out of simpler, reusable components.
 
----
 
 ## 2. Using Rules in Queries
 
@@ -186,7 +178,6 @@ tenant-specific logic, tests, and experiments. Rules are data, so you can load
 them from EDN, compose them in ordinary code, or generate them from a small
 domain-specific configuration when that is appropriate.
 
----
 
 ## 3. Logical OR: Multiple Rule Definitions
 
@@ -388,7 +379,6 @@ Use `or-join` for one-off branching inside a single query. Use multiple rule
 definitions when the expansion has a name, is reused, or is clearer as part of
 the domain model.
 
----
 
 ## 4. Datalevin as a Reasoner: Forward-Chaining Logic
 
@@ -620,7 +610,6 @@ This approach is useful because:
    database schema context, not scattered across microservices or application
    code modules.
 
----
 
 ## 5. Recursion: Navigating Hierarchies
 
@@ -876,7 +865,6 @@ Termination is not the same as data validity: if your domain requires a strict
 tree, your application or transaction functions should still prevent illegal
 management cycles.
 
----
 
 ## 6. Rule Parameters and Binding
 
@@ -1052,7 +1040,6 @@ const result = await conn.query('[:find ?name ?dist2 ' +
 The first query uses the computed third column as a filter. The second query
 returns it as data. The rule body is the same in both cases.
 
----
 
 ## 7. Rules as an Abstraction Layer
 
@@ -1244,7 +1231,6 @@ By moving this logic into rules, you gain:
 3. **Simplicity**: Your application code stays focused on the *intent* of the
    query, not the mechanics of the calculation.
 
----
 
 ## Summary
 
@@ -1258,8 +1244,7 @@ sophisticated tool for knowledge derivation.
 
 By mastering rules, you can build expressive and maintainable data models that
 reflect the true complexity of your domain logic. For a deep dive into using
-these patterns for graph data, see **Chapter 13: Graph Modeling and Relationship
-Design**.
+these patterns for graph data, see **Chapter 13: Graph Modeling**.
 
 ## References
 
@@ -1278,4 +1263,5 @@ the Performance of Rule Engines*, 2009.
 https://www3.cs.stonybrook.edu/~kifer/TechReports/OpenRuleBench09.pdf
 
 [5] Datalevin project, OpenRuleBench benchmark implementation.
+
 https://github.com/datalevin/datalevin/tree/master/benchmarks/openrulebench

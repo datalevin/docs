@@ -12,10 +12,11 @@
 (def pdf-dir "target/pdf")
 (def converted-image-dir (str pdf-dir "/images"))
 (def index-terms-file (str docs-dir "/index-terms.edn"))
-(def reviewer-md-file (str pdf-dir "/datalevin-reviewer.md"))
-(def reviewer-tex-file (str pdf-dir "/datalevin-reviewer.tex"))
-(def reviewer-pdf-file (str pdf-dir "/datalevin-reviewer.pdf"))
-(def default-datalevin-version "0.10.18")
+(def final-pdf-stem "datalevin-definitive-guide")
+(def final-md-file (str pdf-dir "/" final-pdf-stem ".md"))
+(def final-tex-file (str pdf-dir "/" final-pdf-stem ".tex"))
+(def final-pdf-file (str pdf-dir "/" final-pdf-stem ".pdf"))
+(def default-datalevin-version "1.0.x")
 (def basis (delay (b/create-basis {:project "deps.edn"
                                    :aliases [:prod]})))
 
@@ -186,12 +187,18 @@
   (let [lang (-> info str/trim (str/split #"\s+") first str/lower-case)]
     (contains? #{"console" "{.console}"} lang)))
 
+(defn- prolog-fence?
+  [info]
+  (let [lang (-> info str/trim (str/split #"\s+") first str/lower-case)]
+    (contains? #{"prolog" "{.prolog}"} lang)))
+
 (defn- pdf-fence-info
   [info]
   (cond
     (clojure-fence? info) "clojure"
     (pdf-keep-text-fence? info) "text"
     (console-fence? info) "text"
+    (prolog-fence? info) "text"
     :else nil))
 
 (defn- keep-clojure-fences-only
@@ -287,6 +294,8 @@
 
 (declare table-cells
          table-separator-row?
+         fit-pipe-table-widths
+         make-inline-code-breakable
          inline-code-spans
          unqualify-function-name
          function-name-token?)
@@ -435,13 +444,6 @@
    markdown
    #(str/replace % #"^# (.*)$" "# $1 {.unnumbered .unlisted}")))
 
-(defn- normalize-blurb-headings
-  [markdown]
-  (-> markdown
-      normalize-front-heading
-      (str/replace #"(?m)^## About the Author$"
-                   "## About the Author {.unnumbered .unlisted}")))
-
 (defn- normalize-preface-heading
   [markdown]
   (update-first-h1
@@ -469,17 +471,20 @@
   ([file heading-fn]
    (prepare-markdown file heading-fn nil))
   ([file heading-fn terms]
-   (cond-> (-> file
-               slurp
-               strip-frontmatter
-               substitute-vars
-               rewrite-image-paths
-               remove-multi-lang-html
-               keep-clojure-fences-only
-               show-external-link-urls
-               heading-fn
-               replace-code-listing-markers)
-     (seq terms) (inject-index-entries terms))))
+   (let [markdown (-> file
+                      slurp
+                      strip-frontmatter
+                      substitute-vars
+                      rewrite-image-paths
+                      remove-multi-lang-html
+                      keep-clojure-fences-only
+                      show-external-link-urls
+                      heading-fn
+                      fit-pipe-table-widths
+                      replace-code-listing-markers)
+         indexed (cond-> markdown
+                   (seq terms) (inject-index-entries terms))]
+     (make-inline-code-breakable indexed))))
 
 (defn- title-metadata
   []
@@ -515,6 +520,7 @@
    "\\definecolor{dlgray}{HTML}{2F3437}"
    "\\definecolor{shadecolor}{HTML}{F5F7FA}"
    "\\usepackage{microtype}"
+   "\\usepackage{ragged2e}"
    "\\usepackage{titlesec}"
    "\\usepackage{fancyhdr}"
    "\\usepackage[font=small,labelfont=bf]{caption}"
@@ -524,22 +530,34 @@
    "\\usepackage{newunicodechar}"
    "\\usepackage{needspace}"
    "\\makeindex"
+   "\\AtBeginDocument{\\RaggedRight\\sloppy}"
+   "\\setlength{\\tabcolsep}{4pt}"
+   "\\setlength{\\LTpre}{0.4\\baselineskip}"
+   "\\setlength{\\LTpost}{0.4\\baselineskip}"
+   "\\renewcommand{\\arraystretch}{0.94}"
    "\\newunicodechar{→}{\\ensuremath{\\to}}"
    "\\newcounter{dlcode}"
    "\\numberwithin{dlcode}{chapter}"
    "\\newcommand{\\dlcodelisting}[1]{\\Needspace{6\\baselineskip}\\refstepcounter{dlcode}\\par\\medskip{\\small\\sffamily\\bfseries\\color{dlgray} Listing \\thedlcode. #1\\par}\\smallskip}"
    "\\captionsetup[figure]{justification=centering,singlelinecheck=false}"
+   "\\emergencystretch=3em"
    "\\fvset{breaklines=true,breakanywhere=true,fontsize=\\small}"
-   "\\titleformat{\\chapter}[display]{\\sffamily\\bfseries\\color{dlblue}}{\\Large\\MakeUppercase{\\chaptertitlename}\\ \\thechapter}{0.6em}{\\Huge}"
-   "\\titlespacing*{\\chapter}{0pt}{-8pt}{24pt}"
+   "\\titleformat{\\chapter}[display]{\\sffamily\\bfseries\\raggedright\\color{dlblue}}{\\large\\MakeUppercase{\\chaptertitlename}\\ \\thechapter}{0.5em}{\\huge}"
+   "\\titlespacing*{\\chapter}{0pt}{-4pt}{20pt}"
    "\\titleformat{\\section}{\\sffamily\\Large\\bfseries\\color{dlgray}}{\\thesection}{0.75em}{}"
    "\\titleformat{\\subsection}{\\sffamily\\large\\bfseries\\color{dlgray}}{\\thesubsection}{0.75em}{}"
    "\\titleformat{\\subsubsection}{\\sffamily\\normalsize\\bfseries\\color{dlgray}}{\\thesubsubsection}{0.75em}{}"
-   "\\titleformat{\\part}[display]{\\thispagestyle{empty}\\sffamily\\bfseries\\centering\\color{dlblue}}{\\Large\\MakeUppercase{\\partname}\\ \\thepart}{1em}{\\Huge}"
+   "\\titleformat{\\part}[display]{\\thispagestyle{empty}\\sffamily\\bfseries\\centering\\color{dlblue}}{\\Large\\MakeUppercase{\\partname}\\ \\thepart}{1em}{\\huge}"
+   "\\makeatletter"
+   "\\renewcommand{\\chaptermark}[1]{\\markboth{\\@chapapp\\ \\thechapter: #1}{\\@chapapp\\ \\thechapter: #1}}"
+   "\\renewcommand{\\sectionmark}[1]{\\markright{#1}}"
+   "\\makeatother"
    "\\pagestyle{fancy}"
    "\\fancyhf{}"
-   "\\fancyhead[L]{\\sffamily\\small\\nouppercase{\\leftmark}}"
-   "\\fancyhead[R]{\\sffamily\\small\\thepage}"
+   "\\fancyhead[LE,RO]{\\sffamily\\small\\thepage}"
+   "\\fancyhead[RE]{\\sffamily\\small\\nouppercase{\\leftmark}}"
+   "\\fancyhead[LO]{\\sffamily\\small\\nouppercase{\\rightmark}}"
+   "\\fancypagestyle{plain}{\\fancyhf{}\\fancyhead[LE,RO]{\\sffamily\\small\\thepage}\\fancyhead[RE]{\\sffamily\\small\\nouppercase{\\leftmark}}\\fancyhead[LO]{\\sffamily\\small\\nouppercase{\\rightmark}}\\renewcommand{\\headrulewidth}{0.4pt}}"
    "\\renewcommand{\\headrulewidth}{0.4pt}"
    "\\setlength{\\headheight}{14pt}"
    "\\makeatletter"
@@ -547,7 +565,7 @@
    "\\begin{titlepage}"
    "\\thispagestyle{empty}"
    "\\vspace*{0.14\\textheight}"
-   "{\\sffamily\\bfseries\\color{dlblue}\\fontsize{30}{36}\\selectfont\\@title\\par}"
+   "{\\raggedright\\sffamily\\bfseries\\color{dlblue}\\fontsize{24}{30}\\selectfont\\@title\\par}"
    "\\vfill"
    "{\\sffamily\\Large\\@author\\par}"
    "\\vspace{0.75em}"
@@ -568,12 +586,17 @@
        "author: " (yaml-quote author) "\n"
        "date: " (yaml-quote date) "\n"
        "documentclass: book\n"
-       "classoption: oneside\n"
-       "papersize: letter\n"
+       "classoption:\n"
+       "  - twoside\n"
+       "  - openany\n"
        "fontsize: 10pt\n"
+       "linestretch: 1.08\n"
        "numbersections: true\n"
        "secnumdepth: 0\n"
-       "geometry: margin=0.8in\n"
+       "geometry:\n"
+       "  - paperwidth=7in\n"
+       "  - paperheight=9.25in\n"
+       "  - margin=0.65in\n"
        "mainfont: Charter\n"
        "sansfont: Avenir Next\n"
        "monofont: Menlo\n"
@@ -588,6 +611,10 @@
        "linkcolor: black\n"
        "urlcolor: dlblue\n"
        "toccolor: black\n"
+       "hyperrefoptions:\n"
+       "  - pdfdisplaydoctitle\n"
+       "  - bookmarksopen=true\n"
+       "  - bookmarksopenlevel=1\n"
        "header-includes:\n"
        (yaml-literal-list-item pdf-header-includes)
        "---\n\n"))
@@ -599,6 +626,107 @@
       (str/replace #"([&%$#_{}])" "\\\\$1")
       (str/replace "~" "\\textasciitilde{}")
       (str/replace "^" "\\textasciicircum{}")))
+
+(def inline-code-break-chars
+  #{\/ \. \- \_ \: \? \! \+ \= \< \>})
+
+(defn- breakable-inline-code-latex
+  [code]
+  (let [index-commands (apply str (re-seq #"\\index\{[^}]+\}" code))
+        code (-> code
+                 (str/replace #"\\index\{[^}]+\}" "")
+                 (str/replace #"\s+" " ")
+                 str/trim)
+        body (apply str
+                    (mapcat
+                     (fn [ch]
+                       (cond-> [(latex-escape (str ch))]
+                         (contains? inline-code-break-chars ch)
+                         (conj "\\allowbreak{}")))
+                     code))]
+    (str "\\texttt{" body "}" index-commands)))
+
+(defn- heading-start?
+  [^String s idx]
+  (let [n (count s)]
+    (loop [i idx]
+      (cond
+        (>= i n) false
+        (Character/isWhitespace (.charAt s i)) (recur (inc i))
+        :else (= \# (.charAt s i))))))
+
+(defn- copy-until-line-end
+  [^String s ^StringBuilder out idx]
+  (let [n (count s)]
+    (loop [i idx]
+      (if (>= i n)
+        i
+        (let [ch (.charAt s i)]
+          (.append out ch)
+          (if (= ch \newline)
+            (inc i)
+            (recur (inc i))))))))
+
+(defn- break-inline-code-spans
+  [^String markdown]
+  (let [n (count markdown)
+        out (StringBuilder.)]
+    (loop [idx 0
+           line-start? true]
+      (if (>= idx n)
+        (str out)
+        (cond
+          (and line-start? (heading-start? markdown idx))
+          (recur (copy-until-line-end markdown out idx) true)
+
+          (= \` (.charAt markdown idx))
+          (let [end (.indexOf markdown "`" (inc idx))]
+            (if (neg? end)
+              (do
+                (.append out (.charAt markdown idx))
+                (recur (inc idx) false))
+              (do
+                (.append out
+                         (breakable-inline-code-latex
+                          (subs markdown (inc idx) end)))
+                (recur (inc end) false))))
+
+          :else
+          (let [ch (.charAt markdown idx)]
+            (.append out ch)
+            (recur (inc idx) (= ch \newline))))))))
+
+(defn- flush-inline-code-prose
+  [out lines]
+  (cond-> out
+    (seq lines)
+    (conj (break-inline-code-spans (str (str/join "\n" lines) "\n")))))
+
+(defn- make-inline-code-breakable
+  [markdown]
+  (let [{:keys [lines prose-lines in-code?]}
+        (reduce
+         (fn [{:keys [in-code?] :as state} line]
+           (cond
+             (re-matches #"^\s*```.*$" line)
+             (-> state
+                 (assoc :lines (flush-inline-code-prose (:lines state)
+                                                        (:prose-lines state))
+                        :prose-lines [])
+                 (update :lines conj (str line "\n"))
+                 (update :in-code? not))
+
+             in-code?
+             (update state :lines conj (str line "\n"))
+
+             :else
+             (update state :prose-lines conj line)))
+         {:lines [] :prose-lines [] :in-code? false}
+         (str/split-lines markdown))]
+    (when in-code?
+      (throw (ex-info "Unclosed fenced code block while preparing inline code"
+                      {})))
+    (apply str (flush-inline-code-prose lines prose-lines))))
 
 (defn- raw-latex
   [s]
@@ -744,6 +872,273 @@
   [cells]
   (and (seq cells)
        (every? #(re-matches #":?-{3,}:?" %) cells)))
+
+(defn- table-separator-dash-count
+  [cell]
+  (count (filter #{\-} cell)))
+
+(defn- separator-cell
+  [cell width]
+  (let [cell (str/trim cell)]
+    (str (when (str/starts-with? cell ":") ":")
+         (apply str (repeat width "-"))
+         (when (str/ends-with? cell ":") ":"))))
+
+(defn- markdown-width-text
+  [cell]
+  (-> cell
+      (str/replace #"`([^`]+)`" "$1")
+      (str/replace #"\[([^\]]+)\]\([^)]+\)" "$1")
+      (str/replace #"<https?://[^>]+>" "URL")
+      (str/replace #"[*_~]" "")
+      (str/replace #"\\index\{[^}]+\}" "")
+      str/trim))
+
+(defn- normalized-table-header
+  [header]
+  (-> header
+      markdown-width-text
+      str/lower-case
+      (str/replace #"\s+" " ")
+      str/trim))
+
+(defn- width-header-kind
+  [header]
+  (let [header (normalized-table-header header)]
+    (cond
+      (contains? #{"meaning" "description" "purpose" "use" "use it when"
+                   "best for" "notes" "result shape" "index behavior"
+                   "what changes" "start here when" "risk" "domain membership"}
+                 header)
+      :prose
+
+      (contains? #{"function" "property" "option" "key" "field" "type"
+                   "value type" "range type" "mode" "area" "feature"
+                   "need" "shape" "syntax" "default" "values" "edn form"
+                   "common forms" "operations" "namespace" "form"
+                   "original token" "indexed term" "position" "offset"}
+                 header)
+      :label
+
+      :else
+      :neutral)))
+
+(defn- cell-width-score
+  [cell]
+  (let [text (markdown-width-text cell)
+        code-spans (inline-code-spans cell)
+        words (re-seq #"[^,\s]+" text)
+        longest-word (apply max 0 (map count words))
+        longest-code (apply max 0 (map count code-spans))
+        unbreakable-score (* 1.6 (max longest-word longest-code))
+        content-score (min 80 (max 3 (count text)))
+        code-bonus (if (seq code-spans) 1.15 1.0)]
+    (* code-bonus (max content-score unbreakable-score))))
+
+(defn- column-width-scores
+  [rows]
+  (let [headers (first rows)
+        columns (apply map vector rows)]
+    (mapv
+     (fn [header column]
+       (let [scores (map cell-width-score column)
+             avg (/ (reduce + scores) (max 1 (count scores)))
+             max-score (apply max scores)
+             base (+ (* 0.7 avg) (* 0.3 max-score))
+             kind (width-header-kind header)]
+         (* base
+            (case kind
+              :prose 1.45
+              :label 0.82
+              1.0))))
+     headers
+     columns)))
+
+(defn- column-min-width
+  [n header]
+  (let [kind (width-header-kind header)]
+    (case n
+      2 (case kind
+          :prose 0.38
+          :label 0.28
+          0.24)
+      3 (case kind
+          :prose 0.28
+          :label 0.24
+          0.20)
+      4 (case kind
+          :prose 0.20
+          :label 0.15
+          0.13)
+      (case kind
+        :prose 0.16
+        :label 0.10
+        0.08))))
+
+(defn- cell-unbreakable-length
+  [cell]
+  (let [code-spans (inline-code-spans cell)
+        tokens (if (seq code-spans)
+                 code-spans
+                 (re-seq #"[^,\s]+" (markdown-width-text cell)))]
+    (apply max 0 (map count tokens))))
+
+(defn- column-content-min-width
+  [n column]
+  (let [longest (apply max 0 (map cell-unbreakable-length column))]
+    (case n
+      2 (cond
+          (>= longest 30) 0.42
+          (>= longest 24) 0.36
+          (>= longest 18) 0.30
+          :else 0.0)
+      3 (cond
+          (>= longest 24) 0.38
+          (>= longest 20) 0.32
+          (>= longest 16) 0.28
+          (>= longest 12) 0.24
+          :else 0.0)
+      4 (cond
+          (>= longest 24) 0.28
+          (>= longest 20) 0.24
+          (>= longest 16) 0.20
+          (>= longest 12) 0.16
+          :else 0.0)
+      0.0)))
+
+(defn- column-max-width
+  [n header]
+  (let [kind (width-header-kind header)]
+    (case n
+      2 (case kind
+          :prose 0.72
+          :label 0.42
+          0.60)
+      3 (case kind
+          :prose 0.52
+          :label 0.42
+          0.46)
+      4 (case kind
+          :prose 0.42
+          :label 0.34
+          0.36)
+      (case kind
+        :prose 0.40
+        :label 0.30
+        0.34))))
+
+(defn- distribute-table-widths
+  [initial mins maxes]
+  (let [n (count initial)
+        min-total (reduce + mins)]
+    (if (>= min-total 0.98)
+      (mapv #(/ % min-total) mins)
+      (loop [widths (vec mins)
+             remaining (- 1.0 min-total)
+             active (set (range n))]
+        (if (or (< (Math/abs remaining) 0.0001) (empty? active))
+          (let [diff (- 1.0 (reduce + widths))]
+            (if (< (Math/abs diff) 0.0001)
+              widths
+              (update widths (dec n) + diff)))
+          (let [weights (mapv #(max 0.001 (- (initial %) (mins %))) active)
+                total (reduce + weights)
+                result (reduce
+                        (fn [{:keys [widths remaining active]} [idx weight]]
+                          (let [share (* remaining (/ weight total))
+                                capacity (- (maxes idx) (widths idx))
+                                add (min share capacity)]
+                            {:widths (update widths idx + add)
+                             :remaining (- remaining add)
+                             :active (if (< (- capacity add) 0.0001)
+                                       (disj active idx)
+                                       active)}))
+                        {:widths widths
+                         :remaining remaining
+                         :active active}
+                        (map vector active weights))]
+            (recur (:widths result)
+                   (:remaining result)
+                   (:active result))))))))
+
+(defn- normalize-column-widths
+  [headers rows scores]
+  (let [n (count scores)
+        total (double (max 1.0 (reduce + scores)))
+        initial (mapv #(/ % total) scores)
+        columns (apply mapv vector rows)
+        mins (mapv #(max (column-min-width n %1)
+                         (column-content-min-width n %2))
+                   headers
+                   columns)
+        maxes (mapv #(max (column-max-width n %1)
+                          (column-content-min-width n %2))
+                    headers
+                    columns)]
+    (distribute-table-widths initial mins maxes)))
+
+(defn- column-dash-widths
+  [rows]
+  (let [headers (first rows)
+        widths (normalize-column-widths headers rows (column-width-scores rows))
+        dash-total (case (count widths)
+                     2 40
+                     3 54
+                     4 64
+                     72)
+        raw (mapv #(max 3 (int (Math/round (* dash-total %)))) widths)
+        diff (- dash-total (reduce + raw))]
+    (if (zero? diff)
+      raw
+      (update raw (dec (count raw)) + diff))))
+
+(defn- rebalance-pipe-table
+  [lines]
+  (let [rows (mapv table-cells lines)
+        header (first rows)
+        separator (second rows)
+        n (count header)
+        dash-counts (mapv table-separator-dash-count separator)]
+    (if (and (<= 2 n 4)
+             (every? #(= n (count %)) rows)
+             (apply = dash-counts))
+      (let [widths (column-dash-widths (remove table-separator-row? rows))
+            new-separator (str "| "
+                               (str/join " | "
+                                         (map separator-cell separator widths))
+                               " |")]
+        (assoc lines 1 new-separator))
+      lines)))
+
+(defn- table-start?
+  [line next-line]
+  (and (table-cells line)
+       (some-> next-line table-cells table-separator-row?)))
+
+(defn- fit-pipe-table-widths
+  [markdown]
+  (let [lines (vec (str/split-lines markdown))]
+    (loop [idx 0
+           out []
+           in-code? false]
+      (if (>= idx (count lines))
+        (str (str/join "\n" out) "\n")
+        (let [line (lines idx)]
+          (cond
+            (re-matches #"^\s*```.*$" line)
+            (recur (inc idx) (conj out line) (not in-code?))
+
+            (and (not in-code?)
+                 (table-start? line (get lines (inc idx))))
+            (let [table-lines (->> (subvec lines idx)
+                                   (take-while table-cells)
+                                   vec)]
+              (recur (+ idx (count table-lines))
+                     (into out (rebalance-pipe-table table-lines))
+                     in-code?))
+
+            :else
+            (recur (inc idx) (conj out line) in-code?)))))))
 
 (defn- inline-code-spans
   [markdown]
@@ -936,17 +1331,13 @@
   [part]
   (str "\\part{" (latex-escape (part-titles part)) "}"))
 
-(defn- reviewer-markdown
+(defn- final-markdown
   []
   (let [{:keys [note-lines] :as title} (title-metadata)
         terms (book-index-terms)
-        blurb (prepare-markdown (jio/file docs-dir "blurb.md")
-                                normalize-blurb-headings)
         copyright (prepare-markdown (jio/file docs-dir "copyright.md")
                                     normalize-front-heading)
         dedication (dedication-page (jio/file docs-dir "dedication.md"))
-        reviewer-note (prepare-markdown (jio/file docs-dir "reviewer-note.md")
-                                        normalize-front-heading)
         preface (prepare-markdown (jio/file docs-dir "preface.md")
                                   normalize-preface-heading
                                   terms)
@@ -955,16 +1346,15 @@
      (pdf-metadata-block title)
      (raw-latex "\\frontmatter")
      (frontmatter-note note-lines)
-     blurb
-     "\n\\clearpage\n\n"
      copyright
      "\n\\clearpage\n\n"
      dedication
      "\n\\clearpage\n\n"
-     reviewer-note
-     "\n\\clearpage\n\n"
+     "\\bookmarksetup{startatroot}\n"
+     "\\pdfbookmark[0]{Contents}{contents}\n"
      "\\setcounter{tocdepth}{1}\n"
      "\\tableofcontents\n"
+     "\\bookmarksetup{startatroot}\n"
      "\n\\clearpage\n\n"
      (raw-latex "\\mainmatter")
      preface
@@ -985,12 +1375,13 @@
                     part-block (conj part-block)
                     true (conj chapter))))
          (str (str/join "\n" out)
-              (raw-latex "\\backmatter
+	              (raw-latex "\\backmatter
 \\cleardoublepage
 \\phantomsection
 \\addcontentsline{toc}{chapter}{Index}
 \\markboth{Index}{Index}
-\\printindex")))))))
+\\printindex
+\\cleardoublepage")))))))
 
 (defn- run-command!
   [failure-message cmd]
@@ -1078,47 +1469,50 @@
                        (.getPath svg)
                        :env env])))))
 
-(defn write-reviewer-source
-  "Generate the print-oriented reviewer Markdown consumed by Pandoc."
+(defn write-final-source
+  "Generate the print-oriented final Markdown consumed by Pandoc."
   [_]
   (b/delete {:path pdf-dir})
-  (jio/make-parents reviewer-md-file)
-  (spit reviewer-md-file (reviewer-markdown))
-  (println "Wrote:" reviewer-md-file))
+  (jio/make-parents final-md-file)
+  (spit final-md-file (final-markdown))
+  (println "Wrote:" final-md-file))
 
-(defn reviewer-pdf
-  "Build target/pdf/datalevin-reviewer.pdf with a TOC and terminology index.
+(defn final-pdf
+  "Build target/pdf/datalevin-definitive-guide.pdf with a TOC and index.
 
    The generated Markdown keeps Clojure fenced code blocks and command-line
    console fences. Other non-Clojure fenced blocks remain in the web book but
    are omitted from this PDF source."
   [_]
-  (write-reviewer-source nil)
+  (write-final-source nil)
   (convert-svg-assets!)
-  (run-command! "Pandoc reviewer TeX build failed"
-                ["pandoc" reviewer-md-file
+  (run-command! "Pandoc final TeX build failed"
+                ["pandoc" final-md-file
                  "--from" "markdown+raw_tex+fenced_code_attributes"
                  "--standalone"
                  "--top-level-division=chapter"
                  "--resource-path=.:resources/public"
-                 "-o" reviewer-tex-file])
+                 "-o" final-tex-file])
   (doseq [cmd [["xelatex" "-interaction=nonstopmode" "-halt-on-error"
+                (str "-jobname=" final-pdf-stem)
                 "-output-directory" pdf-dir
-                reviewer-tex-file]
-               ["makeindex" (str pdf-dir "/datalevin-reviewer.idx")]
+                final-tex-file]
+               ["makeindex" (str pdf-dir "/" final-pdf-stem ".idx")]
                ["xelatex" "-interaction=nonstopmode" "-halt-on-error"
+                (str "-jobname=" final-pdf-stem)
                 "-output-directory" pdf-dir
-                reviewer-tex-file]
+                final-tex-file]
                ["xelatex" "-interaction=nonstopmode" "-halt-on-error"
+                (str "-jobname=" final-pdf-stem)
                 "-output-directory" pdf-dir
-                reviewer-tex-file]]]
-    (run-command! "Reviewer PDF build failed" cmd))
-  (println "Built:" reviewer-pdf-file))
+                final-tex-file]]]
+    (run-command! "Final PDF build failed" cmd))
+  (println "Built:" final-pdf-file))
 
 (comment
   ;; Build a runnable uberjar.
   ;; clojure -T:build uber
   ;;
-  ;; Build a reviewer PDF.
-  ;; clojure -T:build reviewer-pdf
+  ;; Build the final print-oriented PDF.
+  ;; clojure -T:build final-pdf
   )

@@ -1,17 +1,16 @@
 ---
-title: "Durability, Database Maintenance, and Storage Tuning"
+title: "Durability and Maintenance"
 chapter: 19
 part: "V — Performance and Operations"
 ---
 
-# Chapter 19: Durability, Database Maintenance, and Storage Tuning
+# Chapter 19: Durability and Maintenance
 
 Performance and durability are the two sides of the same operational problem:
 the database must be fast, bounded, recoverable, and predictable under failure.
 This chapter starts with durability, backup, and maintenance practices, then
 covers memory and storage tuning.
 
----
 
 ## 1. Durability, Snapshots, and Maintenance
 
@@ -23,7 +22,6 @@ This section covers how Datalevin ensures durability, how to perform online
 snapshots, and how to build a robust backup strategy for your production
 environment.
 
----
 
 ### 1.1 Durability: The Power of Copy-on-Write (CoW)
 
@@ -43,7 +41,6 @@ Datalevin's storage engine (LMDB) uses a **Copy-on-Write (CoW) B+Tree**.
     known-good state. **There is no "recovery process" needed because the
     database is never in an inconsistent state on disk.**
 
----
 
 ### 1.2 Syncing to Disk: `msync` and Durability
 
@@ -57,7 +54,6 @@ primarily limited by the speed of your disk's **synchronous flush (`msync`)**.
   older magnetic drives or cloud-based block storage (like AWS EBS), it can be a
   major bottleneck.
 
----
 
 ### 1.3 Non-Durable Environment Flags
 
@@ -74,7 +70,6 @@ the application has an explicit recovery plan. For raw KV stores, call the KV
 `sync` operation at explicit checkpoints if you need to force a flush. For the
 full flag table, setup examples, and ingestion trade-offs, see Chapter 20.
 
----
 
 ### 1.4 WAL-Based Durability: Performance + Safety
 
@@ -285,7 +280,6 @@ the durable LSN in the log. If the log is ahead, Datalevin validates newer log
 records and replays them into the LMDB environment before opening the database
 for normal reads and writes.
 
----
 
 ### 1.5 Maintenance in WAL Mode
 
@@ -392,7 +386,6 @@ In Java, Python, and JavaScript, use `gcTxLogSegments`,
 handle. The optional retain-floor LSN is passed as the method argument in Java
 and Python, or as `{ retainFloorLsn: 5000 }` in JavaScript.
 
----
 
 ### 1.6 Online Backup Copies: `d/copy`
 
@@ -478,7 +471,6 @@ $ dtlv -d /data/companydb copy /backup/companydb-2024-01-15
   source remains available. A long-running copy still consumes I/O and can keep
   older pages live until it finishes, so schedule large copies deliberately.
 
----
 
 ### 1.7 Database Maintenance: Copy, Dump, and Load
 
@@ -567,7 +559,6 @@ Use `-n` / `--nippy` when speed and file size matter more than human
 inspectability. Keep EDN when the dump needs to be reviewed, transformed, or
 stored as a long-lived interchange artifact.
 
----
 
 ### 1.8 Re-Indexing
 
@@ -591,7 +582,6 @@ and standalone search engines expose corresponding `reIndex` / `re_index`
 methods. Client/server users should schedule re-indexing as an operator task on
 the host that owns the local database files.
 
----
 
 ### 1.9 Database Upgrades
 
@@ -622,7 +612,6 @@ $ dtlv-0.4 -d /src/dir -g -f dump.edn dump
 $ dtlv -d /dest/dir -f dump.edn -g load
 ```
 
----
 
 ### 1.10 Operations Checklist
 
@@ -652,7 +641,6 @@ To ensure your data is safe and recoverable, follow this checklist:
 By leveraging Datalevin's rock-solid CoW architecture, you can sleep soundly
 knowing your data is safe from crashes and easy to recover from disasters.
 
----
 
 ## 2. Memory Layout and Storage Tuning
 
@@ -721,7 +709,6 @@ const conn = await connect(path, {
 > application-level transaction failures such as validation, lookup-ref, unique,
 > and CAS errors.
 
----
 
 ### 2.2 Leveraging the OS Page Cache
 
@@ -798,7 +785,6 @@ tool such as `vmtouch` when it is available:
 $ vmtouch /data/companydb/data.mdb
 ```
 
----
 
 ### 2.3 Reader Threads and Locking: `:max-readers`
 
@@ -842,7 +828,6 @@ const conn = await connect(path, {
 
 </div>
 
----
 
 ### 2.4 Storage Efficiency: Prefix Compression
 
@@ -869,7 +854,6 @@ compression, it maintains subtree counts that let Datalevin count ranges without
 materializing them. Those counts feed both direct index APIs, such as
 `count-datoms`, and the query optimizer's cardinality estimates.
 
----
 
 ## Summary: The Tuning Checklist
 

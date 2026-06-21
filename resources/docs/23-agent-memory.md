@@ -1,28 +1,33 @@
 ---
-title: "Persistent Agent Memory Architectures"
+title: "Agent Memory Architectures"
 chapter: 23
 part: "VI — Datalevin for Intelligent Systems"
 ---
 
-# Chapter 23: Persistent Agent Memory Architectures
+# Chapter 23: Agent Memory Architectures
 
 The greatest limitation of modern Large Language Models (LLMs) is their lack of
 state. While they possess vast general knowledge, they are "reset" at the start
 of every session. To build true **Intelligent Agents**, we must provide them
-with a persistent memory—a place to store past experiences, learned facts, and
+with a persistent memory — a place to store past experiences, learned facts, and
 evolving goals.
 
 This chapter explores how Datalevin serves as a unified substrate for agent
 memory, bridging the gap between unstructured semantic search and structured
 logical reasoning.
 
----
 
 ## Part VI Contract: What Datalevin Provides
 
-Part VI is about application architecture on top of Datalevin. It is not a
-description of a bundled agent framework. Datalevin gives you the database
-capabilities needed to build durable agent memory:
+Before we begin, we lay down the boundary. Part VI of this book is about
+application architecture on top of Datalevin. The intent is not to give a
+description of a bundled agent framework, but to give guidance on how to
+leverage Datalevin's capabilities to build persistent agent memory. Figure 23.1
+shows the boundary.
+
+![The Datalevin/application boundary: Datalevin provides ACID transactions, Datalog and graph, search indexes, and operations, while your application code builds the ingestion loop, consolidation, working memory, truth maintenance, and policy](/images/diagrams/agent-memory-boundary.svg)
+
+Datalevin gives you the database capabilities needed to build durable agent memory:
 
 - ACID transactions over facts, documents, indexes, and task state.
 - Datalog queries, rules, lookup refs, schema, and graph traversal.
@@ -41,8 +46,6 @@ You build the agent-specific machinery:
 - The operating envelope, tool authorization checks, budgets, and model-calling
   policy.
 
-![The Datalevin/application boundary: Datalevin provides ACID transactions, Datalog and graph, search indexes, and operations, while your application code builds the ingestion loop, consolidation, working memory, truth maintenance, and policy](/images/diagrams/agent-memory-boundary.svg)
-
 The examples in this part model those pieces as ordinary entities, references,
 attributes, and idocs. When a snippet demonstrates a basic Datalevin API call,
 it may use the same multi-language style as earlier chapters. When a snippet
@@ -56,17 +59,22 @@ are the same as elsewhere: Clojure, Java, and Python expose the Datalog
 transaction callback, but JavaScript does not; staged mutation of existing
 Entity objects is Clojure-only.
 
-Many of the patterns in Part VI were informed by Xia, a separate open-source
-personal AI assistant project [3]. Xia is a reference implementation for these
-agent-memory ideas: long-term memory, scoped task state, local tool boundaries,
-scheduled work, and persistent assistant state. It is not part of Datalevin and
-does not change what Datalevin provides; it shows how an application can build
-the agent-specific machinery on top of ordinary database capabilities.
+Many of the patterns in Part VI were informed by the author's decade-long
+experience building the Juji platform [3], as well as building Xia, a separate
+open-source personal AI assistant project [4]. Xia can be considered a reference
+implementation for these agent-memory ideas: long-term memory, scoped task
+state, local tool boundaries, scheduled work, and persistent assistant state. It
+is not part of Datalevin and does not change what Datalevin provides; it shows
+how an application can build the agent-specific machinery on top of ordinary
+database capabilities.
 
-The following minimal in-memory setup is enough to run many of the Clojure
-examples in Part VI:
+The following minimal in-memory setup can be created from any primary binding.
+Later Part VI examples use the Clojure binding for longer control-flow examples,
+but the same schema and transaction shapes are portable.
 
 <!-- pdf-listing: Minimal Part VI memory schema -->
+
+<div class="multi-lang">
 
 ```clojure
 (require '[datalevin.core :as d])
@@ -117,6 +125,184 @@ examples in Part VI:
    {:session/id "release-standup"
     :session/user [:user/id "alice"]}])
 ```
+
+```java
+import datalevin.Connection;
+import datalevin.Datalevin;
+
+import java.util.List;
+import java.util.Map;
+
+import static java.util.Map.entry;
+
+Map<?, ?> uniqueString =
+    Map.of(":db/valueType", ":db.type/string",
+           ":db/unique", ":db.unique/identity");
+Map<?, ?> uniqueUuid =
+    Map.of(":db/valueType", ":db.type/uuid",
+           ":db/unique", ":db.unique/identity");
+Map<?, ?> stringAttr = Map.of(":db/valueType", ":db.type/string");
+Map<?, ?> refAttr = Map.of(":db/valueType", ":db.type/ref");
+Map<?, ?> keywordAttr = Map.of(":db/valueType", ":db.type/keyword");
+Map<?, ?> doubleAttr = Map.of(":db/valueType", ":db.type/double");
+Map<?, ?> booleanAttr = Map.of(":db/valueType", ":db.type/boolean");
+Map<?, ?> instantAttr = Map.of(":db/valueType", ":db.type/instant");
+Map<?, ?> idocAttr = Map.of(":db/valueType", ":db.type/idoc");
+Map<?, ?> fulltextString =
+    Map.of(":db/valueType", ":db.type/string", ":db/fulltext", true);
+Map<?, ?> manyRef =
+    Map.of(":db/valueType", ":db.type/ref",
+           ":db/cardinality", ":db.cardinality/many");
+
+Map<?, ?> memorySchema = Map.ofEntries(
+    entry(":user/id", uniqueString),
+    entry(":session/id", uniqueString),
+    entry(":session/user", refAttr),
+    entry(":episode/id", uniqueUuid),
+    entry(":episode/user", refAttr),
+    entry(":episode/session", refAttr),
+    entry(":episode/timestamp", instantAttr),
+    entry(":episode/summary", fulltextString),
+    entry(":fact/id", uniqueUuid),
+    entry(":fact/subject", refAttr),
+    entry(":fact/kind", keywordAttr),
+    entry(":fact/source-episode", refAttr),
+    entry(":fact/supersedes", manyRef),
+    entry(":fact/status", keywordAttr),
+    entry(":fact/content", fulltextString),
+    entry(":fact/confidence", doubleAttr),
+    entry(":fact/created-at", instantAttr),
+    entry(":task/id", uniqueUuid),
+    entry(":task/state", keywordAttr),
+    entry(":task/contract", idocAttr),
+    entry(":wm/id", uniqueUuid),
+    entry(":wm/session", refAttr),
+    entry(":wm.slot/wm", refAttr),
+    entry(":wm.slot/entity", refAttr),
+    entry(":wm.slot/relevance", doubleAttr),
+    entry(":wm.slot/reason", stringAttr),
+    entry(":wm.slot/pinned?", booleanAttr));
+
+Connection conn = Datalevin.createConn(
+    null,
+    memorySchema,
+    Map.of("kv-opts", Map.of("inmemory?", true)));
+
+conn.transact(List.of(
+    Map.of(":user/id", "alice"),
+    Map.of(":session/id", "release-standup",
+           ":session/user", List.of(":user/id", "alice"))));
+```
+
+```python
+from datalevin import connect
+
+memory_schema = {
+    ":user/id": {":db/valueType": ":db.type/string",
+                 ":db/unique": ":db.unique/identity"},
+    ":session/id": {":db/valueType": ":db.type/string",
+                    ":db/unique": ":db.unique/identity"},
+    ":session/user": {":db/valueType": ":db.type/ref"},
+    ":episode/id": {":db/valueType": ":db.type/uuid",
+                    ":db/unique": ":db.unique/identity"},
+    ":episode/user": {":db/valueType": ":db.type/ref"},
+    ":episode/session": {":db/valueType": ":db.type/ref"},
+    ":episode/timestamp": {":db/valueType": ":db.type/instant"},
+    ":episode/summary": {":db/valueType": ":db.type/string",
+                         ":db/fulltext": True},
+    ":fact/id": {":db/valueType": ":db.type/uuid",
+                 ":db/unique": ":db.unique/identity"},
+    ":fact/subject": {":db/valueType": ":db.type/ref"},
+    ":fact/kind": {":db/valueType": ":db.type/keyword"},
+    ":fact/source-episode": {":db/valueType": ":db.type/ref"},
+    ":fact/supersedes": {":db/valueType": ":db.type/ref",
+                         ":db/cardinality": ":db.cardinality/many"},
+    ":fact/status": {":db/valueType": ":db.type/keyword"},
+    ":fact/content": {":db/valueType": ":db.type/string",
+                      ":db/fulltext": True},
+    ":fact/confidence": {":db/valueType": ":db.type/double"},
+    ":fact/created-at": {":db/valueType": ":db.type/instant"},
+    ":task/id": {":db/valueType": ":db.type/uuid",
+                 ":db/unique": ":db.unique/identity"},
+    ":task/state": {":db/valueType": ":db.type/keyword"},
+    ":task/contract": {":db/valueType": ":db.type/idoc"},
+    ":wm/id": {":db/valueType": ":db.type/uuid",
+               ":db/unique": ":db.unique/identity"},
+    ":wm/session": {":db/valueType": ":db.type/ref"},
+    ":wm.slot/wm": {":db/valueType": ":db.type/ref"},
+    ":wm.slot/entity": {":db/valueType": ":db.type/ref"},
+    ":wm.slot/relevance": {":db/valueType": ":db.type/double"},
+    ":wm.slot/reason": {":db/valueType": ":db.type/string"},
+    ":wm.slot/pinned?": {":db/valueType": ":db.type/boolean"},
+}
+
+conn = connect(
+    None,
+    schema=memory_schema,
+    opts={":kv-opts": {":inmemory?": True}})
+
+conn.transact([
+    {":user/id": "alice"},
+    {":session/id": "release-standup",
+     ":session/user": [":user/id", "alice"]},
+])
+```
+
+```javascript
+import { connect } from "datalevin-node";
+
+const memorySchema = {
+  ":user/id": { ":db/valueType": ":db.type/string",
+                ":db/unique": ":db.unique/identity" },
+  ":session/id": { ":db/valueType": ":db.type/string",
+                   ":db/unique": ":db.unique/identity" },
+  ":session/user": { ":db/valueType": ":db.type/ref" },
+  ":episode/id": { ":db/valueType": ":db.type/uuid",
+                   ":db/unique": ":db.unique/identity" },
+  ":episode/user": { ":db/valueType": ":db.type/ref" },
+  ":episode/session": { ":db/valueType": ":db.type/ref" },
+  ":episode/timestamp": { ":db/valueType": ":db.type/instant" },
+  ":episode/summary": { ":db/valueType": ":db.type/string",
+                        ":db/fulltext": true },
+  ":fact/id": { ":db/valueType": ":db.type/uuid",
+                ":db/unique": ":db.unique/identity" },
+  ":fact/subject": { ":db/valueType": ":db.type/ref" },
+  ":fact/kind": { ":db/valueType": ":db.type/keyword" },
+  ":fact/source-episode": { ":db/valueType": ":db.type/ref" },
+  ":fact/supersedes": { ":db/valueType": ":db.type/ref",
+                        ":db/cardinality": ":db.cardinality/many" },
+  ":fact/status": { ":db/valueType": ":db.type/keyword" },
+  ":fact/content": { ":db/valueType": ":db.type/string",
+                     ":db/fulltext": true },
+  ":fact/confidence": { ":db/valueType": ":db.type/double" },
+  ":fact/created-at": { ":db/valueType": ":db.type/instant" },
+  ":task/id": { ":db/valueType": ":db.type/uuid",
+                ":db/unique": ":db.unique/identity" },
+  ":task/state": { ":db/valueType": ":db.type/keyword" },
+  ":task/contract": { ":db/valueType": ":db.type/idoc" },
+  ":wm/id": { ":db/valueType": ":db.type/uuid",
+              ":db/unique": ":db.unique/identity" },
+  ":wm/session": { ":db/valueType": ":db.type/ref" },
+  ":wm.slot/wm": { ":db/valueType": ":db.type/ref" },
+  ":wm.slot/entity": { ":db/valueType": ":db.type/ref" },
+  ":wm.slot/relevance": { ":db/valueType": ":db.type/double" },
+  ":wm.slot/reason": { ":db/valueType": ":db.type/string" },
+  ":wm.slot/pinned?": { ":db/valueType": ":db.type/boolean" }
+};
+
+const conn = await connect(null, {
+  schema: memorySchema,
+  opts: { ":kv-opts": { ":inmemory?": true } }
+});
+
+await conn.transact([
+  { ":user/id": "alice" },
+  { ":session/id": "release-standup",
+    ":session/user": [":user/id", "alice"] }
+]);
+```
+
+</div>
 
 ## 1. The Human Memory Analogy
 
@@ -179,15 +365,14 @@ By using Datalevin, an agent can query past experiences, organized world
 knowledge, and current task state through multiple lenses at the same time. That
 is the foundation for the rest of Part VI.
 
----
 
 ## 2. Perception Is Not Organized Knowledge
 
 Modern generative models are very strong perceptual systems, which are bottom-up
 systems that map text, images, audio, and other raw inputs into labels,
-concepts, and their high dimensional vector representations. This is enormously
+concepts, and their high-dimensional vector representations. This is enormously
 useful, but it is not the same thing as an organized world model. A model can
-recognize that two passages are similar without connecting with semantic
+recognize that two passages are similar without connecting them to semantic
 knowledge, such as which facts are current, which goal they support, who is
 allowed to see them, or which old belief they supersede.
 
@@ -204,7 +389,6 @@ long-lived agents. Vectors help recall things that feel similar. They do not, by
 themselves, maintain propositions, graph structure, task state, authority, or
 evidence. Those are explicit knowledge-organization problems.
 
----
 
 ## 3. Why a Unified Memory Engine?
 
@@ -225,22 +409,73 @@ what an experience means; your ingestion and consolidation code does that. At
 retrieval time, a Datalog query can combine the relevant pieces of information
 in one semantically coherent fashion.
 
+<div class="multi-lang">
+
 ```clojure
 ;; An "Experience" entity in Datalevin
 {:experience/id      #uuid "00000000-0000-0000-0000-000000000001"
  :experience/text    "I helped the user debug a Clojure macro today."
- :experience/vector  [...] ; Optional user-supplied vector
+ :experience/vector  [0.12 -0.03 0.44] ; Optional user-supplied vector
  :experience/user    [:user/id "alice"]
  :experience/success true
  :experience/topics  [:clojure :macros]}
 ```
+
+```java
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+Map<?, ?> experience = Map.of(
+    ":experience/id",
+    UUID.fromString("00000000-0000-0000-0000-000000000001"),
+    ":experience/text",
+    "I helped the user debug a Clojure macro today.",
+    ":experience/vector",
+    List.of(0.12, -0.03, 0.44),
+    ":experience/user",
+    List.of(":user/id", "alice"),
+    ":experience/success",
+    true,
+    ":experience/topics",
+    List.of(":clojure", ":macros"));
+```
+
+```python
+from uuid import UUID
+
+experience = {
+    ":experience/id": UUID("00000000-0000-0000-0000-000000000001"),
+    ":experience/text": "I helped the user debug a Clojure macro today.",
+    ":experience/vector": [0.12, -0.03, 0.44],
+    ":experience/user": [":user/id", "alice"],
+    ":experience/success": True,
+    ":experience/topics": [":clojure", ":macros"],
+}
+```
+
+```javascript
+import { readEdn } from "datalevin-node";
+
+const experience = {
+  ":experience/id": await readEdn(
+    '#uuid "00000000-0000-0000-0000-000000000001"'
+  ),
+  ":experience/text": "I helped the user debug a Clojure macro today.",
+  ":experience/vector": [0.12, -0.03, 0.44],
+  ":experience/user": [":user/id", "alice"],
+  ":experience/success": true,
+  ":experience/topics": [":clojure", ":macros"]
+};
+```
+
+</div>
 
 For many text-memory workloads, mark the text attribute with `:db/embedding
 true` instead of storing a separate vector datom. Datalevin keeps the original
 text as the source of truth and maintains the embedding index as a secondary
 index.
 
----
 
 ## 4. The "Context Graph" Pattern
 
@@ -257,7 +492,6 @@ code can navigate this graph to find non-obvious connections in stored memory.
 The graph supplies explainable associations; the agent runtime decides how those
 associations affect a turn.
 
----
 
 ## 5. Memory Scopes: Goal, Task, Session, Turn
 
@@ -283,6 +517,8 @@ rewrite the user's preferences or the goal contract.
 
 Model these scopes as ordinary entities and references:
 
+<div class="multi-lang">
+
 ```clojure
 {:goal/id       #uuid "00000000-0000-0000-0000-000000000101"
  :goal/status   :goal.status/active
@@ -303,6 +539,129 @@ Model these scopes as ordinary entities and references:
  :session/scratch {:notes ["User prefers short deployment summaries."]}}
 ```
 
+```java
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+UUID goalId = UUID.fromString("00000000-0000-0000-0000-000000000101");
+UUID taskId = UUID.fromString("00000000-0000-0000-0000-000000000102");
+UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000103");
+
+Map<?, ?> goal = Map.of(
+    ":goal/id", goalId,
+    ":goal/status", ":goal.status/active",
+    ":goal/contract", Map.of(
+        ":objective", "Monitor release readiness",
+        ":success", "Open blockers are summarized before 09:00",
+        ":budget", Map.of(":max-llm-calls", 12)));
+
+Map<?, ?> task = Map.of(
+    ":task/id", taskId,
+    ":task/goal", List.of(":goal/id", goalId),
+    ":task/state", ":task.state/running",
+    ":task/contract", Map.of(
+        ":kind", ":task",
+        ":version", 1,
+        ":steps", List.of(
+            Map.of(":id", ":collect", ":kind", ":tool"),
+            Map.of(":id", ":summarize", ":kind", ":llm"))));
+
+Map<?, ?> session = Map.of(
+    ":session/id", sessionId,
+    ":session/task", List.of(":task/id", taskId),
+    ":session/scratch", Map.of(
+        ":notes", List.of("User prefers short deployment summaries.")));
+```
+
+```python
+from uuid import UUID
+
+goal_id = UUID("00000000-0000-0000-0000-000000000101")
+task_id = UUID("00000000-0000-0000-0000-000000000102")
+session_id = UUID("00000000-0000-0000-0000-000000000103")
+
+goal = {
+    ":goal/id": goal_id,
+    ":goal/status": ":goal.status/active",
+    ":goal/contract": {
+        ":objective": "Monitor release readiness",
+        ":success": "Open blockers are summarized before 09:00",
+        ":budget": {":max-llm-calls": 12},
+    },
+}
+
+task = {
+    ":task/id": task_id,
+    ":task/goal": [":goal/id", goal_id],
+    ":task/state": ":task.state/running",
+    ":task/contract": {
+        ":kind": ":task",
+        ":version": 1,
+        ":steps": [
+            {":id": ":collect", ":kind": ":tool"},
+            {":id": ":summarize", ":kind": ":llm"},
+        ],
+    },
+}
+
+session = {
+    ":session/id": session_id,
+    ":session/task": [":task/id", task_id],
+    ":session/scratch": {
+        ":notes": ["User prefers short deployment summaries."],
+    },
+}
+```
+
+```javascript
+import { readEdn } from "datalevin-node";
+
+const goalId = await readEdn(
+  '#uuid "00000000-0000-0000-0000-000000000101"'
+);
+const taskId = await readEdn(
+  '#uuid "00000000-0000-0000-0000-000000000102"'
+);
+const sessionId = await readEdn(
+  '#uuid "00000000-0000-0000-0000-000000000103"'
+);
+
+const goal = {
+  ":goal/id": goalId,
+  ":goal/status": ":goal.status/active",
+  ":goal/contract": {
+    ":objective": "Monitor release readiness",
+    ":success": "Open blockers are summarized before 09:00",
+    ":budget": { ":max-llm-calls": 12 }
+  }
+};
+
+const task = {
+  ":task/id": taskId,
+  ":task/goal": [":goal/id", goalId],
+  ":task/state": ":task.state/running",
+  ":task/contract": {
+    ":kind": ":task",
+    ":version": 1,
+    ":steps": [
+      { ":id": ":collect", ":kind": ":tool" },
+      { ":id": ":summarize", ":kind": ":llm" }
+    ]
+  }
+};
+
+const session = {
+  ":session/id": sessionId,
+  ":session/task": [":task/id", taskId],
+  ":session/scratch": {
+    ":notes": ["User prefers short deployment summaries."]
+  }
+};
+```
+
+</div>
+
 The `:goal/contract`, `:task/contract`, and `:session/scratch` fields are good
 uses for `:db.type/idoc`: they are structured documents that need to move
 transactionally with the graph, but do not need every nested field promoted to a
@@ -320,7 +679,6 @@ slots, and session documents. Chapter 25 explains how those records are
 retrieved, ranked, and assembled into a prompt. Chapter 26 covers the harder
 problem of keeping long-term state coherent as new evidence arrives.
 
----
 
 ## Summary
 
@@ -338,4 +696,8 @@ Academic Press, 1972, pp. 381-403.
 [2] Alan D. Baddeley and Graham Hitch, "Working Memory," in *Psychology of
 Learning and Motivation*, vol. 8, Academic Press, 1974, pp. 47-89.
 
-[3] Huahai Yang, [Xia](https://github.com/huahaiy/xia), GitHub repository.
+[3] Michelle X. Zhou, Jie Lu, Huahai Yang, and Wenxi Chen,
+*Human-Centered Agentic AI: Fundamentals, Practice, Applications, and Future
+Directions*, ACM Press, in press.
+
+[4] Huahai Yang, [Xia](https://github.com/huahaiy/xia), GitHub repository.

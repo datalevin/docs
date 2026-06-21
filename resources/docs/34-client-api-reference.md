@@ -1,10 +1,10 @@
 ---
-title: "Appendix G: datalevin.client API Reference"
+title: "Appendix G: Client API"
 chapter: 34
 part: "VII — Appendices"
 ---
 
-# Appendix G: datalevin.client API Reference
+# Appendix G: Client API
 
 The `datalevin.client` namespace is Datalevin's public administrative client
 API for a remote Datalevin server. Use it when you need to manage server-side
@@ -18,6 +18,11 @@ Most application reads and writes should still use ordinary connections from
 `datalevin.core/get-conn` or `datalevin.core/create-conn`. Use
 `datalevin.client` for server administration and cluster operations.
 
+The appendix uses the Clojure names. Java, Python, and JavaScript expose the
+same administrative families with their normal naming conventions: for example
+`Datalevin.newClient`, `new_client`, and `newClient`; method names become
+`listDatabases`, `list_databases`, and `listDatabases`, respectively.
+
 ```clojure
 (require '[datalevin.client :as cl])
 
@@ -28,7 +33,6 @@ Most application reads and writes should still use ordinary connections from
 The URI identifies the server and credentials. Database names are passed as
 separate arguments to the administrative functions.
 
----
 
 ## 1. Client Lifecycle
 
@@ -36,7 +40,9 @@ separate arguments to the administrative functions.
 | :--- | :--- | :--- |
 | `new-client` | `(cl/new-client uri)`, `(cl/new-client uri opts)` | Create a pooled administrative client for a Datalevin server. |
 | `disconnect` | `(cl/disconnect client)` | Close the client's pooled network connections. |
+| `close-client` | `(cl/close-client client)` | Idempotent close helper. This is the resource cleanup function used by non-Clojure bindings. |
 | `disconnected?` | `(cl/disconnected? client)` | Return true when the client pool is closed. |
+| `get-id` | `(cl/get-id client)` | Return the server-assigned client UUID for this administrative client. |
 
 `new-client` performs authentication and maintains a connection pool. Creating a
 client includes secure password hashing work, so long-running tools should reuse
@@ -69,14 +75,13 @@ characters.
     (cl/disconnect client)))
 ```
 
----
 
 ## 2. Database Administration
 
 | Function | Shape | Use |
 | :--- | :--- | :--- |
 | `create-database` | `(cl/create-database client db-name db-type)` | Create a server-side database. `db-type` is `:datalog` or `:key-value`. |
-| `open-database` | `(cl/open-database client db-name db-type)`, plus schema/opts arities | Open a database on the server. `db-type` is `"datalog"`, `"kv"`, or `"engine"`. |
+| `open-database` | `(cl/open-database client db-name db-type)`, plus schema/opts/info arities | Open a database on the server. `db-type` is `"datalog"`, `"kv"`, or `"engine"`. |
 | `close-database` | `(cl/close-database client db-name)` | Force close a server-side database and disconnect clients using it. |
 | `drop-database` | `(cl/drop-database client db-name)` | Delete a database. Close it first if it is in use. |
 | `list-databases` | `(cl/list-databases client)` | List server-side databases. |
@@ -86,10 +91,16 @@ Database names supplied to `create-database` are normalized to kebab case by the
 server. Prefer stable, simple names and treat them as administrative identifiers,
 not user-facing display names.
 
+`create-database` creates durable Datalog or KV database directories. The
+`"engine"` type for `open-database` is for server-side search engine activation,
+not for `create-database`.
+
 Most application code does not call `open-database` directly. A remote
 `get-conn` or `create-conn` call opens the target database as needed. Use
 `open-database` from administrative code when you deliberately want to open or
 activate a server-side database without creating an application connection.
+The longest arity accepts `schema`, `opts`, and `return-db-info?`; when
+`return-db-info?` is true it returns the server's database information map.
 
 ```clojure
 (cl/create-database client "app" :datalog)
@@ -109,7 +120,6 @@ activate a server-side database without creating an application connection.
 it asks the server to close the database and disconnect clients that are using
 it. Use it before maintenance operations such as dropping a database.
 
----
 
 ## 3. Users, Roles, and Permissions
 
@@ -198,7 +208,6 @@ Example: administrative server control:
 Use the narrowest permission that supports the task. Application users usually
 need database-scoped permissions, not server control.
 
----
 
 ## 4. Replication and HA
 
@@ -206,6 +215,7 @@ need database-scoped permissions, not server control.
 | :--- | :--- | :--- |
 | `replica-status` | `(cl/replica-status client db-name)` | Return async read-replica status for an open database. |
 | `ha-update-membership!` | `(cl/ha-update-membership! client db-name spec)` | Commit an operator-driven consensus HA membership update. |
+| `*ha-read-min-tx*` | `(binding [cl/*ha-read-min-tx* tx] ...)` | Dynamic Clojure var requiring HA read requests in the binding scope to observe at least transaction `tx`. |
 
 `replica-status` is for async read replicas. The returned map includes fields
 such as `:replica-applied-lsn`, `:replica-source-durable-lsn`,
@@ -250,7 +260,11 @@ Membership updates are operator actions. Automating them without health checks,
 clock discipline, and rollback procedures can turn failover into a data-safety
 problem.
 
----
+`*ha-read-min-tx*` is for read-after-write or monotonic-read requirements in
+Clojure HA clients. When it is bound to an integer transaction id, non-write
+requests carry that minimum-tx requirement; stale read targets can reject the
+request, and the client will retry eligible HA endpoints.
+
 
 ## 5. System Database and Connected Clients
 
@@ -281,13 +295,16 @@ Use `show-clients` before `disconnect-client`:
 
 Do not confuse `disconnect-client` with `disconnect`. `disconnect-client`
 disconnects another server-side client session. `disconnect` closes the
-administrative client object in your process.
+administrative client object in your process. `get-id` returns the UUID of the
+current administrative client when you need to compare it with `show-clients`
+output.
 
----
 
 ## 6. Operational Notes
 
 - Keep one administrative client per operation scope and reuse it.
+- Close clients with `disconnect` or `close-client` when the operation scope
+  ends.
 - Use server URIs such as `dtlv://admin:secret@host:8898`; pass database names
   separately.
 - URL encode usernames and passwords in URIs when they contain special

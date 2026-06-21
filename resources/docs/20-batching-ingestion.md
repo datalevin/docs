@@ -1,10 +1,10 @@
 ---
-title: "Batching, Sorting, and High-Throughput Ingestion"
+title: "High-Throughput Ingestion"
 chapter: 20
 part: "V — Performance and Operations"
 ---
 
-# Chapter 20: Batching, Sorting, and High-Throughput Ingestion
+# Chapter 20: High-Throughput Ingestion
 
 High write throughput is a different problem from low-latency reads or
 interactive transactions. This chapter collects the tools Datalevin offers for
@@ -15,30 +15,17 @@ path that bypasses the transaction layer entirely. It closes with a decision
 flow for choosing among them. For the durability trade-offs behind these
 choices, see Chapter 19.
 
----
 
-## 1. High-Throughput Ingestion: The Infrastructure
+## 1. Online Ingestion: WAL and Async Transactions
 
-Ingesting large datasets requires a different strategy than standard interactive
-writes or OLTP. Datalevin provides several infrastructure features to support
-high throughput.
+For durable ingestion while the database remains queryable, the usual recipe is
+manual batches submitted through `transact-async`, often with WAL mode enabled.
+Chapter 19 explains WAL durability profiles and LSN maintenance; here the point
+is how to submit work without making every caller wait for its own commit.
 
-### 1.1 WAL Mode for Ingestion
-
-For high-throughput ingestion where data must remain queryable as it arrives,
-enable **WAL mode**. WAL turns write pressure into sequential log appends while
-preserving LMDB's B+Tree read path.
-
-- **Benefit**: Sequential WAL appends are faster than random B+Tree flushes.
-- **Durability policy**: Choose the WAL durability profile using the operational
-  guidance in Chapter 19, Section 1.4.2.
-
-### 1.2 Asynchronous Transactions
-
-The async transaction API automatically batches multiple transactions together:
 `d/transact-async` in Clojure, `transactAsync` in Java and JavaScript, and
-`transact_async` in Python. When combined with WAL mode, this provides the
-highest possible OLTP throughput.
+`transact_async` in Python submit ordinary transaction data and return a future
+or promise. Datalevin can then batch concurrent submissions internally.
 
 <div class="multi-lang">
 
@@ -84,15 +71,11 @@ await p3;
 
 </div>
 
-The batching is **adaptive**: the higher the write load, the bigger the batch
-size. This combines with manual batching for compound performance gains.
+Block on the last submitted future when later work depends on the whole burst.
+Since async transactions are still committed in order, the last realized future
+indicates all prior calls in that burst have also committed.
 
-An asynchronous transaction returns a future or promise that requires some
-programmatic management work. One technique is to block and wait only on the
-last asynchronous transaction. Since async transactions are still committed in
-order, the last realized future indicates all prior calls are already committed.
-
-### 1.3 Sync + Async Combo
+### 1.1 Durable Checkpoints After Async Work
 
 For embedded applications that need both good throughput and deterministic
 commit points, use a sequence of async transactions followed by a sync call:
@@ -150,7 +133,7 @@ await conn.transact([]);
 > combine manual batches with `transact-async` and measure before adding writer
 > threads.
 
-### 1.4 Non-Durable LMDB Flags for Repeatable Imports
+### 1.2 Non-Durable LMDB Flags for Repeatable Imports
 
 WAL mode and async transactions are the first tools to try when data must remain
 durable. For one-time imports, cache rebuilds, temporary KV stores, and other
@@ -246,7 +229,6 @@ replayed from a durable source. For raw KV imports, call the KV `sync` operation
 normal durable workloads. For online systems with irreplaceable writes, prefer
 WAL mode with async transactions and tune durability there instead.
 
----
 
 ## 2. Sorting Before Ingestion
 
@@ -308,8 +290,10 @@ for (const batch of partitionAll(sortedDatoms, 5000)) {
 Datalevin keeps a small Datalog index cache for normal interactive workloads.
 During a large bulk transaction job, that cache can add memory pressure and cache
 maintenance work without helping much, especially when the import touches a wide
-range of entities and attributes only once. In Clojure, set the cache limit to
-`0` for the import phase, then restore the previous limit:
+range of entities and attributes only once. In every binding, set the cache
+limit to `0` for the import phase, then restore the previous limit:
+
+<div class="multi-lang">
 
 ```clojure
 (let [db             (d/db conn)
@@ -322,11 +306,49 @@ range of entities and attributes only once. In Clojure, set the cache limit to
       (d/datalog-index-cache-limit (d/db conn) previous-limit))))
 ```
 
+```java
+long previousLimit = conn.datalogIndexCacheLimit();
+
+try {
+    conn.datalogIndexCacheLimit(0);
+    for (List<Map<String, Object>> batch : partition(sortedDatoms, 5000)) {
+        conn.transact(batch);
+    }
+} finally {
+    conn.datalogIndexCacheLimit(previousLimit);
+}
+```
+
+```python
+previous_limit = conn.datalog_index_cache_limit()
+
+try:
+    conn.datalog_index_cache_limit(0)
+    for batch in partition_all(sorted_datoms, 5000):
+        conn.transact(batch)
+finally:
+    conn.datalog_index_cache_limit(previous_limit)
+```
+
+```javascript
+const previousLimit = await conn.datalogIndexCacheLimit();
+
+try {
+  await conn.datalogIndexCacheLimit(0);
+  for (const batch of partitionAll(sortedDatoms, 5000)) {
+    await conn.transact(batch);
+  }
+} finally {
+  await conn.datalogIndexCacheLimit(previousLimit);
+}
+```
+
+</div>
+
 This is a bulk-ingestion tuning knob, not a general query-performance setting.
 Leave the cache enabled for mixed read/write application traffic unless a
 measured workload shows that disabling it helps.
 
----
 
 ## 3. Bulk Load: `d/init-db` and `d/fill-db`
 
@@ -354,6 +376,8 @@ A simple technique works well for relational imports whose source tables already
 have integer primary keys: reserve a non-overlapping entity-id range for each
 source table, then convert every primary key and foreign key with the same
 function [1] [2]. For example:
+
+<div class="multi-lang">
 
 <!-- pdf-listing: Preparing stable entity ids for bulk datom ingestion -->
 
@@ -405,51 +429,197 @@ function [1] [2]. For example:
 (def db (d/init-db prepared-datoms "/tmp/import-db" schema))
 ```
 
-The other bindings use the same prepared-datom shape. They accept compact
-`[entity-id attribute value]` data, and each binding also provides a `datom`
-helper for clarity:
-
-<div class="multi-lang">
-
 ```java
 import datalevin.*;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
-List<?> preparedDatoms = Datalevin.listOf(
-    Datalevin.datom(userEid("1"), ":user/id", 1L),
-    Datalevin.datom(userEid("1"), ":user/name", "Alice"));
+static long userEid(String sourceId) {
+    return 1_000_000L + Long.parseLong(sourceId);
+}
+
+static long orderEid(String sourceId) {
+    return 2_000_000L + Long.parseLong(sourceId);
+}
+
+static List<Object> userDatoms(Map<String, ?> user) {
+    String id = (String) user.get("id");
+    long eid = userEid(id);
+
+    return Datalevin.listOf(
+        Datalevin.datom(eid, ":user/id", Long.parseLong(id)),
+        Datalevin.datom(eid, ":user/name", user.get("name")));
+}
+
+static List<Object> orderDatoms(Map<String, ?> order) {
+    String id = (String) order.get("id");
+    String customerId = (String) order.get("customerId");
+    long eid = orderEid(id);
+
+    return Datalevin.listOf(
+        Datalevin.datom(eid, ":order/id", Long.parseLong(id)),
+        Datalevin.datom(eid, ":order/customer", userEid(customerId)),
+        Datalevin.datom(eid, ":order/total", order.get("total")));
+}
+
+Map<?, ?> schema = Map.of(
+    ":user/id", Map.of(
+        ":db/valueType", ":db.type/long",
+        ":db/unique", ":db.unique/identity"),
+    ":user/name", Map.of(":db/valueType", ":db.type/string"),
+    ":order/id", Map.of(
+        ":db/valueType", ":db.type/long",
+        ":db/unique", ":db.unique/identity"),
+    ":order/customer", Map.of(":db/valueType", ":db.type/ref"),
+    ":order/total", Map.of(":db/valueType", ":db.type/double"));
+
+List<Map<String, ?>> users = List.of(
+    Map.of("id", "1", "name", "Alice"),
+    Map.of("id", "2", "name", "Bob"));
+
+List<Map<String, ?>> orders = List.of(
+    Map.of("id", "10", "customerId", "1", "total", 42.5),
+    Map.of("id", "11", "customerId", "2", "total", 19.0));
+
+List<Object> preparedDatoms = new ArrayList<>();
+for (Map<String, ?> user : users) {
+    preparedDatoms.addAll(userDatoms(user));
+}
+for (Map<String, ?> order : orders) {
+    preparedDatoms.addAll(orderDatoms(order));
+}
 
 try (Connection conn =
          Datalevin.initDb(preparedDatoms, "/tmp/import-db", schema)) {
-    conn.fillDb(Datalevin.listOf(
-        Datalevin.datom(orderEid("10"), ":order/id", 10L),
-        Datalevin.datom(orderEid("10"), ":order/customer", userEid("1")),
-        Datalevin.datom(orderEid("10"), ":order/total", 42.5)));
+    // Bulk-loaded database is ready to query.
 }
 ```
 
 ```python
-from datalevin import datom, fill_db, init_db
+from datalevin import datom, init_db
+
+schema = {
+    ":user/id": {
+        ":db/valueType": ":db.type/long",
+        ":db/unique": ":db.unique/identity",
+    },
+    ":user/name": {":db/valueType": ":db.type/string"},
+    ":order/id": {
+        ":db/valueType": ":db.type/long",
+        ":db/unique": ":db.unique/identity",
+    },
+    ":order/customer": {":db/valueType": ":db.type/ref"},
+    ":order/total": {":db/valueType": ":db.type/double"},
+}
+
+USER_BASE = 1_000_000
+ORDER_BASE = 2_000_000
+
+
+def user_eid(source_id):
+    return USER_BASE + int(source_id)
+
+
+def order_eid(source_id):
+    return ORDER_BASE + int(source_id)
+
+
+users = [
+    {"id": "1", "name": "Alice"},
+    {"id": "2", "name": "Bob"},
+]
+
+orders = [
+    {"id": "10", "customer_id": "1", "total": 42.5},
+    {"id": "11", "customer_id": "2", "total": 19.0},
+]
+
+
+def user_datoms(user):
+    eid = user_eid(user["id"])
+    return [
+        datom(eid, ":user/id", int(user["id"])),
+        datom(eid, ":user/name", user["name"]),
+    ]
+
+
+def order_datoms(order):
+    eid = order_eid(order["id"])
+    return [
+        datom(eid, ":order/id", int(order["id"])),
+        datom(eid, ":order/customer", user_eid(order["customer_id"])),
+        datom(eid, ":order/total", order["total"]),
+    ]
 
 prepared_datoms = [
-    datom(user_eid("1"), ":user/id", 1),
-    datom(user_eid("1"), ":user/name", "Alice"),
+    item
+    for row in users
+    for item in user_datoms(row)
+] + [
+    item
+    for row in orders
+    for item in order_datoms(row)
 ]
 
 with init_db(prepared_datoms, dir="/tmp/import-db", schema=schema) as conn:
-    fill_db(conn, [
-        datom(order_eid("10"), ":order/id", 10),
-        datom(order_eid("10"), ":order/customer", user_eid("1")),
-        datom(order_eid("10"), ":order/total", 42.5),
-    ])
+    # Bulk-loaded database is ready to query.
+    pass
 ```
 
 ```javascript
-import { datom, fillDb, initDb } from "datalevin-node";
+import { datom, initDb } from "datalevin-node";
+
+const schema = {
+  ":user/id": {
+    ":db/valueType": ":db.type/long",
+    ":db/unique": ":db.unique/identity"
+  },
+  ":user/name": { ":db/valueType": ":db.type/string" },
+  ":order/id": {
+    ":db/valueType": ":db.type/long",
+    ":db/unique": ":db.unique/identity"
+  },
+  ":order/customer": { ":db/valueType": ":db.type/ref" },
+  ":order/total": { ":db/valueType": ":db.type/double" }
+};
+
+const userBase = 1_000_000;
+const orderBase = 2_000_000;
+
+const userEid = sourceId => userBase + Number.parseInt(sourceId, 10);
+const orderEid = sourceId => orderBase + Number.parseInt(sourceId, 10);
+
+const users = [
+  { id: "1", name: "Alice" },
+  { id: "2", name: "Bob" }
+];
+
+const orders = [
+  { id: "10", customerId: "1", total: 42.5 },
+  { id: "11", customerId: "2", total: 19.0 }
+];
+
+function userDatoms(user) {
+  const eid = userEid(user.id);
+  return [
+    datom(eid, ":user/id", Number.parseInt(user.id, 10)),
+    datom(eid, ":user/name", user.name)
+  ];
+}
+
+function orderDatoms(order) {
+  const eid = orderEid(order.id);
+  return [
+    datom(eid, ":order/id", Number.parseInt(order.id, 10)),
+    datom(eid, ":order/customer", userEid(order.customerId)),
+    datom(eid, ":order/total", order.total)
+  ];
+}
 
 const preparedDatoms = [
-  datom(userEid("1"), ":user/id", 1),
-  datom(userEid("1"), ":user/name", "Alice")
+  ...users.flatMap(userDatoms),
+  ...orders.flatMap(orderDatoms)
 ];
 
 const conn = await initDb(preparedDatoms, {
@@ -458,11 +628,7 @@ const conn = await initDb(preparedDatoms, {
 });
 
 try {
-  await fillDb(conn, [
-    datom(orderEid("10"), ":order/id", 10),
-    datom(orderEid("10"), ":order/customer", userEid("1")),
-    datom(orderEid("10"), ":order/total", 42.5)
-  ]);
+  // Bulk-loaded database is ready to query.
 } finally {
   await conn.close();
 }
@@ -482,6 +648,8 @@ may use different eids, while the unique source-id attributes stay stable.
 For a large import, it is common to stream one table at a time with `fill-db`,
 using the same id functions:
 
+<div class="multi-lang">
+
 ```clojure
 (def db
   (-> (d/empty-db "/tmp/import-db" schema {:closed-schema? true})
@@ -489,24 +657,81 @@ using the same id functions:
       (d/fill-db (mapcat order-datoms orders))))
 ```
 
-In Java, Python, and JavaScript, keep the connection returned by `initDb` /
-`init_db` / `initDb` open and call the binding's `fillDb` / `fill_db` /
-`fillDb` method or top-level helper for each streamed chunk.
+```java
+List<Object> userChunk = new ArrayList<>();
+for (Map<String, ?> user : users) {
+    userChunk.addAll(userDatoms(user));
+}
+
+List<Object> orderChunk = new ArrayList<>();
+for (Map<String, ?> order : orders) {
+    orderChunk.addAll(orderDatoms(order));
+}
+
+try (Connection conn = Datalevin.initDb(
+         userChunk,
+         "/tmp/import-db",
+         schema,
+         Map.of(":closed-schema?", true))) {
+    conn.fillDb(orderChunk);
+}
+```
+
+```python
+user_chunk = [
+    item
+    for row in users
+    for item in user_datoms(row)
+]
+
+order_chunk = [
+    item
+    for row in orders
+    for item in order_datoms(row)
+]
+
+with init_db(user_chunk,
+             dir="/tmp/import-db",
+             schema=schema,
+             opts={":closed-schema?": True}) as conn:
+    conn.fill_db(order_chunk)
+```
+
+```javascript
+const userChunk = users.flatMap(userDatoms);
+const orderChunk = orders.flatMap(orderDatoms);
+
+const conn = await initDb(userChunk, {
+  dir: "/tmp/import-db",
+  schema,
+  opts: { ":closed-schema?": true }
+});
+
+try {
+  await conn.fillDb(orderChunk);
+} finally {
+  await conn.close();
+}
+```
+
+</div>
 
 If the source does not have dense integer ids, build an `eid-by-key` map first:
 collect stable keys such as `[:user external-id]` and `[:order external-id]`,
 sort or otherwise deterministically order them, assign fresh positive integers,
 and use that map when emitting subject ids and reference values. With
-`fill-db`, any new ids must be greater than the existing `(d/max-eid db)` unless
-you reserved non-overlapping ranges up front.
+`fill-db`, any new ids must be greater than the database's current maximum eid
+unless you reserved non-overlapping ranges up front. In Clojure, inspect this
+with `(d/max-eid db)`; in Java, use `conn.maxEid()`. In Python and JavaScript,
+prefer deterministic reserved ranges in the import plan.
 
 > **Note**: These functions skip transaction-level data integrity checks and
 > temporary entity id resolution. You must ensure the datoms are correct before
 > calling them: no duplicate entity-id ranges, no unresolved references, values
-> must match the declared schema, and every item must be a `Datom` created with
-> `d/datom`.
+> must match the declared schema, and every item must use the prepared datom
+> shape accepted by the binding, such as `d/datom`, `Datalevin.datom`,
+> `datom(...)`, or compact `[eid attr value]` tuples/arrays.
 
----
 
 ## 4. Choosing an Ingestion Strategy
 
@@ -521,7 +746,6 @@ or modest write rates. Use async transactions, often with WAL, when online
 ingestion needs higher throughput; add explicit sync checkpoints when the
 application needs durable handoff points.
 
----
 
 ## Summary: The Ingestion Checklist
 

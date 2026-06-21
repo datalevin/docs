@@ -1,23 +1,16 @@
 ---
-title: "Appendix F: Key-Value API Reference"
+title: "Appendix F: Key-Value API"
 chapter: 33
 part: "VII — Appendices"
 ---
 
-# Appendix F: Key-Value API Reference
+# Appendix F: Key-Value API
 
 This appendix is a compact reference for public Datalevin KV functions exposed
-from `datalevin.core`. For tutorial examples, see Chapter 10. Search, vector,
-embedding, and idoc APIs may use KV stores internally, but they are covered in
-their own chapters.
+from `datalevin.core`. Chapter 10 is the tutorial introduction. Chapters 19 and
+20 cover durability, snapshots, WAL, re-indexing, and ingestion strategy.
+Appendix A covers host-language binding conventions.
 
-All examples assume:
-
-```clojure
-(require '[datalevin.core :as d])
-```
-
----
 
 ## 1. Store Lifecycle
 
@@ -27,27 +20,26 @@ All examples assume:
 | `close-kv` | `(d/close-kv db)` | Close a KV store. |
 | `closed-kv?` | `(d/closed-kv? db)` | Return true if the KV store is closed. |
 | `dir` | `(d/dir db)` | Return the path or URI string for the store. |
+| `datalog-kv` | `(d/datalog-kv conn)`, `(d/datalog-kv db)` | Return the KV handle backing a Datalog connection or DB. |
 | `copy` | `(d/copy db dest)`, `(d/copy db dest compact?)` | Copy a Datalog or KV database to another directory, optionally compacting. |
-| `sync` | `(d/sync db)` | Force a synchronous flush to disk. Useful when non-default write flags are used. |
+| `sync` | `(d/sync db)` | Force a synchronous flush to disk. |
+| `re-index` | `(d/re-index db opts)` | Dump, clear, reload, and rebuild a KV store with new options. |
 
-Common `open-kv` options include `:mapsize`, `:max-dbs`, `:max-readers`,
-`:temp?`, `:inmemory?`, `:wal?`, `:wal-durability-profile`,
-`:wal-group-commit`, `:wal-group-commit-ms`, `:client-opts`, and
-`:spill-opts`.
+| Option group | Keys |
+| :--- | :--- |
+| Capacity and environment | `:mapsize`, `:max-dbs`, `:max-readers`, `:flags`, `:temp?`, `:inmemory?` |
+| WAL | `:wal?`, `:wal-durability-profile`, `:wal-group-commit`, `:wal-group-commit-ms` |
+| Client | `:client-opts` |
+| Spill to disk | `:spill-opts` |
+| HA | `:ha-mode`, `:ha-control-plane`, lease timing, fencing, promotion, and clock-skew options |
 
-`:spill-opts` controls temporary spill-to-disk behavior for eager range
-operations. Direct KV stores receive it at the top level:
-`(d/open-kv dir {:spill-opts {:spill-threshold 100}})`. Embedded Datalog
-connections pass it through the underlying KV options:
-`(d/get-conn dir schema {:kv-opts {:spill-opts {:spill-threshold 100}}})`.
-Setting `:spill-threshold` to `100` disables spill-to-disk.
+The default LMDB environment flags are `#{:nordahead :notls}`. `datalog-kv`
+returns a borrowed handle owned by the Datalog connection. `re-index` is an
+offline maintenance operation; use it only when other threads or programs are
+not accessing the same store.
 
----
 
 ## 2. DBI Management
-
-A DBI is an LMDB sub-database inside a KV store. Use regular DBIs for one value
-per key and list DBIs for sorted multi-values per key.
 
 | Function | Common forms | Purpose |
 | :--- | :--- | :--- |
@@ -59,14 +51,16 @@ per key and list DBIs for sorted multi-values per key.
 | `stat` | `(d/stat db)`, `(d/stat db name)` | Return LMDB statistics for the environment or a DBI. |
 | `entries` | `(d/entries db name)` | Return the number of entries in a DBI. |
 
-Common DBI options include `:key-size`, `:val-size`, `:validate-data?`,
-`:closed-schema?`, and LMDB `:flags`.
+| Option or flag group | Values |
+| :--- | :--- |
+| DBI options | `:key-size`, `:val-size`, `:validate-data?`, `:closed-schema?`, `:flags` |
+| Default DBI flags | `#{:create :counted :prefix-compression}` |
+| Common LMDB flags | `:create`, `:reversekey`, `:dupsort`, `:integerkey`, `:dupfixed`, `:integerdup`, `:reversedup`, `:counted`, `:prefix-compression` |
 
-In the KV API, `:validate-data?` checks keys and values against the KV type
-descriptors used for a DBI or operation. It is independent of Datalog
-`:db/valueType` schema validation.
+Use regular DBIs for one value per key and list DBIs for sorted multi-values
+per key. `:validate-data?` checks keys and values against KV type descriptors;
+it is independent of Datalog schema validation.
 
----
 
 ## 3. Writes and Transactions
 
@@ -77,18 +71,16 @@ descriptors used for a DBI or operation. It is independent of Datalog
 | `with-transaction-kv` | `(d/with-transaction-kv [tx db] body...)` | Run reads and writes in one explicit KV transaction. |
 | `abort-transact-kv` | `(d/abort-transact-kv tx)` | Roll back writes from inside `with-transaction-kv`. |
 
-Transaction items are vectors:
+| Transaction item | Shape |
+| :--- | :--- |
+| Put | `[:put dbi-name key value key-type value-type flags]` |
+| Delete | `[:del dbi-name key key-type]` |
 
-```clojure
-[:put dbi-name key value key-type value-type flags]
-[:del dbi-name key key-type]
-```
+`key-type`, `value-type`, and `flags` are optional. Common write flags include
+`:nooverwrite`, `:nodupdata`, `:current`, `:reserve`, `:append`, `:appenddup`,
+and `:multiple`. Use `:append` only with input already sorted in the target
+DBI's key order.
 
-`key-type`, `value-type`, and `flags` are optional. When all items target the
-same DBI and use the same types, pass `dbi-name`, `key-type`, and `value-type`
-as function arguments instead.
-
----
 
 ## 4. Encoding Helpers
 
@@ -99,18 +91,18 @@ as function arguments instead.
 | `k` | `(d/k kv)` | Return the raw key buffer from an `IKV` visitor object. |
 | `v` | `(d/v kv)` | Return the raw value buffer from an `IKV` visitor object. |
 
-Public scalar KV types include `:data`, `:string`, `:long`, `:float`,
-`:double`, `:bigint`, `:bigdec`, `:bytes`, `:keyword`, `:symbol`, `:boolean`,
-`:instant`, and `:uuid`. Tuple types are vectors of scalar types, such as
-`[:string :instant]` or `[:long]`.
+| Descriptor form | Meaning |
+| :--- | :--- |
+| `:data` | General serialized data. |
+| `:string`, `:long`, `:float`, `:double`, `:bigint`, `:bigdec` | Scalar numeric or string encodings. |
+| `:bytes`, `:keyword`, `:symbol`, `:boolean`, `:instant`, `:uuid` | Other scalar encodings. |
+| `[:string :instant]`, `[:long]` | Tuple key or value encodings. |
+| `:ignore` | Special read value type used when values should not be decoded. |
 
-A DBI can technically contain keys encoded with mixed data types, and Datalevin
-uses that flexibility internally. Application DBIs should normally avoid this:
-range and rank APIs follow encoded byte ordering, so mixed key types can make
-range boundaries surprising. Prefer one consistent key type, or one tuple key
-type, per DBI unless you intentionally design a mixed encoding.
+KV type descriptors use unqualified keywords, not Datalog value-type keywords
+such as `:db.type/string`. Prefer one consistent key type, or one tuple key
+type, per application DBI.
 
----
 
 ## 5. Point Reads and Order Statistics
 
@@ -121,15 +113,10 @@ type, per DBI unless you intentionally design a mixed encoding.
 | `get-by-rank` | `(d/get-by-rank db name rank)`, `(d/get-by-rank db name rank k-type v-type ignore-key?)` | Return the value or pair at a zero-based key rank. |
 | `sample-kv` | `(d/sample-kv db name n)`, `(d/sample-kv db name n k-type v-type ignore-key?)` | Return random samples from a DBI. |
 
-Rank and sampling functions are backed by DLMDB order-statistics support.
+Rank and sampling functions use DLMDB order-statistics support.
 
----
 
 ## 6. Key Ranges
-
-Range specs are vectors such as `[:all]`, `[:closed from to]`, or
-`[:greater-than k]`. Reverse variants add `-back`, for example `:all-back` and
-`:closed-back`.
 
 | Function | Common forms | Purpose |
 | :--- | :--- | :--- |
@@ -139,19 +126,14 @@ Range specs are vectors such as `[:all]`, `[:closed from to]`, or
 | `range-seq` | `(d/range-seq db name k-range)`, `(d/range-seq db name k-range k-type v-type ignore-key? opts)` | Lazily stream a key range in batches; close it with `with-open`. |
 | `key-range` | `(d/key-range db name k-range)`, `(d/key-range db name k-range k-type)` | Return only keys in a range. |
 | `range-count` | `(d/range-count db name k-range)`, `(d/range-count db name k-range k-type)` | Count KV pairs in a key range without materializing them. |
-| `key-range-count` | `(d/key-range-count db name k-range)`, `(d/key-range-count db name k-range k-type cap)` | Count keys in a range, optionally stopping at `cap`. |
+| `key-range-count` | `(d/key-range-count db name k-range k-type)`, `(d/key-range-count db name k-range k-type cap)` | Count keys in a range, optionally stopping at `cap`. |
 | `key-range-list-count` | `(d/key-range-list-count db name k-range k-type)`, `(d/key-range-list-count db name k-range k-type cap)` | Count list items across keys in a list DBI key range. |
 
-Use `get-range` when the result is known to be bounded. Use `range-seq` for
-large scans, and always close the returned sequence.
+Range specs use the keywords in Section 11. Use `get-range` for bounded
+results and `range-seq` for large scans.
 
----
 
 ## 7. Range Predicates and Visitors
-
-Predicate and visitor functions can receive either raw `IKV` objects or decoded
-values. The `raw-pred?` argument controls this. Raw mode is the default and is
-best when you want to avoid decoding values that may be skipped.
 
 | Function | Common forms | Purpose |
 | :--- | :--- | :--- |
@@ -163,17 +145,12 @@ best when you want to avoid decoding values that may be skipped.
 | `visit-key-range` | `(d/visit-key-range db name visitor k-range ...)` | Visit only keys in a key range for side effects. |
 | `visit` | `(d/visit db name visitor k-range ...)` | Visit KV pairs in a key range for side effects. |
 
-Visitors may return `:datalevin/terminate-visit` to stop a scan early.
-For server usage, define predicates and visitors with
-`datalevin.interpret/inter-fn`. For Babashka pod usage, use `defpodfn`.
+`raw-pred?` controls whether callbacks receive raw `IKV` objects or decoded
+values. Raw callbacks expose short-lived buffers; decode or copy data inside
+the callback if it must outlive that call.
 
----
 
 ## 8. List DBI Operations
-
-List DBIs are opened with `open-list-dbi`. Each key maps to a sorted set of
-values. List items must fit within the same 511-byte limit that applies to LMDB
-keys.
 
 | Function | Common forms | Purpose |
 | :--- | :--- | :--- |
@@ -183,8 +160,6 @@ keys.
 | `visit-list` | `(d/visit-list db name visitor k k-type v-type raw-pred?)` | Visit values for one key. |
 | `list-count` | `(d/list-count db name k k-type)` | Count values associated with one key. |
 | `in-list?` | `(d/in-list? db name k v k-type v-type)` | Test whether one value is present under a key. |
-
-List DBI value ranges use both a key range and a value range:
 
 | Function | Common forms | Purpose |
 | :--- | :--- | :--- |
@@ -198,11 +173,11 @@ List DBI value ranges use both a key range and a value range:
 | `list-range-some` | `(d/list-range-some db name pred k-range k-type v-range v-type raw-pred?)` | Return the first logical true predicate result. |
 | `visit-list-range` | `(d/visit-list-range db name visitor k-range k-type v-range v-type raw-pred?)` | Visit list range matches for side effects. |
 
----
+List DBIs are opened with `open-list-dbi`. Each key maps to a sorted set of
+values, and list items must fit within the LMDB key-size limit.
+
 
 ## 9. WAL and Snapshots
-
-These functions apply to KV stores opened with WAL support where appropriate.
 
 | Function | Common forms | Purpose |
 | :--- | :--- | :--- |
@@ -212,7 +187,6 @@ These functions apply to KV stores opened with WAL support where appropriate.
 | `list-snapshots` | `(d/list-snapshots db)` | Return available snapshot metadata. |
 | `gc-txlog-segments!` | `(d/gc-txlog-segments! db)`, `(d/gc-txlog-segments! db retain-floor-lsn)` | Garbage-collect WAL segments, optionally retaining records from a floor LSN. |
 
----
 
 ## 10. Environment Flags
 
@@ -221,11 +195,15 @@ These functions apply to KV stores opened with WAL support where appropriate.
 | `set-env-flags` | `(d/set-env-flags db flags on?)` | Set or clear LMDB environment flags. |
 | `get-env-flags` | `(d/get-env-flags db)` | Return currently active LMDB environment flags. |
 
-Common flags include `:rdonly-env`, `:nosync`, `:nometasync`, `:writemap`,
-`:mapasync`, `:notls`, `:nolock`, `:nordahead`, `:nomeminit`, `:nosubdir`, and
-`:fixedmap`.
+| Common flag group | Keywords |
+| :--- | :--- |
+| Read and locking | `:rdonly-env`, `:notls`, `:nolock` |
+| Durability and write behavior | `:nosync`, `:nometasync`, `:writemap`, `:mapasync` |
+| Filesystem and memory | `:nordahead`, `:nomeminit`, `:nosubdir`, `:fixedmap` |
 
----
+For a Datalog connection, call `datalog-kv` first and apply `set-env-flags`,
+`get-env-flags`, or `sync` to the backing KV handle.
+
 
 ## 11. Range Keywords
 

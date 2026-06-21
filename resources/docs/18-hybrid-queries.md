@@ -1,10 +1,10 @@
 ---
-title: "Combining Indexes: Hybrid Queries Across KV, Logic, and Search"
+title: "Hybrid Queries"
 chapter: 18
 part: "IV — Indexes as Capabilities"
 ---
 
-# Chapter 18: Combining Indexes: Hybrid Queries Across KV, Logic, and Search
+# Chapter 18: Hybrid Queries
 
 The true power of Datalevin lies not in any single index, but in how they all
 work together. Because Datalog, full-text search, vector similarity, text
@@ -21,7 +21,6 @@ In Datalevin, **indexes are programmable capabilities**. This chapter
 demonstrates how to build hybrid queries that bridge structured logic and
 unstructured search.
 
----
 
 ## 1. Unified Retrieval: The Single-Engine Advantage
 
@@ -55,7 +54,6 @@ Clojure snippets below use an explicit `db` value. Java, Python, and JavaScript
 snippets assume an open connection named `conn`, whose `query` method supplies
 the current database as `$`.
 
----
 
 ## 2. Index Return Formats
 
@@ -92,7 +90,6 @@ so production code should not combine the raw numbers directly. Prefer a
 rank-based method such as reciprocal rank fusion (RRF), discussed next, or keep
 one index as the candidate generator and use the other as a filter.
 
----
 
 ## 3. Evidence Fusion
 
@@ -430,7 +427,6 @@ produce evidence, aggregation sums it, and strict filters remain ordinary
 Datalog clauses. If a condition must be mandatory, keep it as a Datalog clause
 rather than treating it as just another evidence source.
 
----
 
 ## 4. Order of Execution: How the Optimizer Thinks
 
@@ -463,7 +459,6 @@ ever see it; set it too high and downstream joins do needless work. When in
 doubt, widen `:top` enough that the real answer is reliably in the candidate set,
 then rely on the structured clauses to enforce correctness.
 
----
 
 ## 5. Mixing KV and Datalog
 
@@ -561,102 +556,28 @@ When a write must update Datalog datoms and application-owned KV DBIs atomically
 use the `with-transaction` pattern from Chapter 6. Function bindings are for
 read-time lookup and filtering, not for writing during query evaluation.
 
----
 
-## 6. Practical Pattern: Retrieval-Augmented Generation (RAG)
+## 6. Practical Pattern: Hybrid Retrieval with Structured Filters
 
-Hybrid search is the foundation of modern AI applications. Combining **keyword
-matching** (for exact terms like product IDs or jargon) with **vector
-similarity** (for semantic meaning) provides the most relevant context to LLMs.
-The permission input below is a set of allowed owners.
+The database pattern behind Retrieval-Augmented Generation (RAG) is the same
+pattern this chapter has been building toward: use full-text and vector indexes
+to produce candidates, then join those candidates with ordinary Datalog facts
+for permission, recency, ownership, status, and business rules.
 
-This example assumes `:doc/content` has `:db/fulltext true` and
-`:db.fulltext/autoDomain true`, and `:doc/embedding` is a vector attribute.
-Both search clauses bind the same `?e`; in Datalog, shared variables are joins,
-so no explicit equality clause is needed.
+The important database point is that the filter should run in the same query as
+retrieval. There is no window in which the system fetches candidates and then
+forgets to filter them before handing context to another component. In a fan-out
+architecture, filters often run after results are merged from several services,
+which is exactly where access-control leaks and stale data slip in. In
+Datalevin, an entity that fails a permission or policy clause is never part of
+the result, no matter which index surfaced it.
 
-The variable `query-embedding` in the examples below is a vector produced by the
-application, often by the same embedding model used to index documents. If the
-document text is stored with `:db/embedding true` instead of a user-supplied
-`:db.type/vec` attribute, use `embedding-neighbors` and pass the query text
-directly.
+Chapter 25 returns to this shape in the agent-memory setting. There, the problem
+is no longer just candidate retrieval; it is recall and context assembly:
+choosing the right lenses, ranking evidence, preserving provenance, and
+formatting a small packet for an LLM. This chapter stays at the database level:
+how to make heterogeneous indexes participate in one planned query.
 
-<div class="multi-lang">
-
-```clojure
-(d/q '[:find ?title ?chunk ?dist
-       :in $ ?query ?query-vec ?allowed-owner-set
-       :where
-       ;; semantic search
-       [(vec-neighbors $ :doc/embedding ?query-vec
-                       {:top 10 :display :refs+dists})
-        [[?e _ _ ?dist]]]
-       ;; keyword search
-       [(fulltext $ :doc/content ?query {:top 50}) [[?e _ ?chunk]]]
-       ;; reusing ?e makes this an intersection
-       ;; permission filter
-       [?e :doc/owner ?owner]
-       [(contains? ?allowed-owner-set ?owner)]
-       [?e :doc/title ?title]]
-     db user-query query-embedding allowed-owner-set)
-```
-
-```java
-conn.query("[:find ?title ?chunk ?dist " +
-           " :in $ ?query ?query-vec ?allowed-owner-set " +
-           " :where " +
-           " [(vec-neighbors $ :doc/embedding ?query-vec {:top 10 :display :refs+dists}) [[?e _ _ ?dist]]] " +
-           " [(fulltext $ :doc/content ?query {:top 50}) [[?e _ ?chunk]]] " +
-           " [?e :doc/owner ?owner] " +
-           " [(contains? ?allowed-owner-set ?owner)] " +
-           " [?e :doc/title ?title]]",
-           userQuery, queryEmbedding, allowedOwnerSet);
-```
-
-```python
-conn.query(
-    '[:find ?title ?chunk ?dist '
-    ' :in $ ?query ?query-vec ?allowed-owner-set '
-    ' :where '
-    ' [(vec-neighbors $ :doc/embedding ?query-vec {:top 10 :display :refs+dists}) [[?e _ _ ?dist]]] '
-    ' [(fulltext $ :doc/content ?query {:top 50}) [[?e _ ?chunk]]] '
-    ' [?e :doc/owner ?owner] '
-    ' [(contains? ?allowed-owner-set ?owner)] '
-    ' [?e :doc/title ?title]]',
-    user_query,
-    query_embedding,
-    allowed_owner_set,
-)
-```
-
-```javascript
-await conn.query(
-  '[:find ?title ?chunk ?dist ' +
-  ' :in $ ?query ?query-vec ?allowed-owner-set ' +
-  ' :where ' +
-  ' [(vec-neighbors $ :doc/embedding ?query-vec {:top 10 :display :refs+dists}) [[?e _ _ ?dist]]] ' +
-  ' [(fulltext $ :doc/content ?query {:top 50}) [[?e _ ?chunk]]] ' +
-  ' [?e :doc/owner ?owner] ' +
-  ' [(contains? ?allowed-owner-set ?owner)] ' +
-  ' [?e :doc/title ?title]]',
-  userQuery,
-  queryEmbedding,
-  allowedOwnerSet
-);
-```
-
-</div>
-
-Structured filters ensure AI applications are not only smart but also secure and
-accurate: the permission, recency, and business-rule clauses run in the *same*
-query as retrieval. There is no window in which the system fetches candidates and
-then forgets to filter them before handing context to the model. In a fan-out
-architecture, the filter usually runs after results are merged from several
-services, which is exactly where access-control leaks and stale data slip in.
-Here, an entity that fails the `?allowed-owner-set` membership clause is never
-part of the result, no matter which index surfaced it.
-
----
 
 ## 7. End-to-End Example: The "Smart" Product Search
 
@@ -770,7 +691,6 @@ The shared `?e` variable joins all results together. The
 small KV DBI, for example a same-file operational table of suppressed SKUs,
 real-time availability flags, or rollout policy.
 
----
 
 ## Summary
 

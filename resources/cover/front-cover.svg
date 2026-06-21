@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="7.25in" height="9.5in" viewBox="0 0 2175 2850" role="img" aria-labelledby="title desc">
+  <title id="title">Front cover draft for Datalevin: The Definitive Guide to Logical and Intelligent Databases</title>
+  <desc id="desc">A print front-cover panel with title, subtitle, author name, and a line diagram motif showing datoms, indexes, search, vectors, and agent memory.</desc>
+  <defs>
+    <style>
+      .paper { fill: #f7f8f4; }
+      .ink { fill: #101820; }
+      .muted { fill: #5b6670; }
+      .blue { fill: #0f4c81; }
+      .green { fill: #0f766e; }
+      .rust { fill: #9a4f2f; }
+      .hair { fill: none; stroke: #a8b3bc; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+      .hair-dark { fill: none; stroke: #29343d; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+      .hair-blue { fill: none; stroke: #0f4c81; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+      .hair-green { fill: none; stroke: #0f766e; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+      .panel { fill: #ffffff; stroke: #cbd5dc; stroke-width: 3; }
+      .panel-soft { fill: #eef7f6; stroke: #87b8b1; stroke-width: 3; }
+      .panel-blue { fill: #edf4f9; stroke: #86a9c4; stroke-width: 3; }
+      .panel-rust { fill: #f7eee9; stroke: #c99b83; stroke-width: 3; }
+      .dot { fill: #101820; }
+      .dot-blue { fill: #0f4c81; }
+      .dot-green { fill: #0f766e; }
+      .dot-rust { fill: #9a4f2f; }
+      .title { fill: #101820; font-family: Inter, Avenir Next, Helvetica, Arial, sans-serif; font-size: 184px; font-weight: 800; letter-spacing: 0; }
+      .subtitle { fill: #101820; font-family: Inter, Avenir Next, Helvetica, Arial, sans-serif; font-size: 62px; font-weight: 640; letter-spacing: 0; }
+      .kicker { fill: #0f4c81; font-family: Inter, Avenir Next, Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 760; letter-spacing: 6px; }
+      .author { fill: #101820; font-family: Inter, Avenir Next, Helvetica, Arial, sans-serif; font-size: 48px; font-weight: 650; letter-spacing: 0; }
+      .small { fill: #5b6670; font-family: Inter, Avenir Next, Helvetica, Arial, sans-serif; font-size: 26px; font-weight: 520; letter-spacing: 0; }
+      .label { fill: #101820; font-family: Inter, Avenir Next, Helvetica, Arial, sans-serif; font-size: 31px; font-weight: 720; letter-spacing: 0; }
+      .code { fill: #1f2933; font-family: IBM Plex Mono, Menlo, Consolas, monospace; font-size: 26px; font-weight: 500; letter-spacing: 0; }
+      .code-muted { fill: #66727d; font-family: IBM Plex Mono, Menlo, Consolas, monospace; font-size: 23px; font-weight: 500; letter-spacing: 0; }
+    </style>
+    <marker id="arrow" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#29343d" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#0f4c81" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 12 12" refX="9.5" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M2 2 L10 6 L2 10" fill="none" stroke="#0f766e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect class="paper" x="0" y="0" width="2175" height="2850"/>
+
+  <text class="kicker" x="170" y="308">DATABASES / DATALOG / AGENT MEMORY</text>
+
+  <text class="title" x="165" y="625">Datalevin</text>
+  <text class="subtitle" x="174" y="742">The Definitive Guide to</text>
+  <text class="subtitle" x="174" y="820">Logical and Intelligent Databases</text>
+
+  <path class="hair-blue" d="M174 910 H1025"/>
+  <text class="small" x="174" y="988">Datalog, graph modeling, key-value storage, full-text search,</text>
+  <text class="small" x="174" y="1028">vector retrieval, production operations, and persistent AI memory.</text>
+
+  <g transform="translate(174 1190)">
+    <rect class="panel" x="0" y="0" width="740" height="316" rx="18"/>
+    <text class="label" x="34" y="56">Facts as datoms</text>
+    <text class="code" x="42" y="114">[42 :book/title "Datalevin"]</text>
+    <text class="code" x="42" y="166">[42 :book/topic :datalog]</text>
+    <text class="code" x="42" y="218">[42 :book/topic :search]</text>
+    <text class="code" x="42" y="270">[42 :book/topic :memory]</text>
+
+    <circle class="dot" cx="855" cy="158" r="12"/>
+    <path class="hair-dark" d="M740 158 H855" marker-end="url(#arrow)"/>
+
+    <rect class="panel-blue" x="930" y="-62" width="298" height="106" rx="16"/>
+    <text class="label" x="1079" y="3" text-anchor="middle">EAV</text>
+    <text class="code-muted" x="1079" y="35" text-anchor="middle">entity locality</text>
+
+    <rect class="panel-soft" x="930" y="96" width="298" height="106" rx="16"/>
+    <text class="label" x="1079" y="161" text-anchor="middle">AVE</text>
+    <text class="code-muted" x="1079" y="193" text-anchor="middle">lookup locality</text>
+
+    <rect class="panel-rust" x="930" y="254" width="298" height="106" rx="16"/>
+    <text class="label" x="1079" y="319" text-anchor="middle">HNSW</text>
+    <text class="code-muted" x="1079" y="351" text-anchor="middle">nearest neighbors</text>
+
+    <path class="hair-blue" d="M864 158 C900 70 913 6 930 -9" marker-end="url(#arrow-blue)"/>
+    <path class="hair-green" d="M864 158 H930" marker-end="url(#arrow-green)"/>
+    <path class="hair-dark" d="M864 158 C902 237 915 298 930 307" marker-end="url(#arrow)"/>
+  </g>
+
+  <g transform="translate(325 1765)">
+    <path class="hair" d="M380 0 C430 110 430 224 380 334"/>
+    <path class="hair" d="M380 0 C690 40 848 152 982 334"/>
+    <path class="hair" d="M380 334 C680 330 855 250 982 110"/>
+    <path class="hair" d="M380 334 C510 475 710 520 982 454"/>
+
+    <circle class="dot-blue" cx="380" cy="0" r="18"/>
+    <circle class="dot-green" cx="380" cy="334" r="18"/>
+    <circle class="dot" cx="982" cy="110" r="18"/>
+    <circle class="dot-rust" cx="982" cy="334" r="18"/>
+    <circle class="dot-blue" cx="982" cy="454" r="18"/>
+
+    <rect class="panel-blue" x="96" y="-50" width="242" height="100" rx="16"/>
+    <text class="label" x="217" y="12" text-anchor="middle">Datalog</text>
+    <text class="code-muted" x="217" y="44" text-anchor="middle">logic query</text>
+
+    <rect class="panel-soft" x="82" y="284" width="256" height="100" rx="16"/>
+    <text class="label" x="210" y="346" text-anchor="middle">Search</text>
+    <text class="code-muted" x="210" y="378" text-anchor="middle">text + vector</text>
+
+    <rect class="panel" x="1025" y="60" width="280" height="100" rx="16"/>
+    <text class="label" x="1165" y="122" text-anchor="middle">Graph</text>
+    <text class="code-muted" x="1165" y="154" text-anchor="middle">refs as edges</text>
+
+    <rect class="panel-rust" x="1025" y="284" width="302" height="100" rx="16"/>
+    <text class="label" x="1176" y="346" text-anchor="middle">Operations</text>
+    <text class="code-muted" x="1176" y="378" text-anchor="middle">ACID + LMDB</text>
+
+    <rect class="panel-blue" x="1025" y="404" width="328" height="100" rx="16"/>
+    <text class="label" x="1189" y="466" text-anchor="middle">AI Memory</text>
+    <text class="code-muted" x="1189" y="498" text-anchor="middle">episodes + facts</text>
+  </g>
+
+  <g transform="translate(174 2418)">
+    <path class="hair-green" d="M0 0 H725"/>
+    <text class="author" x="0" y="98">Huahai Yang</text>
+  </g>
+</svg>

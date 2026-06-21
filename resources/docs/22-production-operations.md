@@ -1,14 +1,14 @@
 ---
-title: "Testing, Deployment, and Production Operations"
+title: "Production Operations"
 chapter: 22
 part: "V — Performance and Operations"
 ---
 
-# Chapter 22: Testing, Deployment, and Production Operations
+# Chapter 22: Production Operations
 
 Chapter 19 covered durability, snapshots, copy, dump/load, and storage tuning.
 This chapter covers the operational lifecycle around that storage: how to test
-an application against Datalevin, choose a deployment shape, run a server when
+an application against Datalevin, choose a deployment mode, run a server when
 needed, secure remote access, operate replicas or HA, and monitor a production
 system.
 
@@ -18,16 +18,15 @@ Datalevin's concurrency and failure model, because production code needs a
 clear policy for which transaction failures are data bugs, which are logical
 conflicts, and which are transient operational conditions.
 
----
 
 ## Version Target and API Stability
 
-This review draft targets Datalevin master branch commit `9142da07`. If you
-are reading a local checkout, older generated copy, or printed edition, check
-your installed Datalevin version or source checkout against the target shown
-here and the package metadata for your language binding. Released package
-snippets elsewhere in the book still use `{{datalevin-version}}` where a Maven,
-Leiningen, Gradle, Babashka pod, or standalone-jar version string is required.
+This book targets the Datalevin 1.0.x release line. If you are reading a local
+checkout, older generated copy, or printed edition, check your installed
+Datalevin version or source checkout against the target shown here and the
+package metadata for your language binding. Released package snippets elsewhere
+in the book still use `{{datalevin-version}}` where a Maven, Leiningen, Gradle,
+Babashka pod, or standalone-jar version string is required.
 
 Datalevin follows the common Clojure library practice of keeping public APIs
 stable and evolving them mostly by accumulation. Core APIs such as schema,
@@ -51,7 +50,6 @@ KV APIs may be available on a platform where optional vector or embedding
 support is still experimental. Appendix A calls out current platform and runtime
 requirements.
 
----
 
 ## 1. Testing Datalevin Applications
 
@@ -76,7 +74,12 @@ to a more realistic level only when the test needs it.
 Chapter 8 showed that the query engine accepts any sequence of `[e a v]` tuples
 as a data source. This is the fastest way to unit-test query and rule logic,
 because there is no store to open, transact, or clean up. The fixture data sits
-in the test itself.
+in the test itself. In Clojure the tuple sequence can be the only data source.
+In Java, Python, and JavaScript, the high-level `conn.query` method supplies the
+normal `$` database source, so the examples use a throwaway in-memory connection
+and bind the tuple fixture as `$data`.
+
+<div class="multi-lang">
 
 ```clojure
 (ns my-app.query-test
@@ -97,6 +100,84 @@ in the test itself.
               people 28))))
 ```
 
+```java
+import datalevin.Connection;
+import datalevin.Datalevin;
+
+import java.util.List;
+import java.util.Map;
+
+List<?> people = List.of(
+    List.of(1, Datalevin.kw("user/name"), "Alice"),
+    List.of(1, Datalevin.kw("user/age"), 30),
+    List.of(2, Datalevin.kw("user/name"), "Bob"),
+    List.of(2, Datalevin.kw("user/age"), 25));
+
+try (Connection conn = Datalevin.createConn(
+        null,
+        (Map<?, ?>) null,
+        Map.of("kv-opts", Map.of("inmemory?", true)))) {
+    Object result = conn.query("[:find ?name " +
+        ":in $ $data ?min " +
+        ":where [$data ?e :user/name ?name] " +
+        "       [$data ?e :user/age ?age] " +
+        "       [(>= ?age ?min)]]",
+        people,
+        28);
+    assert result.toString().contains("Alice");
+}
+```
+
+```python
+from datalevin import connect
+
+people = [
+    [1, ":user/name", "Alice"], [1, ":user/age", 30],
+    [2, ":user/name", "Bob"],   [2, ":user/age", 25],
+]
+
+with connect(None, opts={":kv-opts": {":inmemory?": True}}) as conn:
+    result = conn.query(
+        '[:find ?name '
+        ' :in $ $data ?min '
+        ' :where [$data ?e :user/name ?name] '
+        '        [$data ?e :user/age ?age] '
+        '        [(>= ?age ?min)]]',
+        people,
+        28)
+    assert any(row[0] == "Alice" for row in result)
+```
+
+```javascript
+import { connect } from "datalevin-node";
+
+const people = [
+  [1, ":user/name", "Alice"], [1, ":user/age", 30],
+  [2, ":user/name", "Bob"],   [2, ":user/age", 25]
+];
+
+const conn = await connect(null, {
+  opts: { ":kv-opts": { ":inmemory?": true } }
+});
+
+try {
+  const result = await conn.query(
+    '[:find ?name ' +
+    ' :in $ $data ?min ' +
+    ' :where [$data ?e :user/name ?name] ' +
+    '        [$data ?e :user/age ?age] ' +
+    '        [(>= ?age ?min)]]',
+    people,
+    28
+  );
+  console.assert(result.some(([name]) => name === "Alice"));
+} finally {
+  await conn.close();
+}
+```
+
+</div>
+
 Rules are data too, so a rule set can be passed straight into a tuple-backed
 query as the `%` input. Use this level for query shape, rule composition,
 predicates, and aggregation logic. It does not exercise schema, indexes, upsert,
@@ -108,6 +189,8 @@ When a test needs schema, transactions, indexes, or search, open a real
 in-memory connection. An in-memory database uses the same API as a persistent
 one, but keeps nothing on disk and is discarded when the connection closes
 (Chapter 2). Each test gets a fresh, isolated database with no cleanup step.
+
+<div class="multi-lang">
 
 ```clojure
 (deftest upsert-updates-existing-user
@@ -126,6 +209,97 @@ one, but keeps nothing on disk and is discarded when the connection closes
       (finally
         (d/close conn)))))
 ```
+
+```java
+import datalevin.Connection;
+import datalevin.Datalevin;
+import datalevin.Schema;
+
+import java.util.List;
+import java.util.Map;
+
+Schema schema = Datalevin.schema()
+    .attr("user/email",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .unique(Schema.Unique.IDENTITY))
+    .attr("user/name",
+          Schema.attribute().valueType(Schema.ValueType.STRING));
+
+try (Connection conn = Datalevin.createConn(
+        null,
+        schema,
+        Map.of("kv-opts", Map.of("inmemory?", true)))) {
+    conn.transact(List.of(
+        Map.of(":user/email", "ada@example.com", ":user/name", "Ada")));
+    conn.transact(List.of(
+        Map.of(":user/email", "ada@example.com", ":user/name", "Ada L.")));
+
+    Object name = conn.query(
+        "[:find ?name . " +
+        " :where [?e :user/email \"ada@example.com\"] " +
+        "        [?e :user/name ?name]]");
+    assert "Ada L.".equals(name);
+}
+```
+
+```python
+from datalevin import connect
+
+schema = {
+    ":user/email": {":db/valueType": ":db.type/string",
+                    ":db/unique": ":db.unique/identity"},
+    ":user/name": {":db/valueType": ":db.type/string"},
+}
+
+with connect(None,
+             schema=schema,
+             opts={":kv-opts": {":inmemory?": True}}) as conn:
+    conn.transact([{":user/email": "ada@example.com", ":user/name": "Ada"}])
+    conn.transact([{":user/email": "ada@example.com", ":user/name": "Ada L."}])
+
+    assert conn.query(
+        '[:find ?name . '
+        ' :where [?e :user/email "ada@example.com"] '
+        '        [?e :user/name ?name]]') == "Ada L."
+```
+
+```javascript
+import { connect } from "datalevin-node";
+
+const schema = {
+  ":user/email": {
+    ":db/valueType": ":db.type/string",
+    ":db/unique": ":db.unique/identity"
+  },
+  ":user/name": { ":db/valueType": ":db.type/string" }
+};
+
+const conn = await connect(null, {
+  schema,
+  opts: { ":kv-opts": { ":inmemory?": true } }
+});
+
+try {
+  await conn.transact([
+    { ":user/email": "ada@example.com", ":user/name": "Ada" }
+  ]);
+  await conn.transact([
+    { ":user/email": "ada@example.com", ":user/name": "Ada L." }
+  ]);
+
+  const name = await conn.query(
+    '[:find ?name . ' +
+    ' :where [?e :user/email "ada@example.com"] ' +
+    '        [?e :user/name ?name]]'
+  );
+  console.assert(name === "Ada L.");
+} finally {
+  await conn.close();
+}
+```
+
+</div>
 
 Because in-memory stores are cheap to create, the simplest isolation strategy is
 one fresh store per test. A `clojure.test` fixture removes the repeated setup and
@@ -184,6 +358,8 @@ assertion simply fails to find the data (Chapter 5). Tests are the right place t
 turn that leniency off. Open test connections with `:validate-data?` and
 `:closed-schema?` so unknown attributes and ill-typed values fail loudly:
 
+<div class="multi-lang">
+
 ```clojure
 (d/create-conn nil schema
   {:kv-opts        {:inmemory? true}
@@ -191,21 +367,57 @@ turn that leniency off. Open test connections with `:validate-data?` and
    :closed-schema? true})
 ```
 
+```java
+Connection conn = Datalevin.createConn(
+    null,
+    schema,
+    Map.of("kv-opts", Map.of("inmemory?", true),
+           "validate-data?", true,
+           "closed-schema?", true));
+```
+
+```python
+conn = connect(
+    None,
+    schema=schema,
+    opts={":kv-opts": {":inmemory?": True},
+          ":validate-data?": True,
+          ":closed-schema?": True})
+```
+
+```javascript
+const conn = await connect(null, {
+  schema,
+  opts: {
+    ":kv-opts": { ":inmemory?": true },
+    ":validate-data?": true,
+    ":closed-schema?": true
+  }
+});
+```
+
+</div>
+
 With these options, a transaction that mentions an undeclared attribute or writes
 a value that does not match its declared `:db/valueType` throws instead of
 quietly storing surprising data. This converts a class of modeling bugs into
 test failures (Chapter 11).
 
-### 1.5 Dry-Run Transactions With `tx-data->simulated-report`
+### 1.5 Dry-Run Transactions With Simulated Reports
 
-To test how transaction data resolves — tempids, upserts, the datoms that would
-be added or retracted — without mutating the database, use
-`tx-data->simulated-report`. It returns the same transaction-report shape as
-`transact!` but leaves the connection untouched (Appendix E):
+To test how transaction data resolves, including tempids, upserts, and the
+datoms that would be added or retracted, without mutating the database, use the
+simulated transaction report API. It returns the same transaction-report shape
+as `transact!` but leaves the connection untouched (Appendix E). The method
+follows each binding's naming convention: `tx-data->simulated-report` in
+Clojure, `txDataToSimulatedReport` in Java and JavaScript, and
+`tx_data_to_simulated_report` in Python.
+
+<div class="multi-lang">
 
 ```clojure
 (deftest signup-adds-email-datom
-  (let [conn   (d/create-conn nil test-schema {:kv-opts {:inmemory? true}})
+  (let [conn   (d/create-conn nil schema {:kv-opts {:inmemory? true}})
         report (d/tx-data->simulated-report
                  (d/db conn)
                  [{:user/email "ada@example.com" :user/name "Ada"}])]
@@ -219,6 +431,65 @@ be added or retracted — without mutating the database, use
       (finally
         (d/close conn)))))
 ```
+
+```java
+import datalevin.Connection;
+import datalevin.Datalevin;
+
+import java.util.List;
+import java.util.Map;
+
+try (Connection conn = Datalevin.createConn(
+        null,
+        schema,
+        Map.of("kv-opts", Map.of("inmemory?", true)))) {
+    Map<?, ?> report = conn.txDataToSimulatedReport(List.of(
+        Map.of(":user/email", "ada@example.com", ":user/name", "Ada")));
+
+    List<?> txData = (List<?>) report.get(Datalevin.kw("tx-data"));
+    assert !txData.isEmpty();
+    assert conn.query(
+        "[:find ?e . :where [?e :user/email \"ada@example.com\"]]") == null;
+}
+```
+
+```python
+from datalevin import connect
+
+with connect(None,
+             schema=schema,
+             opts={":kv-opts": {":inmemory?": True}}) as conn:
+    report = conn.tx_data_to_simulated_report(
+        [{":user/email": "ada@example.com", ":user/name": "Ada"}])
+
+    assert report[":tx-data"]
+    assert conn.query(
+        '[:find ?e . :where [?e :user/email "ada@example.com"]]') is None
+```
+
+```javascript
+import { connect } from "datalevin-node";
+
+const conn = await connect(null, {
+  schema,
+  opts: { ":kv-opts": { ":inmemory?": true } }
+});
+
+try {
+  const report = await conn.txDataToSimulatedReport([
+    { ":user/email": "ada@example.com", ":user/name": "Ada" }
+  ]);
+
+  console.assert(report[":tx-data"].length > 0);
+  console.assert(await conn.query(
+    '[:find ?e . :where [?e :user/email "ada@example.com"]]'
+  ) == null);
+} finally {
+  await conn.close();
+}
+```
+
+</div>
 
 This is useful for unit-testing transaction-function output and validation logic,
 where you care about the datoms a transaction would produce rather than
@@ -252,51 +523,51 @@ Two pitfalls are worth avoiding:
               (d/db conn))))
 ```
 
+The high-level Java, Python, and JavaScript bindings can test the same full-text,
+idoc, and vector queries through ordinary `conn.query` calls. For async
+secondary-index maintenance helpers, check the current language-compatibility
+document for wrapper coverage; otherwise keep unit tests in synchronous indexing
+mode and put async-index assertions behind a Clojure maintenance hook or
+integration test.
+
 ### 1.7 Testing From Other Language Bindings
 
-The helpers in this section that are Clojure APIs — `with-conn`, the
-`clojure.test` fixtures, and `tx-data->simulated-report` — do not have direct
-equivalents in the Java, Python, and JavaScript bindings. From those languages,
-test with your usual test runner and two portable techniques:
+Use the test runner native to each host language: `clojure.test`, JUnit or
+AssertJ, pytest, Node's built-in test runner, Jest, or whatever your application
+already uses. Datalevin should be ordinary application code inside those tests.
 
-- **Tuple-based logic tests** (Section 1.1) work everywhere, because passing an
-  EAV tuple sequence to `query` needs no database.
-- **Per-test temporary databases** give realistic coverage. Use the test
-  runner's own temporary-directory facility for isolation and cleanup — for
-  example, pytest's `tmp_path` fixture in Python — and open a normal connection
-  on that path:
+The portable patterns are:
 
-```python
-def test_upsert_updates_existing_user(tmp_path):
-    from datalevin import connect
+- **Tuple-backed query tests**: Clojure can call `d/q` directly on an EAV tuple
+  sequence. Java, Python, and JavaScript can bind the same tuple sequence as a
+  named source such as `$data` while using a throwaway in-memory connection as
+  the query host.
+- **Fresh in-memory databases**: all bindings can open `nil`/`null`/`None` with
+  `:kv-opts {:inmemory? true}` and close the connection at the end of the test.
+- **Per-test temporary directories**: all bindings can use the host test
+  runner's temporary-directory facility, open a normal path-backed connection,
+  and let the runner delete the directory after the test.
+- **Simulated transaction reports**: all bindings can dry-run transaction data
+  against the current database value and assert on the resulting report without
+  committing the transaction.
+- **Clojure-specific conveniences**: `with-conn`, `clojure.test` fixtures,
+  and `datalevin.util/tmp-dir` are Clojure helper APIs. In other languages,
+  prefer explicit connection lifecycle management and the host runner's
+  temporary-directory facilities.
 
-    schema = {
-        ":user/email": {":db/valueType": ":db.type/string",
-                        ":db/unique": ":db.unique/identity"},
-        ":user/name": {":db/valueType": ":db.type/string"},
-    }
-    with connect(str(tmp_path / "db"), schema=schema) as conn:
-        conn.transact([{":user/email": "ada@example.com", ":user/name": "Ada"}])
-        conn.transact([{":user/email": "ada@example.com", ":user/name": "Ada L."}])
-        assert conn.query(
-            '[:find ?name . '
-            ' :where [?e :user/email "ada@example.com"] '
-            '        [?e :user/name ?name]]') == "Ada L."
-```
-
-The `with` form closes the connection at the end of the test, and the runner
-deletes the temporary directory. This is the pattern Datalevin's own Python test
-suite uses.
-
----
 
 ## 2. Choose a Deployment Mode
 
 Datalevin can run as an embedded library, a TCP server, a read-replica topology,
-a consensus-lease HA cluster, an MCP tool process, or a Babashka pod. The data
-model and storage format stay the same; the operational boundary changes.
+a consensus-lease HA cluster, an MCP tool process, or a Babashka pod. Figure
+22.1 depicts these different modes. The data model and storage format stay the
+same; the operational boundary changes.
 
 ![Deployment topologies around the same database: embedded keeps the app and DB in one process; server exposes the DB to remote clients over dtlv://; an async read replica ships WAL from a primary to a read-only replica; consensus-lease HA coordinates a leader and follower DBs via Raft with fencing; MCP wraps the DB in a tool-call boundary with writes off by default; a Babashka pod reaches the DB over IPC](/images/diagrams/deployment-topologies.svg)
+
+Appendix A gives package coordinates, supported platforms, startup commands,
+and connection examples. This chapter focuses on the production decision: which
+operational boundary should own the database?
 
 | Mode | Best Fit | Main Trade-Off |
 | :--- | :--- | :--- |
@@ -307,36 +578,17 @@ model and storage format stay the same; the operational boundary changes.
 | MCP | AI tools that need controlled Datalevin access | Tool-call boundary; writes disabled unless explicitly allowed |
 | Babashka pod | Scripts and maintenance tasks | IPC boundary; convenient but not the zero-copy embedded path |
 
-In HA discussions, **fencing** means preventing a stale or deposed writer from
-continuing to accept writes after another node has been allowed to lead. It is
-the safety mechanism that keeps failover from becoming split-brain.
+Embedded mode is the default when one application owns the database path. It
+avoids network serialization and uses the OS page cache directly, so leave RAM
+headroom for that cache. Server mode is the right boundary when multiple
+processes need the same database, when remote clients need `dtlv://` access, or
+when server-side RBAC is part of the deployment.
 
-### 2.1 Embedded Mode
-
-Embedded mode is the default choice when one application owns the database path.
-It keeps the application and Datalevin in the same process, so reads use the OS
-page cache directly and avoid network serialization. It is a good fit for
-single-node services, local-first applications, desktop tools, and containers
-with per-instance storage.
-
-Leave RAM headroom for the OS page cache. On small VMs, a small amount of swap
-can prevent brief memory spikes from killing the process, but Datalevin
-performance still depends on keeping the active working set in memory.
-
-Embedded mode and server mode are not mutually exclusive. A JVM application can
-run Datalevin directly in-process and also start a Datalevin server inside the
-same process. This is useful when the application owns the local database but
-wants to expose a `dtlv://` endpoint for administrative tools, background
-workers, non-JVM clients, or controlled inspection.
-
-### 2.2 Server Mode
-
-Use server mode when multiple applications need to share a Datalevin instance,
-when non-JVM clients need a remote database, or when you need server-side RBAC.
-The server exposes Datalog and KV APIs over `dtlv://` URIs and also provides a
-JSON command surface used by MCP and other adapters.
-
-### 2.3 Read Replicas and HA
+An embedded Clojure application with the full Datalevin library, or a Java
+application with `org.datalevin:datalevin-java-server`, can also host a server
+inside its own process. Use that only when the application intentionally owns
+both lifecycles. Python and Node.js applications should run `dtlv`, Docker, or
+the standalone JVM jar as a separate server process.
 
 Async read replicas and consensus HA both depend on WAL records, but they solve
 different problems:
@@ -350,29 +602,15 @@ different problems:
 Choose async replicas when stale-by-lag reads are acceptable. Choose HA only
 when automatic failover is worth the extra operational surface.
 
-### 2.4 Tooling Modes
+In HA discussions, **fencing** means preventing a stale or deposed writer from
+continuing to accept writes after another node has been allowed to lead. It is
+the safety mechanism that keeps failover from becoming split-brain.
 
-`dtlv mcp` runs a local MCP server over `stdio`. It can open local databases or
-remote `dtlv://` targets. Read-only tools are the default; write tools require
-starting MCP with write access enabled.
+`dtlv mcp` and the Babashka pod are tooling modes. They are useful for local AI
+tools, maintenance jobs, and ad hoc scripts, but they are not replacements for
+the embedded or server boundary of the main application.
 
-The Babashka pod is useful for fast scripts, maintenance jobs, and ad hoc data
-tasks. It runs as a separate process and communicates with Babashka over IPC.
-
-### 2.5 Native Language Libraries
-
-Datalevin publishes libraries for several host languages:
-
-- **Clojure**: `datalevin/datalevin` on Clojars, plus
-  `org.datalevin/datalevin-embedded` for embedded-only JVM use.
-- **Java**: `org.datalevin:datalevin-java` on Maven Central.
-- **Python**: `datalevin` on PyPI.
-- **Node.js**: `datalevin-node` on npm.
-
-These libraries can open embedded databases. They can also connect to remote
-Datalevin servers where the wrapper supports remote `dtlv://` connections.
-
-### 2.6 High-Density Multi-Tenancy
+### 2.1 High-Density Multi-Tenancy
 
 A useful Datalevin pattern is one database file per tenant, workspace, or user.
 This is common in personal knowledge management and local-first systems.
@@ -387,59 +625,18 @@ The advantages are operational:
 The trade-off is fleet management. You need naming, discovery, backup, and
 retention automation for many small databases instead of one large database.
 
----
 
-## 3. Run a Datalevin Server
+## 3. Operate a Datalevin Server
 
 The server is a non-blocking network service that exposes Datalevin APIs over a
-TCP connection. It listens on `127.0.0.1:8898` by default.
+TCP connection. Appendix A shows the `dtlv`, Docker, standalone JVM jar,
+in-process Clojure, and in-process Java startup forms. In production, the
+important operational rules are the same for all of them: bind to loopback
+unless remote access is intended, set `DATALEVIN_DEFAULT_PASSWORD` before
+exposing a non-loopback address, and run the server under the platform's service
+manager with a service account that can read and write the data root.
 
-### 3.1 Start the Server
-
-Use the native `dtlv` binary for lightweight deployments. Use the JVM standalone
-jar for highly concurrent or long-running server workloads where normal JVM
-monitoring and GC choices matter.
-
-```console
-# Native CLI
-$ DATALEVIN_DEFAULT_PASSWORD=secret \
-  dtlv serv -r /data/datalevin -p 8898 --host 0.0.0.0
-
-# JVM standalone jar
-$ DATALEVIN_DEFAULT_PASSWORD=secret \
-  java --add-opens=java.base/java.nio=ALL-UNNAMED \
-       --add-opens=java.base/sun.nio.ch=ALL-UNNAMED \
-       -jar datalevin-standalone.jar serv --host 0.0.0.0 -r /data/datalevin
-```
-
-An embedded Clojure service can also start the same server programmatically and
-tie its lifecycle to the application's lifecycle:
-
-```clojure
-(require '[datalevin.server :as srv])
-
-(defonce datalevin-server (atom nil))
-
-(defn start-datalevin-server! []
-  (let [server (srv/create {:host "127.0.0.1"
-                            :port 8898
-                            :root "/data/datalevin"})]
-    (srv/start server)
-    (reset! datalevin-server server)))
-
-(defn stop-datalevin-server! []
-  (when-let [server @datalevin-server]
-    (srv/stop server)
-    (reset! datalevin-server nil)))
-```
-
-This pattern keeps Datalevin embedded from the application's point of view while
-making databases under the server root reachable to remote clients. Use the same
-security rules as a standalone server: bind to loopback unless remote access is
-intended, set `DATALEVIN_DEFAULT_PASSWORD` before exposing a non-loopback
-address, and shut the server down cleanly with the rest of the application.
-
-Important options:
+The main server options are:
 
 - **`-r <path>`**: Root directory for databases. The default is
   `/var/lib/datalevin` on POSIX systems and `C:\ProgramData\Datalevin` on
@@ -451,11 +648,7 @@ Important options:
   `172800000` ms, or 48 hours.
 - **`-v`**: Enable verbose server logs on stdout.
 
-Run the server under the platform's service manager, such as `systemd`,
-`launchd`, or `sc.exe`, and make sure the service account has read/write access
-to the data root.
-
-### 3.2 Connect to a Remote Database
+### 3.1 Remote Database URIs
 
 Remote Datalog and KV databases use this URI shape:
 
@@ -465,86 +658,10 @@ dtlv://<user>:<pass>@<host>:<port>/<db-name>?store=datalog|kv
 
 `store` is optional and defaults to `datalog`. Database names must be unique
 across the whole server, so a Datalog database and a KV database cannot share
-the same server-side name.
+the same server-side name. Appendix A shows connection examples, and Appendix G
+lists the public `datalevin.client` administrative API.
 
-<div class="multi-lang">
-
-```clojure
-(require '[datalevin.core :as d])
-
-(def conn
-  (d/get-conn "dtlv://datalevin:secret@localhost:8898/app"))
-
-(d/q '[:find ?e . :where [?e _ _]] @conn)
-```
-
-```java
-import datalevin.Connection;
-import datalevin.Datalevin;
-
-Connection conn =
-    Datalevin.getConn("dtlv://datalevin:secret@localhost:8898/app");
-
-Object result = conn.query("[:find ?e . :where [?e _ _]]");
-```
-
-```python
-from datalevin import connect
-
-conn = connect("dtlv://datalevin:secret@localhost:8898/app")
-
-result = conn.query("[:find ?e . :where [?e _ _]]")
-```
-
-```javascript
-import { connect } from "datalevin-node";
-
-const conn = await connect("dtlv://datalevin:secret@localhost:8898/app");
-
-const result = await conn.query("[:find ?e . :where [?e _ _]]");
-```
-
-</div>
-
-### 3.3 Use the Admin Client
-
-Administrative operations use `datalevin.client/new-client` in Clojure and the
-corresponding wrapper client in other host languages.
-
-<div class="multi-lang">
-
-```clojure
-(require '[datalevin.client :as c])
-
-(def client
-  (c/new-client "dtlv://datalevin:secret@localhost:8898"))
-```
-
-```java
-import datalevin.Client;
-import datalevin.Datalevin;
-
-Client client =
-    Datalevin.newClient("dtlv://datalevin:secret@localhost:8898");
-```
-
-```python
-from datalevin import new_client
-
-client = new_client("dtlv://datalevin:secret@localhost:8898")
-```
-
-```javascript
-import { newClient } from "datalevin-node";
-
-const client = await newClient("dtlv://datalevin:secret@localhost:8898");
-```
-
-</div>
-
-Appendix G lists the public `datalevin.client` administrative API.
-
-### 3.4 Protocol and Client Tuning
+### 3.2 Protocol and Client Tuning
 
 The server protocol uses a TLV-style (type-length-value) message format. Clojure
 clients use Nippy serialization by default; language-neutral adapters use
@@ -572,7 +689,7 @@ For network-heavy workloads, prefer fewer larger requests. Batch writes with
 small entity lookups, and keep `:find` clauses specific so large unused result
 sets are not serialized over the wire.
 
-### 3.5 Runtime UDFs in Server Mode
+### 3.3 Runtime UDFs in Server Mode
 
 Descriptor-backed `:db/udf` functions resolve where the query or transaction
 executes. Embedded databases can receive a runtime registry in store options.
@@ -584,7 +701,6 @@ In HA deployments, `:ha-require-udf-ready? true` makes a leader reject writes
 until installed transaction UDF descriptors can be resolved by the server
 runtime.
 
----
 
 ## 4. Security and Access Control
 
@@ -697,7 +813,6 @@ with KMS-managed keys, and encrypt sensitive values before transacting them into
 Datalevin. NIST SP 800-57 is a useful general reference for key-management
 terminology and lifecycle concerns [3].
 
----
 
 ## 5. Replication and High Availability
 
@@ -711,6 +826,8 @@ read-only servers. The primary must have WAL enabled. A strict WAL durability
 profile is recommended because the replica tails durable source records.
 
 Configure the replica when opening the database on the replica server:
+
+<div class="multi-lang">
 
 ```clojure
 (require '[datalevin.core :as d]
@@ -733,6 +850,80 @@ Configure the replica when opening the database on the replica server:
     :wal-durability-profile :strict}))
 ```
 
+```java
+import datalevin.Connection;
+import datalevin.Datalevin;
+import datalevin.Schema;
+
+import java.util.Map;
+
+Schema schema = Datalevin.schema()
+    .attr("name",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .cardinality(Schema.Cardinality.ONE));
+
+Connection replicaConn = Datalevin.createConn(
+    "dtlv://replica-admin:pass@replica-host:8898/app",
+    schema,
+    Map.of(":replica/read-only?", true,
+           ":replica/source", "dtlv://replicator:pass@primary-host:8898/app",
+           ":replica/id", "app-replica-us-west",
+           ":replica/poll-ms", 250,
+           ":replica/report-ms", 5000,
+           ":wal?", true,
+           ":wal-durability-profile", ":strict"));
+```
+
+```python
+from datalevin import connect
+
+schema = {
+    ":name": {":db/valueType": ":db.type/string",
+              ":db/cardinality": ":db.cardinality/one"},
+}
+
+replica_conn = connect(
+    "dtlv://replica-admin:pass@replica-host:8898/app",
+    schema=schema,
+    opts={":replica/read-only?": True,
+          ":replica/source": "dtlv://replicator:pass@primary-host:8898/app",
+          ":replica/id": "app-replica-us-west",
+          ":replica/poll-ms": 250,
+          ":replica/report-ms": 5000,
+          ":wal?": True,
+          ":wal-durability-profile": ":strict"})
+```
+
+```javascript
+import { connect } from "datalevin-node";
+
+const schema = {
+  ":name": {
+    ":db/valueType": ":db.type/string",
+    ":db/cardinality": ":db.cardinality/one"
+  }
+};
+
+const replicaConn = await connect(
+  "dtlv://replica-admin:pass@replica-host:8898/app",
+  {
+    schema,
+    opts: {
+      ":replica/read-only?": true,
+      ":replica/source": "dtlv://replicator:pass@primary-host:8898/app",
+      ":replica/id": "app-replica-us-west",
+      ":replica/poll-ms": 250,
+      ":replica/report-ms": 5000,
+      ":wal?": true,
+      ":wal-durability-profile": ":strict"
+    }
+  }
+);
+```
+
+</div>
+
 On first open, Datalevin bootstraps the replica from the primary copy interface
 if the local replica database does not exist. After that, the replica tails WAL
 records in LSN order and reports its applied LSN to the primary so WAL garbage
@@ -746,6 +937,8 @@ on the replica server.
 
 Replica reads use normal APIs. User writes are rejected by the replica server:
 
+<div class="multi-lang">
+
 ```clojure
 (d/q '[:find [?name ...] :where [?e :name ?name]] @replica-conn)
 
@@ -753,14 +946,81 @@ Replica reads use normal APIs. User writes are rejected by the replica server:
 (d/transact! replica-conn [{:db/id -1 :name "blocked"}])
 ```
 
-Replica status is available through the Clojure admin client:
+```java
+import java.util.List;
+import java.util.Map;
+
+Object names = replicaConn.query(
+    "[:find [?name ...] :where [?e :name ?name]]");
+
+// Throws: Replica is read-only
+replicaConn.transact(List.of(Map.of(":db/id", -1, ":name", "blocked")));
+```
+
+```python
+names = replica_conn.query(
+    "[:find [?name ...] :where [?e :name ?name]]")
+
+# Throws: Replica is read-only
+replica_conn.transact([{":db/id": -1, ":name": "blocked"}])
+```
+
+```javascript
+const names = await replicaConn.query(
+  "[:find [?name ...] :where [?e :name ?name]]"
+);
+
+// Throws: Replica is read-only
+await replicaConn.transact([{ ":db/id": -1, ":name": "blocked" }]);
+```
+
+</div>
+
+Replica status is available through typed admin clients in all primary
+bindings:
+
+<div class="multi-lang">
 
 ```clojure
+(require '[datalevin.client :as cl])
+
 (def client
   (cl/new-client "dtlv://replica-admin:pass@replica-host:8898"))
 
 (cl/replica-status client "app")
 ```
+
+```java
+import datalevin.Client;
+import datalevin.Datalevin;
+
+import java.util.Map;
+
+Client client =
+    Datalevin.newClient("dtlv://replica-admin:pass@replica-host:8898");
+
+Map<?, ?> status = client.replicaStatus("app");
+```
+
+```python
+from datalevin import new_client
+
+client = new_client("dtlv://replica-admin:pass@replica-host:8898")
+
+status = client.replica_status("app")
+```
+
+```javascript
+import { newClient } from "datalevin-node";
+
+const client = await newClient(
+  "dtlv://replica-admin:pass@replica-host:8898"
+);
+
+const status = await client.replicaStatus("app");
+```
+
+</div>
 
 The returned map includes `:replica-applied-lsn`,
 `:replica-source-durable-lsn`, `:replica-source-committed-lsn`,
@@ -788,10 +1048,27 @@ leader and is not demoting. HA forces `:wal? true` and defaults to
 
 For follower reads, connect to a follower endpoint with the normal APIs:
 
+<div class="multi-lang">
+
 ```clojure
 (def follower
   (d/get-conn "dtlv://user:pass@replica-host:8898/app"))
 ```
+
+```java
+Connection follower =
+    Datalevin.getConn("dtlv://user:pass@replica-host:8898/app");
+```
+
+```python
+follower = connect("dtlv://user:pass@replica-host:8898/app")
+```
+
+```javascript
+const follower = await connect("dtlv://user:pass@replica-host:8898/app");
+```
+
+</div>
 
 Use RBAC to enforce read-only access. Grant only `:datalevin.server/view` to
 users that should read from followers.
@@ -800,10 +1077,13 @@ users that should read from followers.
 
 Consensus HA membership is operator managed. Datalevin does not discover data
 nodes automatically. Update the authoritative membership for an open HA database
-with `datalevin.client/ha-update-membership!`.
+with `datalevin.client/ha-update-membership!` in Clojure or the equivalent
+typed client method in the other bindings.
 
 `ha-members` endpoints use `host:port` strings and must be ordered by ascending
 `:node-id`.
+
+<div class="multi-lang">
 
 ```clojure
 (require '[datalevin.client :as cl])
@@ -823,6 +1103,98 @@ with `datalevin.client/ha-update-membership!`.
             {:peer-id "node-b:9098" :promotable? true :ha-node-id 2}
             {:peer-id "node-c-new:9098" :promotable? true :ha-node-id 3}]}})
 ```
+
+```java
+import datalevin.Client;
+import datalevin.Datalevin;
+
+import java.util.List;
+import java.util.Map;
+
+Client client = Datalevin.newClient("dtlv://admin:pass@node-a:8898");
+
+Map<?, ?> result = client.haUpdateMembership(
+    "app",
+    Map.of(
+        ":ha-members",
+        List.of(
+            Map.of(":node-id", 1, ":endpoint", "node-a:8898"),
+            Map.of(":node-id", 2, ":endpoint", "node-b:8898"),
+            Map.of(":node-id", 3, ":endpoint", "node-c-new:8898")),
+        ":ha-control-plane",
+        Map.of(
+            ":voters",
+            List.of(
+                Map.of(":peer-id", "node-a:9098",
+                       ":promotable?", true,
+                       ":ha-node-id", 1),
+                Map.of(":peer-id", "node-b:9098",
+                       ":promotable?", true,
+                       ":ha-node-id", 2),
+                Map.of(":peer-id", "node-c-new:9098",
+                       ":promotable?", true,
+                       ":ha-node-id", 3)))));
+```
+
+```python
+from datalevin import new_client
+
+client = new_client("dtlv://admin:pass@node-a:8898")
+
+result = client.ha_update_membership("app", {
+    ":ha-members": [
+        {":node-id": 1, ":endpoint": "node-a:8898"},
+        {":node-id": 2, ":endpoint": "node-b:8898"},
+        {":node-id": 3, ":endpoint": "node-c-new:8898"},
+    ],
+    ":ha-control-plane": {
+        ":voters": [
+            {":peer-id": "node-a:9098",
+             ":promotable?": True,
+             ":ha-node-id": 1},
+            {":peer-id": "node-b:9098",
+             ":promotable?": True,
+             ":ha-node-id": 2},
+            {":peer-id": "node-c-new:9098",
+             ":promotable?": True,
+             ":ha-node-id": 3},
+        ],
+    },
+})
+```
+
+```javascript
+import { newClient } from "datalevin-node";
+
+const client = await newClient("dtlv://admin:pass@node-a:8898");
+
+const result = await client.haUpdateMembership("app", {
+  ":ha-members": [
+    { ":node-id": 1, ":endpoint": "node-a:8898" },
+    { ":node-id": 2, ":endpoint": "node-b:8898" },
+    { ":node-id": 3, ":endpoint": "node-c-new:8898" }
+  ],
+  ":ha-control-plane": {
+    ":voters": [
+      { ":peer-id": "node-a:9098",
+        ":promotable?": true,
+        ":ha-node-id": 1 },
+      { ":peer-id": "node-b:9098",
+        ":promotable?": true,
+        ":ha-node-id": 2 },
+      { ":peer-id": "node-c-new:9098",
+        ":promotable?": true,
+        ":ha-node-id": 3 }
+    ]
+  }
+});
+```
+
+</div>
+
+This is an operator API; keep it in deployment tooling that is tested against
+the target Datalevin version. The binding names are `ha-update-membership!`,
+`haUpdateMembership`, and `ha_update_membership`.
 
 The request validates the member and voter lists, persists the new HA options on
 the target server, optionally replaces the Raft voter set, CAS-updates the
@@ -844,7 +1216,6 @@ persisted options match the authoritative membership hash. A node with a
 membership mismatch fails closed and will not promote or admit writes until the
 mismatch is resolved.
 
----
 
 ## 6. Monitoring and Diagnostics
 
@@ -897,6 +1268,31 @@ kv.openDbi("datalevin/eav");
 Map<?, ?> eavStats = kv.stat("datalevin/eav");
 ```
 
+```python
+from datalevin import open_kv
+
+with open_kv("/data/companydb") as kv:
+    stats = kv.stat()
+
+    kv.open_dbi("datalevin/eav")
+    eav_stats = kv.stat("datalevin/eav")
+```
+
+```javascript
+import { openKv } from "datalevin-node";
+
+const kv = await openKv("/data/companydb");
+
+try {
+  const stats = await kv.stat();
+
+  await kv.openDbi("datalevin/eav");
+  const eavStats = await kv.stat("datalevin/eav");
+} finally {
+  await kv.close();
+}
+```
+
 ```console
 $ dtlv -d /data/companydb stat
 $ dtlv -d /data/companydb stat datalevin/eav
@@ -922,8 +1318,9 @@ controlled maintenance.
 
 ### 6.4 Replication and HA Checks
 
-For async replicas, monitor `datalevin.client/replica-status`, especially
-`:replica-lag-lsn`, `:replica-degraded-reason`, and `:replica-last-error`.
+For async replicas, monitor `replica-status` (`replicaStatus` in Java and
+JavaScript, `replica_status` in Python), especially `:replica-lag-lsn`,
+`:replica-degraded-reason`, and `:replica-last-error`.
 
 For HA clusters, monitor leader identity, follower lag, membership hash
 agreement, clock skew, and fencing health. Keep each node's `:ha-members` and
@@ -934,9 +1331,25 @@ promotable control-plane voters aligned with the authoritative membership hash.
 A service health check should prove that the application can reach the database
 path it depends on. For a Datalog database, use a scalar probe:
 
+<div class="multi-lang">
+
 ```clojure
-(d/q '[:find ?e . :where [?e _ _]] db)
+(d/q '[:find ?e . :where [?e _ _]] @conn)
 ```
+
+```java
+Object probe = conn.query("[:find ?e . :where [?e _ _]]");
+```
+
+```python
+probe = conn.query("[:find ?e . :where [?e _ _]]")
+```
+
+```javascript
+const probe = await conn.query("[:find ?e . :where [?e _ _]]");
+```
+
+</div>
 
 This is cheaper than returning a relation with `:limit 1`; the health check only
 needs one scalar value or `nil`.
@@ -945,7 +1358,6 @@ For server deployments, check both the server process and the application-level
 operation that your service needs, such as a read-only query for read endpoints
 or a small write in a dedicated health database for write-path checks.
 
----
 
 ## 7. Concurrency and Failure Handling
 
@@ -959,12 +1371,14 @@ code also needs a failure policy. Separate failures into three groups:
 3. **Operational failures**: the local store, WAL, remote server, or HA topology
    could not complete the write.
 
-Handle those groups differently. Retrying a validation error just repeats a
-bug. Retrying a CAS conflict can be correct if the operation re-reads current
-state on every attempt. Retrying an operational failure is only safe when the
-application operation is idempotent or has an idempotency key.
+Handle those groups differently, as shown in Figure 22.2.
 
 ![Failure and retry policy: a failed write is classified into a semantic failure (invalid data for the schema or state — do not retry, fix the cause), a logical conflict (a well-formed transaction whose condition such as :db/cas did not hold — re-read current state, recompute, and retry), or an operational failure (the store, WAL, remote server, or HA topology could not complete the write — retry only when the operation is idempotent and the topology is healthy)](/images/diagrams/failure-retry-policy.svg)
+
+Retrying a validation error just repeats a bug. Retrying a CAS conflict can be
+correct if the operation re-reads current state on every attempt. Retrying an
+operational failure is only safe when the application operation is idempotent or
+has an idempotency key.
 
 ### 7.1 The Write Serialization Model
 
@@ -1024,6 +1438,8 @@ In embedded Clojure, Java, or Python, prefer the Datalog transaction callback
 (`with-transaction`, `withTransaction`, or `with_transaction`) for
 read-modify-write logic that must be atomic within one store:
 
+<div class="multi-lang">
+
 ```clojure
 (defn increment-counter! [conn counter-id]
   (d/with-transaction [tx conn]
@@ -1039,15 +1455,65 @@ read-modify-write logic that must be atomic within one store:
           :counter/value (inc n)}]))))
 ```
 
+```java
+import datalevin.Connection;
+
+import java.util.List;
+import java.util.Map;
+
+void incrementCounter(Connection conn, String counterId) {
+    conn.withTransaction(tx -> {
+        Object value = tx.query("[:find ?n . " +
+            " :in $ ?id " +
+            " :where [?e :counter/id ?id] " +
+            "        [?e :counter/value ?n]]",
+            counterId);
+        long n = value == null ? 0L : ((Number) value).longValue();
+
+        tx.transact(List.of(
+            Map.of(":counter/id", counterId,
+                   ":counter/value", n + 1)));
+        return null;
+    });
+}
+```
+
+```python
+def increment_counter(conn, counter_id):
+    def body(tx):
+        value = tx.query(
+            '[:find ?n . '
+            ' :in $ ?id '
+            ' :where [?e :counter/id ?id] '
+            '        [?e :counter/value ?n]]',
+            counter_id)
+        n = value or 0
+
+        tx.transact([
+            {":counter/id": counter_id,
+             ":counter/value": n + 1}])
+
+    return conn.with_transaction(body)
+```
+
+</div>
+
 This pattern does not need a CAS retry loop because the read and write happen
 inside the same write transaction. Use it only for short critical sections. Do
 not perform HTTP calls, file uploads, email delivery, or long CPU work inside
 the transaction body.
 
+JavaScript does not expose the Datalog transaction callback. For JavaScript,
+keep the read-modify-write operation as a single `conn.transact(...)` when
+possible, use `:db/cas` for optimistic updates, or move the serialized command
+into the Datalevin-hosting process.
+
 When a write is intentionally optimistic, use CAS and retry at the application
 operation boundary. Re-read inside every attempt:
 
 <!-- pdf-listing: Optimistic CAS retry pattern -->
+
+<div class="multi-lang">
 
 ```clojure
 (defn cas-conflict?
@@ -1084,6 +1550,150 @@ operation boundary. Re-read inside every attempt:
            :account/balance balance (+ balance amount)]]))))
 ```
 
+```java
+import datalevin.DatalevinException;
+
+import java.util.List;
+import java.util.Map;
+import java.util.function.Supplier;
+
+boolean casConflict(Throwable e) {
+    if (e instanceof DatalevinException de
+        && de.getData() instanceof Map<?, ?> data) {
+        Object error = data.get(":error");
+        if (error == null) {
+            error = data.get("error");
+        }
+        return error != null && error.toString().contains("transact/cas");
+    }
+    return false;
+}
+
+<T> T retryCas(Supplier<T> f) {
+    for (int attempt = 1; ; attempt++) {
+        try {
+            return f.get();
+        } catch (DatalevinException e) {
+            if (!casConflict(e) || attempt >= 5) {
+                throw e;
+            }
+            try {
+                Thread.sleep(25L * attempt);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw e;
+            }
+        }
+    }
+}
+
+void deposit(Connection conn, String email, long amount) {
+    retryCas(() -> {
+        Object value = conn.query("[:find ?balance . " +
+            " :in $ ?email " +
+            " :where [?e :account/email ?email] " +
+            "        [?e :account/balance ?balance]]",
+            email);
+        long balance = value == null ? 0L : ((Number) value).longValue();
+
+        conn.transact(List.of(List.of(
+            ":db/cas",
+            List.of(":account/email", email),
+            ":account/balance",
+            balance,
+            balance + amount)));
+        return null;
+    });
+}
+```
+
+```python
+import time
+from datalevin import DatalevinError
+
+def cas_conflict(exc):
+    data = getattr(exc, "data", {}) or {}
+    return (data.get(":error") == ":transact/cas"
+            or data.get("error") == "transact/cas")
+
+def retry_cas(fn, max_attempts=5):
+    attempt = 1
+    while True:
+        try:
+            return fn()
+        except DatalevinError as exc:
+            if not cas_conflict(exc) or attempt >= max_attempts:
+                raise
+            time.sleep(0.025 * attempt)
+            attempt += 1
+
+def deposit(conn, email, amount):
+    def attempt():
+        balance = conn.query(
+            '[:find ?balance . '
+            ' :in $ ?email '
+            ' :where [?e :account/email ?email] '
+            '        [?e :account/balance ?balance]]',
+            email) or 0
+
+        return conn.transact([[
+            ":db/cas",
+            [":account/email", email],
+            ":account/balance",
+            balance,
+            balance + amount,
+        ]])
+
+    return retry_cas(attempt)
+```
+
+```javascript
+import { DatalevinError } from "datalevin-node";
+
+function casConflict(error) {
+  const data = error?.data ?? {};
+  return data[":error"] === ":transact/cas" ||
+         data.error === "transact/cas";
+}
+
+async function retryCas(fn, maxAttempts = 5) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (!(error instanceof DatalevinError) ||
+          !casConflict(error) ||
+          attempt >= maxAttempts) {
+        throw error;
+      }
+      await new Promise(resolve => setTimeout(resolve, 25 * attempt));
+    }
+  }
+}
+
+async function deposit(conn, email, amount) {
+  return retryCas(async () => {
+    const balance = await conn.query(
+      '[:find ?balance . ' +
+      ' :in $ ?email ' +
+      ' :where [?e :account/email ?email] ' +
+      '        [?e :account/balance ?balance]]',
+      email
+    ) ?? 0;
+
+    return conn.transact([[
+      ":db/cas",
+      [":account/email", email],
+      ":account/balance",
+      balance,
+      balance + amount
+    ]]);
+  });
+}
+```
+
+</div>
+
 The retry wrapper does not retry unique, lookup-ref, schema, or validation
 failures. It retries only CAS conflicts, and each retry re-reads the balance
 from a fresh DB snapshot before preparing a new transaction.
@@ -1119,7 +1729,6 @@ serializes writes for a store, exposes logical conflicts as exceptions, retries
 only safe internal resize events, and leaves application-level retries to the
 code that understands the business operation.
 
----
 
 ## Summary
 

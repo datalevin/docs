@@ -1,10 +1,10 @@
 ---
-title: "Using Datalevin as a Key–Value Store"
+title: "Key–Value Store"
 chapter: 10
 part: "II — Core APIs: Datalog First, KV When Needed"
 ---
 
-# Chapter 10: Using Datalevin as a Key–Value Store
+# Chapter 10: Key–Value Store
 
 As explored in Chapter 4, Datalevin is built on a high-performance Key-Value
 (KV) foundation. While Datalog is powerful for complex queries, sometimes a
@@ -21,7 +21,6 @@ need sorted-key access, custom indexes, list DBIs, scripting primitives, or
 performance-critical storage structures. For a compact list of all public KV
 functions, see Appendix F.
 
----
 
 ## 1. Opening a KV Store
 
@@ -144,7 +143,6 @@ const memKv = await openKv(null, { ":inmemory?": true });
 
 </div>
 
----
 
 ## 2. Sub-Databases (DBIs) and DUPSORT
 
@@ -226,7 +224,6 @@ await kv.openListDbi("tags");
 
 </div>
 
----
 
 ## 3. Data Types
 
@@ -509,7 +506,6 @@ the maximum key size is **511 bytes**.
 - **Large Values**: Standard (non-list) DBI values are not subject to this limit
   and can grow up to 2GB.
 
----
 
 ## 4. KV Operations
 
@@ -1199,7 +1195,6 @@ const sample = await kv.sampleKv("people", 2, {
 If `n` is larger than the number of entries in the DBI, `sample-kv` returns
 `nil`.
 
----
 
 ## 5. Explicit Transaction `with-transaction-kv`
 
@@ -1289,7 +1284,6 @@ write both Datalog data and custom KV DBIs in the same store, use Datalog
 `with-transaction` and access the transactional KV instance from inside that
 block; Chapter 6 shows the pattern.
 
----
 
 ## Summary
 

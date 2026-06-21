@@ -1,10 +1,10 @@
 ---
-title: "Document Modeling and Path-Based Access"
+title: "Document Modeling"
 chapter: 14
 part: "III — Modeling Across Paradigms"
 ---
 
-# Chapter 14: Document Modeling and Path-Based Access
+# Chapter 14: Document Modeling
 
 Datalevin gives you two ways to model document-shaped data: **logical
 documents**, built from normal datoms and component references, and **indexed
@@ -24,7 +24,6 @@ Python and JavaScript snippets assume open `conn` and `db` handles. When an
 example passes a Datalog form as data, non-Clojure snippets use EDN helpers such
 as `Datalevin.edn`, `interop().read_edn`, and `await interop().readEdn`.
 
----
 
 ## 1. Logical Documents with `:db/isComponent`
 
@@ -543,7 +542,6 @@ nested data is part of the application's long-lived domain model, turn it into
 normal Datalevin facts or component entities. If it is flexible document data
 that should be stored and searched by path, use `:db.type/idoc`.
 
----
 
 ## 2. Native Indexed Documents with `idoc`
 
@@ -1037,7 +1035,6 @@ Patch paths are vectors of map keys and vector indices. Supported operations are
 For cardinality-many idoc attributes, provide the old document value so
 Datalevin can identify which value should be patched.
 
----
 
 ## 3. Querying Path-Indexed Documents
 
@@ -1392,7 +1389,6 @@ await conn.query('[:find ?e ?email ' +
 
 When a path traverses arrays, `idoc-get` returns a vector of matching values.
 
----
 
 ## 4. How `idoc` Indexes Work
 
@@ -1413,7 +1409,6 @@ filters, but the document remains one value from the perspective of ordinary
 datoms. If a nested field deserves identity, constraints, independent history, or
 joins as a first-class fact, model that part with normal attributes instead.
 
----
 
 ## 5. Choosing Between Logical Documents and `idoc`
 
@@ -1435,7 +1430,6 @@ These models can coexist on the same entity. A product can have structured facts
 for price and inventory, component entities for variants, full-text fields for
 descriptions, and an idoc attribute for merchant-specific metadata.
 
----
 
 ## Summary
 

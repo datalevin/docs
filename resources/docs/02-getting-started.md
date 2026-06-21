@@ -1,5 +1,5 @@
 ---
-title: "Getting Started: Your First Datalevin Session"
+title: "Your First Datalevin Session"
 chapter: 2
 part: "I — Foundations: A Multi-Paradigm Database"
 ---
@@ -21,12 +21,13 @@ examples. To understand the shape of the EDN data format we use, consult
 Appendix B. The web edition includes parallel Java, Python, and JavaScript
 examples where the bindings expose equivalent APIs.
 
----
 
 ## Before You Start
 
 You need Java 21 or newer. First we will create a Clojure project that depends
-on the Datalevin library. The examples use released package version
+on the Datalevin library. This book targets the Datalevin 1.0.x release line;
+for the dependency coordinate in this starter project, use the current released
+1.0.x package version. In this edition, that version is shown as
 `{{datalevin-version}}`. If you are reading an older copy, check the package
 page or the Datalevin GitHub repository for the current release.
 
@@ -52,7 +53,6 @@ Then start a REPL with `clojure -M:datalevin/jvm`.
 Appendix A has the full installation matrix, including Leiningen, Java, Python,
 Node.js, the standalone `dtlv` executable, Docker, and Babashka setup.
 
----
 
 ## 1. Open a Database
 
@@ -159,7 +159,6 @@ directory does not exist, Datalevin creates it. If the database already exists,
 Datalevin opens it and uses the supplied schema to ensure the attributes are
 available.
 
----
 
 ## 2. Transact Facts
 
@@ -231,7 +230,6 @@ transaction that introduces previously unknown attributes may also include
 Some application code may want to inspect the report when it needs to see what
 datoms are transacted, what ids are generated, or to audit other details.
 
----
 
 ## 3. Query the Database
 
@@ -312,7 +310,6 @@ surrounding code, where they would be considered undefined.
 database view. Reads use a stable view while writes advance the connection to a
 newer database object.
 
----
 
 ## 4. Pull One Entity
 
@@ -354,7 +351,6 @@ This works because the attribute `:user/name` has the `:db.unique/identity`
 property in the schema. The important part is that `[:user/name "Alice"]` names the entity
 without requiring you to know its internal entity id.
 
----
 
 ## 5. Close and Reopen
 
@@ -442,7 +438,6 @@ await conn2.close();
 If you want to rerun the whole session from a blank database, remove the
 directory named by `db-path` before starting again, or start with a new path.
 
----
 
 ## 6. Use an In-Memory Database for Scratch Work
 
@@ -485,7 +480,6 @@ store. With this, this database does not persist to disk. Closing the connection
 or ending the process loses the contents. Use a real directory path when the
 data must survive process restart.
 
----
 
 ## 7. Connection Lifecycle
 
@@ -507,7 +501,6 @@ For a persistent application database, prefer `d/get-conn` at the application
 boundary and share the returned connection. Short-lived connections are fine for
 REPL experiments, scripts, and tests.
 
----
 
 ## Troubleshooting
 
@@ -521,7 +514,6 @@ If the first session does not run:
 5. Remove `/tmp/datalevin-book-getting-started` if you want a completely fresh
    run.
 
----
 
 ## Next Steps
 

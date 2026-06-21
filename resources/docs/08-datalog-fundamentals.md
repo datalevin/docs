@@ -24,17 +24,12 @@ unification, conjunction, predicates, rules, and recursive derivation.
 This chapter covers the fundamentals of writing Datalog queries, the role of the
 query optimizer, and best practices for performance.
 
----
 
 ## 1. The Declarative Nature of Datalog
 
 The most important concept to understand about Datalog is that it is
 declarative. The `:where` clauses in a query define a *set of constraints*. You
 are not providing a step-by-step procedure for the database to follow.
-
-The Java, Python, and JavaScript snippets in this chapter assume an open
-connection named `conn`. Calling `conn.query` supplies the connection's current
-database as `$`; pass only additional `:in` values after the query string.
 
 <div class="multi-lang">
 
@@ -288,7 +283,6 @@ This is the core Datalog mental model: data patterns create candidate bindings,
 shared variables join those bindings by equality, predicates filter rows, and
 `:find` shapes the surviving values into the result.
 
----
 
 ## 2. The `:find` Specification: Shaping Your Results
 
@@ -633,7 +627,6 @@ This query finds all users in London and, for each one, pulls their name and
 a nested list of their orders. The result is a collection of maps, ready to be
 used by your application.
 
----
 
 ## 3. Declarative Power: The Query Optimizer
 
@@ -650,7 +643,6 @@ finding the London users first, as it's a much smaller set to filter.
 > `:where` clauses. State your constraints clearly and let the optimizer do its
 > job.
 
----
 
 ## 4. Predicates and Function Bindings
 
@@ -781,7 +773,6 @@ The resolution of functions follows these rules:
 The `is-adult?` function is not built-in, so its namespace must be included to
 qualify it; otherwise, the function cannot be found.
 
----
 
 ## 5. Query Modifiers and Post-Processing
 
@@ -1108,7 +1099,6 @@ in the query's result columns. When ordering by an aggregate result, use the
 appropriate result-column index in `:order-by`, as shown earlier in this
 section.
 
----
 
 ## 6. Logical `or` and `not`
 
@@ -1171,7 +1161,6 @@ alternative needs more than one clause, wrap those clauses in `(and ...)`:
          [?e :user/review-required? true]))
 ```
 
----
 
 ## 7. Subqueries: The Right Way and the Wrong Way
 
@@ -1282,7 +1271,6 @@ nested `q` approach.
 
 Figure 8.3 shows the different approaches visually.
 
----
 
 ## 8. Flexible Data Sources: Beyond a Single Database
 
@@ -1460,7 +1448,6 @@ The EAV model is not just a storage format, but also a universal data representa
 that makes Datalevin's query engine applicable far beyond traditional database
 use cases.
 
----
 
 ## Summary
 
