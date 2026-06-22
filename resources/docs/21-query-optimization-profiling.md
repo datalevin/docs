@@ -584,7 +584,7 @@ estimated cardinalities without paying query execution cost.
            [?e :user/age ?age]
            [(> ?age 30)]])
 
-(d/explain {} query @conn)
+(d/explain {} query (d/db conn))
 ```
 
 ```java
@@ -679,7 +679,7 @@ the query and augments the explain map with fields such as `:execution-time`,
 <div class="multi-lang">
 
 ```clojure
-(d/explain {:run? true} query @conn)
+(d/explain {:run? true} query (d/db conn))
 ```
 
 ```java

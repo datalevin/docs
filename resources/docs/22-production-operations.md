@@ -940,7 +940,7 @@ Replica reads use normal APIs. User writes are rejected by the replica server:
 <div class="multi-lang">
 
 ```clojure
-(d/q '[:find [?name ...] :where [?e :name ?name]] @replica-conn)
+(d/q '[:find [?name ...] :where [?e :name ?name]] (d/db replica-conn))
 
 ;; Throws: Replica is read-only
 (d/transact! replica-conn [{:db/id -1 :name "blocked"}])
@@ -1334,7 +1334,7 @@ path it depends on. For a Datalog database, use a scalar probe:
 <div class="multi-lang">
 
 ```clojure
-(d/q '[:find ?e . :where [?e _ _]] @conn)
+(d/q '[:find ?e . :where [?e _ _]] (d/db conn))
 ```
 
 ```java
@@ -1538,7 +1538,7 @@ operation boundary. Re-read inside every attempt:
 
 (defn deposit! [conn email amount]
   (retry-cas
-    #(let [db      @conn
+    #(let [db      (d/db conn)
            balance (or (d/q '[:find ?balance .
                               :in $ ?email
                               :where [?e :account/email ?email]

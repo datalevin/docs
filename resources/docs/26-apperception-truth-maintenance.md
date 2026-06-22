@@ -328,7 +328,7 @@ transition atomic and inspectable:
        :where [?fact :fact/kind ?kind]
               [?fact :fact/status ?status]
               [?fact :fact/content ?content]]
-     @conn :preference/deployment-window)
+     (d/db conn) :preference/deployment-window)
 ```
 
 ```java

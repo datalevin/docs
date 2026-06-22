@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Datalevin logo</title>
+  <desc id="desc">A navy hexagon with a mint lightning bolt.</desc>
+  <polygon fill="#273b6b" points="200,0 373,100 373,300 200,400 27,300 27,100"/>
+  <path fill="#8bd8bf" d="M234 52 L118 224 H187 L162 347 L281 176 H210 Z"/>
+</svg>

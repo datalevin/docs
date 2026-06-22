@@ -745,7 +745,7 @@ links queryable.
        :where [?f :fact/status :fact.status/pending]
               [?f :fact/content ?content]
               [?f :fact/confidence ?confidence]]
-     @conn)
+     (d/db conn))
 ```
 
 ```java

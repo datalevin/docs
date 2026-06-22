@@ -24,7 +24,7 @@ work together.
 
 The Java, Python, and JavaScript snippets assume an open connection named
 `conn`. Clojure snippets use `conn` for a connection and `db` for a Datalog DB
-object obtained with `(d/db conn)` or `@conn`.
+object obtained with `(d/db conn)`.
 
 Datalevin's `db` is not a Datomic-style immutable snapshot value. It is a
 mutable DB object/reference used by read APIs. Treat it as a read handle for the
@@ -34,6 +34,10 @@ Call `(d/db conn)` when you need to read the connection's current state. Do not
 save a `db` object or an entity object and expect it to follow later
 transactions; if freshness matters after a write, get a new `db` from the
 connection before reading.
+
+You may see `@conn` in older examples or REPL notes. Treat that as Clojure
+deref shorthand that relies on connection implementation details, not as the
+recommended public style. This book uses `(d/db conn)` consistently.
 
 
 ## 1. Reading by Identity with Lookup Refs

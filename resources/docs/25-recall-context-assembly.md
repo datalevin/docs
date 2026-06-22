@@ -499,7 +499,7 @@ refresh logic can inspect it.
   [{:fact-id (d/q '[:find ?id .
                     :where [?f :fact/status :fact.status/pending]
                            [?f :fact/id ?id]]
-                  @conn)
+                  (d/db conn))
     :relevance 0.91
     :reason "The current task asks for release-note guidance."
     :pinned? true}])

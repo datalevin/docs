@@ -411,7 +411,7 @@ connection and KV handles.
 
 ```clojure
 ;; Copy a live Datalog database from a connection
-(d/copy @conn "/path/to/backup-db")
+(d/copy (d/db conn) "/path/to/backup-db")
 
 ;; Copy a raw KV store
 (d/copy kv "/path/to/backup-kv")
@@ -488,7 +488,7 @@ backup artifact.
 
 ```clojure
 ;; Copy and compact a Datalog database
-(d/copy @conn "/path/to/compact-backup-db" true)
+(d/copy (d/db conn) "/path/to/compact-backup-db" true)
 
 ;; Copy and compact a raw KV store
 (d/copy kv "/path/to/compact-backup-kv" true)

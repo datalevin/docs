@@ -1071,7 +1071,7 @@ The program below implements this loop end to end.
 
 (defn create-doc-review-task!
   [conn fact-id]
-  (let [db           @conn
+  (let [db           (d/db conn)
         topic        (d/q '[:find ?topic .
                             :in $ ?fact-id
                             :where [?f :fact/id ?fact-id]
@@ -1120,7 +1120,7 @@ The program below implements this loop end to end.
     {:task/id task-id
      :wm/id wm-id}))
 
-(def candidate (first (candidate-gaps @conn)))
+(def candidate (first (candidate-gaps (d/db conn))))
 (def fact-id (accept-gap-fact! conn candidate))
 (def task-ref (create-doc-review-task! conn fact-id))
 
@@ -1132,11 +1132,11 @@ The program below implements this loop end to end.
                  [?f :fact/status ?status]
                  [?f :fact/content ?content]
                  [?f :fact/confidence ?confidence]]
-        @conn)
+        (d/db conn))
 
    ;; Recall: evidence that explains why the fact exists.
    :recall-context
-   (recall-gap-context @conn "backup and restore")
+   (recall-gap-context (d/db conn) "backup and restore")
 
    ;; Task state: reviewable work item, not an automatic publication.
    :task-state
@@ -1145,7 +1145,7 @@ The program below implements this loop end to end.
                  [?task :task/title ?title]
                  [?task :task/state ?state]
                  [?task :task/contract ?contract]]
-        @conn)
+        (d/db conn))
 
    ;; Working memory: bounded context selected for this task.
    :working-memory
@@ -1155,7 +1155,7 @@ The program below implements this loop end to end.
                  [?slot :wm.slot/reason ?reason]
                  [?slot :wm.slot/entity ?entity]
                  [?entity :episode/summary ?summary]]
-        @conn)})
+        (d/db conn))})
 
 (d/close conn)
 

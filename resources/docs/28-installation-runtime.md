@@ -412,17 +412,17 @@ A quick smoke test with `dtlv exec` is:
 
 ```console
 dtlv exec <<'EOF'
-(def conn (get-conn "dtlv://datalevin:secret@localhost:8898/getting-started"))
-(transact! conn [{:user/name "Server Alice"}])
-(q '[:find [?name ...] :where [_ :user/name ?name]] @conn)
-(close conn)
+(require '[datalevin.core :as d])
+(def conn (d/get-conn "dtlv://datalevin:secret@localhost:8898/getting-started"))
+(d/transact! conn [{:user/name "Server Alice"}])
+(d/q '[:find [?name ...] :where [_ :user/name ?name]] (d/db conn))
+(d/close conn)
 EOF
 ```
 
 The query should return `["Server Alice"]`, possibly with set/vector rendering
-depending on the client surface. In Clojure, `@conn` dereferences the connection
-and returns the current database value, the same value you would get from
-`(d/db conn)` in namespace-qualified application code.
+depending on the client surface. In Clojure, prefer `(d/db conn)` when a read
+API needs the current Datalog DB object.
 
 
 ## 10. Replication and High Availability
@@ -457,10 +457,11 @@ For a copy-paste local CLI example:
 
 ```console
 dtlv exec <<'EOF'
-(def conn (get-conn "/tmp/dtlv-cli"))
-(transact! conn [{:msg "Hello from dtlv"}])
-(q '[:find [?m ...] :where [_ :msg ?m]] @conn)
-(close conn)
+(require '[datalevin.core :as d])
+(def conn (d/get-conn "/tmp/dtlv-cli"))
+(d/transact! conn [{:msg "Hello from dtlv"}])
+(d/q '[:find [?m ...] :where [_ :msg ?m]] (d/db conn))
+(d/close conn)
 EOF
 ```
 
