@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="885" height="1378" viewBox="0 -130 885 1378" role="img" aria-labelledby="title desc">
+  <title id="title">Calero Creek Press owl mark</title>
+  <desc id="desc">A one-color contour silhouette based on the wooden owl clock used for the Calero Creek Press imprint.</desc>
+  <path fill="#0f766e" fill-rule="evenodd" d="M 437 0 L 285 22 L 155 70 L 54 148 L 9 223 L 0 312 L 28 424 L 170 601 L 49 900 L 25 1124 L 34 1150 L 76 1149 L 249 1091 L 436 1122 L 470 1172 L 446 1234 L 489 1247 L 524 1227 L 565 1238 L 599 1218 L 703 1215 L 638 1165 L 650 1098 L 767 1042 L 844 945 L 870 776 L 794 539 L 872 390 L 884 265 L 849 140 L 765 60 L 634 12 Z M 74 318 A 205 205 0 1 0 484 318 A 205 205 0 1 0 74 318 Z M 414 318 A 205 205 0 1 0 824 318 A 205 205 0 1 0 414 318 Z M 407 515 C 407 482 463 482 464 516 C 465 550 440 575 436 610 C 429 576 407 550 407 515 Z"/>
+  <path fill="#0f766e" d="M 56 168 L 212 -126 L 392 74 C 266 58 150 100 56 168 Z M 494 74 L 686 -126 L 836 168 C 742 100 620 58 494 74 Z"/>
+  <g fill="none" stroke="#0f766e" stroke-width="28" stroke-linecap="round">
+    <path d="M279 236 L279 145 M337 260 L401 196 M361 318 L452 318 M337 376 L401 440 M279 400 L279 491 M221 376 L157 440 M197 318 L106 318 M221 260 L157 196"/>
+    <path d="M619 236 L619 145 M677 260 L741 196 M701 318 L792 318 M677 376 L741 440 M619 400 L619 491 M561 376 L497 440 M537 318 L446 318 M561 260 L497 196"/>
+  </g>
+  <path fill="#0f766e" fill-rule="evenodd" d="M 229 318 A 50 50 0 1 0 329 318 A 50 50 0 1 0 229 318 Z M 261 318 A 18 18 0 1 1 297 318 A 18 18 0 1 1 261 318 Z M 569 318 A 50 50 0 1 0 669 318 A 50 50 0 1 0 569 318 Z M 601 318 A 18 18 0 1 1 637 318 A 18 18 0 1 1 601 318 Z"/>
+</svg>
