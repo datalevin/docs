@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="7in" height="9.25in" viewBox="0 0 2100 2775" role="img" aria-labelledby="title desc">
   <title id="title">Front cover for Datalevin: The Definitive Guide to Logical and Intelligent Databases</title>
-  <desc id="desc">A bold dark front cover at 7 by 9.25 inch trim. A glowing central Datalevin hexagon logo is the hub of a radial diagram, with six paradigms (Datalog, Graph, Search, Vectors, Key-Value, AI Memory) orbiting it. Title, subtitle, author Huahai Yang, and imprint Calero Creek Press.</desc>
+  <desc id="desc">A bold dark front cover at 7 by 9.25 inch trim. A glowing central Datalevin hexagon logo is the hub of a radial diagram, with six paradigms (Datalog, Graph, Search, Documents, Key-Value, AI Memory) orbiting it. Title, subtitle, author Huahai Yang, and imprint Calero Creek Press.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#0e2942"/>
@@ -88,11 +88,11 @@
   <text class="node" x="1582" y="1872" text-anchor="start">Search</text>
   <text class="nodesub" x="1582" y="1904" text-anchor="start">text + vector</text>
 
-  <!-- Vectors (bottom) -->
+  <!-- AI Memory (bottom) -->
   <circle cx="1050" cy="2160" r="26" fill="none" stroke="#d28a62" stroke-width="3" opacity="0.5"/>
   <circle cx="1050" cy="2160" r="14" fill="#d28a62"/>
-  <text class="node" x="1050" y="2226" text-anchor="middle">Vectors</text>
-  <text class="nodesub" x="1050" y="2258" text-anchor="middle">HNSW neighbors</text>
+  <text class="node" x="1050" y="2226" text-anchor="middle">AI Memory</text>
+  <text class="nodesub" x="1050" y="2258" text-anchor="middle">episodes + facts</text>
 
   <!-- Key-Value (lower left) -->
   <circle cx="565" cy="1880" r="26" fill="none" stroke="#7fb8e0" stroke-width="3" opacity="0.5"/>
@@ -100,11 +100,11 @@
   <text class="node" x="518" y="1872" text-anchor="end">Key-Value</text>
   <text class="nodesub" x="518" y="1904" text-anchor="end">LMDB store</text>
 
-  <!-- AI Memory (upper left) -->
+  <!-- Documents (upper left) -->
   <circle cx="565" cy="1320" r="26" fill="none" stroke="#46c0a8" stroke-width="3" opacity="0.5"/>
   <circle cx="565" cy="1320" r="14" fill="#46c0a8"/>
-  <text class="node" x="518" y="1312" text-anchor="end">AI Memory</text>
-  <text class="nodesub" x="518" y="1344" text-anchor="end">episodes + facts</text>
+  <text class="node" x="518" y="1312" text-anchor="end">Documents</text>
+  <text class="nodesub" x="518" y="1344" text-anchor="end">idoc paths</text>
 
   <!-- Hub: brighter gradient hex + mint outline + bolt -->
   <polygon fill="url(#hexGrad)" points="1050,1400 1223,1500 1223,1700 1050,1800 877,1700 877,1500"/>

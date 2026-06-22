@@ -19,7 +19,7 @@ with read-only replicas, a high-availability server cluster, a command-line
 tool, a Babashka pod, or a local MCP tool server. The same core concepts appear
 in each mode: a path or URI names the database, schema describes attribute
 behavior, transactions add or retract facts, and Datalog queries read through a
-current database value.
+current database state.
 
 Most readers should start with embedded mode. It has the fewest moving parts
 and uses the same transactions, schema, and Datalog queries as the other modes.

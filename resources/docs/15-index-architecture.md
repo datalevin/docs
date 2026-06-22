@@ -82,12 +82,12 @@ This distinction explains a recurring convention in the book: `[e a v]` means
 the extra transaction metadata needed by lower-level APIs and transaction
 reports.
 
-The connection to database history is direct. One way to support
-database-as-value history is to store the transaction dimension with every
-datom: keep each assertion and retraction with its transaction id, then
-reconstruct an old database value by selecting the datoms whose transaction ids
-are visible at that point in time. Datalevin deliberately does not make that
-per-datom transaction dimension part of the persistent EAV/AVE indexes.
+The contrast with database-as-value systems is direct. One way to support that
+style of history is to store the transaction dimension with every datom: keep
+each assertion and retraction with its transaction id, then answer historical
+queries by selecting the datoms whose transaction ids are visible at a chosen
+point in time. Datalevin deliberately does not make that per-datom transaction
+dimension part of the persistent EAV/AVE indexes.
 
 **Why not database-as-value history?** Datalevin is designed first as an OLTP
 database: an operational store for current application state. For that workload,

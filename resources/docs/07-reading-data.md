@@ -26,14 +26,17 @@ The Java, Python, and JavaScript snippets assume an open connection named
 `conn`. Clojure snippets use `conn` for a connection and `db` for a Datalog DB
 object obtained with `(d/db conn)`.
 
-Datalevin's `db` is not a Datomic-style immutable snapshot value. It is a
-mutable DB object/reference used by read APIs. Treat it as a read handle for the
-current operation, not as durable application state.
+Datalevin's `db` is not a Datomic-style immutable database-as-value object. It
+is a mutable DB object/reference used by read APIs. Treat it as access to the
+current database state for the current operation, not as durable application
+state.
 
 Call `(d/db conn)` when you need to read the connection's current state. Do not
-save a `db` object or an entity object and expect it to follow later
-transactions; if freshness matters after a write, get a new `db` from the
-connection before reading.
+save a `db` object or an entity object and expect it to remain meaningful after
+later transactions; if you are making a new decision, get a new `db` from the
+connection before reading. There is no application-level concept of an "old
+db" in Datalevin. A saved DB object is better understood as an expired
+reference, not as something the application can treat as an earlier world.
 
 You may see `@conn` in older examples or REPL notes. Treat that as Clojure
 deref shorthand that relies on connection implementation details, not as the
@@ -665,7 +668,7 @@ listed in `:in`; additional Datalevin connections can be passed as query inputs.
        :in $users $orders
        :where [$users ?user :user/email ?email]
               [$orders ?order :order/customer-email ?email]]
-     users-db orders-db)
+     (d/db users-conn) (d/db orders-conn))
 ```
 
 ```java
@@ -1484,12 +1487,12 @@ await aliceV2.get(":user/name");
 
 </div>
 
-The same rule applies to `db1` itself: it is the DB object that was current when
-`(d/db conn)` was called. For the latest committed state, call `(d/db conn)`
-again after the transaction. In Java, Python, and JavaScript, reacquire the
-entity or map from the connection after a write when you need the latest
-committed state. Reads are stable because they are against a specific DB object,
-not a moving connection.
+The same rule applies to `db1` itself: it was the DB object for the read you
+were doing then. For a later read, call `(d/db conn)` again after the
+transaction. In Java, Python, and JavaScript, reacquire the entity or map from
+the connection after a write when you need to observe current state. Reads are
+stable for the operation because they use a specific DB object, not a moving
+connection.
 
 ### 6.4 Why Chapter 6 Uses `d/entity`
 

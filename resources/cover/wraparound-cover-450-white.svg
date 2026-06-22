@@ -29,6 +29,10 @@
       <stop offset="0.48" stop-color="#1f9e7e" stop-opacity="0.12"/>
       <stop offset="1" stop-color="#1f9e7e" stop-opacity="0"/>
     </radialGradient>
+    <filter id="grain" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.5" numOctaves="2" seed="11" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
     <style>
       .cover-cream { fill: #f4f6f2; }
       .cover-muted { fill: #d7e1ea; }
@@ -58,7 +62,7 @@
 
   <text class="cover-heading" x="252" y="284">DATABASES · DATALOG · AGENT MEMORY</text>
   <text class="cover-title" x="252" y="410">One database for facts, logic,</text>
-  <text class="cover-title" x="252" y="486">search, and durable memory.</text>
+  <text class="cover-title" x="252" y="486">search, graph, and durable memory.</text>
   <rect class="cover-rule" x="252" y="548" width="260" height="6" rx="3"/>
 
   <text class="cover-body" x="252" y="672">
@@ -109,8 +113,7 @@
 
   <!-- Spine -->
   <rect x="2137.5" y="0" width="304.02" height="2850" fill="#071525" opacity="0.82"/>
-  <rect x="2137.5" y="0" width="2" height="2850" fill="#9db0c1" opacity="0.16"/>
-  <rect x="2439.52" y="0" width="2" height="2850" fill="#9db0c1" opacity="0.16"/>
+  <!-- spine edge hairlines removed: they could telegraph as a defect on a binding shift -->
   <rect class="cover-mint" x="2137.5" y="0" width="304.02" height="10"/>
   <text class="spine-author" x="2289.51" y="214" text-anchor="middle">HUAHAI</text>
   <text class="spine-author" x="2289.51" y="264" text-anchor="middle">YANG</text>
@@ -129,12 +132,12 @@
   </g>
 
   <!-- Front cover panel, embedded as vector artwork. -->
-  <svg x="2441.52" y="37.5" width="2100" height="2775" viewBox="0 0 2100 2775">
+  <svg x="2441.52" y="0" width="2137.5" height="2850" viewBox="0 -37.5 2137.5 2850" preserveAspectRatio="xMidYMid meet">
     <defs>
       <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0" stop-color="#0e2942"/>
         <stop offset="0.55" stop-color="#0a1c30"/>
-        <stop offset="1" stop-color="#06101c"/>
+        <stop offset="1" stop-color="#0a1828"/>
       </linearGradient>
       <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
         <stop offset="0" stop-color="#2bc6a0" stop-opacity="0.42"/>
@@ -172,8 +175,8 @@
       </style>
     </defs>
 
-    <rect x="0" y="0" width="2100" height="2775" fill="url(#bg)"/>
-    <rect class="mint" x="0" y="0" width="2100" height="10"/>
+    <rect x="0" y="-37.5" width="2137.5" height="2850" fill="url(#bg)"/>
+    <rect class="mint" x="0" y="-37.5" width="2137.5" height="10"/>
 
     <text class="kicker" x="1050" y="296" text-anchor="middle">DATABASES · DATALOG · AGENT MEMORY</text>
     <text class="title" x="1050" y="540" text-anchor="middle"><tspan fill="#f4f6f2">Data</tspan><tspan fill="#7ad9b9">levin</tspan></text>
@@ -210,8 +213,8 @@
 
     <circle cx="1050" cy="2160" r="26" fill="none" stroke="#d28a62" stroke-width="3" opacity="0.5"/>
     <circle cx="1050" cy="2160" r="14" fill="#d28a62"/>
-    <text class="node" x="1050" y="2226" text-anchor="middle">Vectors</text>
-    <text class="nodesub" x="1050" y="2258" text-anchor="middle">HNSW neighbors</text>
+    <text class="node" x="1050" y="2226" text-anchor="middle">AI Memory</text>
+    <text class="nodesub" x="1050" y="2258" text-anchor="middle">episodes + facts</text>
 
     <circle cx="565" cy="1880" r="26" fill="none" stroke="#7fb8e0" stroke-width="3" opacity="0.5"/>
     <circle cx="565" cy="1880" r="14" fill="#7fb8e0"/>
@@ -220,8 +223,8 @@
 
     <circle cx="565" cy="1320" r="26" fill="none" stroke="#46c0a8" stroke-width="3" opacity="0.5"/>
     <circle cx="565" cy="1320" r="14" fill="#46c0a8"/>
-    <text class="node" x="518" y="1312" text-anchor="end">AI Memory</text>
-    <text class="nodesub" x="518" y="1344" text-anchor="end">episodes + facts</text>
+    <text class="node" x="518" y="1312" text-anchor="end">Documents</text>
+    <text class="nodesub" x="518" y="1344" text-anchor="end">idoc paths</text>
 
     <polygon fill="url(#hexGrad)" points="1050,1400 1223,1500 1223,1700 1050,1800 877,1700 877,1500"/>
     <polygon class="hexring" points="1050,1388 1233.6,1494 1233.6,1706 1050,1812 866.4,1706 866.4,1494"/>
@@ -244,4 +247,7 @@
 
     <text class="imprint" x="1050" y="2724" text-anchor="middle">CALERO CREEK PRESS</text>
   </svg>
+
+  <!-- subtle grayscale grain over the whole cover to dither out gradient banding in CMYK print -->
+  <rect x="0" y="0" width="4579.02" height="2850" filter="url(#grain)" opacity="0.07"/>
 </svg>

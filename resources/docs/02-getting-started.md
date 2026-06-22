@@ -233,7 +233,7 @@ datoms are transacted, what ids are generated, or to audit other details.
 
 ## 3. Query the Database
 
-Read the current database snapshot from the connection and query it:
+Read the current database state from the connection and query it:
 
 <div class="multi-lang">
 
@@ -306,9 +306,10 @@ Careful readers may notice that the whole query was prefixed by a quotation mark
 variable symbols in the query are meaningful only inside that query, not for the
 surrounding code, where they would be considered undefined.
 
-`(d/db conn)` returns a database object that holds a snapshot of the current
-database view. Reads use a stable view while writes advance the connection to a
-newer database object.
+`(d/db conn)` gives the read APIs access to the current database state. A DB
+object is not a durable value to save and reuse later. Treat it like a fresh
+look at a changing external world: get it when you are about to read, use it for
+that operation, and ask the connection again before making a later decision.
 
 
 ## 4. Pull One Entity
@@ -517,8 +518,9 @@ If the first session does not run:
 
 ## Next Steps
 
-You have seen the core loop: open a connection, transact facts, query a database
-snapshot, and close the connection. Chapter 3 explains the mental model behind
-those operations. Chapter 4 explains the storage layer that makes the operations
-fast and durable. Chapter 5 explains attributes and entities in depth. Appendix
-A covers details of Datalevin installation and deployment options.
+You have seen the core loop: open a connection, transact facts, query current
+database state, and close the connection. Chapter 3 explains the mental model
+behind those operations. Chapter 4 explains the storage layer that makes the
+operations fast and durable. Chapter 5 explains attributes and entities in
+depth. Appendix A covers details of Datalevin installation and deployment
+options.

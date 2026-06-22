@@ -5,14 +5,13 @@ chapter: 0
 
 # Preface
 
-Modern applications rarely fit inside one traditional database model.
-
-An application may need transactional updates, graph-shaped relationships,
+Modern applications rarely fit inside one traditional database model. An
+application may need transactional updates, graph-shaped relationships,
 document-shaped payloads, fast key-value access, full-text search, vector
 similarity, analytics over recent activity, and long-term state that can be
 explained later. In many systems, each requirement becomes another service:
-PostgreSQL for records, Redis for low-latency state, Elasticsearch for search,
-a vector database for embeddings, a document store for flexible payloads, and a
+PostgreSQL for records, Redis for low-latency state, Elasticsearch for search, a
+vector database for embeddings, a document store for flexible payloads, and a
 queue or workflow engine for long-running tasks.
 
 That architecture can work. It also creates friction. Data has to be copied
@@ -384,7 +383,13 @@ grounded in real systems.
 This book has already benefited from volunteer reviewers in the Datalevin
 community who read draft chapters, ran examples, questioned unclear
 explanations, found inconsistent terminology, and pointed out places where the
-book assumed too much background. I am grateful for their contributions.
+book assumed too much background: Norbert Wójtowicz,  I am grateful for their
+contributions.
+
+<div class="preface-signature" style="text-align: right; margin-top: 2rem;">
+Huahai Yang<br>
+June 2026
+</div>
 
 ## Notes
 

@@ -11,6 +11,7 @@
 (def docs-dir "resources/docs")
 (def pdf-dir "target/pdf")
 (def converted-image-dir (str pdf-dir "/images"))
+(def title-page-owl-pdf (str converted-image-dir "/cover/owl-logo.pdf"))
 (def index-terms-file (str docs-dir "/index-terms.edn"))
 (def final-pdf-stem "datalevin-definitive-guide")
 (def final-md-file (str pdf-dir "/" final-pdf-stem ".md"))
@@ -467,6 +468,25 @@
    (fn [[_ title]]
      (str "\n\\dlcodelisting{" (latex-index-escape (str/trim title)) "}\n"))))
 
+(declare latex-escape)
+
+(defn- replace-signature-blocks
+  [markdown]
+  (str/replace
+   markdown
+   #"(?s)<div class=\"preface-signature\"[^>]*>\s*(.*?)\s*</div>"
+   (fn [[_ body]]
+     (let [lines (->> (-> body
+                          (str/replace #"(?i)<br\s*/?>" "\n")
+                          (str/replace #"<[^>]+>" "")
+                          str/split-lines)
+                      (map str/trim)
+                      (remove str/blank?))]
+       (str "\n\\vspace{1em}\n"
+            "\\begin{flushright}\n"
+            (str/join "\\\\\n" (map latex-escape lines))
+            "\n\\end{flushright}\n")))))
+
 (defn- prepare-markdown
   ([file heading-fn]
    (prepare-markdown file heading-fn nil))
@@ -476,6 +496,7 @@
                       strip-frontmatter
                       substitute-vars
                       rewrite-image-paths
+                      replace-signature-blocks
                       remove-multi-lang-html
                       keep-clojure-fences-only
                       show-external-link-urls
@@ -565,11 +586,16 @@
    "\\begin{titlepage}"
    "\\thispagestyle{empty}"
    "\\vspace*{0.14\\textheight}"
-   "{\\raggedright\\sffamily\\bfseries\\color{dlblue}\\fontsize{24}{30}\\selectfont\\@title\\par}"
-   "\\vfill"
+   "\\begin{center}"
+   "{\\sffamily\\bfseries\\color{dlblue}\\fontsize{24}{30}\\selectfont\\@title\\par}"
+   "\\vspace{2em}"
    "{\\sffamily\\Large\\@author\\par}"
-   "\\vspace{0.75em}"
+   "\\end{center}"
+   "\\vfill"
+   "\\begin{center}"
+   (str "\\includegraphics[height=0.58in]{" title-page-owl-pdf "}\\\\[0.7em]")
    "{\\sffamily\\large\\@date\\par}"
+   "\\end{center}"
    "\\end{titlepage}}"
    "\\makeatother"])
 
@@ -1458,9 +1484,12 @@
   []
   (let [fonts-conf (write-fonts-conf!)
         env (font-render-env fonts-conf)]
-    (doseq [svg (->> (file-seq (jio/file "resources/public/images"))
-                     (filter svg-file?))]
-      (let [relative-svg-path (relative-path "resources/public/images" svg)
+    (doseq [[svg-root svg] (concat
+                            (->> (file-seq (jio/file "resources/public/images"))
+                                 (filter svg-file?)
+                                 (map #(vector "resources/public/images" %)))
+                            [["resources" (jio/file "resources/cover/owl-logo.svg")]])]
+      (let [relative-svg-path (relative-path svg-root svg)
             output-file (pdf-image-path relative-svg-path)]
         (jio/make-parents output-file)
         (run-command! "SVG to PDF conversion failed"

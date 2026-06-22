@@ -548,7 +548,7 @@ The portable patterns are:
   runner's temporary-directory facility, open a normal path-backed connection,
   and let the runner delete the directory after the test.
 - **Simulated transaction reports**: all bindings can dry-run transaction data
-  against the current database value and assert on the resulting report without
+  against the current database state and assert on the resulting report without
   committing the transaction.
 - **Clojure-specific conveniences**: `with-conn`, `clojure.test` fixtures,
   and `datalevin.util/tmp-dir` are Clojure helper APIs. In other languages,
@@ -1383,8 +1383,8 @@ has an idempotency key.
 ### 7.1 The Write Serialization Model
 
 Datalevin inherits LMDB's MVCC read model: readers do not block writers, and
-writers do not block readers. A reader sees a stable snapshot. A writer commits
-a new version that later readers can observe.
+writers do not block readers. A reader sees a stable read view for its current
+operation. A writer commits a new version that later reads can observe.
 
 Writes are different. For a single Datalevin store, the durable B+Tree commit
 path has one writer at a time. In embedded Clojure, `transact!` serializes
@@ -1696,7 +1696,7 @@ async function deposit(conn, email, amount) {
 
 The retry wrapper does not retry unique, lookup-ref, schema, or validation
 failures. It retries only CAS conflicts, and each retry re-reads the balance
-from a fresh DB snapshot before preparing a new transaction.
+from the current database state before preparing a new transaction.
 
 For operational retries, apply the same rule at a higher level:
 

@@ -1293,7 +1293,7 @@ different symbols in `:in`:
               [$orders ?order :order/customer ?e]
               [$orders ?order :order/total ?order-total]
               [(> ?order-total ?min-total)]]
-     user-db order-db 100)
+     (d/db users-conn) (d/db orders-conn) 100)
 ```
 
 ```java
@@ -1338,11 +1338,12 @@ const result = await usersConn.query(
 
 </div>
 
-`$users` and `$orders` stand for two different databases. The triple patterns
-accept an extra position in front for a source database symbol. In Clojure,
-`d/q` accepts each database source explicitly. In Java, Python, and JavaScript,
-the receiver connection supplies the first source listed in `:in`, and
-additional Datalevin connections can be passed as query inputs.
+`$users` and `$orders` stand for two different database sources. The triple
+patterns accept an extra position in front for a source symbol. In Clojure,
+`d/q` accepts each source explicitly; call `(d/db ...)` for each connection at
+the point where you run the query. In Java, Python, and JavaScript, the receiver
+connection supplies the first source listed in `:in`, and additional Datalevin
+connections can be passed as query inputs.
 
 This is invaluable when:
 

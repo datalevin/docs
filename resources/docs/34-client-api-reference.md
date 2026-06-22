@@ -275,7 +275,7 @@ request, and the client will retry eligible HA endpoints.
 | `disconnect-client` | `(cl/disconnect-client client client-id)` | Force disconnect a connected client by UUID. |
 
 `query-system` is for administrative inspection. The query is a normal Datalog
-query, but unlike `d/q`, arguments do not include a DB value:
+query, but unlike `d/q`, arguments do not include a DB object:
 
 ```clojure
 (cl/query-system
