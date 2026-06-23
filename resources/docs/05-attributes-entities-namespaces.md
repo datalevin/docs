@@ -11,14 +11,16 @@ we move up the stack to the logical model. Datalevin's data model is built on
 three pillars: **Attributes**, **Entities**, and **Namespaces**.
 
 Unlike a relational database, Datalevin does not require you to declare a full
-schema before writing data. Its model is **schema-on-write**, in two senses:
-the schema *grows* on write — each new attribute is added to the schema the
-first time it appears in a transaction — and, once you declare types and
-constraints for an attribute, they are *enforced* on write. The database is
-flexible by default, but provides powerful controls when you need performance
-and integrity.
+schema before writing data. When transaction data mentions an attribute that is
+not yet in the schema, Datalevin creates a schema entry for that attribute
+automatically. That is Datalevin's **schema-on-write** model: schema can be
+created as data is written, not fully declared before data is accepted. Declared
+attribute properties still matter: types, uniqueness, cardinality, indexes, and
+other schema properties control how attributes are stored, constrained, indexed,
+and queried. The database is flexible by default, but provides powerful controls
+when you need performance and integrity.
 
-![Schema-on-write lifecycle: a new attribute appears on transact and is added automatically; by default it has an implicit EDN-blob type supporting exact-match lookup; declaring :db/valueType with :db/cardinality and :db/unique unlocks range and sorted queries, validation, upsert, and compact storage; adding the :db/fulltext and :db/embedding flags unlocks full-text and embedding search — a progression from flexible, zero schema to strict, enforced types and indexes](/images/diagrams/schema-on-write-lifecycle.svg)
+![Attribute schema lifecycle: a new attribute appears on transact and is added automatically; by default it has an implicit EDN-blob type supporting exact-match lookup; declaring :db/valueType with :db/cardinality and :db/unique unlocks range and sorted queries, validation, upsert, and compact storage; adding the :db/fulltext and :db/embedding flags unlocks full-text and embedding search — a progression from flexible, no declared schema to strict, enforced types and indexes](/images/diagrams/schema-on-write-lifecycle.svg)
 
 Figure 5.1 depicts the lifecycle of schema evolution for an application. The
 detailed description of each stage comes in the following sections.

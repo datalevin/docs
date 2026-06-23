@@ -297,10 +297,10 @@ The examples in this book use one convention throughout:
 - Clojure examples use EDN directly.
 - Java examples use the high-level `datalevin` package, especially typed schema
   and transaction builders. Attribute names are written as strings such as
-  `"person/name"`. When Java examples must pass a raw option map or UDF
-  descriptor, keyword values are still written as colon-prefixed strings such as
-  `":cosine"` or `":tx-fn"`, because those maps are normalized by the Java
-  wrapper at runtime.
+  `"person/name"`. In the few Java examples that pass options or custom
+  function definitions as maps, keyword values are still written as
+  colon-prefixed strings such as `":cosine"` or `":tx-fn"`, because those maps
+  are normalized by the Java wrapper at runtime.
 - Python Datalog examples use `from datalevin import connect` and connection
   methods such as `conn.transact`, `conn.query`, and `conn.pull`. Schema and
   transaction maps use EDN keyword strings such as `":person/name"`. KV,
@@ -382,9 +382,8 @@ grounded in real systems.
 
 This book has already benefited from volunteer reviewers in the Datalevin
 community who read draft chapters, ran examples, questioned unclear
-explanations, found inconsistent terminology, and pointed out places where the
-book assumed too much background: Norbert Wójtowicz,  I am grateful for their
-contributions.
+explanations, and found inconsistent terminology: Norbert Wójtowicz, Estevo U.
+C. Castro,  I am grateful for their contributions.
 
 <div class="preface-signature" style="text-align: right; margin-top: 2rem;">
 Huahai Yang<br>
@@ -404,7 +403,7 @@ Know About Datalog (And Never Dared to
 Ask)"](https://hdl.handle.net/11311/665510), *IEEE Transactions on Knowledge and
 Data Engineering* 1, no. 1, 1989, pp. 146-166.
 
-[2] Cognitect, [Datomic](https://www.datomic.com/).
+[2] Rich Hickey, [Datomic](https://www.datomic.com/).
 
 [3] Nikita Prokopov, [DataScript](https://github.com/tonsky/datascript).
 

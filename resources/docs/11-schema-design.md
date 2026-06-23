@@ -558,10 +558,10 @@ await conn.transact([
 
 ### 2.3 Reference Integrity
 
-Because Datalevin is "schema-on-write" and flexible, it does not enforce
-traditional "foreign key" constraints by default. If you delete an entity that
-is referred to by others, the references to its id will remain (pointing to a
-non-existent entity).
+Because Datalevin is fact-oriented and flexible, it does not enforce traditional
+"foreign key" constraints by default. If you delete an entity that is referred
+to by others, the references to its id will remain (pointing to a non-existent
+entity).
 
 To ensure a clean removal of an entity and its associated facts, it is highly
 recommended to use the **`[:db/retractEntity <eid>]`** transaction function.
@@ -756,10 +756,10 @@ By modeling enums as entities with `:db/ident`, you gain:
 
 ### 5.4 Evolve Schema Explicitly
 
-Datalevin uses schema-on-write, but schema is still operational state. Initial
-schema is passed when opening a connection; later changes go through
-`update-schema` on the open connection. Schema changes are not transacted as
-ordinary datoms.
+Datalevin can create schema entries when new attributes appear in transaction
+data, but schema is still operational state. Initial schema is passed when
+opening a connection; later changes go through `update-schema` on the open
+connection. Schema changes are not transacted as ordinary datoms.
 
 Use `d/schema` to inspect the current effective schema before and after a
 change:

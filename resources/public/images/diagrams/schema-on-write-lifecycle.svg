@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="406" viewBox="0 0 1000 406" role="img" aria-labelledby="title desc">
-  <title id="title">Schema-on-write lifecycle</title>
-  <desc id="desc">An attribute progresses from flexible to strict in four stages. Stage 1, a new attribute appears when you transact a keyword Datalevin has not seen, such as user/name with value Alice; it is added to the schema automatically with no declaration. Stage 2, the implicit EDN schema gives the attribute a generic EDN blob type; this supports exact-match lookup and stores any value, but offers no range, sort, or specialized index. Stage 3, you declare an explicit type and constraints with db/valueType, db/cardinality, and db/unique, which unlock range and sorted queries, validation, upsert, and compact storage. Stage 4, you enable specialized indexes with the db/fulltext and db/embedding flags, which unlock full-text search and embedding similarity search. Other specialized capabilities, such as vector and document-path search, come from value types like vec and idoc declared in stage 3. The progression runs from flexible, zero schema, on the left to strict, enforced types and indexes, on the right. Stricter still are two connection-wide options set when opening the connection: validate-data? enforces value types on write, and closed-schema? rejects transactions that mention undeclared attributes.</desc>
+  <title id="title">Attribute schema lifecycle</title>
+  <desc id="desc">An attribute progresses from flexible to strict in four stages. Stage 1, a new attribute appears when you transact a keyword Datalevin has not seen, such as user/name with value Alice; it is added to the schema automatically with no declaration. Stage 2, the implicit EDN schema gives the attribute a generic EDN blob type; this supports exact-match lookup and stores any value, but offers no range, sort, or specialized index. Stage 3, you declare an explicit type and constraints with db/valueType, db/cardinality, and db/unique, which unlock range and sorted queries, validation, upsert, and compact storage. Stage 4, you enable specialized indexes with the db/fulltext and db/embedding flags, which unlock full-text search and embedding similarity search. Other specialized capabilities, such as vector and document-path search, come from value types like vec and idoc declared in stage 3. The progression runs from flexible, no declared schema, on the left to strict, enforced types and indexes, on the right. Stricter still are two connection-wide options set when opening the connection: validate-data? enforces value types on write, and closed-schema? rejects transactions that mention undeclared attributes.</desc>
   <defs>
     <style>
       .card { fill: #ffffff; }
@@ -37,7 +37,7 @@
   </defs>
 
   <rect class="card" x="2" y="2" width="996" height="402" rx="18" stroke="#e2e8f0" stroke-width="2"/>
-  <text class="title" x="500" y="42" text-anchor="middle">Schema-on-Write Lifecycle</text>
+  <text class="title" x="500" y="42" text-anchor="middle">Attribute Schema Lifecycle</text>
   <text class="caption" x="500" y="68" text-anchor="middle">An attribute starts flexible and becomes strict only as you declare more.</text>
 
   <!-- inter-card arrows -->
@@ -92,7 +92,7 @@
 
   <!-- ===== flexible -> strict axis ===== -->
   <path class="axis" d="M40 300 H960" marker-end="url(#ax)"/>
-  <text class="axlbl" x="40" y="290" text-anchor="start">flexible &#183; zero schema</text>
+  <text class="axlbl" x="40" y="290" text-anchor="start">flexible &#183; no declared schema</text>
   <text class="axlbl" x="958" y="290" text-anchor="end">strict &#183; enforced types + indexes</text>
   <text class="trig" x="257" y="322" text-anchor="middle">transact</text>
   <text class="trig" x="501" y="322" text-anchor="middle">+ :db/valueType</text>

@@ -43,32 +43,35 @@ unifies multiple access patterns, and where it fits in a modern stack.
 At the Datalog layer, Datalevin represents facts as EAV triples: Entity,
 Attribute, and Value. This follows the same atom-of-statement idea used by RDF:
 an RDF graph is defined as a set of subject-predicate-object triples, and
-asserting one triple states that a relationship holds between its subject and
-object, a single fact [6]. Datalevin uses entity-attribute-value rather than
-subject-predicate-object, because Datalevin is an operational database and
-chooses database-friendly terminology: entity is a fluid concept
-(see below), not a concrete subject; attribute can have value types, cardinality,
-uniqueness, indexing behavior, and transaction-time validation, while predicate
-already means a boolean decision function in databases; the third position is
-called a value, because it may be a scalar, a reference to another entity, a
-tuple, a document value, or another supported Datalevin value type. Despite the
+asserting one triple states one fact: that a relationship holds between its
+subject and object [6]. Datalevin uses entity-attribute-value rather than
+subject-predicate-object because it is an operational database and chooses
+database-friendly terminology. An entity is a fluid concept (see below), not a
+concrete subject. An attribute can have value types, cardinality, uniqueness,
+indexing behavior, and transaction-time validation, while predicate already
+means a boolean decision function in databases. The third position is called a
+value because it may be a scalar, a reference to another entity, a tuple, a
+document value, or another supported Datalevin value type. Despite the
 terminology differences, the modeling point is the same: each assertion is
-stored as one small, independently queryable fact, hence called a **datom**
-(data atom).
+stored as one small, independently queryable fact, called a **datom** (data
+atom).
 
 Modeling data in terms of datoms results in a data model that is compact,
 sparse, and composable:
 
 - **Entity (E):** the subject being described. In a Datalevin datom, this is
   represented as a system-assigned internal numeric entity id (eid), valid
-  inside that database. With automatic eid, users no longer need to invent an ID
-  field for each domain object.
+  inside that database. Because eids are assigned automatically, users no longer
+  need to invent an ID field for each domain object.
 - **Attribute (A):** the named property being asserted. Attributes are usually
   namespaced keywords such as `:user/email`, `:order/customer`, or
   `:doc/body`. The relationship between entity and attribute is arbitrary. There
   is no requirement that certain entities must have certain attributes, and vice
-  versa. Therefore, the data model can be sparse: only true datoms are
-  asserted in the database, and the false ones are simply missing.
+  versa. Therefore, the data model can be sparse: only asserted datoms are
+  present in the database, and missing facts are represented by the absence of a
+  datom rather than by placeholder values. This does not prevent storing a
+  boolean `false` as an actual value; in that case, the datom is present and its
+  value is `false`.
 - **Value (V):** the value of the property. A value may be a string, number,
   keyword, boolean, reference to another entity, timestamp, document value,
   vector, or another supported Datalevin value type.
@@ -80,10 +83,12 @@ For example, the fact that entity `101` has Alice's email address is the datom
 This tiny shape is the first new concept to internalize. A datom is smaller
 than a row and flatter than a document, but it can express both. A group of
 datoms that share the same entity id can look like a row. A graph edge can be a
-datom whose value is another entity id. A document-like aggregate can be built
-from ordinary facts, or stored as an indexed document value when that is the
-better fit. The uniform shape makes these choices composable instead of
-isolated.
+datom whose value is another entity id. A document-like aggregate can be
+modeled as ordinary facts when its fields should join, validate, reference
+other entities, or change independently. Later, Chapter 14 introduces the other
+choice: storing a nested map or JSON-like payload as one document value while
+Datalevin indexes its internal paths. The uniform shape makes these choices
+composable instead of isolated.
 
 Entities also deserve a precise definition. An entity is not a table, class, or
 JSON object. It is an identity around which facts collect. If entity `101` has
@@ -96,8 +101,8 @@ As database-local handles, entity ids should not be confused with stable
 application identifiers; two databases containing the same application data may
 assign different sets of eids. Application domain identifiers such as user IDs,
 order IDs, document IDs, UUIDs, and slugs should be stored as ordinary attribute
-values, often with `:db.unique/identity` property (see Chapter 3 for detailed
-explanations).
+values, often with the `:db.unique/identity` property (see Chapter 3 for
+details).
 
 This makes Datalevin's notion of entity close to the metaphysical idea known as
 bundle theory: an object can be understood as the bundle of properties that
@@ -115,12 +120,14 @@ full-text search, and may have cardinality constraints. Naming attributes well
 therefore matters. Namespaces such as `:user/email`, `:doc/body`, and
 `:invoice/total` make the domain visible in the data itself.
 
-Datalevin is schema-on-write. Schema is optional, so you can start with a small
-model and add structure as the application becomes clearer. When schema is
-declared, Datalevin checks and uses it when data is written. This is different
-from treating all data as untyped blobs: declared attributes can participate in
-type checking, uniqueness, references, full-text indexing, vector search, and
-other database behaviors.
+Datalevin does not require a complete schema up front. When transaction data
+mentions an attribute that is not yet in the schema, Datalevin creates a schema
+entry for that attribute automatically. That automatic creation of schema as
+data is written is what this book means by **schema-on-write**. You can start
+with a small model and add declared structure as the application becomes
+clearer. Declared attribute properties still matter: types, uniqueness,
+references, indexing flags, and other schema properties control how attributes
+are stored, constrained, indexed, and queried.
 
 ### Aggregate Models vs Triple Model
 
@@ -163,22 +170,13 @@ If only some users have a `:user/timezone`, only those users need that datom.
 If a later feature adds `:user/preferred-model`, existing entities do not need
 to be rewritten. The model grows by adding attributes and facts.
 
-The layer boundary is important: triples are the conceptual model; key-value is
-the physical storage implementation. Datalevin stores facts and indexes in its
-DLMDB key-value substrate, and also exposes that substrate as a low-level API.
-DLMDB is Datalevin's extension of LMDB, the memory-mapped key-value store
-covered in Chapter 4.
-
-You normally reason about the logical facts. The engine handles how those facts
-are encoded into sorted key-value indexes for efficient reads and writes.
-
 ## 2. One Engine, Multiple Access Patterns
 
 Datalevin exposes several complementary capabilities in one runtime. Each
 capability can be useful by itself, but the more important strength is that they
 compose over the same database state. As illustrated in Figure 1.1, Datalevin
-uses a single unified data model to handle different database capabilities. This
-section gives an overview, while the rest of the book elaborates all the details.
+uses a single unified data model to support multiple database capabilities. This
+section gives an overview, while the rest of the book fills in the details.
 
 ![Datalevin unified data model](/images/diagrams/unified-data-model.svg)
 
@@ -194,12 +192,12 @@ facts are joined by shared variables. The second feels graph-oriented: entity
 references are followed as edges. In Datalevin both are expressed as logical
 patterns over datoms.
 
-Datalevin uses an EDN (see Appendix B) format of Datalog
-pioneered by Datomic. This is friendlier to application developers as well as to
-programmatic construction than the older Prolog-like notation because queries
-are ordinary data structures: vectors, keywords, symbols, and lists. The
-underlying idea is still classic Datalog: describe the facts that must be true,
-and let the engine find bindings for the variables [7].
+Datalevin uses the EDN Datalog format pioneered by Datomic (see Appendix B).
+This is friendlier to application developers and easier for programs to
+construct than the older Prolog-like notation because queries are ordinary data
+structures: vectors, keywords, symbols, and lists. The underlying idea is still
+classic Datalog: describe the facts that must be true, and let the engine find
+bindings for the variables [7].
 
 A small comparison makes the difference concrete:
 
@@ -212,7 +210,7 @@ friend_of_friend(X, Z) :- follows(X, Y), follows(Y, Z).
 The logical expression is concise and elegant, but less familiar to application
 developers who are not versed in first-order predicate logic. For example, it
 would be easy to miss the precise meaning of `:-`, `,`, or `.`. The functors and
-arguments seem to be arbitrary, and everything seems to be abstract.
+arguments can seem arbitrary, and the whole form can feel abstract.
 
 Datalevin writes the same Datalog as EDN data:
 
@@ -225,9 +223,9 @@ Datalevin writes the same Datalog as EDN data:
 ```
 
 `:find`, `:in`, and `:where` are meaningful words for developers who are
-familiar with the ideas of database queries. Variables all conveniently start
-with `?`. `$` can be easily explained as representing the database. Attributes
-are part of the schema. Everything is concrete.
+familiar with database queries. Variables consistently start with `?`, `$`
+names the database input, and attributes are part of the schema. Everything is
+concrete.
 
 Both examples say: find `Z` such that `X` follows `Y` and `Y` follows `Z`. The
 Datalevin form is not a string in a mathematical language. It is an
@@ -246,22 +244,16 @@ not from manually naming join algorithms, as you may need to do in SQL.
 ### Direct Key-Value Access
 
 The same key-value substrate that persists triples and indexes is also available
-directly as a durable key-value API for EDN values. EDN is a Clojure data format
-similar to JSON but richer: keywords, symbols, sets, tagged literals. This
+directly as a durable key-value API. That substrate is DLMDB, Datalevin's
+extension of LMDB, the memory-mapped key-value store covered in Chapter 4. This
 low-level API is useful for low-latency state access, caches, and simple
 lookup-oriented components.
 
-Use the key-value API when the access pattern really is just "given this key, read
-or update this value" or "read this key range". Examples include local
+Use the key-value API when the access pattern really is just "given this key,
+read or update this value" or "read this key range". Examples include local
 application state, checkpoints, registries, counters, queues, or cached
 results. In those cases, forcing everything through a logical query layer would
 add complexity without adding much value.
-
-Conceptually, the key-value layer is the physical foundation and a low level
-direct access API, while the Datalog layer is the logical model for facts,
-relationships, joins, and rules. Datalevin gives you both, so a system can keep
-simple state simple while still using Datalog for the parts that benefit from
-logical querying.
 
 ### Path-Indexed Documents with idoc
 
@@ -289,11 +281,10 @@ important than turning every leaf into a named attribute.
 
 ### Integrated Full-Text, Vector, and Embedding Search
 
-Datalevin includes built-in full-text search, user-supplied vector similarity
-search, and text embedding search over datoms that have string values. Because
-these indexes live in the same database system, you can combine retrieval and
-logic filtering in one Datalog query instead of synchronizing external search
-services.
+Datalevin includes built-in full-text search, similarity search over
+user-supplied vectors, and text embedding search. Because these indexes live in
+the same database system, you can combine retrieval and logic filtering in one
+Datalog query instead of synchronizing external search services.
 
 These search modes answer different questions:
 
@@ -302,10 +293,10 @@ These search modes answer different questions:
   expressions. Details are in Chapter 16.
 - Vector search is geometric. It is good for finding items whose vector
   embeddings are near a query vector under a similarity metric. See Chapter 17.
-- Embedding converts text to vectors. It is useful when the application
+- Embedding search converts text to vectors. It is useful when the application
   wants semantic retrieval over text fields instead of exact word matching.
   Datalevin provides built-in embedding services so users do not have to roll
-  their own. It can also leverage third-party embedding services.
+  their own. Datalevin can also use third-party embedding services.
 
 In many systems, these capabilities live outside the primary database. The
 application first asks a search engine for candidate ids, then asks the
@@ -313,10 +304,10 @@ database for structured facts, then performs more filtering in application
 code. Datalevin's integrated approach lets lexical, semantic, document-path,
 and logical constraints meet inside one query.
 
-By integrating different capabilities in one Datalog system, users can choose
+By integrating these capabilities in one Datalog system, users can choose
 the access pattern that fits the problem without leaving the same Datalog model.
-When a task needs specific retrieval shape and exact constraints, composition is
-readily available in Datalog.
+When a task needs a specific retrieval shape and exact constraints, Datalog can
+compose them in one query.
 
 ## 3. Why Not Just SQL?
 
@@ -326,9 +317,9 @@ indexes, procedural languages, recursive CTEs, and extension ecosystems. For
 example, if PostgreSQL can do more and more of these jobs, why not stay with
 familiar SQL?
 
-There are two reasons that are deeper than cosmetics in syntax differences. The
+There are two reasons that go deeper than syntactic cosmetics. The
 first is blunt: SQL is not a good query language for programs. It is a large
-structured-English language designed around tables, joins, projections,
+structured English language designed around tables, joins, projections,
 grouping, subqueries, and dialect-specific extensions. It succeeded as a
 standard, but standardization should not be confused with language quality. SQL
 queries are usually strings assembled by a host language, and complex SQL often
@@ -354,17 +345,25 @@ queries. The result is not less relational; it is a higher-level way to write
 relational logic. Relational algebra remains the substrate, but the user does
 not have to speak in join operators to ask a relational question [2].
 
-The second reason is deeper still, as it is about facilities for effective query
-implementation, specifically, query planning. SQL databases are table-first
-systems: data is bundled into row or column containers, and the optimizer must
-infer how many rows will survive predicates and joins over those containers.
-Real application data is skewed and correlated. Traditional estimators therefore
-depend on approximations such as histograms and assumptions such as uniformity
-or independence. The database literature has repeatedly identified cardinality
-estimation as one of the central hard problems in query optimization [3] [4].
+The second reason is deeper still: query planning. SQL databases are
+table-first systems. Data is bundled into row or column containers, and the
+optimizer must infer how many rows will survive predicates and joins over those
+containers.
+Real application data is usually neither evenly distributed nor independent. A
+few customers may account for most orders; a few tags may appear on most
+documents; some vendors, regions, products, and refund patterns may strongly
+move together. Data distributions are called **skewed** when some values are
+much more common than others, and **correlated** when one predicate being true
+changes the odds of another predicate being true. Skewed and correlated data
+make a query optimizer's job difficult because formulas based on uniformity or
+independence can produce wildly inaccurate estimates for them. Traditional
+estimators therefore depend on approximations such as histograms and, in some
+systems, learned models. This difficult problem of estimating result sizes,
+**cardinality estimation**, has been repeatedly identified as one of the central
+problems in query optimization in the database research literature [3] [4].
 For container-based storage, there is no cheap general answer: the counts the
-planner needs are not directly present in the layout, so the optimizer has to
-approximate them.
+planner needs are not directly present in the storage layout, so the optimizer
+has to approximate them.
 
 A triplestore changes the shape of the problem. In Datalevin, a datom is an
 explicit cell: entity, attribute, value. Missing facts are absent rather than
@@ -375,14 +374,13 @@ conditions that execution will use. Datalevin still has to optimize queries,
 but it starts from a storage model that exposes the units the optimizer needs to
 count [5].
 
-This is why adding more features to a SQL database does not fully answer the
-question that a modern database is presented with. That is, a modern database
-needs not only to be full of features, but also to be simple in concept, fast in
-performance, and easy to operate. For many legacy systems
-that are already heavily invested in SQL ecosystems, a mature SQL database
-remains the right choice. But feature accumulation does not fix SQL as a query
-language, and it does not remove the cardinality estimation burden created by
-table-shaped containers.
+This is why adding more features to a SQL database does not fully answer what
+modern applications need. A modern application database needs more than
+features: it must remain conceptually simple, fast, and easy to operate. For
+many legacy systems that are already heavily invested in SQL ecosystems, a
+mature SQL database remains the right choice. But feature accumulation does not
+fix SQL as a query language, and it does not remove the cardinality estimation
+burden created by table-shaped containers.
 
 There is also an integration difference. SQL databases can add search, vector,
 document, and graph features, but those features often arrive as separate
@@ -402,15 +400,16 @@ sparse, evolving, searchable, and increasingly retrieval-driven.
 A concrete way to see this argument is through Join Order Benchmark (JOB) [3].
 JOB is useful here because it is not a benchmark of simple key lookups or
 single-table scans, nor some academic exercise with synthetic data. JOB is based
-on the real IMDb dataset, and its queries stress the query optimizer because the
-data distribution is highly skewed and correlated, as it is in all real-world
-datasets. It requires joins across many related entities: 113 analytical queries, with
-query shapes that range from a few joins to more than a dozen. Its queries have
-enough joins that a poor query plan can produce orders of magnitude more
-intermediate rows than a good one.
+on the real IMDb dataset, where value frequencies and relationships have the
+same nonuniform shape seen in many production datasets. It therefore stresses
+exactly the optimizer problem described above: estimating which predicates and
+joins are selective before executing the query. It requires joins across many
+related entities: 113 analytical queries, with query shapes that range from a
+few joins to more than a dozen. Its queries have enough joins that a poor query
+plan can produce orders of magnitude more intermediate rows than a good one.
 
-It should be noted that this kind of query is not exotic either. It appears
-whenever an application keeps data normalized and asks compositional questions:
+This kind of query is not exotic either. It appears whenever an application
+keeps data normalized and asks compositional questions:
 which documents can this user see, which orders match a constraint spanning
 products, vendors, shipments, refunds, and customers, which clinical cases
 satisfy rules spanning diagnoses, providers, prescriptions, and coverage, or
@@ -419,7 +418,7 @@ collaborators. If a system never seems to have such queries, that is because the
 complexity has been moved into denormalized records, application-side filtering,
 or cache materialization rather than disappearing. That is to say, the lack of
 complex queries is a symptom of weak database capability, not a lack of demand
-for them. Developers have to deal with the complexities in application code
+for them. Developers have to deal with the complexity in application code
 because the database they use cannot handle them effectively.
 
 Let us start with a concrete example. A Datalevin query for a production
@@ -459,17 +458,17 @@ rows survive each predicate and each join, because the fact counts it needs are
 bundled inside rows, indexes, histograms, and assumptions about value
 independence. When the estimates are wrong, the optimizer can start from a broad
 table, build huge intermediate results, and only later discover that a different
-predicate would have narrowed the search immediately. It is therefore quite
-unpredictable if a SQL query engine would perform well or not for complex
-queries. Due to this kind of uncertainty, large join queries are widely treated
-as optimizer-sensitive. For example, PostgreSQL's own documentation [8] notes
+predicate would have narrowed the search immediately. It is therefore hard to
+predict whether a SQL query engine will perform well on complex queries. Because
+of this uncertainty, large join queries are widely treated as
+optimizer-sensitive. For example, PostgreSQL's own documentation [8] notes
 that possible join orders grow exponentially, that exhaustive planning becomes
 impractical beyond roughly ten input tables, and that the planner switches to
 heuristic search for many-relation queries. It also documents techniques for
 constraining join order to reduce planning time. That is the practical pressure
 behind advice to denormalize, split a query, materialize intermediate results,
 or hand-guide the planner when SQL joins become too large or too sensitive to
-cardinality estimation, the work of estimating the result size of all sub-plans
+cardinality estimation, the work of estimating the result size of all subplans
 of a query [9].
 
 Fact-based storage changes that problem. Datalevin does not have to answer every
@@ -488,14 +487,14 @@ Datalevin is designed to run where your application runs:
 
 - **Embedded mode** for local, process-level access. This is the simplest mode:
   the application links to Datalevin and reads or writes a local database
-  directly. Right now, four programming languages, Java, Clojure, Python, and
-  Node.js are supported.
+  directly. Embedded access is supported from Clojure, Java, Python, and
+  Node.js.
 - **Client/server mode** for shared deployment and centralized operations. This
   is useful when multiple processes or machines should access the same service.
-  The client can be written in the same four programming languages.
-- **Non-HA async read-only replicas** for simple read scaling on the server. Replicas can
-  serve reads where eventual freshness is acceptable and automatic failover is
-  not required.
+  The client can be written in the same four environments.
+- **Non-HA async read-only replicas** for simple read scaling on the server.
+  Replicas can serve reads where eventual freshness is acceptable and automatic
+  failover is not required.
 - **Consensus-lease HA** for automatic leader promotion. This mode is intended
   for server deployments that need higher availability without changing the
   application data model.
@@ -538,21 +537,20 @@ porous. If a search result must be filtered by permissions, joined to ownership
 metadata, checked against a lifecycle state, and then ranked with semantic
 signals, keeping those facts in one engine simplifies the application.
 
-Another advantage is the ability to absorb change. Datalevin is
-schema-on-write: you can start with a small schema, add structure where the
-application has learned enough to justify it, and keep optional facts absent
-rather than storing placeholder nulls. Because facts are isolated datoms and
-attributes are additive, new features can add new attributes without rewriting
-old entities or forcing every record through a table migration. Stable domain
-identifiers, lookup refs, and unique attributes let the application keep its
-own identities while Datalevin manages database-local entity ids. This makes the
-model well suited to systems whose shape changes as the product, data, or AI
-workflow matures.
+Another advantage is the ability to absorb change. Datalevin lets you start
+with a small schema, add declared structure where the application has learned
+enough to justify it, and keep optional facts absent rather than storing
+placeholder nulls. Declared schema is enforced when transactions write data.
+Because facts are isolated datoms and attributes are additive, new features can
+add new attributes without rewriting old entities or forcing every record
+through a table migration. Stable domain identifiers, lookup refs, and unique
+attributes let the application keep its own identities while Datalevin manages
+database-local entity ids. This makes the model well suited to systems whose
+shape changes as the product, data, or AI workflow matures.
 
-Due to the advantages in handling complex queries that are common in today's
-practical applications, greenfield projects and mature systems looking to
-modernize data access layers should seriously consider a Datalog-based system
-like Datalevin.
+Because complex queries are common in today's practical applications, greenfield
+projects and mature systems looking to modernize their data access layers should
+seriously consider a Datalog-based system like Datalevin.
 
 If your workload is narrowly specialized, a single-purpose engine may still be
 the better choice. Datalevin is most compelling when you need these
@@ -560,10 +558,9 @@ capabilities together. For example, a pure analytical warehouse, a massive
 append-only log pipeline, or a dedicated search cluster may be better served by
 systems built only for those jobs.
 
-Datalevin's niche is the application database that needs to be
-logical, graph-aware, document-friendly, and retrieval-capable, especially as
-user requirements grow in complexity and composition while the application
-matures.
+Datalevin's niche is the application database that needs to be logical,
+graph-aware, document-friendly, and retrieval-capable, especially as user
+requirements grow in complexity and composition while the application matures.
 
 ## 6. A Minimal Unified Query Example
 
@@ -587,24 +584,24 @@ fact.
 ```clojure
 (require '[datalevin.core :as d])
 
-;; Datalevin is schema-on-write, so schema is optional, but strongly recommended
+;; Schema is optional, but this example declares it for type checking and indexes.
 (def schema
   {:doc/body {:db/valueType :db.type/string
               :db/fulltext  true}
    :doc/lang {:db/valueType :db.type/string}
    :doc/idoc {:db/valueType :db.type/idoc}})
 
-;; Obtain a DB connection. DB will be at data/ch1 directory
+;; Obtain a DB connection. The database will be in the data/ch1 directory.
 (def conn (d/get-conn "data/ch1" schema))
 
-;; Transact an entity
+;; Transact one entity.
 (d/transact! conn
   [{:db/id    -1
     :doc/lang "en"
     :doc/body "Datalevin adds idoc indexing and vector search."
     :doc/idoc {:module {:name "search" :status "stable"}}}])
 
-;; Query
+;; Run the query.
 (d/q '[:find ?e
        :in $ ?term
        :where
@@ -619,7 +616,7 @@ fact.
 ```java
 import datalevin.*;
 
-// Datalevin is schema-on-write, so schema is optional, but strongly recommended
+// Schema is optional, but this example declares it for type checking and indexes.
 Schema schema = Datalevin.schema()
     .attr("doc/body",
           Schema.attribute()
@@ -630,10 +627,10 @@ Schema schema = Datalevin.schema()
     .attr("doc/idoc",
           Schema.attribute().valueType(Schema.ValueType.IDOC));
 
-// Obtain a DB connection. DB will be at data/ch1 directory
+// Obtain a DB connection. The database will be in the data/ch1 directory.
 Connection conn = Datalevin.getConn("data/ch1", schema);
 
-// Transact an entity
+// Transact one entity.
 conn.transact(Datalevin.tx()
     .entity(Tx.entity(-1)
         .put("doc/lang", "en")
@@ -642,7 +639,7 @@ conn.transact(Datalevin.tx()
              Datalevin.mapOf("module",
                  Datalevin.mapOf("name", "search", "status", "stable")))));
 
-// Query
+// Run the query.
 Object results = conn.query(
     "[:find ?e " +
     " :in $ ?term " +
@@ -656,14 +653,14 @@ Object results = conn.query(
 ```python
 from datalevin import connect
 
-# Datalevin is schema-on-write, so schema is optional, but strongly recommended
+# Schema is optional, but this example declares it for type checking and indexes.
 schema = {
     ":doc/body": {":db/valueType": ":db.type/string",
                   ":db/fulltext": True},
     ":doc/lang": {":db/valueType": ":db.type/string"},
     ":doc/idoc": {":db/valueType": ":db.type/idoc"}}
 
-# Obtain a DB connection. DB will be at data/ch1 directory.
+# Obtain a DB connection. The database will be in the data/ch1 directory.
 with connect("data/ch1", schema=schema) as conn:
     # Transact an entity.
     conn.transact([
@@ -686,7 +683,7 @@ with connect("data/ch1", schema=schema) as conn:
 ```javascript
 import { connect } from "datalevin-node";
 
-// Datalevin is schema-on-write, so schema is optional, but strongly recommended
+// Schema is optional, but this example declares it for type checking and indexes.
 const schema = {
   ":doc/body": { ":db/valueType": ":db.type/string",
                  ":db/fulltext": true },
@@ -694,7 +691,7 @@ const schema = {
   ":doc/idoc": { ":db/valueType": ":db.type/idoc" }
 };
 
-// Obtain a DB connection. DB will be at data/ch1 directory.
+// Obtain a DB connection. The database will be in the data/ch1 directory.
 const conn = await connect("data/ch1", { schema });
 
 try {
@@ -726,13 +723,13 @@ What happens in this query:
 
 1. `fulltext` retrieves candidate entities by searching `:doc/body` for the
    term `"vector"`.
-2. `idoc-match` narrows candidates to documents whose nested idoc metadata has
-   `{:module {:status "stable"}}`.
+2. `idoc-match` narrows candidates to documents whose nested idoc metadata
+   contains `{:module {:status "stable"}}`.
 3. The Datalog clause `[?e :doc/lang "en"]` applies an exact metadata constraint.
 
-The key point here is composition: lexical retrieval,
-structure-aware filtering, and exact logical predicates are executed in one
-query context, over one database state.
+The key point here is composition: lexical retrieval, structure-aware
+filtering, and exact logical predicates are executed in one query context over
+one database state.
 
 This example also shows the architectural core: the triple model links all
 capabilities together, so full-text matches, idoc constraints, and relational
