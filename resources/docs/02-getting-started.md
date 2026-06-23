@@ -280,7 +280,12 @@ const names = await conn.query(
 </div>
 
 Here, the Datalog query function `d/q` takes as arguments a query and a database
-object.
+object. That separation is intentional. A Datalog query is a query over data,
+not over the connection object itself. Later chapters will use the same `d/q`
+function to query multiple databases in one expression and even to query plain
+EAV tuple sequences that are not stored in Datalevin at all. Writes are
+different: `d/transact!` works through a connection because a transaction
+changes the database.
 
 For now, read the query as: find the names of users whose age is greater than
 28. Chapter 8 explains Datalog in detail. The important first point is that a

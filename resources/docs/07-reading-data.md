@@ -31,6 +31,14 @@ is a mutable DB object/reference used by read APIs. Treat it as access to the
 current database state for the current operation, not as durable application
 state.
 
+The reason read examples use `(d/db conn)` instead of passing `conn` directly
+to `d/q` is not ceremony. `d/q` is a query over data sources. A source may be
+the current DB from one connection, the current DB from several connections, or
+even an in-memory sequence of raw EAV tuples. The query engine should not have
+to pretend that all of those sources are connections. Transaction functions are
+different: they work through a connection because they coordinate writes,
+validation, indexes, and durability for one database.
+
 Call `(d/db conn)` when you need to read the connection's current state. Do not
 save a `db` object or an entity object and expect it to remain meaningful after
 later transactions; if you are making a new decision, get a new `db` from the

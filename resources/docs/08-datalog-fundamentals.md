@@ -1277,6 +1277,8 @@ Figure 8.3 shows the different approaches visually.
 One of the most powerful aspects of Datalevin's Datalog engine is that queries
 are not limited to a single database. The `:in` clause allows you to specify
 multiple data sources, enabling cross-database joins and ad-hoc data analysis.
+This is why the Clojure `d/q` API takes data sources rather than a connection:
+queries run over data, while transactions run through connections.
 
 ### 8.1 Multiple Databases
 
