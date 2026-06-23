@@ -45,7 +45,25 @@
   "Datalevin documentation, examples, and guides for Datalog, LMDB-backed storage, search, vectors, and production deployment.")
 
 (def ^:private docs-index-description
-  "Browse the Datalevin book by chapter, from getting started and storage fundamentals to search, AI, and operations.")
+  "Browse the Datalevin guide by chapter, from getting started and storage fundamentals to search, performance, and operations.")
+
+(def ^:private book-description
+  "The complete print book for Datalevin, including the online guide, agent-memory chapters, and full appendices.")
+
+(defn web-visible-frontmatter?
+  "Returns true when a document should be shown in the web guide."
+  [frontmatter]
+  (not (false? (:web frontmatter))))
+
+(defn- book-buy-url
+  []
+  (some-> (config/env "BOOK_BUY_URL") str/trim not-empty))
+
+(defn- buy-book-link-attrs
+  [class]
+  (if-let [url (book-buy-url)]
+    {:href url :target "_blank" :rel "noopener noreferrer" :class class}
+    {:href "/book" :class class}))
 
 (defn- clear-chapter-cache!
   "Clear the chapter metadata cache. Call when docs are updated."
@@ -121,6 +139,13 @@
             {}))
         {}))))
 
+(defn web-visible-slug?
+  "Returns true when the Markdown file for `slug` should be shown in the web guide."
+  [slug]
+  (let [file (jio/file docs-dir (str slug ".md"))]
+    (and (.exists file)
+         (web-visible-frontmatter? (read-frontmatter file)))))
+
 (defn- doc-description
   [frontmatter html]
   (or (some-> (:description frontmatter) str/trim not-empty)
@@ -174,13 +199,15 @@
         (when (.exists file)
           (let [content (slurp path)
                 {:keys [frontmatter markdown]} (parse-frontmatter content)
-                html (parse-markdown (substitute-markdown-vars markdown))
-                doc {:title (:title frontmatter)
-                     :chapter (:chapter frontmatter)
-                     :part (:part frontmatter)
-                     :description (doc-description frontmatter html)
-                     :html html}]
-            (cache-doc! filename doc))))))
+                html (when (web-visible-frontmatter? frontmatter)
+                       (parse-markdown (substitute-markdown-vars markdown)))]
+            (when html
+              (let [doc {:title (:title frontmatter)
+                         :chapter (:chapter frontmatter)
+                         :part (:part frontmatter)
+                         :description (doc-description frontmatter html)
+                         :html html}]
+                (cache-doc! filename doc))))))))
 
 (defn load-chapter-meta
   "Reads frontmatter from all chapter .md files in docs-dir.
@@ -197,7 +224,8 @@
                                       (not= name "toc.md"))
                            :let [slug (subs name 0 (- (count name) 3))
                                  frontmatter (read-frontmatter f)]
-                           :when (:chapter frontmatter)]
+                           :when (and (:chapter frontmatter)
+                                      (web-visible-frontmatter? frontmatter))]
                        {:slug slug
                         :title (:title frontmatter)
                         :chapter (:chapter frontmatter)
@@ -223,6 +251,7 @@
     (apply str
            "<div class=\"max-w-3xl mx-auto px-4 py-8\">"
            "<h1 class=\"text-3xl font-bold mb-8\" style=\"color:var(--text-primary, #e5e7eb)\"><i>Datalevin: The Definitive Guide</i></h1>"
+           "<p class=\"mb-8\" style=\"color:var(--text-secondary, #9ca3af)\">This online guide covers the Datalevin-focused chapters. The complete print book also includes AI memory chapters and full appendices. <a href=\"/book\" class=\"hover:underline\" style=\"color:var(--text-link, #22d3ee);\">Learn about the full book</a>.</p>"
            (concat
             (for [group grouped
                   :let [part (:part (first group))]]
@@ -288,6 +317,7 @@
 
 (defn sitemap-xml [req]
   (let [static-urls [{:path "/" :priority "1.0"}
+                     {:path "/book" :priority "0.9"}
                      {:path "/docs" :priority "0.9"}
                      {:path "/examples" :priority "0.8"}]
         doc-urls (for [{:keys [slug lastmod]} (load-chapter-meta)]
@@ -317,7 +347,7 @@
                           [:p {:style "font-size:1.25rem;color:#9ca3af;margin-bottom:2rem"}
                            "The database that thinks"]                          [:div {:style "display:flex;justify-content:center;gap:1rem;margin-bottom:3rem"}
                                                                                  [:a {:href "/docs/02-getting-started" :class "dl-btn-primary"} "Get Started"]
-                                                                                 [:a {:href "/docs" :class "dl-btn"} "Read the Book"]]]
+                                                                                 [:a {:href "/docs" :class "dl-btn"} "Read the Guide"]]]
                          ;; Features
                          [:div {:style "max-width:64rem;margin:0 auto;padding:2rem 2rem"}
                           [:h2 {:class "section-title" :style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:2rem;color:#f9fafb"} "Why Datalevin?"]
@@ -338,9 +368,9 @@
                            [:a {:href "/docs/21-query-optimization-profiling" :class card-style}
                             [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Performance Optimized"]
                             [:p {:style "color:#9ca3af;font-size:0.875rem"} "WAL and asynchronous transactions + state of the art query optimizer and rule engine."]]
-                           [:a {:href "/docs/23-agent-memory" :class card-style}
-                            [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "AI Native"]
-                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "Built-in MCP server + model inference for embedding, generation and OCR."]]]]
+                           [:a {:href "/docs/18-hybrid-queries" :class card-style}
+                            [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Retrieval Ready"]
+                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "Full-text, vector, embedding, idoc, and logic filters compose in one query."]]]]
                          ;; Ecosystem
                          [:div {:style "max-width:64rem;margin:0 auto;padding:2rem 2rem"}
                           [:h2 {:class "section-title" :style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:0.75rem;color:#f9fafb"} "Ecosystem"]
@@ -358,9 +388,63 @@
                           [:h2 {:class "section-title" :style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:0.75rem;color:#f9fafb"} "Support the Project"]
                           [:p {:style "text-align:center;color:#9ca3af;font-size:1rem;margin-bottom:1.5rem"}
                            "If you enjoy Datalevin and it is helping you succeed, consider sponsoring the development and maintenance of this project."]
-                          [:div {:style "display:flex;justify-content:center"}
+                          [:div {:style "display:flex;justify-content:center;gap:1rem;flex-wrap:wrap"}
+                           [:a (buy-book-link-attrs "dl-btn-primary")
+                            "Buy the book"]
                            [:a {:href "https://github.com/sponsors/huahaiy" :target "_blank" :rel "noopener noreferrer" :class btn-style}
                             "GitHub Sponsors"]]])})
+
+(defn book-cover-svg [_req]
+  (if-let [resource (jio/resource "cover/front-cover.svg")]
+    {:status 200
+     :headers {"Content-Type" "image/svg+xml; charset=utf-8"
+               "Cache-Control" "public, max-age=3600"}
+     :body (slurp resource)}
+    {:status 404
+     :headers {"Content-Type" "text/plain; charset=utf-8"}
+     :body "Book cover not found"}))
+
+(defn book-page [req]
+  (let [buy-url (book-buy-url)]
+    {:status  200
+     :headers {"Content-Type" "text/html"}
+     :body
+     (layout/base-with-req
+      "The Complete Book" req
+      {:description book-description
+       :canonical-path "/book"
+       :image-path "/book/cover.svg"}
+      [:div {:style "max-width:72rem;margin:0 auto;padding:3rem 1.5rem 4rem"}
+       [:div {:style "display:grid;grid-template-columns:minmax(220px,360px) minmax(0,1fr);gap:3rem;align-items:start"}
+        [:div {:style "display:flex;justify-content:center"}
+         [:img {:src "/book/cover.svg"
+                :alt "Cover of Datalevin: The Definitive Guide to Logical and Intelligent Databases"
+                :style "width:min(100%,360px);height:auto;border-radius:8px;box-shadow:0 24px 80px rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.12);"}]]
+        [:div
+         [:p {:style "color:#7ad9b9;font-size:0.8rem;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;margin-bottom:0.75rem"}
+          "Complete Print Edition"]
+         [:h1 {:style "color:var(--text-primary,#f9fafb);font-size:2.5rem;line-height:1.1;font-weight:800;margin-bottom:1rem"}
+          "Datalevin: The Definitive Guide to Logical and Intelligent Databases"]
+         [:p {:style "color:var(--text-secondary,#9ca3af);font-size:1.05rem;line-height:1.7;margin-bottom:1.5rem"}
+          "The online guide focuses on Datalevin itself. The complete book goes further: it includes the Datalevin guide, a substantial part on using Datalevin as persistent memory for intelligent systems, and full appendices for installation, EDN, schema, Datalog built-ins, and public APIs."]
+         [:div {:style "display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1.75rem"}
+          (if buy-url
+            [:a {:href buy-url :target "_blank" :rel "noopener noreferrer" :class "dl-btn-primary"}
+             "Buy on Amazon"]
+            [:span {:class "dl-btn-primary"
+                    :style "opacity:0.72;cursor:default"}
+             "Amazon link coming soon"])
+          [:a {:href "/docs" :class "dl-btn"} "Read the Online Guide"]]
+         [:div {:style "display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem"}
+          [:div {:class card-style}
+           [:h2 {:style "color:#f9fafb;font-size:1.05rem;font-weight:700;margin-bottom:0.5rem"} "Datalevin Guide"]
+           [:p {:style "color:#9ca3af;font-size:0.95rem;line-height:1.55"} "Foundations, transactions, reading APIs, Datalog, rules, modeling, full-text search, vector search, hybrid queries, durability, ingestion, query planning, and operations."]]
+          [:div {:class card-style}
+           [:h2 {:style "color:#f9fafb;font-size:1.05rem;font-weight:700;margin-bottom:0.5rem"} "AI Memory"]
+           [:p {:style "color:#9ca3af;font-size:0.95rem;line-height:1.55"} "Agent memory architecture, episodic and semantic memory, recall and context assembly, apperception, truth maintenance, and stateful AI application patterns built on Datalevin."]]
+          [:div {:class card-style}
+           [:h2 {:style "color:#f9fafb;font-size:1.05rem;font-weight:700;margin-bottom:0.5rem"} "Full Appendices"]
+           [:p {:style "color:#9ca3af;font-size:0.95rem;line-height:1.55"} "Installation and runtime notes, EDN, schema reference, Datalog built-ins, core helpers, key-value API, and client API reference material for print reading."]]]]]])}))
 
 (defn docs-index [req]
   {:status  200

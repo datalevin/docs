@@ -2,6 +2,7 @@
 title: "Appendix G: Client API"
 chapter: 34
 part: "VII — Appendices"
+web: false
 ---
 
 # Appendix G: Client API

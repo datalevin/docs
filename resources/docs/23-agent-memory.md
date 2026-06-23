@@ -2,6 +2,7 @@
 title: "Agent Memory Architectures"
 chapter: 23
 part: "VI — Datalevin for Intelligent Systems"
+web: false
 ---
 
 # Chapter 23: Agent Memory Architectures

@@ -24,23 +24,59 @@ examples where the bindings expose equivalent APIs.
 
 ## Before You Start
 
-You need Java 21 or newer. First we will create a Clojure project that depends
-on the Datalevin library. This book targets the Datalevin 1.0.x release line;
-for the dependency coordinate in this starter project, use the current released
-1.0.x package version. In this edition, that version is shown as
-`{{datalevin-version}}`. If you are reading an older copy, check the package
-page or the Datalevin GitHub repository for the current release.
+You need Java 21 or newer. Python examples also assume Python 3.10 or newer,
+and JavaScript examples assume Node.js 20 or newer. This book targets the
+Datalevin 1.0.x release line; for dependency coordinates in this starter
+project, use the current released 1.0.x package version. In this edition, that
+version is shown as `{{datalevin-version}}`. If you are reading an older copy,
+check the package page or the Datalevin GitHub repository for the current
+release.
 
-For the Clojure command line, add the embedded Datalevin dependency:
+Add the Datalevin package for the language you want to use:
+
+<div class="multi-lang">
 
 ```clojure
+;; deps.edn
 {:deps {org.datalevin/datalevin-embedded {:mvn/version "{{datalevin-version}}"}}}
 ```
 
+```java
+<!-- Maven pom.xml -->
+<dependency>
+  <groupId>org.datalevin</groupId>
+  <artifactId>datalevin-java</artifactId>
+  <version>{{datalevin-version}}</version>
+</dependency>
+
+// Gradle Kotlin DSL
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation("org.datalevin:datalevin-java:{{datalevin-version}}")
+}
+```
+
+```python
+python -m pip install datalevin
+```
+
+```javascript
+npm install datalevin-node
+```
+
+</div>
+
 Datalevin uses native storage code through the JVM. For Clojure and Java
-programs, pass the required JVM options when starting the process:
+programs, pass the required JVM options when starting the process. Python and
+Node.js bindings add these options automatically.
+
+<div class="multi-lang">
 
 ```clojure
+;; deps.edn
 {:aliases
  {:datalevin/jvm
   {:jvm-opts ["--add-opens=java.base/java.nio=ALL-UNNAMED"
@@ -48,7 +84,26 @@ programs, pass the required JVM options when starting the process:
               "--enable-native-access=ALL-UNNAMED"]}}}
 ```
 
-Then start a REPL with `clojure -M:datalevin/jvm`.
+```java
+java --add-opens=java.base/java.nio=ALL-UNNAMED \
+     --add-opens=java.base/sun.nio.ch=ALL-UNNAMED \
+     --enable-native-access=ALL-UNNAMED \
+     -cp target/classes:your-dependencies.jar your.main.Class
+```
+
+```python
+# No extra JVM flags are normally needed.
+python your_program.py
+```
+
+```javascript
+// No extra JVM flags are normally needed.
+node your-program.mjs
+```
+
+</div>
+
+For Clojure, start a REPL with `clojure -M:datalevin/jvm`.
 
 Appendix A has the full installation matrix, including Leiningen, Java, Python,
 Node.js, the standalone `dtlv` executable, Docker, and Babashka setup.

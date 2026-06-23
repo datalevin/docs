@@ -227,6 +227,8 @@
                   (ring/router
 	                    [;; Public routes
 	                     ["/" {:get {:handler pages/home}}]
+	                     ["/book" {:get {:handler pages/book-page}}]
+	                     ["/book/cover.svg" {:get {:handler pages/book-cover-svg}}]
 	                     ["/robots.txt" {:get {:handler pages/robots-txt}}]
 	                     ["/sitemap.xml" {:get {:handler pages/sitemap-xml}}]
 	                     ["/docs" {:get {:handler pages/docs-index}}]

@@ -2,6 +2,7 @@
 title: "Appendix D: Datalog Built-Ins"
 chapter: 31
 part: "VII — Appendices"
+web: false
 ---
 
 # Appendix D: Datalog Built-Ins

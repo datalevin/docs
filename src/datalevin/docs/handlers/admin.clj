@@ -143,16 +143,18 @@
                          (remove #(= (.getName %) "toc.md")))
               ;; Build all transactions, then batch-transact to reduce overhead
               txs (doall
-                   (for [f files]
+                   (keep (fn [f]
                      (let [filename (str/replace (.getName f) #"\.md$" "")
                            content (slurp f)
                            {:keys [frontmatter markdown]} (pages/parse-frontmatter content)]
-                       (cond-> {:doc/filename filename
-                                :doc/content markdown
-                                :doc/updated-at (Date.)}
-                         (:title frontmatter) (assoc :doc/title (:title frontmatter))
-                         (:chapter frontmatter) (assoc :doc/chapter (:chapter frontmatter))
-                         (:part frontmatter) (assoc :doc/part (:part frontmatter))))))]
+                       (when (pages/web-visible-frontmatter? frontmatter)
+                         (cond-> {:doc/filename filename
+                                  :doc/content markdown
+                                  :doc/updated-at (Date.)}
+                           (:title frontmatter) (assoc :doc/title (:title frontmatter))
+                           (:chapter frontmatter) (assoc :doc/chapter (:chapter frontmatter))
+                           (:part frontmatter) (assoc :doc/part (:part frontmatter))))))
+                    files))]
           ;; Single batch transaction instead of one per file
           (d/transact! conn txs)
           ;; Clear caches after reindex

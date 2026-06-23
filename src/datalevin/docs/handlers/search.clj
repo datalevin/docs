@@ -1,5 +1,6 @@
 (ns datalevin.docs.handlers.search
   (:require [datalevin.docs.views.layout :as layout]
+            [datalevin.docs.handlers.pages :as pages]
             [datalevin.core :as d]
             [clojure.string :as str]
             [hiccup2.core :as h]))
@@ -87,6 +88,13 @@
                     (str "/docs/" s)
                     "/examples")}))
 
+(defn- hidden-doc-result?
+  [entity]
+  (or (and (:doc/filename entity)
+           (not (pages/web-visible-slug? (:doc/filename entity))))
+      (and (:example/doc-section entity)
+           (not (pages/web-visible-slug? (:example/doc-section entity))))))
+
 (defn search [conn query]
   (when (and conn (seq query))
     (let [trimmed-query (str/trim query)
@@ -101,6 +109,8 @@
                   db q)
              ;; Filter out removed examples
              (remove (fn [[entity _ _]] (:example/removed? entity)))
+             ;; Filter out print-only chapters and examples attached to them
+             (remove (fn [[entity _ _]] (hidden-doc-result? entity)))
              ;; Group by entity; prefer :doc/content or :example/code for snippet
              (reduce (fn [m [entity a offsets]]
                        (let [eid  (:db/id entity)

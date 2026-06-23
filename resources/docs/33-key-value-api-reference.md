@@ -2,6 +2,7 @@
 title: "Appendix F: Key-Value API"
 chapter: 33
 part: "VII — Appendices"
+web: false
 ---
 
 # Appendix F: Key-Value API

@@ -17,7 +17,7 @@
        [:span {:class "font-bold text-lg" :style "color:var(--text-primary, #e5e7eb)"} "Datalevin"]]
       [:nav {:class "hidden md:flex items-center gap-6"
              :style "color:var(--text-secondary, #9ca3af);"}
-       [:a {:href "/docs" :class "hover:text-cyan-400 transition" :style "color:var(--text-secondary, #9ca3af);"} "The Book"]
+       [:a {:href "/docs" :class "hover:text-cyan-400 transition" :style "color:var(--text-secondary, #9ca3af);"} "The Guide"]
        [:a {:href "/examples" :class "hover:text-cyan-400 transition" :style "color:var(--text-secondary, #9ca3af);"} "Examples"]
        [:a {:href "/search" :class "hover:text-cyan-400 transition" :style "color:var(--text-secondary, #9ca3af);"} "Search"]
        [:a {:href "https://github.com/datalevin/datalevin" :target "_blank" :rel "noopener noreferrer"

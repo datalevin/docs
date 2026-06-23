@@ -2,6 +2,7 @@
 title: "Recall and Context Assembly"
 chapter: 25
 part: "VI — Datalevin for Intelligent Systems"
+web: false
 ---
 
 # Chapter 25: Recall and Context Assembly

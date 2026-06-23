@@ -5,7 +5,7 @@
   "dev-session-secret-fallback-1234")
 
 (def ^:const default-datalevin-version
-  "0.10.18")
+  "1.0.x")
 
 (defn env
   "Returns the value of an environment variable, falling back to system property."

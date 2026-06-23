@@ -2,6 +2,7 @@
 title: "Stateful AI Applications"
 chapter: 27
 part: "VI — Datalevin for Intelligent Systems"
+web: false
 ---
 
 # Chapter 27: Stateful AI Applications

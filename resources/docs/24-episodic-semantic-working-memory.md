@@ -2,6 +2,7 @@
 title: "Episodic, Semantic, and Working Memory"
 chapter: 24
 part: "VI — Datalevin for Intelligent Systems"
+web: false
 ---
 
 # Chapter 24: Episodic, Semantic, and Working Memory

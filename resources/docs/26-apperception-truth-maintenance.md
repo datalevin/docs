@@ -2,6 +2,7 @@
 title: "Apperception and Truth Maintenance"
 chapter: 26
 part: "VI — Datalevin for Intelligent Systems"
+web: false
 ---
 
 # Chapter 26: Apperception and Truth Maintenance

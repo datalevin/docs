@@ -2,6 +2,7 @@
 title: "Appendix E: Core API Helpers"
 chapter: 32
 part: "VII — Appendices"
+web: false
 ---
 
 # Appendix E: Core API Helpers
