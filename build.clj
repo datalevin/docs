@@ -1425,6 +1425,25 @@
       (binding [*out* *err*]
         (print err)))))
 
+(def ^:private predicate-token-tex-pattern
+  #"\\(AttributeTok|FunctionTok|BuiltInTok|KeywordTok|VariableTok)\{((?:[^{}]|\{[^{}]*\})*)\}\\NormalTok\{\?([^}]*)\}")
+
+(defn- fix-predicate-token-highlighting
+  [tex]
+  (str/replace
+   tex
+   predicate-token-tex-pattern
+   (fn [[_ macro body tail]]
+     (str "\\" macro "{" body "?}"
+          (when (seq tail)
+            (str "\\NormalTok{" tail "}"))))))
+
+(defn- postprocess-pandoc-tex!
+  [tex-file]
+  ;; Pandoc's Clojure highlighter treats a trailing predicate marker as
+  ;; normal text in tokens such as :inmemory?. Keep it styled with the token.
+  (spit tex-file (fix-predicate-token-highlighting (slurp tex-file))))
+
 (defn- svg-file?
   [file]
   (and (.isFile file)
@@ -1522,6 +1541,7 @@
                  "--top-level-division=chapter"
                  "--resource-path=.:resources/public"
                  "-o" final-tex-file])
+  (postprocess-pandoc-tex! final-tex-file)
   (doseq [cmd [["xelatex" "-interaction=nonstopmode" "-halt-on-error"
                 (str "-jobname=" final-pdf-stem)
                 "-output-directory" pdf-dir
