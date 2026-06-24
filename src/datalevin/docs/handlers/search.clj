@@ -89,7 +89,9 @@
 (defn- result-for-search-record [db entity attr offsets]
   (let [text (get (d/pull db [attr] (:db/id entity)) attr)
         type (:search/type entity)]
-    {:title    (or (:search/title entity) (:search/doc entity))
+    {:title    (or (:search/title entity)
+                   (:search/context entity)
+                   (:search/doc entity))
      :filename (:search/doc entity)
      :chapter  (:search/chapter entity)
      :part     (:search/part entity)
@@ -117,7 +119,8 @@
 
 (def ^:private search-record-query
   '[:find (pull ?e [:db/id :search/type :search/doc :search/anchor
-                    :search/title :search/language :search/chapter :search/part])
+                    :search/title :search/context :search/language
+                    :search/chapter :search/part])
           ?a ?offsets
     :in $ ?q
     :where [(fulltext $ ?q {:top 20

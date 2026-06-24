@@ -149,7 +149,6 @@
  {:term "reverse pull" :index "pull!reverse pull"}
  {:term "rules" :index "Datalog!rules"}
  {:term "schema"}
- {:term "schema-on-write" :index "schema!schema-on-write"}
  {:term "semantic memory" :index "agent memory!semantic memory"}
  {:term "server mode"}
  {:term "serial-position effect" :index "agent memory!serial-position effect"}

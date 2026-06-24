@@ -3,6 +3,7 @@
             [biff.datalevin.session :as session]
             [clojure.java.io :as io]
             [clojure.string :as str]
+            [datalevin.docs.config :as config]
             [datalevin.docs.handlers.pages :as pages]
             [datalevin.docs.handlers.search :as search]
             [datalevin.docs.handlers.auth :as auth]
@@ -203,6 +204,25 @@
 (def ^:private static-asset-max-age-seconds
   86400)
 
+(def ^:private reindex-csrf-bypass-header
+  "x-reindex-csrf-bypass")
+
+(defn- reindex-secret-request?
+  [{:keys [request-method uri headers]}]
+  (let [secret (some-> (config/env "REINDEX_SECRET") str/trim not-empty)]
+    (and (= :post request-method)
+         (= "/admin/reindex" uri)
+         (seq secret)
+         (= secret (get headers "x-reindex-secret")))))
+
+(defn- wrap-reindex-secret-csrf-bypass
+  [handler]
+  (fn [req]
+    (handler
+     (cond-> req
+       (reindex-secret-request? req)
+       (assoc-in [:headers reindex-csrf-bypass-header] "true")))))
+
 (defn wrap-static-asset-headers [handler]
   (fn [req]
     (let [resp (handler req)
@@ -297,5 +317,8 @@
         (defaults/wrap-defaults
           (-> defaults/site-defaults
               (assoc :static false)
+              (assoc-in [:security :anti-forgery :safe-header]
+                        reindex-csrf-bypass-header)
               (assoc-in [:session :cookie-attrs :max-age] 86400)
-              (assoc-in [:session :cookie-attrs :secure] (= env "prod")))))))
+              (assoc-in [:session :cookie-attrs :secure] (= env "prod"))))
+        wrap-reindex-secret-csrf-bypass)))

@@ -137,6 +137,12 @@
     (is (= "clojure"
            (get-in by-key ["08-datalog-fundamentals#rules:code-1"
                            :search/language])))
+    (is (nil?
+         (get-in by-key ["08-datalog-fundamentals#rules:code-1"
+                         :search/title])))
+    (is (= "Rules"
+           (get-in by-key ["08-datalog-fundamentals#rules:code-1"
+                           :search/context])))
     (is (= :figure
            (get-in by-key ["08-datalog-fundamentals#rules:figure-1"
                            :search/type])))))

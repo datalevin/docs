@@ -79,6 +79,31 @@
     return m ? canonicalLang(m[1]) : '';
   }
 
+  function isClojureBlock(codeEl) {
+    var cls = codeEl.className || '';
+    return /\blanguage-(clojure|clj|edn)\b/.test(cls) ||
+      /\b(clojure|clj|edn)\b/.test(cls);
+  }
+
+  function fixClojurePredicateSymbols(el) {
+    var symbols = el.querySelectorAll('.hljs-symbol');
+    for (var i = 0; i < symbols.length; i++) {
+      var symbol = symbols[i];
+      var text = symbol.textContent || '';
+      if (text.charAt(0) !== ':') continue;
+
+      var next = symbol.nextSibling;
+      if (!next || next.nodeType !== 3) continue;
+
+      var nextText = next.nodeValue || '';
+      var match = nextText.match(/^\?[^\s\[\]\(\)\{\}",;]*/);
+      if (!match) continue;
+
+      symbol.textContent = text + match[0];
+      next.nodeValue = nextText.slice(match[0].length);
+    }
+  }
+
   function activatePanel(container, idx) {
     var tabs = container.querySelectorAll('.lang-tab');
     var panels = container.querySelectorAll('.lang-panel');
@@ -232,8 +257,8 @@
     var cljBlocks = document.querySelectorAll('code.hljs:not([data-rainbow])');
     for (var i = 0; i < cljBlocks.length; i++) {
       var el = cljBlocks[i];
-      var lang = el.className || '';
-      if (lang.indexOf('clojure') !== -1 || lang.indexOf('clj') !== -1) {
+      if (isClojureBlock(el)) {
+        fixClojurePredicateSymbols(el);
         rainbowParens(el);
         el.setAttribute('data-rainbow', 'true');
       }

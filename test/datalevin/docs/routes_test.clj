@@ -3,6 +3,8 @@
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [datalevin.docs.handlers.auth :as auth]
+            [datalevin.docs.handlers.admin :as admin]
+            [datalevin.docs.config :as config]
             [datalevin.docs.handlers.pages :as pages]
             [datalevin.docs.routes :as routes]
             [ring.middleware.anti-forgery :as anti-forgery])
@@ -29,6 +31,19 @@
 
     (testing "POST logout is protected by anti-forgery middleware"
       (is (= 403 (:status (handler (request :post "/auth/logout"))))))))
+
+(deftest reindex-route-allows-secret-header-without-csrf-token
+  (with-redefs [config/env (fn [name]
+                             (when (= name "REINDEX_SECRET")
+                               "expected"))
+                admin/reindex-handler (fn [_] {:status 204})]
+    (let [handler (routes/app {:reindex-secret "expected"
+                               :biff/config {:env "dev"}})
+          resp (handler (request-with-headers
+                         :post
+                         "/admin/reindex"
+                         {"x-reindex-secret" "expected"}))]
+      (is (= 204 (:status resp))))))
 
 (deftest login-page-sanitizes-return-to
   (binding [anti-forgery/*anti-forgery-token* (delay "test-token")]

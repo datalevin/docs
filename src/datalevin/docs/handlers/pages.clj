@@ -262,27 +262,29 @@
             (let [n (swap! code-count inc)
                   anchor (current-anchor)
                   title (current-title)
-                  key (str slug
-                           (if anchor (str "#" anchor) "#top")
-                           ":code-" n)]
-              (swap! records conj
-                     (cond-> (assoc (search-record-base slug frontmatter :example
-                                                        key anchor title (next-order!))
-                                    :search/code code)
-                       (code-language info) (assoc :search/language (code-language info)))))))
+              key (str slug
+                       (if anchor (str "#" anchor) "#top")
+                       ":code-" n)]
+          (swap! records conj
+                 (cond-> (assoc (search-record-base slug frontmatter :example
+                                                     key anchor nil (next-order!))
+                                 :search/code code
+                                 :search/context title)
+                   (code-language info) (assoc :search/language (code-language info)))))))
         add-figure!
         (fn [alt-text]
           (when-let [text (normalize-search-text alt-text)]
             (let [n (swap! figure-count inc)
                   anchor (current-anchor)
                   title (current-title)
-                  key (str slug
-                           (if anchor (str "#" anchor) "#top")
-                           ":figure-" n)]
-              (swap! records conj
-                     (assoc (search-record-base slug frontmatter :figure
-                                                key anchor title (next-order!))
-                            :search/text text)))))
+              key (str slug
+                       (if anchor (str "#" anchor) "#top")
+                       ":figure-" n)]
+          (swap! records conj
+                 (assoc (search-record-base slug frontmatter :figure
+                                            key anchor nil (next-order!))
+                        :search/text text
+                        :search/context title)))))
         visit!
         (fn visit! [^Node node]
           (cond

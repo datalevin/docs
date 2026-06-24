@@ -13,20 +13,20 @@ three pillars: **Attributes**, **Entities**, and **Namespaces**.
 Unlike a relational database, Datalevin does not require you to declare a full
 schema before writing data. When transaction data mentions an attribute that is
 not yet in the schema, Datalevin creates a schema entry for that attribute
-automatically. That is Datalevin's **schema-on-write** model: schema can be
-created as data is written, not fully declared before data is accepted. Declared
-attribute properties still matter: types, uniqueness, cardinality, indexes, and
-other schema properties control how attributes are stored, constrained, indexed,
-and queried. The database is flexible by default, but provides powerful controls
-when you need performance and integrity.
+automatically. Schema can be created as data is written, instead of being fully
+declared before data is accepted. Declared attribute properties still matter:
+types, uniqueness, cardinality, indexes, and other schema properties control how
+attributes are stored, constrained, indexed, and queried. The database is
+flexible by default, but provides powerful controls when you need performance
+and integrity.
 
-![Attribute schema lifecycle: a new attribute appears on transact and is added automatically; by default it has an implicit EDN-blob type supporting exact-match lookup; declaring :db/valueType with :db/cardinality and :db/unique unlocks range and sorted queries, validation, upsert, and compact storage; adding the :db/fulltext and :db/embedding flags unlocks full-text and embedding search — a progression from flexible, no declared schema to strict, enforced types and indexes](/images/diagrams/schema-on-write-lifecycle.svg)
+![Attribute schema lifecycle: a new attribute appears on transact and is added automatically; by default it has an implicit EDN-blob type supporting exact-match lookup; declaring :db/valueType with :db/cardinality and :db/unique unlocks range and sorted queries, validation, upsert, and compact storage; adding the :db/fulltext and :db/embedding flags unlocks full-text and embedding search — a progression from flexible, no declared schema to strict, enforced types and indexes](/images/diagrams/attribute-schema-lifecycle.svg)
 
 Figure 5.1 depicts the lifecycle of schema evolution for an application. The
 detailed description of each stage comes in the following sections.
 
 
-## 1. Attributes: The Schema-on-Write Model
+## 1. Attributes: Flexible Schema
 
 An attribute (the "A" in EAV) defines a property that can be associated with an
 entity. Attributes are the main subjects of a Datalevin schema.

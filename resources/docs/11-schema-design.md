@@ -893,8 +893,8 @@ Two options are especially important:
 - **`:validate-data? true`** checks transaction values against declared
   `:db/valueType` before writing. The default is `false`.
 - **`:closed-schema? true`** rejects transactions that mention attributes not
-  already present in the schema. The default is `false`, which preserves
-  schema-on-write behavior.
+  already present in the schema. The default is `false`, which allows new
+  attributes to be added as data is written.
 
 One validation rule is always important: Datalevin does **not** store `nil`
 values. In JavaScript and Python client code, this also means application-level

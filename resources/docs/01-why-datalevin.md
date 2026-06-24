@@ -122,12 +122,11 @@ therefore matters. Namespaces such as `:user/email`, `:doc/body`, and
 
 Datalevin does not require a complete schema up front. When transaction data
 mentions an attribute that is not yet in the schema, Datalevin creates a schema
-entry for that attribute automatically. That automatic creation of schema as
-data is written is what this book means by **schema-on-write**. You can start
-with a small model and add declared structure as the application becomes
-clearer. Declared attribute properties still matter: types, uniqueness,
-references, indexing flags, and other schema properties control how attributes
-are stored, constrained, indexed, and queried.
+entry for that attribute automatically. You can start with a small model and add
+declared structure as the application becomes clearer. Declared attribute
+properties still matter: types, uniqueness, references, indexing flags, and
+other schema properties control how attributes are stored, constrained, indexed,
+and queried.
 
 ### Aggregate Models vs Triple Model
 

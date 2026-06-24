@@ -55,6 +55,7 @@
    :search/code {:db/valueType :db.type/string
                  :db/fulltext true
                  :db.fulltext/domains ["code"]}
+   :search/context {:db/valueType :db.type/string}
    :search/language {:db/valueType :db.type/string}
    :search/chapter {:db/valueType :db.type/long}
    :search/part {:db/valueType :db.type/string}

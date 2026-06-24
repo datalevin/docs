@@ -86,7 +86,7 @@ options, not by entries inside the schema map:
 | Option | Default | Meaning |
 | :--- | :--- | :--- |
 | `:validate-data?` | `false` | When `true`, transaction values must already match declared `:db/valueType` runtime types. When `false`, Datalevin still uses declared types to coerce or canonicalize values where possible. |
-| `:closed-schema?` | `false` | When `true`, transactions may mention only attributes already present in the schema. When `false`, Datalevin preserves schema-on-write behavior. |
+| `:closed-schema?` | `false` | When `true`, transactions may mention only attributes already present in the schema. When `false`, Datalevin allows new attributes to be added as data is written. |
 | `:auto-entity-time?` | `false` | When `true`, Datalevin maintains `:db/created-at` and `:db/updated-at` epoch-millisecond values for entities. |
 
 Pass these options when opening or creating a database:
