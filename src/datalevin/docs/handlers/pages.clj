@@ -582,10 +582,10 @@
                             [:p {:style "color:#9ca3af;font-size:0.875rem"} "Start embedded, move to cluster, never migrate data."]]
                            [:a {:href "/docs/21-query-optimization-profiling" :class card-style}
                             [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Performance Optimized"]
-                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "WAL and asynchronous transactions + state of the art query optimizer and rule engine."]]
+                           [:p {:style "color:#9ca3af;font-size:0.875rem"} "WAL and asynchronous transactions + state of the art query optimizer and rule engine."]]
                            [:a {:href "/docs/18-hybrid-queries" :class card-style}
-                            [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "Retrieval Ready"]
-                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "Full-text, vector, embedding, idoc, and logic filters compose in one query."]]]]
+                            [:h3 {:style "font-weight:600;margin-bottom:0.5rem;color:#f9fafb"} "AI Native"]
+                            [:p {:style "color:#9ca3af;font-size:0.875rem"} "Built-in embedding, text generation, and OCR, with full-text/vector/idoc retrieval and MCP tools."]]]]
                          ;; Ecosystem
                          [:div {:style "max-width:64rem;margin:0 auto;padding:2rem 2rem"}
                           [:h2 {:class "section-title" :style "font-size:1.5rem;font-weight:bold;text-align:center;margin-bottom:0.75rem;color:#f9fafb"} "Ecosystem"]
