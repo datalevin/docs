@@ -28,9 +28,8 @@ You need Java 21 or newer. Python examples also assume Python 3.10 or newer,
 and JavaScript examples assume Node.js 20 or newer. This book targets the
 Datalevin 1.0.x release line; for dependency coordinates in this starter
 project, use the current released 1.0.x package version. In this edition, that
-version is shown as `{{datalevin-version}}`. If you are reading an older copy,
-check the package page or the Datalevin GitHub repository for the current
-release.
+version is shown as `{{datalevin-version}}`. Check the package page or the
+Datalevin GitHub repository for the current release.
 
 Add the Datalevin package for the language you want to use:
 
@@ -537,7 +536,7 @@ const memConn = await connect(null, {
 
 `{:kv-opts {:inmemory? true}}` is an option map given when opening the database
 connection. It passes the `:inmemory? true` option to the underlying key-value
-store. With this, this database does not persist to disk. Closing the connection
+store. With this option, the database does not persist to disk. Closing the connection
 or ending the process loses the contents. Use a real directory path when the
 data must survive process restart.
 

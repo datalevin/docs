@@ -92,7 +92,9 @@
          ;; Single DB with canonical schema
          all-schema schema/schema
          conn (d/get-conn db-path all-schema
-                          {:search-domains {"datalevin" {:index-position? true}}})
+                          {:search-domains {"datalevin" {:index-position? true}
+                                            "site" {:index-position? true}
+                                            "code" {:index-position? true}}})
 
          _ (pages/warm-static-caches!)
          session-scheduler (start-session-cleanup conn)

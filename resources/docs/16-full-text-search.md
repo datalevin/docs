@@ -1418,6 +1418,96 @@ participate in the default `"datalevin"` domain. Attributes with
 the attribute without the leading colon, such as `"post/title"`.
 
 
+### 5.4 Application Pattern: Typed Search Records
+
+For application search, do not assume that the thing you index must be the
+original domain entity. Often the better model is to create explicit search
+records: ordinary Datalevin entities whose job is to represent searchable units
+of the application.
+
+A documentation site is a good example. If you index an entire Markdown chapter
+as one string, a hit tells you that the chapter matched somewhere, and offsets
+are accurate only inside that Markdown source. They do not necessarily line up
+with rendered HTML, generated anchors, syntax-highlighted code, or extracted
+examples. A more precise design is to index the units users can actually land
+on: sections, examples, figures, API entries, and other rendered blocks.
+
+The `:search/type` attribute is application metadata. It tells the result
+renderer what kind of thing matched. Full-text domains are index configuration.
+They decide which analyzer, visibility boundary, and search surface should be
+used.
+
+```clojure
+(def search-schema
+  {:search/key    {:db/valueType :db.type/string
+                   :db/unique :db.unique/identity}
+   :search/type   {:db/valueType :db.type/keyword}
+   :search/doc    {:db/valueType :db.type/string}
+   :search/anchor {:db/valueType :db.type/string}
+
+   :search/title  {:db/valueType :db.type/string
+                   :db/fulltext  true
+                   :db.fulltext/domains ["site"]
+                   :db.fulltext/autoDomain true}
+
+   :search/text   {:db/valueType :db.type/string
+                   :db/fulltext  true
+                   :db.fulltext/domains ["site"]}
+
+   :search/code   {:db/valueType :db.type/string
+                   :db/fulltext  true
+                   :db.fulltext/domains ["code"]}})
+```
+
+An indexing job can infer the type from the source structure. A heading becomes
+a section record. A code fence becomes an example record. A figure caption
+becomes a figure record. The user still types one search query; the application
+uses the type internally to render better results.
+
+```clojure
+(d/transact! conn
+  [{:search/key "08-query#rules"
+    :search/type :section
+    :search/doc "08-query"
+    :search/anchor "rules"
+    :search/title "Rules"
+    :search/text "Rules let you name reusable query logic..."}
+
+   {:search/key "08-query#rules:example-basic"
+    :search/type :example
+    :search/doc "08-query"
+    :search/anchor "rules"
+    :search/title "Basic rule query"
+    :search/code "(d/q '[:find ?e :where ...] db)"}])
+```
+
+Now the result entity already knows where it should send the user:
+`/docs/08-query#rules`. The snippet can be built from the same normalized text
+that was indexed, while the page link jumps to a stable rendered anchor.
+
+Queries can search one domain or merge several domains:
+
+```clojure
+(d/q '[:find (pull ?hit [:search/type
+                         :search/doc
+                         :search/anchor
+                         :search/title])
+       :in $ ?q
+       :where [(fulltext $ ?q {:domains ["site" "code"]
+                               :top 20
+                               :display :offsets})
+               [[?hit _ _ ?offsets]]]]
+     (d/db conn)
+     "rules")
+```
+
+Use this pattern when search results need precise destinations, type-aware
+rendering, or different analyzers for prose and code. Keep using the original
+domain entities directly when the searchable field naturally belongs to the
+thing being returned, such as a post title, product description, or customer
+message.
+
+
 ## 6. Standalone Search Engine
 
 Datalevin can be used as a standalone search engine outside of Datalog from the

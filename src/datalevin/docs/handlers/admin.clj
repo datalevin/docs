@@ -6,7 +6,7 @@
             [clojure.string :as str]
             [ring.middleware.anti-forgery :as anti-forgery]
             [taoensso.timbre :as log])
-  (:import [java.util Date UUID]))
+  (:import [java.util UUID]))
 
 (def ^:private admin-example-pull-expr
   [:example/id :example/title :example/code :example/output
@@ -19,6 +19,17 @@
     (or (= (:user/role user) :admin)
         (and (seq reindex-secret)
              (= secret-header reindex-secret)))))
+
+(defn- retract-existing-search-index-txs
+  [db]
+  (let [search-eids (d/q '[:find [?e ...]
+                           :where [?e :search/key]]
+                         db)
+        legacy-doc-eids (d/q '[:find [?e ...]
+                               :where [?e :doc/filename]]
+                             db)]
+    (mapv (fn [eid] [:db/retractEntity eid])
+          (concat search-eids legacy-doc-eids))))
 
 ;; ---- Remove / Restore ----
 
@@ -141,28 +152,27 @@
                          (.listFiles)
                          (filter #(and (.isFile %) (str/ends-with? (.getName %) ".md")))
                          (remove #(= (.getName %) "toc.md")))
-              ;; Build all transactions, then batch-transact to reduce overhead
+              db (d/db conn)
+              retract-txs (retract-existing-search-index-txs db)
               txs (doall
-                   (keep (fn [f]
-                     (let [filename (str/replace (.getName f) #"\.md$" "")
-                           content (slurp f)
-                           {:keys [frontmatter markdown]} (pages/parse-frontmatter content)]
-                       (when (pages/web-visible-frontmatter? frontmatter)
-                         (cond-> {:doc/filename filename
-                                  :doc/content markdown
-                                  :doc/updated-at (Date.)}
-                           (:title frontmatter) (assoc :doc/title (:title frontmatter))
-                           (:chapter frontmatter) (assoc :doc/chapter (:chapter frontmatter))
-                           (:part frontmatter) (assoc :doc/part (:part frontmatter))))))
-                    files))]
-          ;; Single batch transaction instead of one per file
-          (d/transact! conn txs)
+                   (mapcat (fn [f]
+                             (let [filename (str/replace (.getName f) #"\.md$" "")
+                                   content (slurp f)
+                                   {:keys [frontmatter markdown]} (pages/parse-frontmatter content)]
+                               (if (pages/web-visible-frontmatter? frontmatter)
+                                 (pages/search-records filename frontmatter markdown)
+                                 [])))
+                           files))]
+          (when (seq retract-txs)
+            (d/transact! conn retract-txs))
+          (when (seq txs)
+            (d/transact! conn txs))
           ;; Clear caches after reindex
           (pages/clear-all-caches!)
           (pages/warm-static-caches!)
-          (log/info "Reindex complete:" (count txs) "docs")
+          (log/info "Reindex complete:" (count txs) "search records")
           {:status 302
-           :session (assoc session :flash {:success (str "Reindexed " (count txs) " documents")})
+           :session (assoc session :flash {:success (str "Reindexed " (count txs) " search records")})
            :headers {"Location" "/admin/examples"}})
         (catch Exception e
           (log/error e "Reindex failed")

@@ -166,25 +166,6 @@ In the example below, one transaction creates two entities and relates them. A
 **reference** attribute, declared with data type `:db.type/ref`, stores the
 entity id of another entity. This is how Datalevin represents graph edges.
 
-When a transaction creates several related entities at once, you can use
-temporary entity ids, or **tempids**, so the new entities can refer to one
-another before Datalevin assigns permanent ids. In entity maps, `:db/id` is the
-system attribute used to provide an explicit entity id or tempid. Negative
-integers and strings can be used as tempids. If the transaction data does not
-need to connect new entities to one another, `:db/id` can be omitted and
-Datalevin will assign permanent entity ids automatically.
-
-Do not put application identifiers in `:db/id`. A permanent Datalevin entity id
-is a system-managed `long`, not a UUID, email, slug, or external primary key.
-It is also local to one database: two databases with the same application data
-may assign different eids. Use a separate unique identity attribute, such as
-`:user/id` or `:user/email`, for application identity.
-
-Chapter 6 covers transaction data shapes, transaction reports, listeners,
-transaction functions, and durability settings in detail. For now, the important
-mental model is simple: Datalevin changes the database in coherent committed
-steps, not by mutating one fact at a time in isolation.
-
 <div class="multi-lang">
 
 ```clojure
@@ -275,6 +256,25 @@ await conn.transact([
 ```
 
 </div>
+
+When a transaction creates several related entities at once, you can use
+temporary entity ids, or **tempids**, so the new entities can refer to one
+another before Datalevin assigns permanent ids. In entity maps, `:db/id` is the
+system attribute used to provide an explicit entity id or tempid. Negative
+integers and strings can be used as tempids. If the transaction data does not
+need to connect new entities to one another, `:db/id` can be omitted and
+Datalevin will assign permanent entity ids automatically.
+
+Do not put application identifiers in `:db/id`. A permanent Datalevin entity id
+is a system-managed `long`, not a UUID, email, slug, or external primary key.
+It is also local to one database: two databases with the same application data
+may assign different eids. Use a separate unique identity attribute, such as
+`:user/id` or `:user/email`, for application identity.
+
+Chapter 6 covers transaction data shapes, transaction reports, listeners,
+transaction functions, and durability settings in detail. For now, the important
+mental model is simple: Datalevin changes the database in coherent committed
+steps, not by mutating one fact at a time in isolation.
 
 ## 5. Store Each Fact Once, Then Link Entities
 
@@ -627,11 +627,12 @@ const emails = await conn.query(
 
 </div>
 
-The query only names the policy as `(premium-user ?u)`. The rule body records
-what the policy means: the user is active, has a subscription entity, and that
-subscription is both premium and active. If the policy changes, the calling
-queries can stay focused on the business concept rather than repeating all of
-those clauses.
+The `%` entry in `:in` is Datalevin's special marker for the rule set supplied
+to the query; it is not just a naming convention. The query applies the rule by
+calling `(premium-user ?u)`. The rule body records what the policy means: the
+user is active, has a subscription entity, and that subscription is both premium
+and active. If the policy changes, the calling queries can stay focused on the
+business concept rather than repeating all of those clauses.
 
 Rules can also be **recursive**, meaning a rule can call itself. Recursion is
 essential for graph traversal because it lets a query follow an unknown number
@@ -682,8 +683,7 @@ const ancestryRules = `
 </div>
 
 By defining this rule, you've taught the database the *concept* of an ancestor.
-The `%` input below supplies the rule set to the query, and `(ancestor 42
-?ancestor)` calls the rule:
+The query below calls that rule as `(ancestor 42 ?ancestor)`:
 
 <div class="multi-lang">
 

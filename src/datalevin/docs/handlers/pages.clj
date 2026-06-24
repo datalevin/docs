@@ -9,15 +9,88 @@
             [hiccup2.core :as h])
   (:import [java.time Instant]
            [java.time.format DateTimeFormatter]
+           [org.commonmark.node Block Code FencedCodeBlock HardLineBreak Heading
+            Image IndentedCodeBlock Node SoftLineBreak Text]
            [org.commonmark.ext.footnotes FootnotesExtension]
            [org.commonmark.ext.gfm.tables TablesExtension]
            [org.commonmark.parser Parser]
-           [org.commonmark.renderer.html HtmlRenderer]))
+           [org.commonmark.renderer.html AttributeProvider AttributeProviderFactory HtmlRenderer]))
 
 (def docs-dir "resources/docs")
 (def extensions [(FootnotesExtension/create) (TablesExtension/create)])
 (def parser* (.. Parser builder (extensions extensions) build))
-(def renderer* (.. HtmlRenderer builder (extensions extensions) build))
+
+(defn- child-seq
+  [^Node node]
+  (when-let [first-child (.getFirstChild node)]
+    (->> first-child
+         (iterate #(.getNext ^Node %))
+         (take-while some?))))
+
+(declare node-text)
+
+(defn- children-text
+  [^Node node]
+  (->> (child-seq node)
+       (map node-text)
+       (remove str/blank?)
+       (str/join " ")))
+
+(defn- node-text
+  [^Node node]
+  (cond
+    (instance? Text node) (.getLiteral ^Text node)
+    (instance? Code node) (.getLiteral ^Code node)
+    (instance? SoftLineBreak node) " "
+    (instance? HardLineBreak node) " "
+    (instance? FencedCodeBlock node) ""
+    (instance? IndentedCodeBlock node) ""
+    :else (children-text node)))
+
+(defn- normalize-search-text
+  [text]
+  (some-> text
+          (str/replace #"\s+" " ")
+          str/trim
+          not-empty))
+
+(defn- slugify
+  [s]
+  (let [slug (-> (or s "")
+                 str/lower-case
+                 (str/replace #"[^a-z0-9]+" "-")
+                 (str/replace #"(^-+|-+$)" ""))]
+    (if (seq slug) slug "section")))
+
+(defn- unique-anchor!
+  [seen heading-text]
+  (let [base (slugify heading-text)
+        n (get @seen base 0)
+        anchor (if (zero? n)
+                 base
+                 (str base "-" (inc n)))]
+    (swap! seen assoc base (inc n))
+    anchor))
+
+(defn- heading-anchor-provider-factory
+  []
+  (reify AttributeProviderFactory
+    (create [_ _context]
+      (let [seen (atom {})]
+        (reify AttributeProvider
+          (setAttributes [_ node tag-name attrs]
+            (when (and (instance? Heading node)
+                       (str/starts-with? tag-name "h"))
+              (let [heading-text (or (normalize-search-text (node-text node))
+                                     "section")]
+                (.put attrs "id" (unique-anchor! seen heading-text))))))))))
+
+(def renderer*
+  (.. HtmlRenderer
+      builder
+      (extensions extensions)
+      (attributeProviderFactory (heading-anchor-provider-factory))
+      build))
 
 ;; Cache for chapter metadata to avoid repeated file I/O
 ;; Metadata only changes when docs are added/removed, so we cache indefinitely
@@ -116,6 +189,133 @@
   (str/replace (or markdown "")
                "{{datalevin-version}}"
                (config/datalevin-version)))
+
+(defn- search-record-base
+  [slug frontmatter type key anchor title order]
+  (cond-> {:search/key key
+           :search/type type
+           :search/doc slug}
+    order (assoc :search/order order)
+    (seq anchor) (assoc :search/anchor anchor)
+    (seq title) (assoc :search/title title)
+    (:chapter frontmatter) (assoc :search/chapter (:chapter frontmatter))
+    (:part frontmatter) (assoc :search/part (:part frontmatter))))
+
+(defn- code-language
+  [info]
+  (some-> info str/trim (str/split #"\s+") first not-empty))
+
+(defn search-records
+  "Build typed search records for one rendered Markdown document.
+
+   The records are ordinary Datalevin entities: sections search prose,
+   examples search code fences, and figures search image alt text. Heading
+   anchors are generated with the same algorithm used by parse-markdown."
+  [slug frontmatter markdown]
+  (let [doc-node (.parse parser* (substitute-markdown-vars markdown))
+        seen-anchors (atom {})
+        current-section (atom nil)
+        records (atom [])
+        order (atom 0)
+        code-count (atom 0)
+        figure-count (atom 0)
+        next-order! #(swap! order inc)
+        current-target (fn []
+                         (or @current-section
+                             (let [section {:anchor nil
+                                            :title (or (:title frontmatter) slug)
+                                            :order (next-order!)
+                                            :text []}]
+                               (reset! current-section section)
+                               section)))
+        current-anchor #(some-> (current-target) :anchor)
+        current-title #(or (:title (current-target))
+                           (:title frontmatter)
+                           slug)
+        flush-section!
+        (fn []
+          (when-let [{:keys [anchor title text order]} @current-section]
+            (when-let [body (normalize-search-text (str/join " " text))]
+              (swap! records conj
+                     (assoc (search-record-base slug frontmatter :section
+                                                (str slug (when anchor (str "#" anchor)))
+                                                anchor title order)
+                            :search/text body)))))
+        append-section-text!
+        (fn [text]
+          (when (seq text)
+            (let [section (current-target)]
+              (swap! current-section update :text conj text))))
+        start-section!
+        (fn [^Heading heading]
+          (flush-section!)
+          (let [title (or (normalize-search-text (node-text heading))
+                          "Section")
+                anchor (unique-anchor! seen-anchors title)]
+            (reset! current-section {:anchor anchor
+                                     :title title
+                                     :order (next-order!)
+                                     :text []})))
+        add-code!
+        (fn [literal info]
+          (when-let [code (some-> literal str/trim not-empty)]
+            (let [n (swap! code-count inc)
+                  anchor (current-anchor)
+                  title (current-title)
+                  key (str slug
+                           (if anchor (str "#" anchor) "#top")
+                           ":code-" n)]
+              (swap! records conj
+                     (cond-> (assoc (search-record-base slug frontmatter :example
+                                                        key anchor title (next-order!))
+                                    :search/code code)
+                       (code-language info) (assoc :search/language (code-language info)))))))
+        add-figure!
+        (fn [alt-text]
+          (when-let [text (normalize-search-text alt-text)]
+            (let [n (swap! figure-count inc)
+                  anchor (current-anchor)
+                  title (current-title)
+                  key (str slug
+                           (if anchor (str "#" anchor) "#top")
+                           ":figure-" n)]
+              (swap! records conj
+                     (assoc (search-record-base slug frontmatter :figure
+                                                key anchor title (next-order!))
+                            :search/text text)))))
+        visit!
+        (fn visit! [^Node node]
+          (cond
+            (instance? Heading node)
+            (start-section! node)
+
+            (instance? FencedCodeBlock node)
+            (add-code! (.getLiteral ^FencedCodeBlock node)
+                       (.getInfo ^FencedCodeBlock node))
+
+            (instance? IndentedCodeBlock node)
+            (add-code! (.getLiteral ^IndentedCodeBlock node) nil)
+
+            (instance? Image node)
+            (let [alt-text (node-text node)]
+              (add-figure! alt-text)
+              (append-section-text! alt-text))
+
+            (or (instance? Text node)
+                (instance? Code node)
+                (instance? SoftLineBreak node)
+                (instance? HardLineBreak node))
+            (append-section-text! (node-text node))
+
+            :else
+            (do
+              (doseq [child (child-seq node)]
+                (visit! child))
+              (when (instance? Block node)
+                (append-section-text! " ")))))]
+    (visit! doc-node)
+    (flush-section!)
+    @records))
 
 (defn- read-frontmatter
   [file]

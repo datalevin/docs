@@ -68,32 +68,90 @@
 
 (def ^:private max-query-length 200)
 
-(defn- doc-result? [attr] (#{:doc/title :doc/content} attr))
+(def ^:private searchable-attrs
+  #{:search/title :search/text :search/code :example/code})
 
-(defn- result-for-doc [db entity attr offsets]
-  (let [text (get (d/pull db [attr] (:db/id entity)) attr)]
-    {:title    (:doc/title entity)
-     :filename (:doc/filename entity)
-     :chapter  (:doc/chapter entity)
+(def ^:private attr-priority
+  {:search/text 3
+   :search/code 3
+   :example/code 3
+   :search/title 1})
+
+(defn- hit-better?
+  [new-attr old-attr]
+  (> (get attr-priority new-attr 0)
+     (get attr-priority old-attr 0)))
+
+(defn- doc-url
+  [doc anchor]
+  (str "/docs/" doc (when (seq anchor) (str "#" anchor))))
+
+(defn- result-for-search-record [db entity attr offsets]
+  (let [text (get (d/pull db [attr] (:db/id entity)) attr)
+        type (:search/type entity)]
+    {:title    (or (:search/title entity) (:search/doc entity))
+     :filename (:search/doc entity)
+     :chapter  (:search/chapter entity)
+     :part     (:search/part entity)
+     :anchor   (:search/anchor entity)
+     :language (:search/language entity)
      :snippet  (build-snippet text offsets)
-     :type     :doc
-     :url      (str "/docs/" (:doc/filename entity))}))
+     :type     type
+     :url      (doc-url (:search/doc entity) (:search/anchor entity))}))
 
 (defn- result-for-example [db entity attr offsets]
   (let [text (get (d/pull db [attr] (:db/id entity)) attr)]
     {:snippet     (build-snippet text offsets)
      :doc-section (:example/doc-section entity)
-     :type        :example
-     :url         (if-let [s (:example/doc-section entity)]
-                    (str "/docs/" s)
+     :type        :community-example
+     :url         (if-let [s (some-> (:example/doc-section entity) not-empty)]
+                    (str "/docs/" s "#examples")
                     "/examples")}))
 
 (defn- hidden-doc-result?
   [entity]
-  (or (and (:doc/filename entity)
-           (not (pages/web-visible-slug? (:doc/filename entity))))
-      (and (:example/doc-section entity)
+  (or (and (:search/doc entity)
+           (not (pages/web-visible-slug? (:search/doc entity))))
+      (and (seq (:example/doc-section entity))
            (not (pages/web-visible-slug? (:example/doc-section entity))))))
+
+(def ^:private search-record-query
+  '[:find (pull ?e [:db/id :search/type :search/doc :search/anchor
+                    :search/title :search/language :search/chapter :search/part])
+          ?a ?offsets
+    :in $ ?q
+    :where [(fulltext $ ?q {:top 20
+                            :display :offsets
+                            :domains ["site" "code"]})
+            [[?e ?a _ ?offsets]]]])
+
+(def ^:private community-example-query
+  '[:find (pull ?e [:db/id :example/doc-section :example/removed?]) ?a ?offsets
+    :in $ ?q
+    :where [(fulltext $ ?q {:top 20
+                            :display :offsets
+                            :domains ["datalevin"]})
+            [[?e ?a _ ?offsets]]]
+           [(= ?a :example/code)]])
+
+(defn- collapse-hits
+  [rows]
+  (let [{:keys [order by-id]}
+        (reduce (fn [{:keys [order by-id] :as state} [entity attr offsets]]
+                  (if-not (searchable-attrs attr)
+                    state
+                    (let [eid (:db/id entity)
+                          prev (get by-id eid)
+                          hit {:entity entity :attr attr :offsets offsets}]
+                      (if prev
+                        (if (hit-better? attr (:attr prev))
+                          (assoc-in state [:by-id eid] hit)
+                          state)
+                        {:order (conj order eid)
+                         :by-id (assoc by-id eid hit)}))))
+                {:order [] :by-id {}}
+                rows)]
+    (mapv by-id order)))
 
 (defn search [conn query]
   (when (and conn (seq query))
@@ -101,31 +159,39 @@
           q (subs trimmed-query 0 (min (count trimmed-query) max-query-length))
           db (d/db conn)]
       (when (seq q)
-        (->> (d/q '[:find (pull ?e [:db/id :doc/title :doc/filename :doc/chapter
-                                    :example/doc-section :example/removed?]) ?a ?offsets
-                    :in $ ?q
-                    :where [(fulltext $ ?q {:top 20 :display :offsets})
-                            [[?e ?a _ ?offsets]]]]
-                  db q)
+        (->> (concat (d/q search-record-query db q)
+                     (d/q community-example-query db q))
              ;; Filter out removed examples
              (remove (fn [[entity _ _]] (:example/removed? entity)))
              ;; Filter out print-only chapters and examples attached to them
              (remove (fn [[entity _ _]] (hidden-doc-result? entity)))
-             ;; Group by entity; prefer :doc/content or :example/code for snippet
-             (reduce (fn [m [entity a offsets]]
-                       (let [eid  (:db/id entity)
-                             prev (get m eid)]
-                         (if (or (nil? prev)
-                                 (and (not= (:attr prev) :doc/content)
-                                      (= a :doc/content)))
-                           (assoc m eid {:entity entity :attr a :offsets offsets})
-                           m)))
-                     {})
-             vals
+             collapse-hits
              (mapv (fn [{:keys [entity attr offsets]}]
-                     (if (doc-result? attr)
-                       (result-for-doc db entity attr offsets)
+                     (if (:search/type entity)
+                       (result-for-search-record db entity attr offsets)
                        (result-for-example db entity attr offsets)))))))))
+
+(defn- badge-label
+  [r]
+  (case (:type r)
+    :section "Guide"
+    :figure "Figure"
+    :example (if-let [language (:language r)]
+               (str "Code · " language)
+               "Code")
+    :community-example "Example"
+    :doc nil
+    nil))
+
+(defn- result-meta
+  [r]
+  (case (:type r)
+    :section (:filename r)
+    :figure (:filename r)
+    :example (:filename r)
+    :community-example (:doc-section r)
+    :doc (:filename r)
+    (:filename r)))
 
 (defn render-result [r]
   (into
@@ -133,8 +199,13 @@
         :class "search-result-card block p-4 rounded-lg transition"
         :style "background:var(--bg-card, rgba(255,255,255,0.05)); border:1px solid var(--border-card, rgba(255,255,255,0.1));"}]
    (case (:type r)
-     :doc
+     (:doc :section :figure)
      (concat
+      (when-let [badge (badge-label r)]
+        [[:div {:class "flex items-center gap-2 mb-1"}
+          [:span {:class "text-xs px-2 py-0.5 rounded-full"
+                  :style "background:rgba(34,211,238,0.15); color:#67e8f9;"}
+           badge]]])
       [[:h3 {:class "text-lg font-medium"
              :style "color:var(--text-link, #22d3ee)"}
         (:title r)]]
@@ -144,17 +215,25 @@
                snippet)])
       [[:p {:class "text-xs mt-1"
             :style "color:var(--text-secondary, #6b7280)"}
-        (or (:filename r) "")]])
-     :example
+        (or (result-meta r) "")]])
+     (:example :community-example)
      (concat
       [[:div {:class "flex items-center gap-2"}
         [:span {:class "text-xs px-2 py-0.5 rounded-full"
                 :style "background:rgba(34,197,94,0.15); color:#86efac;"}
-         "Example"]]]
+         (or (badge-label r) "Example")]]]
+      (when-let [title (:title r)]
+        [[:h3 {:class "text-base font-medium mt-1"
+               :style "color:var(--text-link, #22d3ee)"}
+          title]])
       (when-let [snippet (:snippet r)]
         [(into [:p {:class "text-sm mt-1 font-mono"
                     :style "color:var(--text-secondary, #9ca3af); line-height:1.5;"}]
-               snippet)])))))
+               snippet)])
+      (when-let [meta (result-meta r)]
+        [[:p {:class "text-xs mt-1"
+              :style "color:var(--text-secondary, #6b7280)"}
+          meta]])))))
 
 (defn- no-results-view
   [query]

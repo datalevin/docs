@@ -99,6 +99,48 @@
     (is (str/includes? html "language-python"))
     (is (str/includes? html "language-javascript"))))
 
+(deftest parse-markdown-adds-stable-heading-anchors
+  (let [html (pages/parse-markdown
+              (str "# Query Basics\n\n"
+                   "## Rules\n\n"
+                   "## Rules\n"))]
+    (is (str/includes? html "<h1 id=\"query-basics\">Query Basics</h1>"))
+    (is (str/includes? html "<h2 id=\"rules\">Rules</h2>"))
+    (is (str/includes? html "<h2 id=\"rules-2\">Rules</h2>"))))
+
+(deftest search-records-extracts_sections_code_and_figures
+  (let [records (pages/search-records
+                 "08-datalog-fundamentals"
+                 {:title "Datalog Fundamentals"
+                  :chapter 8
+                  :part "II"}
+                 (str "# Datalog Fundamentals\n\n"
+                      "Intro text about logic.\n\n"
+                      "## Rules\n\n"
+                      "Rules let you name reusable query logic.\n\n"
+                      "```clojure\n"
+                      "(d/q '[:find ?e] db)\n"
+                      "```\n\n"
+                      "![Rule diagram showing bindings](rules.svg)\n"))
+        by-key (into {} (map (juxt :search/key identity) records))]
+    (is (= :section
+           (get-in by-key ["08-datalog-fundamentals#datalog-fundamentals"
+                           :search/type])))
+    (is (= "Rules"
+           (get-in by-key ["08-datalog-fundamentals#rules" :search/title])))
+    (is (str/includes?
+         (get-in by-key ["08-datalog-fundamentals#rules" :search/text])
+         "Rules let you name reusable query logic."))
+    (is (= :example
+           (get-in by-key ["08-datalog-fundamentals#rules:code-1"
+                           :search/type])))
+    (is (= "clojure"
+           (get-in by-key ["08-datalog-fundamentals#rules:code-1"
+                           :search/language])))
+    (is (= :figure
+           (get-in by-key ["08-datalog-fundamentals#rules:figure-1"
+                           :search/type])))))
+
 (deftest substitute-markdown-vars-expands-datalevin-version
   (with-redefs [config/datalevin-version (constantly "9.9.9")]
     (is (= "version 9.9.9"

@@ -41,6 +41,25 @@
    :doc/order {:db/valueType :db.type/long}
    :doc/updated-at {:db/valueType :db.type/instant}
 
+   ;; Search records derived from rendered documentation units
+   :search/key {:db/valueType :db.type/string :db/unique :db.unique/identity}
+   :search/type {:db/valueType :db.type/keyword}
+   :search/doc {:db/valueType :db.type/string}
+   :search/anchor {:db/valueType :db.type/string}
+   :search/title {:db/valueType :db.type/string
+                  :db/fulltext true
+                  :db.fulltext/domains ["site"]}
+   :search/text {:db/valueType :db.type/string
+                 :db/fulltext true
+                 :db.fulltext/domains ["site"]}
+   :search/code {:db/valueType :db.type/string
+                 :db/fulltext true
+                 :db.fulltext/domains ["code"]}
+   :search/language {:db/valueType :db.type/string}
+   :search/chapter {:db/valueType :db.type/long}
+   :search/part {:db/valueType :db.type/string}
+   :search/order {:db/valueType :db.type/long}
+
    ;; Examples
    :example/id {:db/valueType :db.type/uuid :db/unique :db.unique/identity}
    :example/code {:db/valueType :db.type/string :db/fulltext true}

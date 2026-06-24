@@ -20,7 +20,10 @@
 (defn seed []
   (println "Seeding database...")
   
-  (let [conn (d/get-conn db-path schema/schema)
+  (let [conn (d/get-conn db-path schema/schema
+                         {:search-domains {"datalevin" {:index-position? true}
+                                           "site" {:index-position? true}
+                                           "code" {:index-position? true}}})
         db (d/db conn)
         
         test-user-id (UUID/randomUUID)
