@@ -33,6 +33,17 @@
     (is (not (str/includes? body "onmouseover=")))
     (is (not (str/includes? body "onmouseout=")))))
 
+(deftest search-result-links-use-normal-fragment-navigation
+  (let [html (str (h/html {:mode :html}
+                          (search/render-result
+                           {:type :example
+                            :url "/docs/09-rules-recursion#rules-code-3"
+                            :language "clojure"
+                            :filename "09-rules-recursion"
+                            :snippet ["(premium-user ?e)"]})))]
+    (is (str/includes? html "href=\"/docs/09-rules-recursion#rules-code-3\""))
+    (is (str/includes? html "hx-boost=\"false\""))))
+
 (deftest search-trims-before-truncating-query
   (let [captured-query (atom nil)
         over-limit (apply str (repeat 205 "x"))

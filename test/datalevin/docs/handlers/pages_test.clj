@@ -93,7 +93,7 @@
                    "```\n\n"
                    "</div>\n"))]
     (is (str/includes? html "<div class=\"multi-lang\">"))
-    (is (= 4 (count (re-seq #"<pre>" html))))
+    (is (= 4 (count (re-seq #"<pre(?:\s|>)" html))))
     (is (str/includes? html "language-clojure"))
     (is (str/includes? html "language-java"))
     (is (str/includes? html "language-python"))
@@ -107,6 +107,23 @@
     (is (str/includes? html "<h1 id=\"query-basics\">Query Basics</h1>"))
     (is (str/includes? html "<h2 id=\"rules\">Rules</h2>"))
     (is (str/includes? html "<h2 id=\"rules-2\">Rules</h2>"))))
+
+(deftest parse-markdown-adds-stable-code-block-anchors
+  (let [html (pages/parse-markdown
+              (str "# Query Basics\n\n"
+                   "```clojure\n"
+                   "(d/q '[:find ?e] db)\n"
+                   "```\n\n"
+                   "## Rules\n\n"
+                   "```clojure\n"
+                   "(premium-user ?e)\n"
+                   "```\n\n"
+                   "```clojure\n"
+                   "(active-user ?e)\n"
+                   "```\n"))]
+    (is (str/includes? html "<pre id=\"query-basics-code-1\"><code class=\"language-clojure\""))
+    (is (str/includes? html "<pre id=\"rules-code-2\"><code class=\"language-clojure\""))
+    (is (str/includes? html "<pre id=\"rules-code-3\"><code class=\"language-clojure\""))))
 
 (deftest search-records-extracts_sections_code_and_figures
   (let [records (pages/search-records
@@ -132,17 +149,20 @@
          (get-in by-key ["08-datalog-fundamentals#rules" :search/text])
          "Rules let you name reusable query logic."))
     (is (= :example
-           (get-in by-key ["08-datalog-fundamentals#rules:code-1"
+           (get-in by-key ["08-datalog-fundamentals#rules-code-1"
                            :search/type])))
     (is (= "clojure"
-           (get-in by-key ["08-datalog-fundamentals#rules:code-1"
+           (get-in by-key ["08-datalog-fundamentals#rules-code-1"
                            :search/language])))
     (is (nil?
-         (get-in by-key ["08-datalog-fundamentals#rules:code-1"
+         (get-in by-key ["08-datalog-fundamentals#rules-code-1"
                          :search/title])))
     (is (= "Rules"
-           (get-in by-key ["08-datalog-fundamentals#rules:code-1"
+           (get-in by-key ["08-datalog-fundamentals#rules-code-1"
                            :search/context])))
+    (is (= "rules-code-1"
+           (get-in by-key ["08-datalog-fundamentals#rules-code-1"
+                           :search/anchor])))
     (is (= :figure
            (get-in by-key ["08-datalog-fundamentals#rules:figure-1"
                            :search/type])))))

@@ -199,6 +199,7 @@
 (defn render-result [r]
   (into
    [:a {:href (:url r)
+        :hx-boost "false"
         :class "search-result-card block p-4 rounded-lg transition"
         :style "background:var(--bg-card, rgba(255,255,255,0.05)); border:1px solid var(--border-card, rgba(255,255,255,0.1));"}]
    (case (:type r)

@@ -72,24 +72,37 @@
     (swap! seen assoc base (inc n))
     anchor))
 
-(defn- heading-anchor-provider-factory
+(defn- code-anchor
+  [section-anchor n]
+  (str (or section-anchor "top") "-code-" n))
+
+(defn- document-anchor-provider-factory
   []
   (reify AttributeProviderFactory
     (create [_ _context]
-      (let [seen (atom {})]
+      (let [seen (atom {})
+            current-heading (atom nil)
+            code-count (atom 0)]
         (reify AttributeProvider
           (setAttributes [_ node tag-name attrs]
             (when (and (instance? Heading node)
                        (str/starts-with? tag-name "h"))
               (let [heading-text (or (normalize-search-text (node-text node))
-                                     "section")]
-                (.put attrs "id" (unique-anchor! seen heading-text))))))))))
+                                      "section")
+                    anchor (unique-anchor! seen heading-text)]
+                (reset! current-heading anchor)
+                (.put attrs "id" anchor)))
+            (when (and (#{"pre"} tag-name)
+                       (or (instance? FencedCodeBlock node)
+                           (instance? IndentedCodeBlock node)))
+              (.put attrs "id" (code-anchor @current-heading
+                                             (swap! code-count inc))))))))))
 
 (def renderer*
   (.. HtmlRenderer
       builder
       (extensions extensions)
-      (attributeProviderFactory (heading-anchor-provider-factory))
+      (attributeProviderFactory (document-anchor-provider-factory))
       build))
 
 ;; Cache for chapter metadata to avoid repeated file I/O
@@ -209,8 +222,9 @@
   "Build typed search records for one rendered Markdown document.
 
    The records are ordinary Datalevin entities: sections search prose,
-   examples search code fences, and figures search image alt text. Heading
-   anchors are generated with the same algorithm used by parse-markdown."
+   examples search code fences, and figures search image alt text. Heading and
+   code-block anchors are generated with the same algorithm used by
+   parse-markdown."
   [slug frontmatter markdown]
   (let [doc-node (.parse parser* (substitute-markdown-vars markdown))
         seen-anchors (atom {})
@@ -260,31 +274,30 @@
         (fn [literal info]
           (when-let [code (some-> literal str/trim not-empty)]
             (let [n (swap! code-count inc)
-                  anchor (current-anchor)
+                  section-anchor (current-anchor)
+                  anchor (code-anchor section-anchor n)
                   title (current-title)
-              key (str slug
-                       (if anchor (str "#" anchor) "#top")
-                       ":code-" n)]
-          (swap! records conj
-                 (cond-> (assoc (search-record-base slug frontmatter :example
-                                                     key anchor nil (next-order!))
-                                 :search/code code
-                                 :search/context title)
-                   (code-language info) (assoc :search/language (code-language info)))))))
+                  key (str slug "#" anchor)]
+              (swap! records conj
+                     (cond-> (assoc (search-record-base slug frontmatter :example
+                                                         key anchor nil (next-order!))
+                                     :search/code code
+                                     :search/context title)
+                       (code-language info) (assoc :search/language (code-language info)))))))
         add-figure!
         (fn [alt-text]
           (when-let [text (normalize-search-text alt-text)]
             (let [n (swap! figure-count inc)
                   anchor (current-anchor)
                   title (current-title)
-              key (str slug
-                       (if anchor (str "#" anchor) "#top")
-                       ":figure-" n)]
-          (swap! records conj
-                 (assoc (search-record-base slug frontmatter :figure
-                                            key anchor nil (next-order!))
-                        :search/text text
-                        :search/context title)))))
+                  key (str slug
+                           (if anchor (str "#" anchor) "#top")
+                           ":figure-" n)]
+              (swap! records conj
+                     (assoc (search-record-base slug frontmatter :figure
+                                                key anchor nil (next-order!))
+                            :search/text text
+                            :search/context title)))))
         visit!
         (fn visit! [^Node node]
           (cond
