@@ -548,7 +548,8 @@ await conn.query('[:find ?e ?a ?v ' +
 </div>
 
 Use `fulltext-datoms` / `fulltextDatoms` / `fulltext_datoms` when you want
-matching datoms directly instead of joining through a Datalog query:
+matching datoms directly instead of joining through a Datalog query. It accepts
+the same search option map, including `:top`, `:limit`, and `:offset`.
 
 <div class="multi-lang">
 
@@ -651,11 +652,68 @@ await conn.query('[:find ?e ?a ?v ' +
 </div>
 
 Available options:
-- `:top` — number of results (default 10)
+- `:top` — number of results when `:limit` is not supplied (default 10)
+- `:limit` — page size; when supplied, this overrides `:top` as the number of
+  returned results
+- `:offset` — number of ranked results to skip before returning results
+- `:paging-cache-pages` — number of `:limit`-sized pages to score and cache as
+  one top-k window for paged search (default 10)
 - `:display` — `:refs` (default), `:refs+scores`, `:texts`, `:offsets`, or
   `:texts+offsets`
 - `:domains` — list of search domains to query
 - `:doc-filter` — predicate function to filter results
+
+Use `:top` for one bounded result set, such as the first page of a search UI.
+Use `:limit` and `:offset` when the interface needs stable page-sized slices of
+the ranked result list. For example, `{:limit 20 :offset 40}` returns the third
+page when each page contains 20 results. The offset is applied to the full-text
+ranked result stream before the rows are destructured and joined by the
+surrounding Datalog query. It is therefore different from a top-level Datalog
+`:limit` or `:offset`, which would page the final query result after all clauses
+have run.
+
+When `:limit` is present, Datalevin scores and caches a top-k window of
+`max(:offset + :limit, :limit * :paging-cache-pages)` candidates. This lets
+ordinary page-by-page access reuse a ranked window instead of rescoring each
+page in isolation. When `:limit` is not present, Datalevin scores
+`:offset + :top` candidates and returns up to `:top` results after the offset.
+
+<div class="multi-lang">
+
+```clojure
+(d/q '[:find ?e ?a ?v
+       :in $ ?q
+       :where [(fulltext $ ?q {:limit 20 :offset 40})
+               [[?e ?a ?v]]]]
+     db
+     "database")
+```
+
+```java
+conn.query("[:find ?e ?a ?v " +
+           " :in $ ?q " +
+           " :where [(fulltext $ ?q {:limit 20 :offset 40}) " +
+           "         [[?e ?a ?v]]]]",
+           "database");
+```
+
+```python
+conn.query('[:find ?e ?a ?v '
+           ' :in $ ?q '
+           ' :where [(fulltext $ ?q {:limit 20 :offset 40}) '
+           '         [[?e ?a ?v]]]]',
+           "database")
+```
+
+```javascript
+await conn.query('[:find ?e ?a ?v ' +
+                 ' :in $ ?q ' +
+                 ' :where [(fulltext $ ?q {:limit 20 :offset 40}) ' +
+                 '         [[?e ?a ?v]]]]',
+                 "database");
+```
+
+</div>
 
 `:refs` returns document references. In a Datalog store, the document reference
 is the indexed datom itself, so it can be destructured into `?e`, `?a`, and `?v`
@@ -1000,11 +1058,11 @@ const engine = await newSearchEngine(
 </div>
 
 At query time, the usual search options still apply. The phrase is part of the
-query expression; result count, domain selection, display mode, and proximity
-ranking parameters go in the options map. Common keys include `:top`,
-`:domains`, `:display`, `:proximity-expansion`, and `:proximity-max-dist`.
-The proximity options affect ranking of candidate results when positions are
-indexed; they do not turn phrase matching on or off.
+query expression; pagination, domain selection, display mode, and proximity
+ranking parameters go in the options map. Common keys include `:top`, `:limit`,
+`:offset`, `:domains`, `:display`, `:proximity-expansion`, and
+`:proximity-max-dist`. The proximity options affect ranking of candidate results
+when positions are indexed; they do not turn phrase matching on or off.
 
 <div class="multi-lang">
 
@@ -1525,6 +1583,9 @@ embedded bindings:
 (d/search engine "red")
 ;=> (1 2)
 
+(d/search engine "red" {:limit 1 :offset 1})
+;=> (2)
+
 (d/search engine "red" {:display :offsets})
 ;=> ([1 (["red" [10 39]])] [2 (["red" [40]])])
 ```
@@ -1546,6 +1607,14 @@ engine.search("red");
 engine.search(
     "red",
     RetrievalOptions.search()
+        .prop("limit", 1)
+        .prop("offset", 1)
+        .build());
+// => [2]
+
+engine.search(
+    "red",
+    RetrievalOptions.search()
         .display("offsets")
         .build());
 // => [[1, [["red", [10, 39]]]], [2, [["red", [40]]]]]
@@ -1562,6 +1631,9 @@ engine.add_doc(2, "Mary had a little lamb whose fleece was red as fire.")
 
 engine.search("red")
 # => [1, 2]
+
+engine.search("red", opts={":limit": 1, ":offset": 1})
+# => [2]
 
 engine.search("red", opts={":display": ":offsets"})
 # => [[1, [["red", [10, 39]]]], [2, [["red", [40]]]]]
@@ -1581,6 +1653,9 @@ await engine.addDoc(2, "Mary had a little lamb whose fleece was red as fire.");
 
 await engine.search("red");
 // => [1, 2]
+
+await engine.search("red", { ":limit": 1, ":offset": 1 });
+// => [2]
 
 await engine.search("red", { ":display": ":offsets" });
 // => [[1, [["red", [10, 39]]]], [2, [["red", [40]]]]]

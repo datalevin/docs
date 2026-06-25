@@ -298,6 +298,12 @@ await conn.transact([
 </div>
 
 This updates the entity with id 101 to set `:user/active?` to false.
+If a positive id does not already exist, Datalevin still treats it as a
+concrete entity id and asserts facts for that id, advancing the internal entity
+id sequence if necessary. That behavior is useful for controlled imports or
+restores, but normal application code should not invent positive ids; omit
+`:db/id` for new entities or use negative tempids for within-transaction
+references.
 
 ### 2.3 Automatic Entity Timestamps
 

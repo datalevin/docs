@@ -115,7 +115,7 @@ Clojure-only.
 | `max-eid` | Returns the current maximum entity id, useful when a bulk import allocates numeric eids. |
 | `seek-datoms`, `rseek-datoms` | Starts a forward or reverse index cursor near a supplied key prefix. |
 | `index-range` | Reads the AVE range for one attribute between lower and upper bounds. |
-| `fulltext-datoms` | Runs a full-text query and returns matching datoms rather than shaped search results. |
+| `fulltext-datoms` | Runs a full-text query and returns matching datoms rather than shaped search results; accepts search options such as `:top`, `:limit`, and `:offset`. |
 | `analyze` | Refreshes attribute statistics used by the query planner. |
 | `init-db` | Creates a database quickly from trusted prepared datoms. |
 | `fill-db` | Adds trusted prepared datoms to an existing DB object. |

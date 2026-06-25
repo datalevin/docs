@@ -569,6 +569,16 @@ other domain key as the permanent `:db/id`. Store those values in ordinary
 attributes declared with `:db.unique/identity`, then use lookup refs such as
 `[:user/id some-uuid]` or `[:user/email "alice@example.com"]`.
 
+A positive integer in `:db/id` is treated as a concrete entity id, not as a
+tempid. If the current maximum entity id is `1000` and you transact
+`{:db/id 2000 :foo "bar"}`, Datalevin asserts facts for entity `2000`, advances
+the internal maximum entity id to `2000`, and the next automatically assigned
+entity id will be `2001`. It does not create entities `1001` through `1999`.
+Use explicit positive ids only for controlled imports, restores, or other
+cases where you deliberately manage id allocation. Ordinary application code
+should omit `:db/id` for new entities, or use negative tempids when new
+entities need to refer to one another within the same transaction.
+
 ### 4.2 Tempids
 
 During a transaction, you often use **tempids** (temporary ids) to express

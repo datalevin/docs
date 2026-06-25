@@ -714,6 +714,12 @@ const conn = await connect(path, {
 
 Because Datalevin uses **memory-mapped files (`mmap`)**, it does not manage its
 own buffer pool. Instead, it relies on the **Operating System Page Cache**.
+Operationally, a Datalevin database path names a directory, but the durable LMDB
+pages normally live in one memory-mapped data file, `data.mdb`. The directory
+may also contain LMDB's lock/readers file (`lock.mdb`) and Datalevin-managed WAL
+or snapshot files when those features are enabled. Named DBIs are logical
+key-value spaces inside the same LMDB data file; they are not separate data
+files.
 
 - **Zero-Copy Reads**: When you perform a read, the OS handles fetching the
   required pages from disk into the Page Cache. Datalevin then returns a pointer

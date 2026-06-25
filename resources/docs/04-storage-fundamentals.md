@@ -37,15 +37,6 @@ deliberately made this architectural choice, because the OS already manages
 file-backed pages across all processes on the machine, and it can evict,
 prefetch, and share those pages with knowledge of the whole system.
 
-Datalevin APIs usually ask for a directory path, but an LMDB environment is not
-a directory full of table files. In the normal directory layout, the durable
-pages all live in **one** memory-mapped data file, conventionally called
-`data.mdb`. The directory may also contain support files, such as LMDB's
-lock/readers file (`lock.mdb`) and Datalevin-managed WAL or snapshot files when
-those features are enabled. This one data file is divided into a number of named
-sub-databases, called DBIs. These are logical key-value spaces inside the
-same LMDB data file; they are not separate data files.
-
 Traditional databases often manage their own "buffer pool", a chunk of memory where
 they keep data pages. That design makes sense when the database is the main
 program on the machine and wants tight control over every page of memory. But
@@ -147,8 +138,9 @@ characteristics of these two approaches.
 
 A **B+Tree** stores sorted keys in fixed-size pages [3]. A lookup starts at the
 root, walks through internal pages, and ends at a leaf page that contains the
-target key or the place where it would be. Because leaf entries are ordered by
-key, range scans can move through adjacent entries in sorted order. An
+target key or, if the key is missing, the place where it would be. Because leaf
+entries are ordered by key, range scans can move through adjacent entries in
+sorted order. An
 **LSM-Tree** takes a different path: it buffers writes and flushes sorted runs
 to disk, then merges those runs in the background. This can make writes very
 fast, but reads may need to consult several levels, and background compaction
@@ -181,13 +173,12 @@ Standard LMDB is a general-purpose tool, but Datalevin uses a specialized fork
 called **DLMDB** to support advanced Datalog features. DLMDB improves LMDB in
 two ways that matter directly to query execution:
 
-### 3.1 Order Statistics (`:counted`)
+### 3.1 Order Statistics
 
 A standard B+Tree doesn't know how many items are in a range without scanning
 them. DLMDB adds **counted B+Trees**, where each node in the tree stores the
-count of items in its sub-tree. `:counted` is the DLMDB DBI flag that enables
-this per-node count metadata; Datalevin uses it for the indexes where fast
-counts, samples, and rank-based access matter. The counted B+Tree gives
+count of items in its sub-tree. Datalevin uses this metadata for indexes where
+fast counts, samples, and rank-based access matter. The counted B+Tree gives
 Datalevin these advantages:
 
 - **Instant Counts**: All count operations are O(log n) or O(1). For
