@@ -178,6 +178,89 @@ tenant-specific logic, tests, and experiments. Rules are data, so you can load
 them from EDN, compose them in ordinary code, or generate them from a small
 domain-specific configuration when that is appropriate.
 
+### 2.1 Assembling Rule Sets
+
+A rule set is one flat collection of rule definitions. When an application grows,
+avoid building one giant literal rule vector in every query namespace. Keep
+small, named rule groups close to the domain they describe, assemble them at the
+application boundary, and pass the resulting flat rule set as `%`.
+
+The important points are:
+
+- Rule groups are just data. Store them in vars, EDN files, or configuration
+  records that your application controls.
+- The final value passed as `%` should be a flat vector or sequence of rule
+  definitions, not a nested vector of rule groups.
+- Rules may call rules from another group as long as the called rule is present
+  in the assembled rule set.
+- Multiple definitions with the same rule name and arity are alternatives, i.e.
+  logical `OR`.
+- Keep the public rule names and arities stable. Treat helper rules as internal
+  application conventions, just as you would with helper functions.
+
+Here is a typical pattern: one group defines basic user status, another defines
+subscription logic, another defines feature access on top of that policy, and an
+optional group adds a staff override. The assembled rule set is selected per
+query, tenant, feature flag, or test:
+
+```clojure
+(def user-status-rules
+  '[[(active-user ?u)
+     [?u :user/status :user.status/active]
+     [?u :user/verified? true]]])
+
+(def subscription-rules
+  '[[(paid-user ?u)
+     [?sub :subscription/user ?u]
+     [?sub :subscription/status :subscription.status/paid]]
+
+    [(premium-user ?u)
+     (active-user ?u)
+     (paid-user ?u)]])
+
+(def staff-override-rules
+  '[[(premium-user ?u)
+     (active-user ?u)
+     [?u :user/role :user.role/staff]]])
+
+(def feature-access-rules
+  '[[(can-use-feature ?u ?feature)
+     (premium-user ?u)
+     [?feature :feature/min-tier :tier/premium]]
+
+    [(can-use-feature ?u ?feature)
+     [?u :user/feature-flag ?feature]]])
+
+(defn assemble-rules
+  [& rule-groups]
+  (into [] (comp (remove nil?) cat) rule-groups))
+
+(defn user-rules
+  [{:keys [staff-override?]}]
+  (assemble-rules user-status-rules
+                  subscription-rules
+                  feature-access-rules
+                  (when staff-override?
+                    staff-override-rules)))
+
+(d/q '[:find ?feature-name
+       :in $ % ?email
+       :where [?u :user/email ?email]
+              (can-use-feature ?u ?feature)
+              [?feature :feature/name ?feature-name]]
+     db
+     (user-rules {:staff-override? true})
+     "alice@example.com")
+```
+
+Without `staff-override-rules`, `(premium-user ?u)` means "active user with a
+paid subscription." With that group included, the same rule also matches active
+staff users. The `can-use-feature` rule does not need to know which policy
+module made a user premium; it only depends on the assembled `premium-user`
+relation. Nothing about the query changes; only the rule set supplied as `%`
+changes. This is the main design advantage of rule assembly: query call sites
+can stay stable while policy modules evolve.
+
 
 ## 3. Logical OR: Multiple Rule Definitions
 

@@ -382,7 +382,7 @@ grounded in real systems.
 
 This book has already benefited from volunteer reviewers in the Datalevin
 community who read draft chapters, ran examples, questioned unclear
-explanations, and improved wordings: Estevo U. C. Castro, Amar Mehta, Norbert
+explanations, and improved wordings: Estevo U. C. Castro, Max Rothman, Amar Mehta, Norbert
 Wójtowicz, I am grateful for their contributions.
 
 <div class="preface-signature" style="text-align: right; margin-top: 2rem;">

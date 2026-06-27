@@ -39,6 +39,13 @@ returns a borrowed handle owned by the Datalog connection. `re-index` is an
 offline maintenance operation; use it only when other threads or programs are
 not accessing the same store.
 
+For a Datalog database that also stores application KV DBIs through
+`datalog-kv`, the `dtlv dump`/`dtlv load` auto mode can round-trip the mixed
+store: Datalog schema and datoms plus user-created KV DBIs in the same LMDB
+environment. Appendix E lists the `datalevin.main` functions and shows the
+command-line form. Use `copy` when you want a physical database copy; use
+dump/load when you want a portable text export/import workflow.
+
 
 ## 2. DBI Management
 

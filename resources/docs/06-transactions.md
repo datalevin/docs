@@ -136,6 +136,31 @@ high-volume writes, async transactions let Datalevin batch work internally and
 improve throughput. Chapter 20 shows ingestion patterns in all four bindings,
 and Chapter 19 covers the durability profiles behind those choices.
 
+### 1.4 Choosing a Transaction API
+
+The transaction APIs differ mostly in where the transaction boundary is placed
+and when the caller waits. For live commits, they share the same core rule:
+within one Datalevin store, committed writes have one serial order.
+
+| API or pattern | Best use | Transaction boundary | Reads inside |
+| --- | --- | --- | --- |
+| `transact!` / `conn.transact(...)` | Ordinary application writes. | One collection of transaction data commits or aborts as one unit; the call returns after commit. | Application code does not run between tx-data forms, but transaction functions in the data run inside the same transaction. |
+| `transact-async` / `transactAsync` / `transact_async` | High-volume independent writes where the caller can wait later. | Same transaction semantics as `transact!`, but the caller receives a future or promise immediately. | Dependent code must wait for the future or promise before reading or submitting dependent writes. |
+| `with-transaction` / `withTransaction` / `with_transaction` | Read-modify-write logic and multi-step writes that must be one atomic operation. | One explicit read/write transaction around the callback. Nested synchronous transaction calls reuse this transaction instead of opening another one. | Queries through the transaction-bound connection have read-your-writes behavior. No other writer can interleave. |
+| Transaction functions such as `:db/cas` or `:db.fn/call` | Conditional or server-side write logic expressed as transaction data. | The function runs inside the containing transaction and returns more transaction data. | The function receives the current Db for that transaction. Its result is committed atomically with the rest of the transaction. |
+| `tx-data->simulated-report` and variants | Tests, dry runs, validation previews, and explanations of what a transaction would do. | No live commit; Datalevin prepares the transaction against the supplied Db and returns a report shape. | Reads the supplied Db only. It does not serialize with a live connection. |
+| KV-only transaction APIs | Raw KV work without Datalog, or borrowed KV work from a Datalog store. | `transact-kv` applies one KV batch; `with-transaction-kv` opens one explicit KV transaction. Chapter 10 covers the full KV API. | Explicit KV transactions also have read-your-writes behavior, and nested KV transactions reuse the active transaction. |
+
+The explicit Datalog transaction callback is available in Clojure, Java, and
+Python. JavaScript can still express many conditional writes with one
+`conn.transact(...)`, `:db/cas`, transaction functions, or a server-side command
+running in the Datalevin-hosting process.
+
+Nested transactions in Datalevin are not independent subtransactions. When code
+is already inside a write transaction, another synchronous transaction call uses
+that active transaction. There is still only one transaction, not a stack of
+separately committed transactions. If the inner code aborts or throws, the
+whole active transaction aborts; Datalevin does not provide nested savepoints.
 
 ## 2. Transacting Data
 
@@ -849,9 +874,21 @@ await conn.transact([
 
 </div>
 
-Use component relationships only for ownership. If a referenced entity has an
-independent lifecycle, retract the relationship with `:db/retract` instead of
-declaring the relationship as a component.
+Use component relationships only for ownership. The `:db/isComponent` flag
+matters when `:db/retractEntity` is applied to the owning entity: owned children,
+such as line items inside an order, are retracted recursively. It is not the
+mechanism for merely removing a link. To remove one relationship value, use
+`:db/retract`; to remove all values for a relationship attribute, use
+`:db.fn/retractAttribute`.
+
+For example, `:order/items` is a component relationship because a line item has
+no useful lifecycle apart from its order. By contrast, `:order/customer`,
+`:issue/assignee`, or `:team/member` should usually not be components: deleting
+an order should not delete the customer, changing an assignee should not delete
+the user, and removing a member from a team should not delete the member
+entity. If either side of a non-component relationship is later retracted with
+`:db/retractEntity`, Datalevin removes the reference datoms that point at the
+retracted entity; it does not recursively delete the other independent entity.
 
 ### 2.9 Mixed Forms
 
@@ -1193,6 +1230,21 @@ conn.with_transaction(withdraw)
 
 The transaction callback ensures that the read and the write happen within the
 same isolated transaction, preventing another concurrent write from interfering.
+In isolation terminology, Datalevin write transactions are serializable within
+one store: committed writes have a single order, and a `with-transaction` body
+runs inside one read/write transaction in that order. Queries against the
+transaction-bound connection, such as `(d/db tx)` or `@tx`, read that
+transaction's state, including writes already performed earlier in the body. No
+other writer can commit in the middle of that read-modify-write sequence. In
+other words, code inside `with-transaction` has the usual read-your-writes
+behavior that application developers expect from a transaction.
+
+This guarantee is narrower than saying that every query is a transaction.
+Outside `with-transaction`, a query runs against the Db supplied to it. That read
+view is stable for the query and isolated from concurrent writes, but it is not
+an application-level read/write transaction unless the related reads and writes
+are placed inside `with-transaction` or encoded as one conditional transaction.
+
 In Clojure this is the `with-transaction` macro; Java and Python expose the same
 embedded Datalog transaction callback as `conn.withTransaction(...)` and
 `conn.with_transaction(...)`. JavaScript does not expose this Datalog callback

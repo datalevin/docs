@@ -285,3 +285,21 @@ constants in application data.
 | `load` | Loads Datalog or key-value content into a database directory. |
 | `-main` | Entry point for the `dtlv` command. |
 | `default-root-dir` | Default server root directory used by the CLI. |
+
+When neither `--datalog` nor explicit DBI names are supplied, `dump` and `load`
+use auto mode. Auto mode detects a Datalog store and writes a mixed text dump:
+the Datalog options, schema, and datoms, followed by user-created KV DBIs in the
+same LMDB environment. This is the right export/import path for a Datalog
+database that also keeps application state through `datalog-kv`. Datalevin skips
+its own internal and derived Datalog DBIs, so full-text, vector, embedding, and
+idoc indexes are treated as rebuildable indexes rather than separate user data.
+
+```console
+dtlv -d /data/companydb -f companydb.edn dump
+dtlv -d /data/companydb-restored -f companydb.edn load
+```
+
+Use `--datalog` when you intentionally want only the Datalog schema and datoms.
+Use `--all` or explicit DBI names when you want raw KV dumps. Mixed Datalog/KV
+auto dump is a text format; for Nippy binary dumps, choose an explicit Datalog
+or KV mode.

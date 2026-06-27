@@ -1392,11 +1392,20 @@ writes through the connection and the underlying LMDB write transaction. WAL mod
 can queue and batch concurrent callers, but the committed writes still have a
 single order. The caller either receives a transaction report or an exception.
 
+In SQL isolation terminology, committed Datalevin write transactions are
+serializable within that store because they are physically ordered by the single
+writer. Ordinary read-only queries use MVCC read views: the view is stable and
+isolated from concurrent writes, but it is not an application-level read/write
+transaction unless the read and write are placed inside one transaction callback
+or encoded as one conditional transaction.
+
 `with-transaction` opens one read/write transaction around its body. Reads and
 writes inside the body observe the same write transaction, so no other write can
-interleave between the read and the write within that store. If the body throws,
-the transaction is aborted. `with-transaction` does not retry logical conflicts
-such as CAS failures or unique-constraint violations. It only retries Datalevin's
+interleave between the read and the write within that store. A query inside the
+body also reads writes already made earlier in the same body, which gives
+`with-transaction` the usual read-your-writes behavior. If the body throws, the
+transaction is aborted. `with-transaction` does not retry logical conflicts such
+as CAS failures or unique-constraint violations. It only retries Datalevin's
 internal map-resize condition, where the LMDB map was grown and the write can be
 replayed safely.
 
