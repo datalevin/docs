@@ -57,7 +57,7 @@ In the figure, the direct edge `A -> B` becomes a `Follow` entity with two refs,
 `:follow/follower` and `:follow/following`, plus facts such as
 `:follow/created-at` or `:follow/strength`. This gives you
 property-graph-style modeling [1] while keeping Datalevin's normalized fact
-representation. Chapter 12 shows the same move in ER examples such as
+representation [7]. Chapter 12 shows the same move in ER examples such as
 memberships, line items, and enrollments.
 
 
@@ -1988,3 +1988,8 @@ benchmark implementation based on the Mathematics Genealogy Project.
 [6] Datalevin project,
 ["OpenRuleBench"](https://github.com/datalevin/datalevin/tree/master/benchmarks/openrulebench), benchmark implementation including transitive closure, same-generation, and
 LUBM-style type inference rules.
+
+[7] E. F. Codd, "Further Normalization of the Data Base Relational Model,"
+IBM Research Report RJ909, August 31, 1971. Republished in Randall J. Rustin,
+ed., *Data Base Systems: Courant Computer Science Symposia Series 6*,
+Prentice-Hall, 1972.

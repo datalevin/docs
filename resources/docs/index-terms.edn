@@ -44,6 +44,9 @@
  {:term "data-oriented programming"}
  {:term "datom"}
  {:term "DBI" :index "key-value store!DBI"}
+ {:term "denormalization"
+  :patterns ["\\*\\*denormalization\\*\\*"
+             "\\bdenormaliz(?:e|ed|ation)\\b"]}
  {:term ":db.cardinality/many" :index "schema!:db.cardinality/many"}
  {:term ":db/ident" :index "schema!:db/ident"}
  {:term ":db.type/idoc" :index "schema!:db.type/idoc"}
@@ -121,6 +124,10 @@
   :index "LMDB!memory-mapped storage"
   :patterns ["memory-mapped storage" "memory-mapped files" "memory-mapped key-value store" "memory mapped database file"]}
  {:term "MVCC"}
+ {:term "normalization"
+  :patterns ["\\*\\*normalization\\*\\*"
+             "\\bnormalized (?:data|facts|style|relationship facts|relational model|version)\\b"
+             "\\bNormalize by default\\b"]}
  {:term "not-join" :index "Datalog!not-join"}
  {:term "operating envelope" :index "agent memory!operating envelope"}
  {:term "order statistics" :index "DLMDB!order statistics"}

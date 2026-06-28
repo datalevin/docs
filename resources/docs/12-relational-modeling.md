@@ -6,7 +6,7 @@ part: "III — Modeling Across Paradigms"
 
 # Chapter 12: Relational Modeling
 
-Because Datalevin prefers normalized data, industry-standard
+Because Datalevin prefers normalized data [2], industry-standard
 **Entity-Relationship (ER) modeling** [1] is the most effective way to
 design your database.
 
@@ -1371,3 +1371,8 @@ remains clean, performant, and understandable as your domain complexity grows.
 [1] Peter P. Chen, ["The Entity-Relationship Model: Toward a Unified
 View of Data"](https://doi.org/10.1145/320434.320440), *ACM Transactions on
 Database Systems* 1, no. 1, 1976, pp. 9-36.
+
+[2] E. F. Codd, "Further Normalization of the Data Base Relational Model,"
+IBM Research Report RJ909, August 31, 1971. Republished in Randall J. Rustin,
+ed., *Data Base Systems: Courant Computer Science Symposia Series 6*,
+Prentice-Hall, 1972.

@@ -474,7 +474,7 @@ attribute still carries real index-entry overhead and repeated entity/attribute
 structure. In addition, scanning a cardinality-many attribute in the EAV index
 is slower than scanning a cardinality-one attribute.
 
-Datalevin is highly optimized for **normalized data**: small relationship facts
+Datalevin is highly optimized for **normalized data** [2]: small relationship facts
 whose access paths are explicit. For one-to-many relationships, this often means
 placing a cardinality-one reference on the many side. For many-to-many
 relationships, it often means creating a join entity.
@@ -1064,8 +1064,13 @@ flexible enough for rapid development and robust enough for complex,
 high-performance applications.
 
 
-## Reference
+## References
 
 [1] Chen, Peter Pin-Shan. "The Entity-Relationship Model: Toward a Unified View
 of Data." ACM Transactions on Database Systems 1, no. 1 (1976): 9-36.
 https://doi.org/10.1145/320434.320440
+
+[2] E. F. Codd, "Further Normalization of the Data Base Relational Model,"
+IBM Research Report RJ909, August 31, 1971. Republished in Randall J. Rustin,
+ed., *Data Base Systems: Courant Computer Science Symposia Series 6*,
+Prentice-Hall, 1972.

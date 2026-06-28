@@ -6,25 +6,23 @@ pdf-role: blurb
 
 # Datalevin: The Definitive Guide to Logical and Intelligent Databases
 
-Modern applications increasingly need more than rows, documents, or a separate
-search stack. They need durable facts, expressive queries, graph-shaped
-relationships, full-text search, vector retrieval, and reliable memory for
-intelligent agents.
+Many developers use SQL because it is the default serious database choice, not
+because it is the best fit for application code. As systems grow, SQL strings,
+ORM layers, bolt-on search and vector stores, and fragile large-join plans
+harden into the architecture.
 
-Datalevin brings those capabilities into one compact open-source database, six
-years in the making. Built on LMDB and Datalog, it gives application developers
-a practical path from local embedded storage to production systems that combine
-logic, search, and operational simplicity.
+Datalevin is a practical alternative: a compact open-source database, six years
+in the making, that keeps ACID transactions, durable storage, indexes, and
+operational simplicity while making facts and Datalog the core model. Built on
+LMDB, it brings logic, graph, documents, search, vectors, and durable AI memory
+into one coherent system.
 
 This book teaches Datalevin from first principles through advanced use:
 
 - model data as entities, attributes, and datoms
 - write Datalog queries, rules, transactions, and pull patterns
-- design schemas for relational, graph, document, and hybrid models
-- use key-value storage, full-text search, vector search, and embeddings
-- tune durability, batching, indexing, deployment, and production operations
-- build persistent agent memory from episodes, facts, recall, and truth
-  maintenance
+- design relational, graph, document, vector, and hybrid models
+- build persistent agent memory with recall and truth maintenance
 
 For database practitioners and builders of intelligent systems, this is a
 hands-on guide to using Datalevin as a logical database and as a durable
@@ -38,4 +36,4 @@ co-founded, where intelligent applications required fast retrieval, persistent
 memory, and flexible representations of user and agent state. He holds a Ph.D.
 from the University of Michigan, Ann Arbor, and has worked as a faculty member
 at University at Albany, SUNY, and as a research staff member at IBM Almaden
-Research Center. You can follow him @huahaiy.
+Research Center.

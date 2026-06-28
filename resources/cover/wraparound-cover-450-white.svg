@@ -61,25 +61,26 @@
   <circle cx="1087.5" cy="1620" r="238" fill="#7ad9b9" opacity="0.06"/>
 
   <text class="cover-heading" x="252" y="284">DATABASES · DATALOG · AGENT MEMORY</text>
-  <text class="cover-title" x="252" y="410">One database for facts, logic,</text>
-  <text class="cover-title" x="252" y="486">search, graph, and durable memory.</text>
+  <text class="cover-title" x="252" y="410">A serious alternative to SQL</text>
+  <text class="cover-title" x="252" y="486">for application databases.</text>
   <rect class="cover-rule" x="252" y="548" width="260" height="6" rx="3"/>
 
   <text class="cover-body" x="252" y="672">
-    <tspan x="252" dy="0">Modern applications increasingly need more than rows,</tspan>
-    <tspan x="252" dy="58">documents, or a separate search stack. They need durable</tspan>
-    <tspan x="252" dy="58">facts, expressive queries, graph-shaped relationships,</tspan>
-    <tspan x="252" dy="58">full-text search, vector retrieval, and reliable memory for</tspan>
-    <tspan x="252" dy="58">intelligent agents.</tspan>
+    <tspan x="252" dy="0">Many developers use SQL because it is the default</tspan>
+    <tspan x="252" dy="58">serious database choice, not because it is the best fit</tspan>
+    <tspan x="252" dy="58">for application code. As systems grow, SQL strings,</tspan>
+    <tspan x="252" dy="58">ORM layers, bolt-on search and vector stores, and</tspan>
+    <tspan x="252" dy="58">fragile large-join plans harden into the architecture.</tspan>
   </text>
 
   <text class="cover-body" x="252" y="1042">
-    <tspan x="252" dy="0">Datalevin brings those capabilities into one compact</tspan>
-    <tspan x="252" dy="58">open-source database, six years in the making. Built on</tspan>
-    <tspan x="252" dy="58">LMDB and Datalog, it gives application developers a</tspan>
-    <tspan x="252" dy="58">practical path from local embedded storage to production</tspan>
-    <tspan x="252" dy="58">systems that combine logic, search, and operational</tspan>
-    <tspan x="252" dy="58">simplicity.</tspan>
+    <tspan x="252" dy="0">Datalevin is a practical alternative: a compact</tspan>
+    <tspan x="252" dy="58">open-source database, six years in the making, that</tspan>
+    <tspan x="252" dy="58">keeps ACID transactions, durable storage, indexes,</tspan>
+    <tspan x="252" dy="58">and operational simplicity while making facts and</tspan>
+    <tspan x="252" dy="58">Datalog the core model. Built on LMDB, it brings logic,</tspan>
+    <tspan x="252" dy="58">graph, documents, search, vectors, and durable AI</tspan>
+    <tspan x="252" dy="58">memory into one coherent system.</tspan>
   </text>
 
   <text class="cover-heading" x="252" y="1472">THIS BOOK TEACHES YOU TO</text>
@@ -87,7 +88,7 @@
     <tspan x="286" dy="0">model data as entities, attributes, and datoms</tspan>
     <tspan x="286" dy="58">write Datalog queries, rules, transactions, and pull patterns</tspan>
     <tspan x="286" dy="58">design relational, graph, document, vector, and hybrid models</tspan>
-    <tspan x="286" dy="58">build persistent agent memory from episodes, facts, and recall</tspan>
+    <tspan x="286" dy="58">build persistent agent memory with recall and truth maintenance</tspan>
   </text>
   <g fill="#7ad9b9">
     <circle cx="252" cy="1560" r="8"/>
