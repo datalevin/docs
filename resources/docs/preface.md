@@ -45,7 +45,7 @@ Queries are data structures rather than SQL strings. Attributes carry schema and
 documentation wherever facts appear.
 
 This is different from adding isolated extension features to a SQL system. In
-SQL, document features, search features, similarity search, relationship
+SQL, document handling, full-text search, similarity search, relationship
 traversal, and custom logic often come with separate syntaxes and planning
 rules. Application code then has to compose those surfaces carefully and
 reconcile their results. In Datalevin, these capabilities share one
@@ -56,10 +56,9 @@ application code.
 
 Datalevin's aim is practical: it is for application developers who want a
 serious alternative to SQL for day-to-day application state. The goal is not
-merely to offer another database feature set, but to make
-ordinary application data easier to model, query, search, evolve, and operate
-without falling back to SQL strings, ORM ceremony, extension mini-languages, and
-cross-system glue code.
+merely to offer another database feature set. It is to make ordinary application
+data easier to model, query, search, evolve, and operate without falling back to
+SQL strings, ORM ceremony, extension mini-languages, and cross-system glue code.
 
 ## Two Practical Advantages
 
@@ -97,41 +96,62 @@ Two advantages follow from that design:
   joins, graph traversal, full-text search, vector search, and evolving sparse
   data.
 
-## Built on LMDB
+## Implementation Foundations
 
-Datalevin is built on LMDB, a fast memory-mapped key-value store, but it is not
-only a key-value wrapper. LMDB provides the durable sorted storage foundation;
-Datalevin exposes that foundation directly when sorted key-value access is the
-right tool, and provides a Datalog database when relationships, constraints,
-identity, and logical queries are the right tool. Full-text indexes, vector and
-embedding indexes, and path-indexed documents are maintained beside the facts so
-that search, vector similarity, and logical constraints stay transactionally
+Those advantages depend on implementation choices. Datalevin is deliberately
+layered because a database like this needs both performance and flexibility.
+Storage is performance-critical, so Datalevin relies on LMDB's close-to-metal,
+heavily optimized C implementation for the durable storage layer:
+memory-mapped reads, B+Tree ordering, copy-on-write transactions, and crash
+recovery. Above that foundation, Datalevin stores datoms and maintains
+secondary indexes, full-text indexes, vector and embedding indexes, and
+path-indexed documents. Because these structures live under the same
+transaction discipline, direct key-value access, Datalog queries, full-text
+search, vector similarity, and logical constraints stay transactionally
 aligned.
 
-The implementation is layered. At the bottom is a native storage layer derived
-from LMDB. A JVM/Java layer exposes the native operations to managed code. The
-Clojure layer implements the main database semantics: schema, Datalog queries,
-planning, secondary indexes, and high-level APIs, while leveraging LMDB's
-transaction machinery underneath. The Java, Python, and JavaScript packages call
-into the same Datalevin runtime through language bindings. In other words,
-Clojure is the most compact language for showing the model in this book, but
-Datalevin itself is not merely a Clojure wrapper around a file format. This
-layering is pragmatic rather than ideological: each layer uses technology well
-suited to that job, from LMDB's native storage and transaction discipline to the
-JVM's portability and Clojure's strength at data-oriented programming and
-Datalog representation.
+Flexibility comes from the layers above storage. Datalevin's higher layers use
+a data-oriented implementation style [8]: schemas, transactions, queries,
+rules, and many internal plans are represented as plain data structures that can
+be inspected, transformed, tested, and passed between layers. This keeps the
+implementation close to the fact-centered model and makes the database easier
+to adapt as user requirements change. It also reduces complexity by separating
+data from behavior: facts and queries remain explicit data inside the engine,
+not state hidden behind a large object hierarchy. Explicit values also help
+upper-layer concurrency, because they can be shared, snapshotted, compared, and
+passed between threads with less hidden mutation.
+
+The mixed-language implementation follows from those two needs. At the bottom
+is the native LMDB-derived storage layer. A JVM/Java layer exposes the native
+operations to managed code. The Clojure layer implements schema, Datalog
+queries, planning, secondary indexes, and high-level APIs while leveraging
+LMDB's transaction machinery underneath. Datalevin can then be used from four
+host environments: Clojure, Java, Python, and JavaScript/Node.js. Clojure is the
+native and most compact API for showing the model; the other packages expose the
+same engine through language-specific APIs. When this book mentions these
+language runtimes, it means host environments that call into Datalevin's shared
+implementation, not separate database engines with separate behavior. The
+surface syntax differs by language, and Appendix A gives the exact installation
+and compatibility details.
+
+The result is a pragmatic stack: C where the storage engine must be fast,
+data-oriented managed code where database semantics must evolve, and one shared
+runtime behind several language APIs. The rest of the book is about that payoff
+in practice. The same fact-centered model starts with a few facts in a
+transaction and extends to search, graph queries, rules, operations, and AI
+memory. We can start with the smallest useful example.
 
 ## A First Look in Code
 
-Here is a small first look at the model in code. It declares two attributes,
+Here is that model in a small piece of code. It declares two attributes,
 opens a connection, writes three people and two follow relationships, and asks
 for Alice's friend-of-a-friend.
 
 For the printed book, we show Clojure examples for their conciseness. You do
 not need to know Clojure to understand them; most are just data and Datalevin
-function calls. The Web version at
+function calls. The web version at
 https://datalevin.org shows the same examples in four languages side by side:
-Clojure, Java, JavaScript, and Python.
+Clojure, Java, Python, and JavaScript.
 
 To grasp the full nuances of some examples, you may want to be familiar with the
 data notation we use, called EDN (extensible data notation), which is similar to
@@ -271,34 +291,31 @@ applying logic. Later chapters extend the same foundation to transactions,
 schema design, documents, full-text search, vectors, rules, operations, and
 intelligent applications.
 
-A related theme runs throughout the book: data-oriented programming for
-application design. Model durable application state as plain, inspectable data;
-make relationships explicit; and let small functions and declarative queries
-transform that data instead of hiding essential state inside opaque objects.
-
-Datalevin is open source. Its source code, issues, release history, and project
-documentation live in the
-[Datalevin GitHub repository](https://github.com/datalevin/datalevin).
-
 ## Why This Book Exists
 
 Datalevin is a compact database system. It can be embedded in an application,
 run as a server, used from scripts, accessed from multiple language clients, and
-deployed as part of large production systems. It also supports a style of modeling
-that is unfamiliar to many engineers who come from table-first, document-first,
-or service-first architectures.
+deployed as part of large production systems. It also supports a style of
+modeling that is unfamiliar to many engineers who come from table-first,
+document-first, or service-first architectures.
 
-This book exists to make that style practical.
+This book exists to make that style practical as a real alternative to SQL for
+application databases. It is not enough to say that facts and Datalog are
+elegant. A replacement for SQL in day-to-day application work must also explain
+transactions, schema, identity, indexes, performance, deployment, and failure
+modes.
 
-The first goal is to teach Datalevin as a database: how to open it, transact
-data, read data, design schemas, model relationships, use the key-value layer,
-query with Datalog [1], tune storage, and operate the system.
+The first goal is to teach Datalevin as a complete database, not just a query
+language: how to open it, transact data, read data, design schemas, model
+relationships, use the key-value layer, query with Datalog [1], tune storage,
+and operate the system.
 
 The second goal is to teach a way of thinking. Datalevin works best when you
 learn to see application data as facts, relationships, indexes, and derived
-knowledge. A row, a document, a relationship, a search result, and a similarity
-result do not have to live in separate conceptual universes. They can be different
-views over the same durable facts.
+knowledge rather than as rows first, documents first, or service boundaries
+first. A row, a document, a relationship, a search result, and a similarity
+result do not have to live in separate conceptual universes. They can be
+different views over the same durable facts.
 
 The third goal is to show why this matters now. Large language models and
 agentic applications are pushing databases into a new role. A useful AI system
@@ -306,6 +323,10 @@ does not only need prompt text. It needs persistent memory, scoped task state,
 retrieval with permissions and provenance, audit trails, and a way to integrate
 new observations into a coherent long-term model. Part VI of this book shows how
 Datalevin can serve as that memory substrate.
+
+Datalevin is open source. Its source code, issues, release history, and project
+documentation live in the
+[Datalevin GitHub repository](https://github.com/datalevin/datalevin).
 
 ## How the Book Is Organized
 
@@ -341,10 +362,13 @@ built-ins; and the core, key-value, and client APIs.
 
 ## Who This Book Is For
 
-This book is for engineers who build data-intensive applications and want more
-than a single-purpose store. You may be building an embedded application, a
-backend service, a knowledge graph, a search-heavy product, a durable workflow
-system, or an AI application that needs memory and auditability.
+This book is for engineers who build data-intensive applications and are no
+longer satisfied with SQL as the center of application state. If you have felt
+that tables, SQL strings, ORMs, side indexes, and auxiliary services make
+ordinary application data harder to model and change than it should be, this
+book is written for you. You may be building an embedded application, a backend
+service, a knowledge graph, a search-heavy product, a durable workflow system,
+or an AI application that needs memory and auditability.
 
 You should be comfortable with basic database ideas: transactions, indexes,
 schemas, filters, and query results. You do not need prior Datalog
@@ -401,22 +425,24 @@ the earlier parts.
 
 By the end of the book, you should be able to:
 
-- model application data as durable facts without losing relational, graph, or
-  document expressiveness;
-- use Datalog for declarative queries, joins, rules, and recursive relationships;
+- decide when Datalevin is a serious alternative to a SQL application database,
+  and when a different engine is the better fit;
+- model application data as durable facts without losing relational, graph,
+  document, search, or vector expressiveness;
+- use Datalog as an application query language for joins, rules, recursive
+  relationships, and exact constraints;
 - choose when to use Datalevin's Datalog layer and when to use the lower-level
   key-value API directly;
-- combine full-text search, vector search, and logical constraints in one
-  retrieval pipeline;
-- design schemas and indexes that support both correctness and performance;
+- design schemas and indexes that support correctness, performance, and change
+  over time;
 - operate Datalevin in embedded, server, scripting, and production contexts;
-- build persistent-memory systems for agents without treating a chat transcript
-  as the only source of truth.
+- build persistent-memory systems for AI applications without treating a chat
+  transcript as the source of truth.
 
-The larger argument of the book is simple: databases can be more than passive
-containers. A database can be a logical substrate: a place where facts are
-stored, relationships are traversed, knowledge is derived, evidence is preserved,
-and intelligent systems can maintain state over time.
+The larger argument of the book is simple: an application database can be more
+than a passive container behind SQL strings. It can be a logical substrate: a
+place where facts are stored, relationships are traversed, knowledge is derived,
+evidence is preserved, and intelligent systems can maintain state over time.
 
 Datalevin is one concrete way to build on that idea.
 
@@ -482,3 +508,5 @@ Data Engineering* 1, no. 1, 1989, pp. 146-166.
 
 [7] Datalevin project,
     [LDBC SNB Benchmark](https://github.com/datalevin/datalevin/tree/master/benchmarks/LDBC-SNB-bench).
+
+[8] Yehonathan Sharvit, *Data-Oriented Programming*, Manning, 2022.
