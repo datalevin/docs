@@ -76,7 +76,7 @@ it is independent of Datalog schema validation.
 | :--- | :--- | :--- |
 | `transact-kv` | `(d/transact-kv db txs)`, `(d/transact-kv db name txs k-type v-type)` | Synchronously apply KV `:put` and `:del` operations. |
 | `transact-kv-async` | `(d/transact-kv-async db txs)`, `(d/transact-kv-async db name txs k-type v-type callback)` | Batch asynchronous KV writes; returns a future. |
-| `with-transaction-kv` | `(d/with-transaction-kv [tx db] body...)` | Run reads and writes in one explicit KV transaction. |
+| `with-transaction-kv` | `(d/with-transaction-kv [tx db] body...)`, `(d/with-transaction-kv [tx db {:timeout-ms n}] body...)` | Run reads and writes in one explicit KV transaction, optionally with a timeout. |
 | `abort-transact-kv` | `(d/abort-transact-kv tx)` | Roll back writes from inside `with-transaction-kv`. |
 
 | Transaction item | Shape |

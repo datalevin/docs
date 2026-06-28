@@ -34,12 +34,28 @@ Datalevin's storage engine (LMDB) uses a **Copy-on-Write (CoW) B+Tree**.
 
 1.  **Never Overwrite**: When you write a new datom, LMDB doesn't modify
     existing pages. Instead, it creates a *new version* of the affected pages.
-2.  **Atomic Commits**: Once all the new pages are written and synced to disk,
-    the "Root" of the B+Tree is updated in a single, atomic operation.
-3.  **Instant Recovery**: If the power fails during a write, the root pointer is
-    never updated. When you restart the database, it simply points to the last
-    known-good state. **There is no "recovery process" needed because the
-    database is never in an inconsistent state on disk.**
+2.  **Atomic Visibility**: The new pages do not become the current database
+    state just because they have been written. They become visible only when
+    LMDB publishes metadata that points to the new B+Tree root. Until that
+    metadata update succeeds, readers and restart recovery still use the
+    previous committed root.
+3.  **Durability Boundary**: In the default durable mode, commit confirmation
+    includes the required flushes so the new pages and the metadata that
+    publishes the new root are safely on disk. The "atomic" part is the switch
+    from the old committed root to the new committed root; the durability part
+    is making the pages and metadata reach stable storage before the commit is
+    reported as durable.
+4.  **Instant Recovery**: If new pages reach disk but power fails before the
+    root metadata is updated, those pages are not part of the committed
+    database. On restart, LMDB chooses the last valid committed root. The
+    interrupted transaction is lost from the application's point of view, just
+    as if it had never committed. The bytes for the unpublished pages may still
+    be present in the file, but no committed root reaches them, so they are not
+    queryable database state and may be overwritten or reused later. If the root
+    metadata was updated and flushed successfully, the new version is the
+    committed state. There is no long log-replay process for the direct LMDB
+    file because recovery chooses between valid committed roots rather than
+    repairing an in-place update.
 
 
 ### 1.2 Syncing to Disk: `msync` and Durability
@@ -645,9 +661,14 @@ knowing your data is safe from crashes and easy to recover from disasters.
 ## 2. Memory Layout and Storage Tuning
 
 Datalevin is a "zero-copy" database, which means its memory management is very
-different from standard JVM-based applications. While many databases fight the
-JVM Garbage Collector (GC), Datalevin works *with* the operating system's native
-memory management.
+different from an ordinary application that keeps its working data as managed
+runtime objects. As discussed in the preface and Chapter 4, Datalevin is
+layered: native LMDB storage, a JVM/Java bridge, Clojure database semantics, and
+language bindings for Clojure, Java, Python, and JavaScript. The Garbage
+Collection (GC) discussion in this section is about Datalevin's runtime heap,
+not a requirement that application code be written in Java. The important point
+is that the database pages themselves are file-backed pages managed by the
+operating system, not objects managed by Datalevin's runtime GC.
 
 This section covers the best practices for tuning Datalevin's memory and storage
 parameters for maximum performance and stability.
@@ -660,12 +681,12 @@ maximum size the file can grow to in the address space.
 
 #### 2.1.1 Virtual Memory vs. Resident Memory
 
-Unlike a traditional Java heap, the `:mapsize` is a **virtual memory**
+Unlike a traditional managed application heap, the `:mapsize` is a **virtual memory**
 reservation, as shown in Figure 19.2. Setting a 1TB mapsize does *not* mean the
 database will consume 1TB of RAM. It simply means the OS will reserve a 1TB
 "address space" for the database file.
 
-![mapsize, address space, and the page cache as three nested scales: :mapsize reserves a large virtual address space (not disk, not RAM, safe to set generously); the database file grows on disk up to that mapsize (pre-size to avoid a costly auto-resize); and only the hot working set is resident in RAM via the OS page cache (zero-copy reads, outside the JVM heap). Each layer is a subset of the one above](/images/diagrams/mapsize-address-space.svg)
+![mapsize, address space, and the page cache as three nested scales: :mapsize reserves a large virtual address space (not disk, not RAM, safe to set generously); the database file grows on disk up to that mapsize (pre-size to avoid a costly auto-resize); and only the hot working set is resident in RAM via the OS page cache (zero-copy reads, outside Datalevin's runtime heap). Each layer is a subset of the one above](/images/diagrams/mapsize-address-space.svg)
 
 - **Recommendation**: Set `:mapsize` to be significantly larger than your
   expected data size (e.g., if you expect 50GB of data, set it to 256GB).
@@ -714,6 +735,8 @@ const conn = await connect(path, {
 
 Because Datalevin uses **memory-mapped files (`mmap`)**, it does not manage its
 own buffer pool. Instead, it relies on the **Operating System Page Cache**.
+Here "page cache" means the operating system's cache of file-backed pages in
+main memory, not CPU L1/L2/L3 hardware caches.
 Operationally, a Datalevin database path names a directory, but the durable LMDB
 pages normally live in one memory-mapped data file, `data.mdb`. The directory
 may also contain LMDB's lock/readers file (`lock.mdb`) and Datalevin-managed WAL
@@ -722,12 +745,17 @@ key-value spaces inside the same LMDB data file; they are not separate data
 files.
 
 - **Zero-Copy Reads**: When you perform a read, the OS handles fetching the
-  required pages from disk into the Page Cache. Datalevin then returns a pointer
-  directly into that cache.
-- **GC Independence**: Because the database data lives in the Page Cache
-  (outside the JVM heap), your queries do not trigger JVM garbage collection.
-  This allows Datalevin to handle datasets much larger than your JVM heap size
-  with sub-millisecond latency.
+  required pages from disk into the page cache. LMDB maps those pages into the
+  Datalevin process. The native layer hands the address of the LMDB value memory
+  to Java as a `DirectByteBuffer`, and Datalevin's Clojure runtime decodes from
+  that buffer into typed values without first copying the bytes into a JVM heap
+  byte array.
+- **Database Pages Outside the Runtime Heap**: Because the database pages live in
+  the page cache, they are outside Datalevin's JVM-managed heap. A query still
+  allocates normal runtime objects for decoded values and result collections, but
+  the resident database pages themselves do not become managed objects and do not
+  create proportional GC pressure. This allows Datalevin to handle datasets much
+  larger than the runtime heap size with sub-millisecond latency.
 
 > **Tuning Tip**: For best performance, ensure your server has enough free RAM
 > to hold your **active working set** (the most frequently queried data) in the

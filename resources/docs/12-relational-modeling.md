@@ -1054,6 +1054,16 @@ const schema = {
 Think of `:db/doc` as "comments that live in the database." They can be queried
 and used to generate documentation automatically.
 
+This matters even more when LLMs or other tools help write queries. SQL
+databases usually attach comments to table and column objects, and the exact
+mechanism differs by vendor. Datalevin attaches documentation to the attribute
+itself. The same attribute name that appears in a Datalog clause can carry its
+meaning, constraints, and domain intent in schema metadata. A query assistant
+can inspect `:db/doc` before choosing between attributes such as
+`:order/total`, `:order/subtotal`, and `:order/tax`, instead of guessing from
+names alone. Good `:db/doc` strings therefore improve both human maintenance
+and machine-assisted query generation.
+
 
 ## 7. From Tables to Facts: Migrating SQL Models
 

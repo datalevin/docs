@@ -10,6 +10,12 @@ Datalevin's query model is fact-centric, but its performance and reliability are
 grounded in its storage architecture. Unlike many databases that build custom
 buffer managers and page caches, Datalevin leverages the operating system's
 existing strengths by building on **LMDB** (Lightning Memory-Mapped Database).
+Implementation-wise, this storage foundation is a native layer exposed upward
+through the JVM; Datalevin's Clojure database layer builds schema, Datalog, and
+indexing semantics on top while leveraging LMDB's transaction machinery. This is
+a pragmatic stack: native code where the storage engine benefits from it, the
+JVM where portability and mature runtime tooling matter, and Clojure where
+data-oriented database semantics are most direct to express.
 
 This chapter explores why Datalevin chose this foundation, how it extends LMDB
 into **DLMDB**, and how the physical layout of data supports efficient Datalog
@@ -20,14 +26,19 @@ queries, secondary indexes, and high-throughput writes.
 
 LMDB is a small embedded key-value store with a deliberately narrow design. Its
 philosophy is to do as little as possible in user space, offloading complex tasks
-like memory management to the operating system (OS) kernel.
+like memory management to the operating system (OS) kernel. At this layer, LMDB
+does not know Datalevin attributes, datoms, keywords, strings, vectors, or
+schema. It stores and orders raw bytes. Datalevin is the layer that encodes
+typed values into those bytes and decodes them back into typed values.
 
 ### 1.1 Why Memory-Mapping Fits Datalevin
 
 LMDB uses **memory-mapping (`mmap`)**. It treats the database file as if it were
-a large array in the address space of the operating system. This does not mean
+a large array in Datalevin's process virtual address space. This does not mean
 the whole database file is loaded into memory. When Datalevin reads data, the OS
-kernel handles fetching the required pages from disk into the **Page Cache**.
+kernel handles fetching the required pages from disk into the file-system
+**page cache**. This is the operating system's cache of file-backed pages in
+main memory, not the CPU's L1/L2/L3 hardware caches.
 A page is the basic unit of the OS's memory management. On operating systems such
 as Linux or Windows, the page size often defaults to 4KB, while on macOS with
 Apple Silicon, the default is 16KB. The memory map reserves a range of virtual address
@@ -60,14 +71,18 @@ latency may choose a private buffer manager. Datalevin's use case is different:
 it favors an embedded, low-administration engine that cooperates well with the
 rest of the host. This design has some benefits for its use cases:
 
-- **Zero-Copy Reads**: On the read hot-path, Datalevin doesn't copy data from a
-  kernel buffer to a user-space buffer. Instead, it returns a `DirectByteBuffer`
-  that points directly to the OS Page Cache. This bypasses JVM heap allocation
-  and minimizes Garbage Collection (GC) overhead. By default, this memory map is
-  **read-only**. That matters because many objections to mmap focus on writable
-  mappings: accidental memory corruption, dirty-page writeback surprises, or
-  weaker control over when modified pages reach storage. In LMDB's default mode,
-  the read path does not modify the database file through the mapping. Writes go
+- **Zero-Copy Reads**: On the read hot path, Datalevin avoids copying bytes from
+  the mapped database file into a separate JVM heap byte array. Because LMDB
+  memory-maps the file, the native layer hands the address of the LMDB value
+  memory to Java as a `DirectByteBuffer`. Datalevin's Clojure runtime then reads
+  from that buffer and decodes the bytes into typed Datalevin values. This
+  bypasses allocation of an intermediate byte array in Datalevin's JVM heap and
+  minimizes Garbage Collection (GC) overhead. By default, this memory map is
+  **read-only**.
+  That matters because many objections to mmap focus on writable mappings:
+  accidental memory corruption, dirty-page writeback surprises, or weaker
+  control over when modified pages reach storage. In LMDB's default mode, the
+  read path does not modify the database file through the mapping. Writes go
   through LMDB's transaction machinery and copy-on-write discipline: new pages
   are prepared by LMDB and committed through file-system write and sync calls.
   Writable-map mode belongs to a different discussion: it is a non-default,
@@ -119,6 +134,17 @@ the newly written tree. Readers that started earlier keep following the old root
 new readers see the new root. This is structural sharing at storage-engine scale:
 small updates copy a small part of the tree, large unchanged regions are shared,
 and readers do not need locks on the writer's working pages.
+
+The root switch is the publication point, not the whole physical write. New
+pages may have been written before the switch, but they are not the database
+state until the metadata that points to the new root is committed. If a crash
+happens after some new pages reach disk but before that metadata update, recovery
+uses the previous valid root. The transaction's changes are lost from the
+application's point of view, exactly as if the transaction had not committed.
+The physical bytes for the unpublished pages may still be present in the file,
+but no committed root points to them, so they are unreachable database state and
+can be overwritten or reused by later writes. Chapter 19 separates this atomic
+visibility rule from the disk-sync rules that determine when a commit is durable.
 
 This design gives Datalevin fast and safe read concurrency. Reads are zero-copy
 and lockless, while writes remain atomic because a committed transaction becomes

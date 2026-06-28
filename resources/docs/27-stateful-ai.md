@@ -240,7 +240,7 @@ sent for review. Datalevin stores the records, links, and working-memory
 projection that make that decision auditable.
 
 
-## 3. Example 1: The Adaptive Learning Assistant
+## 3. Scenario: The Adaptive Learning Assistant
 
 Imagine an AI tutor that helps a student learn Clojure over six months.
 
@@ -248,107 +248,94 @@ Imagine an AI tutor that helps a student learn Clojure over six months.
   make is stored as an episode.
 - **Semantic State**: A "Student Knowledge Graph" tracks which concepts (e.g.,
   "Recursion", "Macros", "Transducers") the student has mastered.
-- **Stateful Logic**:
-    <div class="multi-lang">
 
-    ```clojure
-    ;; Find concepts the student hasn't mastered but has prerequisite knowledge for
-    (d/q '[:find ?concept
-           :where [?student :student/level ?level]
-                  [?concept :concept/difficulty ?d]
-                  [(< ?d ?level)]
-                  (not [?student :student/mastered ?concept])
-                  [?concept :concept/prereq ?pre]
-                  [?student :student/mastered ?pre]]
-         db)
-    ```
+The tutor also needs stateful logic. Given a student's current level, the
+concepts they have mastered, and the prerequisites for each concept, a query can
+select concepts that are good candidates for the next lesson:
 
-    ```java
-    // Find concepts the student hasn't mastered but has prerequisite knowledge for
-    Object results = conn.query(
-        "[:find ?concept " +
-        " :where [?student :student/level ?level]" +
-        "        [?concept :concept/difficulty ?d]" +
-        "        [(< ?d ?level)]" +
-        "        (not [?student :student/mastered ?concept])" +
-        "        [?concept :concept/prereq ?pre]" +
-        "        [?student :student/mastered ?pre]]");
-    ```
+<div class="multi-lang">
 
-    ```python
-    # Find concepts the student hasn't mastered but has prerequisite knowledge for
-    results = conn.query(
-        """[:find ?concept
-            :where [?student :student/level ?level]
-                   [?concept :concept/difficulty ?d]
-                   [(< ?d ?level)]
-                   (not [?student :student/mastered ?concept])
-                   [?concept :concept/prereq ?pre]
-                   [?student :student/mastered ?pre]]""")
-    ```
+```clojure
+;; Find concepts the student hasn't mastered but has prerequisite knowledge for
+(d/q '[:find ?concept
+       :where [?student :student/level ?level]
+              [?concept :concept/difficulty ?d]
+              [(< ?d ?level)]
+              (not [?student :student/mastered ?concept])
+              [?concept :concept/prereq ?pre]
+              [?student :student/mastered ?pre]]
+     db)
+```
 
-    ```javascript
-    // Find concepts the student hasn't mastered but has prerequisite knowledge for
-    const results = await conn.query(
-        `[:find ?concept
-          :where [?student :student/level ?level]
-                 [?concept :concept/difficulty ?d]
-                 [(< ?d ?level)]
-                 (not [?student :student/mastered ?concept])
-                 [?concept :concept/prereq ?pre]
-                 [?student :student/mastered ?pre]]`);
-    ```
+```java
+// Find concepts the student hasn't mastered but has prerequisite knowledge for
+Object results = conn.query(
+    "[:find ?concept " +
+    " :where [?student :student/level ?level]" +
+    "        [?concept :concept/difficulty ?d]" +
+    "        [(< ?d ?level)]" +
+    "        (not [?student :student/mastered ?concept])" +
+    "        [?concept :concept/prereq ?pre]" +
+    "        [?student :student/mastered ?pre]]");
+```
 
-    </div>
+```python
+# Find concepts the student hasn't mastered but has prerequisite knowledge for
+results = conn.query(
+    """[:find ?concept
+        :where [?student :student/level ?level]
+               [?concept :concept/difficulty ?d]
+               [(< ?d ?level)]
+               (not [?student :student/mastered ?concept])
+               [?concept :concept/prereq ?pre]
+               [?student :student/mastered ?pre]]""")
+```
 
-The tutor's advice is always based on the student's actual history.
+```javascript
+// Find concepts the student hasn't mastered but has prerequisite knowledge for
+const results = await conn.query(
+    `[:find ?concept
+      :where [?student :student/level ?level]
+             [?concept :concept/difficulty ?d]
+             [(< ?d ?level)]
+             (not [?student :student/mastered ?concept])
+             [?concept :concept/prereq ?pre]
+             [?student :student/mastered ?pre]]`);
+```
 
+</div>
 
-## 4. Example 2: Multi-Agent Collaboration Workspace
-
-In a complex project, multiple agents might work together — one for coding, one
-for testing, and one for documentation.
-
-- **Common Workspace**: All agents share a single Datalevin database.
-- **Coordination via Graph**: Agents post tasks as entities and link them to
-  each other.
-- **Security**: Use **Datalevin Server RBAC** (Chapter 22) to ensure the "Code
-  Agent" can modify source entities, but the "Documentation Agent" can only view
-  them.
-
-By sharing a transactionally consistent environment, agents can coordinate their
-efforts without complex message-passing protocols.
+The query is not the whole tutor. The application still decides how to explain
+the recommendation, how to handle motivation and pacing, and when to override
+the next-concept suggestion. Datalevin's role is to keep the student's actual
+history, current semantic state, and recommendation logic in one queryable
+environment.
 
 
-## 5. Example 3: The Self-Updating Knowledge Base
+## 4. Where the Same Pattern Applies
 
-A documentation site (like this one!) that "learns" from user feedback.
+The tutor is only one concrete setting. The same stateful shape appears whenever
+an AI system needs durable memory, explicit tasks, and auditable tool use:
 
-- **Interaction Log**: Store every search query and every "Is this helpful?" click.
-- **Inference**: A background agent uses **Full-Text Search** to find areas
-  where users frequently search but fail to find answers.
-- **Synthesis**: The agent uses an LLM to draft a new `idoc` document addressing
-  the gap and transacts it into the database for human review.
+- **Multi-agent collaboration workspace**: Coding, testing, and documentation
+  agents can share one Datalevin database. Tasks become entities, dependencies
+  become graph relationships, and Datalevin Server RBAC (Chapter 22) can keep
+  each agent inside its allowed authority.
+- **Self-updating knowledge base**: A documentation site can store search
+  queries and "not helpful" feedback as episodes, detect repeated gaps, and open
+  review tasks for humans before generated text becomes documentation.
+- **MCP-backed agent tools**: `dtlv mcp` can expose local or remote Datalevin
+  databases through a `stdio` MCP server. The tool boundary remains explicit:
+  writes are disabled by default, structured responses are machine-readable, and
+  large results include truncation metadata.
 
-
-## 6. Example 4: MCP-Backed Agent Tools
-
-For AI applications that use MCP, `dtlv mcp` provides a local `stdio` tool
-server over Datalevin databases.
-
-- **Read-first safety**: `dtlv mcp` starts with write tools disabled.
-- **Explicit writes**: `dtlv --allow-writes mcp` is required before tools can
-  mutate a database.
-- **Structured payloads**: Tool calls return machine-readable
-  `structuredContent`, with response limits and truncation metadata for large
-  results.
-- **Local and remote targets**: The MCP server can open local database paths or
-  remote `dtlv://` URIs behind the same local process.
-
-This makes Datalevin useful as a durable tool substrate for agents: memory stays in a real database, while the tool boundary remains explicit.
+These are not separate products Datalevin ships. They are application patterns
+built from ordinary facts, transactions, queries, rules, permissions, and
+operational APIs. The next two sections make those patterns more concrete by
+showing durable task records and tool-audit records.
 
 
-## 7. Pattern: Durable Tasks and Board Projections
+## 5. Pattern: Durable Tasks and Board Projections
 
 For long-running work, store the plan as data. A task contract should be stable
 and inspectable, while runtime state changes independently as the task runs.
@@ -647,7 +634,7 @@ without guessing. A good boundary states what was done, why the task stopped,
 what should happen next, and which questions remain open.
 
 
-## 8. Pattern: Tool Authority, Audit, and Usage Ledgers
+## 6. Pattern: Tool Authority, Audit, and Usage Ledgers
 
 Autonomous systems should not rely on the model to remember which tools are
 allowed. Store tool authority and audit records as data.
@@ -853,14 +840,13 @@ tokens. Because the ledger is sanitized, it can be used for policy and reporting
 without storing prompt text or secret-bearing tool payloads.
 
 
-## 9. Capstone: A Documentation Feedback Memory Loop
+## 7. Capstone: A Documentation Feedback Memory Loop
 
-The examples above are patterns. This capstone ties them together in one small,
-runnable program. This is not production code for a documentation site. Instead,
-it models the same application shape in miniature: readers search the docs,
-leave feedback, a background job detects a documentation gap, and the system
-creates a reviewable task with working memory. The memory loop is illustrated in
-Figure 27.1.
+The patterns above come together in one small, runnable program. This is not
+production code for a documentation site. Instead, it models the same
+application shape in miniature: readers search the docs, leave feedback, a
+background job detects a documentation gap, and the system creates a reviewable
+task with working memory. The memory loop is illustrated in Figure 27.1.
 
 ![Capstone feedback memory loop: not-helpful search-feedback episodes are grouped into a candidate gap once they meet a threshold; the app accepts a current docs-gap fact (with evidence and supersession), opens a docs-gap-review task against it, and projects the fact and its evidence into working memory; resolving the task improves the docs and closes the loop with fewer failed searches. Boxes are stored in Datalevin; the dashed candidate-gap box is application-computed; transitions are application policy](/images/diagrams/capstone-memory-loop.svg)
 

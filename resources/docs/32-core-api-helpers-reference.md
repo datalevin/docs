@@ -71,8 +71,10 @@ worked examples.
 | --- | ------ |
 | `transact-async` | Submits a Datalog transaction and returns a future/promise immediately. |
 | `transact` | Blocks for the same asynchronous transaction machinery and returns an already realized future. |
-| `with-transaction` | Groups multiple Datalog writes, and optionally borrowed KV writes, into one explicit transaction. |
+| `with-transaction` | Groups multiple Datalog writes, and optionally borrowed KV writes, into one explicit transaction; accepts `{:timeout-ms n}` in the binding vector. |
 | `abort-transact` | Aborts the open explicit Datalog transaction from inside `with-transaction`. |
+| `explicit-transaction-timeout` | Gets or sets the default timeout, in milliseconds, for explicit Datalog and KV transactions. |
+| `set-explicit-transaction-timeout!` | Sets or clears the default explicit transaction timeout; pass `nil` to disable it. |
 | `listen!`, `unlisten!` | Register or remove transaction-report callbacks on a connection. |
 | `tx-data->simulated-report` | Builds a transaction report from a DB object and tx data without mutating the connection. |
 | `resolve-tempid` | Datomic-compatibility helper for looking up tempids in a transaction report. |

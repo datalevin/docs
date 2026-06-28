@@ -358,7 +358,11 @@ configuration.
   and all systems used default configuration without tuning. Each system was run
   once for warmup and once for the reported timing. Under that setup, Datalevin
   finished the 113-query workload in 71 seconds versus 171 seconds for
-  PostgreSQL, about 2.4x faster overall.
+  PostgreSQL, about 2.4x faster overall. SQLite was included as a second SQL
+  comparison and was much weaker on this workload: it completed the non-timeout
+  portion in 295 seconds, already more than 4x slower than Datalevin, and 9
+  queries hit the benchmark timeout. Counting those queries to completion would
+  make the SQLite gap larger.
 - **LDBC SNB**: The Datalevin LDBC-SNB benchmark [14] is an unofficial
   implementation of the Interactive workload for Datalevin and Neo4j. The
   reported run used scale factor 1, about 3.2M entities and 17.3M edges, on a

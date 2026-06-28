@@ -554,22 +554,24 @@ the same search option map, including `:top`, `:limit`, and `:offset`.
 <div class="multi-lang">
 
 ```clojure
-(d/fulltext-datoms db "red fox" {:top 10})
+(d/fulltext-datoms db "red fox" {:limit 10 :offset 20})
 ;=> (#datalevin/Datom [123 :post/body "The red fox ..."] ...)
 ```
 
 ```java
 import java.util.Map;
 
-conn.fulltextDatoms("red fox", Map.of(":top", 10));
+conn.fulltextDatoms("red fox", Map.of(":limit", 10, ":offset", 20));
 ```
 
 ```python
-conn.fulltext_datoms("red fox", opts={":top": 10})
+conn.fulltext_datoms("red fox", opts={":limit": 10, ":offset": 20})
 ```
 
 ```javascript
-await conn.fulltextDatoms("red fox", { opts: { ":top": 10 } });
+await conn.fulltextDatoms("red fox", {
+  opts: { ":limit": 10, ":offset": 20 }
+});
 ```
 
 </div>

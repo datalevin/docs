@@ -1279,6 +1279,59 @@ Inside the body, use the `tx` handle anywhere you would normally use `kv`.
 `transact-kv` accepts the same self-contained and single-DBI transaction shapes
 inside an explicit transaction.
 
+Explicit KV transactions also support timeouts:
+
+<div class="multi-lang">
+
+```clojure
+(d/with-transaction-kv [tx kv {:timeout-ms 5000}]
+  (d/transact-kv tx "counters" [[:put "hits" 1]] :string :long))
+```
+
+```java
+kv.withTransaction(5000L, tx -> {
+    tx.transact(
+        "counters",
+        List.of(List.of(Datalevin.kw("put"), "hits", 1L)),
+        "string",
+        "long");
+    return null;
+});
+```
+
+```python
+kv.with_transaction(
+    lambda tx: tx.transact(
+        [[":put", "hits", 1]],
+        dbi_name="counters",
+        k_type=":string",
+        v_type=":long"),
+    timeout_ms=5000)
+```
+
+```javascript
+await kv.withTransaction(async (tx) => {
+  await tx.transact([[":put", "hits", 1]], {
+    dbiName: "counters",
+    kType: ":string",
+    vType: ":long"
+  });
+}, { timeoutMs: 5000 });
+```
+
+</div>
+
+The default explicit transaction timeout is unset and shared with Datalog
+explicit transactions. Use `d/explicit-transaction-timeout` and
+`d/set-explicit-transaction-timeout!` in Clojure,
+`Datalevin.explicitTransactionTimeout(...)` and
+`Datalevin.setExplicitTransactionTimeout(...)` in Java,
+`explicit_transaction_timeout` and `set_explicit_transaction_timeout` in
+Python, or `explicitTransactionTimeout` and
+`setExplicitTransactionTimeout` in JavaScript. A timeout aborts the transaction
+and reports `:type :transaction/timeout`; code that ignores interruption, or an
+already-running JavaScript promise body, may continue until it returns.
+
 Use `with-transaction-kv` for KV-only work. When one atomic operation needs to
 write both Datalog data and custom KV DBIs in the same store, use Datalog
 `with-transaction` and access the transactional KV instance from inside that

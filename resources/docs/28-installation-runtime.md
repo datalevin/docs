@@ -170,7 +170,7 @@ For quick orientation, the main areas look like this:
 | Area | Cross-language status |
 | ------ | ------------------ |
 | Datalog basics | Clojure, Java, Python, and JavaScript all support open, query, pull, explain, transactions, async transactions, listeners, simulated transactions, datoms, index reads, bulk load, Datalog-backed KV, and re-index. |
-| KV APIs | All four support ordinary KV operations, list DB operations, range helpers, raw-buffer scans, stats, copy, sync, environment flag updates, and KV transaction callbacks. |
+| KV APIs | All four support ordinary KV operations, list DB operations, range helpers, raw-buffer scans, stats, copy, sync, environment flag updates, KV transaction callbacks, and explicit transaction timeouts. |
 | Search/vector/idoc | All four support Datalog full-text, custom analyzers through UDFs, vector search, idoc schema/options, standalone search/vector indexes, search index writers, and search re-indexing. |
 | Operations | All four support backup/copy, sync, snapshots, tx log watermarks and GC, tx log inspection, remote clients, replica status, and HA membership administration. |
 | UDFs and data helpers | All four support UDF registries, query/predicate/transaction UDFs, analyzer UDFs, EDN helpers, and schema/transaction construction helpers where the host language needs them. |
@@ -178,10 +178,11 @@ For quick orientation, the main areas look like this:
 The remaining notable differences to keep in mind while reading are:
 
 - Clojure, Java, and Python expose the Datalog transaction callback API
-  (`with-transaction`, `withTransaction`, and `with_transaction`). JavaScript
-  does not expose that Datalog callback; use a single `conn.transact(...)`,
-  `conn.transactAsync(...)`, KV transaction APIs, or move the callback logic
-  into a transaction function or application command.
+  (`with-transaction`, `withTransaction`, and `with_transaction`), including
+  per-call timeout options. JavaScript does not expose that Datalog callback;
+  use a single `conn.transact(...)`, `conn.transactAsync(...)`, KV transaction
+  APIs, or move the callback logic into a transaction function or application
+  command.
 - Existing entity objects are transactable only in Clojure. Java, Python, and
   JavaScript support lazy entity reads, but staged entity-object mutation should
   be written as transaction maps, datom forms, or binding transaction builders.

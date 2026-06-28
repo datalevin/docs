@@ -1404,10 +1404,12 @@ writes inside the body observe the same write transaction, so no other write can
 interleave between the read and the write within that store. A query inside the
 body also reads writes already made earlier in the same body, which gives
 `with-transaction` the usual read-your-writes behavior. If the body throws, the
-transaction is aborted. `with-transaction` does not retry logical conflicts such
-as CAS failures or unique-constraint violations. It only retries Datalevin's
-internal map-resize condition, where the LMDB map was grown and the write can be
-replayed safely.
+transaction is aborted. Explicit Datalog and KV transaction callbacks can also
+be given a timeout; when it expires, Datalevin aborts the transaction and reports
+`:type :transaction/timeout`. `with-transaction` does not retry logical
+conflicts such as CAS failures or unique-constraint violations. It only retries
+Datalevin's internal map-resize condition, where the LMDB map was grown and the
+write can be replayed safely.
 
 Normal Datalevin writes should serialize rather than deadlock. If a write path
 appears stuck, look for a long-running transaction function, application locks
@@ -1433,6 +1435,7 @@ full exception and its cause chain at the service boundary.
 | `:db/cas` or `:db.fn/cas` failure | The current value is not the expected old value. | `{:error :transact/cas, :old old, :expected old-value, :new new-value}` | Retry only by re-reading current state and recomputing the new transaction. |
 | Upsert conflict | Multiple identity assertions in one entity resolve to different existing entities. | `{:error :transact/upsert, ...}` | Do not retry. The input identifies two different entities. |
 | Transaction function failure | An installed transaction function or descriptor-backed UDF throws, cannot be resolved, or returns invalid transaction data. | Depends on the function or UDF validation. | Depends on the function. Keep transaction functions deterministic and side-effect-free. |
+| Explicit transaction timeout | A `with-transaction` or `with-transaction-kv` body exceeds its per-call timeout or the configured default explicit transaction timeout. | `{:type :transaction/timeout, :timeout-ms n}` | Treat as an aborted transaction. Retry only if the application operation is idempotent and still useful. Shorten or move slow work out of the transaction. |
 | LMDB map full / map resize | The write exceeds the current memory map size. | Normally handled internally as `"DB resized"` with `{:resized true}` and retried. | Usually no application action. If it happens often, set a larger `:mapsize` up front. |
 | WAL, remote, or HA write failure | WAL sync fails or times out, a remote server returns an error, or HA rejects a write because leadership or fencing changed. | Often `:type :txlog/...` or `:error :ha/...` | Retry only if the operation is idempotent and the topology is healthy. For HA, use the HA retry settings and still design writes to be replay-safe. |
 

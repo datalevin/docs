@@ -146,10 +146,10 @@ within one Datalevin store, committed writes have one serial order.
 | --- | --- | --- | --- |
 | `transact!` / `conn.transact(...)` | Ordinary application writes. | One collection of transaction data commits or aborts as one unit; the call returns after commit. | Application code does not run between tx-data forms, but transaction functions in the data run inside the same transaction. |
 | `transact-async` / `transactAsync` / `transact_async` | High-volume independent writes where the caller can wait later. | Same transaction semantics as `transact!`, but the caller receives a future or promise immediately. | Dependent code must wait for the future or promise before reading or submitting dependent writes. |
-| `with-transaction` / `withTransaction` / `with_transaction` | Read-modify-write logic and multi-step writes that must be one atomic operation. | One explicit read/write transaction around the callback. Nested synchronous transaction calls reuse this transaction instead of opening another one. | Queries through the transaction-bound connection have read-your-writes behavior. No other writer can interleave. |
+| `with-transaction` / `withTransaction` / `with_transaction` | Read-modify-write logic and multi-step writes that must be one atomic operation. | One explicit read/write transaction around the callback, with an optional timeout. Nested synchronous transaction calls reuse this transaction instead of opening another one. | Queries through the transaction-bound connection have read-your-writes behavior. No other writer can interleave. |
 | Transaction functions such as `:db/cas` or `:db.fn/call` | Conditional or server-side write logic expressed as transaction data. | The function runs inside the containing transaction and returns more transaction data. | The function receives the current Db for that transaction. Its result is committed atomically with the rest of the transaction. |
 | `tx-data->simulated-report` and variants | Tests, dry runs, validation previews, and explanations of what a transaction would do. | No live commit; Datalevin prepares the transaction against the supplied Db and returns a report shape. | Reads the supplied Db only. It does not serialize with a live connection. |
-| KV-only transaction APIs | Raw KV work without Datalog, or borrowed KV work from a Datalog store. | `transact-kv` applies one KV batch; `with-transaction-kv` opens one explicit KV transaction. Chapter 10 covers the full KV API. | Explicit KV transactions also have read-your-writes behavior, and nested KV transactions reuse the active transaction. |
+| KV-only transaction APIs | Raw KV work without Datalog, or borrowed KV work from a Datalog store. | `transact-kv` applies one KV batch; `with-transaction-kv` opens one explicit KV transaction, with an optional timeout. Chapter 10 covers the full KV API. | Explicit KV transactions also have read-your-writes behavior, and nested KV transactions reuse the active transaction. |
 
 The explicit Datalog transaction callback is available in Clojure, Java, and
 Python. JavaScript can still express many conditional writes with one
@@ -187,6 +187,63 @@ actually added or retracted, the tempid resolution map, and any transaction
 metadata supplied by the caller. When a transaction introduces attributes that
 were not previously present in the database schema, the report also includes
 `:new-attributes`:
+
+The `:db-before` and `:db-after` fields are mainly for code that needs the
+immediate transaction boundary for the datoms affected by this transaction.
+`:db-after` lets the caller or an embedded listener interpret the state produced
+by the transaction, for example after resolving tempids. `:db-before` lets tools
+compare the affected input state with the affected output state, and is
+especially useful for simulated transaction reports. These fields are not a
+general history API, and they are not meant to answer arbitrary questions such
+as "what would this unrelated query have returned before the transaction?" They
+are transaction-report context, not a reason to hold on to old Db handles. For
+normal application reads, call `d/db` on the connection when you need the
+current database state.
+
+The most obvious use is a simulated report: ask Datalevin what a transaction
+would do, inspect the produced state, and leave the live connection unchanged.
+
+```clojure
+(let [preview (d/tx-data->simulated-report
+                (d/db conn)
+                [{:db/id -1
+                  :user/email "preview@example.com"
+                  :user/name "Preview User"}])
+      eid     (get (:tempids preview) -1)]
+  {:preview-user (d/pull (:db-after preview)
+                   [:user/email :user/name]
+                   eid)
+   :live-user    (d/q '[:find ?e .
+                        :where [?e :user/email "preview@example.com"]]
+                      (d/db conn))})
+;=> {:preview-user {:db/id 101
+;                   :user/email "preview@example.com"
+;                   :user/name "Preview User"}
+;    :live-user nil}
+```
+
+For a committed transaction, use `:db-before` and `:db-after` when the report
+needs to explain the state change at the application level. The raw `:tx-data`
+shows datoms added or retracted; the two Db handles let you ask the same domain
+question over the affected data before and after the transaction. Assume account
+entity `101` currently has status `:open`:
+
+```clojure
+(let [report (d/transact! conn
+               [{:db/id 101
+                 :account/status :closed}])]
+  {:before (d/pull (:db-before report)
+             [:account/status]
+             101)
+   :after  (d/pull (:db-after report)
+             [:account/status]
+             101)
+   :datoms (:tx-data report)})
+;=> {:before {:db/id 101, :account/status :open}
+;    :after  {:db/id 101, :account/status :closed}
+;    :datoms [#datalevin/Datom [101 :account/status :open ... false]
+;             #datalevin/Datom [101 :account/status :closed ... true]]}
+```
 
 <div class="multi-lang">
 
@@ -1082,8 +1139,8 @@ The callback receives the same transaction report returned by `transact!`:
 
 | Report key | Value |
 | :--- | :--- |
-| `:db-before` | The Datalog DB object before the transaction. |
-| `:db-after` | The Datalog DB object after the transaction. |
+| `:db-before` | The Datalog Db handle used as the transaction input. |
+| `:db-after` | The Datalog Db handle produced by the transaction. |
 | `:tx-data` | The full datom objects actually added or retracted by the transaction; Chapter 15 explains their `:e`, `:a`, `:v`, `:tx`, and `:added` fields. |
 | `:tempids` | Map from transaction tempids to assigned entity ids. |
 | `:tx-meta` | The metadata value supplied as the optional third argument to `transact!`, or `nil`. |
@@ -1252,6 +1309,46 @@ because of JVM bridge re-entry constraints; use conditional transaction forms
 such as `:db/cas`, transaction functions, a single `conn.transact(...)`, or an
 application command running inside the Datalevin-hosting process when the
 read-modify-write logic must be serialized.
+
+Explicit transaction callbacks can also take a timeout for the callback body:
+
+<div class="multi-lang">
+
+```clojure
+(d/with-transaction [tx conn {:timeout-ms 5000}]
+  (d/transact! tx [{:db/id 101 :account/checked true}]))
+```
+
+```java
+conn.withTransaction(5000L, tx -> {
+    tx.transact(Datalevin.tx()
+        .entity(Tx.entity(101)
+            .put("account/checked", true)));
+    return null;
+});
+```
+
+```python
+conn.with_transaction(
+    lambda tx: tx.transact([
+        {":db/id": 101, ":account/checked": True}]),
+    timeout_ms=5000)
+```
+
+</div>
+
+The default explicit transaction timeout is unset. It can be read or changed
+with `d/explicit-transaction-timeout` and
+`d/set-explicit-transaction-timeout!`, with corresponding
+`Datalevin.explicitTransactionTimeout(...)` /
+`Datalevin.setExplicitTransactionTimeout(...)` methods in Java and
+`explicit_transaction_timeout` / `set_explicit_transaction_timeout` in Python. A
+per-call timeout overrides the default; `nil`, `null`, or `None`
+disables the default for that call. If the timeout expires, Datalevin interrupts
+the transaction body, aborts the transaction, and reports
+`:type :transaction/timeout` with `:timeout-ms`. Code that ignores interruption
+may continue running until it returns, so transaction callbacks should remain
+small and bounded.
 
 `with-transaction` is a serialization tool, not a general retry loop. If the
 body throws, the transaction aborts. Datalevin retries its own safe internal

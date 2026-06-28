@@ -14,40 +14,104 @@ PostgreSQL for records, Redis for low-latency state, Elasticsearch for search, a
 vector database for embeddings, a document store for flexible payloads, and a
 queue or workflow engine for long-running tasks.
 
-That architecture can work. It also creates friction. Data has to be copied
-between systems. Consistency becomes an application concern. Search results and
-transactional state can drift apart. Operationally, the system becomes a
-collection of moving parts that must be secured, backed up, observed, upgraded,
-and understood together.
+That architecture can work. It also creates complexity and performance overhead.
+Data has to be copied between systems. Consistency becomes an application
+concern. Search results and transactional state can drift apart. Operationally,
+the system becomes a collection of moving parts that must be secured, backed up,
+observed, upgraded, and understood together.
 
 One response is to keep everything in a capable SQL database and add extensions
-as requirements grow. That is often reasonable. However, as we will argue in
-detail in Chapter 1, this choice is often less than ideal, because some far better
-choices exist and they are practical today. We could not only reduce the number of
-services, but also improve system performance while enhancing developer
-ergonomics. To preview the arguments: SQL is a
-poor query language for programs, and table-shaped storage makes cardinality
-estimation hard for the query optimizer precisely when queries become complex.
+as requirements grow. That is often reasonable. SQL is dominant for good
+reasons: it is mature, widely understood, and excellent for many relational
+workloads. The limitation this book cares about is different. SQL can be awkward
+as an application-facing interface: queries are usually strings embedded in an
+application language; composition often requires ORMs or query builders; dialect
+differences leak into application code; and table-shaped schemas make graph,
+sparse, document, search, and vector workloads feel like extensions around the
+relational core. Many SQL extensions also bring their own mini-languages or
+operator families rather than one uniform query model; PostgreSQL `jsonb`, for
+example, is powerful, but path and containment expressions are a separate
+surface that does not look like ordinary relational SQL. When queries span many
+joins over uneven, interrelated data, table-based optimizers also face a hard
+problem: estimating how much data each step of the query will produce.
 
-Datalevin is one such better choice. It starts from a fundamentally different
-premise about data modeling and query language: facts are the storage and query
-substrate, and Datalog is the language for composing those facts. With this new
-approach, many of the aforementioned varying needs can share one small,
-composable data model.
+Datalevin takes another route. Application state is stored as small facts:
+assertions that an entity has an attribute with a value. Datalog composes those
+facts into relational queries, graph traversals, rules, and recursive logic,
+while key-value access, document paths, full-text search, vector similarity, and
+embeddings remain transactional capabilities over the same durable store.
+Queries are data structures rather than SQL strings. Attributes carry schema and
+documentation wherever facts appear.
 
-At its core, Datalevin stores simple facts. A fact says that an entity has an
-attribute with a value. From that simple shape, Datalevin builds relational
-queries, graph traversal, document modeling, key-value access, full-text search,
-vector search, and logical rules. The important idea is that these workloads can
-cooperate inside one transactional engine and apply the same elegant data model,
-instead of being bolted together in an ad-hoc fashion.
+This is different from adding isolated extension features to a SQL system. In
+SQL, document features, search features, similarity search, relationship
+traversal, and custom logic often come with separate syntaxes and rules that
+the application code has to compose carefully. In Datalevin, these capabilities
+share one transactional engine and one coherent, fact-oriented query model. The
+result is not merely that many features are reachable from one product, but that
+search, similarity, document structure, relationships, and exact data
+constraints can be expressed together as one elegant query instead of being
+reconciled after the fact in application code.
 
-Datalevin is built on LMDB, a fast memory-mapped key-value store,
-but it is not only a key-value wrapper. It exposes KV APIs when direct sorted
-access is the right tool, and it provides a Datalog database when relationships,
-constraints, identity, and logical queries are the right tool. It also integrates
-full-text indexes, vector and embedding indexes, and path-indexed documents so
-that search and reasoning can meet in the same query.
+That practical target is important. Datalevin is aimed at application
+developers who want a serious alternative to SQL for day-to-day application
+state. The goal is not merely to offer another database feature set, but to make
+ordinary application data easier to model, query, search, evolve, and operate
+without falling back to SQL strings, ORMs, extension mini-languages, and
+cross-system glue code.
+
+Two advantages follow from that design:
+
+- **Developer ergonomics.** Datalevin queries are data structures, not strings
+  assembled inside another language. Datalog is truly declarative: a query
+  describes the facts that must be true, and the engine finds the matching
+  values. Joins come from shared variables rather than explicit join syntax.
+  Attributes carry names, types, uniqueness, whether they hold one value or
+  many, indexes, and documentation in one place. The same fact-oriented model
+  covers relationships, documents, search, vectors, and rules, which makes
+  queries easier for application developers, new team members, and LLMs to
+  write and inspect. The ergonomics extend beyond the query language: Datalevin
+  can be embedded directly in application code, moved to client/server
+  deployment when sharing or operations require it, and called from shell
+  scripts through the `dtlv` command-line tool. It is also AI-native: embedding
+  and text-generation providers are built in, and the `dtlv mcp` server exposes
+  Datalevin to MCP-compatible AI tools without a separate adapter service.
+- **Performance for complex application queries.** Datalevin's sorted fact
+  indexes keep data close to the shapes that Datalog queries ask for, which
+  gives the query planner better information and reduces unnecessary work.
+  Integrated full-text, vector, embedding, document, and key-value indexes also
+  avoid shuttling candidate ids between separate systems before applying
+  logical constraints. This design performs better on benchmark workloads that
+  stress these shapes: Datalevin's published Join Order Benchmark run compares
+  complex IMDb-derived join queries with PostgreSQL and SQLite [6], and its
+  LDBC Social Network Benchmark run compares graph-oriented social-network
+  queries with Neo4j [7]. In the JOB run, SQLite was the weaker SQL comparison:
+  its reported non-timeout query time was already more than 4x slower than
+  Datalevin, and that understates the gap because several SQLite queries timed
+  out. These are not claims that one database wins every workload; they are
+  evidence for a structural advantage in applications whose queries combine
+  joins, graph traversal, search, retrieval, and evolving sparse data.
+
+Datalevin is built on LMDB, a fast memory-mapped key-value store, but it is not
+only a key-value wrapper. LMDB provides the durable sorted storage foundation;
+Datalevin exposes that foundation directly when sorted key-value access is the
+right tool, and provides a Datalog database when relationships, constraints,
+identity, and logical queries are the right tool. Full-text indexes, vector and
+embedding indexes, and path-indexed documents are maintained beside the facts so
+that search, retrieval, and logical constraints stay transactionally aligned.
+
+The implementation is layered. At the bottom is a native storage layer derived
+from LMDB. A JVM/Java layer exposes the native operations to managed code. The
+Clojure layer implements the main database semantics: schema, Datalog queries,
+planning, secondary indexes, and high-level APIs, while leveraging LMDB's
+transaction machinery underneath. The Java, Python, and JavaScript packages call
+into the same Datalevin runtime through language bindings. In other words,
+Clojure is the most compact language for showing the model in this book, but
+Datalevin itself is not merely a Clojure wrapper around a file format. This
+layering is pragmatic rather than ideological: each layer uses technology well
+suited to that job, from LMDB's native storage and transaction discipline to the
+JVM's portability and Clojure's strength at data-oriented programming and
+Datalog representation.
 
 Below we will show a flavor of the model across the Datalevin APIs in code:
 schema, connection, transaction, and query.
@@ -221,8 +285,8 @@ query with Datalog [1], tune storage, and operate the system.
 
 The second goal is to teach a way of thinking. Datalevin works best when you
 learn to see application data as facts, relationships, indexes, and derived
-knowledge. A row, a document, a graph edge, a search hit, and a vector neighbor
-do not have to live in separate conceptual universes. They can be different
+knowledge. A row, a document, a relationship, a search result, and a similarity
+result do not have to live in separate conceptual universes. They can be different
 views over the same durable facts.
 
 The third goal is to show why this matters now. Large language models and
@@ -272,12 +336,12 @@ backend service, a knowledge graph, a search-heavy product, a durable workflow
 system, or an AI application that needs memory and auditability.
 
 You should be comfortable with basic database ideas: transactions, indexes,
-schemas, predicates, and query results. You do not need prior Datalog
+schemas, filters, and query results. You do not need prior Datalog
 experience. The book introduces Datalog from first principles, then returns to it
 throughout the modeling, search, performance, and intelligent-systems chapters.
 Datalevin uses the Datomic-style EDN form of Datalog: friendlier for application
 developers than the older Prolog-like notation, but still based on the same
-logic-programming ideas of variables, unification, and rules.
+logic-programming ideas of variables and rules.
 
 Most examples use Clojure because Datalevin's native data model is easiest to
 see in EDN and Datalog forms due to their conciseness. The ideas are not limited
@@ -382,8 +446,8 @@ grounded in real systems.
 
 This book has already benefited from volunteer reviewers in the Datalevin
 community who read draft chapters, ran examples, questioned unclear
-explanations, and improved wordings: Estevo U. C. Castro, Max Rothman, Amar Mehta, Norbert
-Wójtowicz, I am grateful for their contributions.
+explanations, and improved phrasings: Estevo U. C. Castro, Max Rothman, Weidong
+Cai, Amar Mehta, and Norbert Wójtowicz. I am grateful for their contributions.
 
 <div class="preface-signature" style="text-align: right; margin-top: 2rem;">
 Huahai Yang<br>
@@ -411,3 +475,9 @@ Data Engineering* 1, no. 1, 1989, pp. 146-166.
 (LMDB)](https://www.lmdb.tech/doc/).
 
 [5] [Juji Inc.](https://juji.io/).
+
+[6] Datalevin project,
+    [Join Order Benchmark](https://github.com/datalevin/datalevin/tree/master/benchmarks/JOB-bench).
+
+[7] Datalevin project,
+    [LDBC SNB Benchmark](https://github.com/datalevin/datalevin/tree/master/benchmarks/LDBC-SNB-bench).

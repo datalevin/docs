@@ -56,6 +56,12 @@ terminology differences, the modeling point is the same: each assertion is
 stored as one small, independently queryable fact, called a **datom** (data
 atom).
 
+In this chapter, the words **fact**, **assertion**, **EAV triple**, and
+**datom** all point to the same basic unit: one statement that an entity has an
+attribute with a value. The emphasis differs slightly. "Fact" and "assertion"
+describe the logical meaning. "EAV triple" describes the three positions in the
+model. "Datom" is Datalevin's concrete name for the stored fact.
+
 Modeling data in terms of datoms results in a data model that is compact,
 sparse, and composable:
 
@@ -316,6 +322,15 @@ indexes, procedural languages, recursive CTEs, and extension ecosystems. For
 example, if PostgreSQL can do more and more of these jobs, why not stay with
 familiar SQL?
 
+This question matters because many developers are not enthusiastic SQL users so
+much as resigned SQL users. They want something more composable, more directly
+usable from programs, and less tied to table containers, but they often find
+that the available alternatives give up too much: transactions, durability,
+joins, ad hoc query, deployment simplicity, or operational maturity. Datalevin
+is aimed at that gap. It is a database for developers who want to replace SQL in
+application systems, not merely wrap it, hide it behind an ORM, or add another
+specialized service beside it.
+
 There are two reasons that go deeper than syntactic cosmetics. The
 first is blunt: SQL is not a good query language for programs. It is a large
 structured English language designed around tables, joins, projections,
@@ -343,6 +358,48 @@ reusable logic. Recursive queries use the same logical form as non-recursive
 queries. The result is not less relational; it is a higher-level way to write
 relational logic. Relational algebra remains the substrate, but the user does
 not have to speak in join operators to ask a relational question [2].
+
+The ergonomic difference is not only visible to database specialists. In
+practice, experienced developers often prefer Datalog once they have used it for
+real application queries, because the clauses stay close to the facts they are
+asking for. The contrast is even sharper for people without years of SQL
+habits: interns, domain experts learning to inspect data, and application
+developers who do not want to become query-planner whisperers before they can
+ask a basic question. A small set of data patterns, shared variables, and named
+rules is easier to teach than a large string language with dialects, aliases,
+join forms, grouping edge cases, and host-language impedance mismatch. This
+developer ergonomics goal was one of the original motivations for Datalevin.
+
+The same simplicity matters for LLM-generated queries. Text-to-SQL is a hard
+problem not only because natural language is ambiguous, but also because SQL is
+a large, dialect-sensitive target language. A model must choose table aliases,
+join syntax, grouping rules, subquery shapes, vendor functions, and sometimes
+planner-sensitive rewrites. Recent text-to-SQL results show the gap clearly:
+Spider 2.0 was designed around realistic enterprise workflows, and its authors
+reported that an `o1-preview`-based code-agent setup solved only 21.3% of its
+tasks, compared with much higher scores on older benchmarks such as Spider 1.0
+[11]. A later Spider 2.0 state-of-the-art system reported 70.2% execution
+accuracy, still far from the reliability one would want from an automatic
+application interface [12].
+
+Datalog is a better generation target for the same reason it is a better
+programming interface: the surface is smaller and more regular. A Datalevin
+query is an EDN data structure. Most of the work is choosing facts,
+attributes, variables, predicates, and rules. The syntax is token-efficient
+compared with structured English SQL, and there are fewer dialect decisions for
+the model to hallucinate. Even though public Datalog training data is much
+smaller than SQL training data, the language itself gives both humans and LLMs a
+simpler target.
+
+Datalevin's attribute-centered schema also gives an LLM better semantic
+handles. An attribute such as `:order/total` can carry its own type,
+cardinality, uniqueness, index behavior, and `:db/doc` documentation wherever
+that fact appears. SQL systems often support table and column comments, but
+they are vendor-specific metadata on table containers. In Datalevin, attribute
+documentation is ordinary schema metadata that can be read, exported, and fed to
+a query-writing assistant along with the same attribute names used in Datalog
+clauses. That makes the schema more useful as prompt context and reduces the
+guesswork involved in choosing the right facts.
 
 The second reason is deeper still: query planning. SQL databases are
 table-first systems. Data is bundled into row or column containers, and the
@@ -381,16 +438,44 @@ mature SQL database remains the right choice. But feature accumulation does not
 fix SQL as a query language, and it does not remove the cardinality estimation
 burden created by table-shaped containers.
 
-There is also an integration difference. SQL databases can add search, vector,
-document, and graph features, but those features often arrive as separate
-extension surfaces with their own indexes, functions, limitations, and planner
-interactions. Datalevin makes these capabilities joinable through one logical
-query model: a full-text hit, an idoc path match, a vector neighbor, and an
-ordinary fact can all bind the same Datalog variable. Likewise, SQL schemas are
-centered on tables, while Datalevin schema is centered on attributes. That
-matters for sparse, evolving, cross-domain data: an attribute can carry its own
-type, uniqueness, cardinality, reference semantics, full-text behavior, or
-embedding behavior wherever that fact appears.
+There is also an integration difference. SQL extensions are valuable; they are
+one reason systems such as PostgreSQL remain useful for so many applications.
+The problem is not that extensions exist. The problem is that each extension
+often brings its own syntax, operators, indexes, cost model, and limitations.
+JSON paths, text search, vector similarity, recursive queries, and procedural
+code may all be available in one SQL database, but the application still has to
+compose several feature-specific surfaces and understand how the planner handles
+their interaction. That flexibility is helpful when a workload needs one
+extension in isolation. It becomes a tax when a single application question
+needs search, document structure, relationships, similarity, and exact
+constraints to work together.
+
+For example, suppose a documentation assistant needs to find pages that mention
+"vector", belong to a stable module in nested metadata, are visible to the
+current user, and are close to the user's question in embedding space. In a
+PostgreSQL-style design, this usually means combining a text-search expression,
+a JSON path or containment expression, a vector-similarity expression, and joins
+through permission tables. Each part can be indexed, but each part also has its
+own operators, index choices, selectivity estimates, and tuning rules. The
+engineering cost is not only syntax. The application may need to maintain
+generated search columns or embedding columns, create several different index
+types, tune a query plan whose estimates cross extension boundaries, or fetch
+candidate ids from one subsystem and filter them in another. The runtime cost is
+extra memory traffic, intermediate result sets, and CPU spent reconciling
+candidates that were found through different access paths.
+
+Datalevin's approach is to make these capabilities participate in one logical
+query model over the same facts. The same documentation question can be written
+as one Datalog query whose parts say, in one place: this entity matches the
+text, this entity has the required nested metadata, this entity is visible to
+the user, this entity is semantically close to the question, and this entity has
+the exact attributes required by the application. The cost shifts from
+application-level stitching to database-level planning over one fact-oriented
+model. Section 6 shows a smaller runnable version of this pattern. Likewise,
+SQL schemas are centered on tables, while Datalevin schema is centered on
+attributes. That matters for sparse, evolving, cross-domain data: an attribute
+can carry its own type, uniqueness, cardinality, reference semantics, full-text
+behavior, embedding behavior, and documentation wherever that fact appears.
 
 Datalevin's argument is that a fact-first model, paired with Datalog, is a
 better foundation for applications whose data is relational, graph-shaped,
@@ -406,6 +491,11 @@ joins are selective before executing the query. It requires joins across many
 related entities: 113 analytical queries, with query shapes that range from a
 few joins to more than a dozen. Its queries have enough joins that a poor query
 plan can produce orders of magnitude more intermediate rows than a good one.
+In Datalevin's published JOB run [13], the same workload was compared with both
+PostgreSQL and SQLite. Datalevin finished the workload in 71 seconds, compared
+with 171 seconds for PostgreSQL. SQLite completed the non-timeout portion in
+295 seconds and hit timeout on 9 queries, so the often-quoted "more than 4x
+faster than SQLite" summary understates the actual gap.
 
 This kind of query is not exotic either. It appears whenever an application
 keeps data normalized and asks compositional questions:
@@ -557,9 +647,13 @@ capabilities together. For example, a pure analytical warehouse, a massive
 append-only log pipeline, or a dedicated search cluster may be better served by
 systems built only for those jobs.
 
-Datalevin's niche is the application database that needs to be logical,
-graph-aware, document-friendly, and retrieval-capable, especially as user
-requirements grow in complexity and composition while the application matures.
+Datalevin's niche is the application database that needs these capabilities to
+compose: rule-based and recursive queries, relationship traversal,
+document-shaped data, search, vector similarity, and strict application
+constraints. This includes search-heavy applications and RAG-style AI systems
+that must find the right records or context by text, meaning, structure, and
+permissions. Datalevin is most useful when these needs grow in complexity
+together as the application matures.
 
 ## 6. A Minimal Unified Query Example
 
@@ -792,3 +886,18 @@ benchmark evaluation. VLDB, 15:4, (2022).
    *The Stanford Encyclopedia of Philosophy*, substantive revision May 6, 2024,
    especially Section 3.2, "Bundle theories versus substrata and thin
    particulars."
+
+[11] Fangyu Lei, Jixuan Chen, Yuxiao Ye, Ruisheng Cao, Dongchan Shin,
+   Hongjin Su, Zhaoqing Suo, Hongcheng Gao, Wenjing Hu, Pengcheng Yin,
+   Victor Zhong, Caiming Xiong, Ruoxi Sun, Qian Liu, Sida Wang, and Tao Yu,
+   [Spider 2.0: Evaluating Language Models on Real-World Enterprise Text-to-SQL Workflows](https://arxiv.org/abs/2411.07763),
+   arXiv:2411.07763, 2024.
+
+[12] Tanmay Parekh, Ella Hofmann-Coyle, Shuyi Wang, Sachith Sri Ram Kothur,
+   Srivas Prasad, and Yunmo Chen,
+   [PExA: Parallel Exploration Agent for Complex Text-to-SQL](https://arxiv.org/abs/2604.22934),
+   arXiv:2604.22934, 2026.
+
+[13] Datalevin project,
+   [Join Order Benchmark](https://github.com/datalevin/datalevin/tree/master/benchmarks/JOB-bench),
+   benchmark writeup and implementation.
