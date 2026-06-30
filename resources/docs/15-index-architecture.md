@@ -109,7 +109,7 @@ useful agent memory is not an append-only transcript. It needs deletion, expiry,
 consolidation, summarization, and retraction. Human memory research treats
 forgetting as an adaptive feature of cognition: transience can reduce
 interference, support abstraction, and help a system stay responsive when the
-world changes [4]. An agent that can only accumulate memories will eventually
+world changes [1]. An agent that can only accumulate memories will eventually
 retrieve stale, irrelevant, or harmful context. Datalevin's current-state model
 makes forgetting a normal database operation rather than an exception to the
 model.
@@ -148,7 +148,7 @@ basic idea is the same reason binary search is faster than scanning a list: if
 the data is ordered, the engine can jump toward the place where a key must be
 instead of checking every item.
 
-LMDB stores each Datalevin index as a B+Tree [1]. A point lookup, such as "find
+LMDB stores each Datalevin index as a B+Tree [4]. A point lookup, such as "find
 the datom for entity `101` and attribute `:user/email`", starts at the root
 page, chooses the child page whose key range could contain the target, repeats
 that step through internal pages, and lands on the leaf page where the key is
@@ -764,19 +764,18 @@ similarity, which we will explore in the following chapters.
 
 ## References
 
-[1] Douglas Comer, ["The Ubiquitous
-B-Tree"](https://doi.org/10.1145/356770.356776), *ACM Computing Surveys* 11(2),
-121-137, 1979.
+[1] Blake A. Richards and Paul W. Frankland, "The Persistence and Transience of
+Memory," *Neuron* 94(6):1071-1084, 2017. DOI:
+<https://doi.org/10.1016/j.neuron.2017.04.037>.
 
-[2] Todd J. Green, Grigoris Karvounarakis, and Val Tannen, ["Provenance
-Semirings"](https://doi.org/10.1145/1265530.1265535), in *Proceedings of the
-Twenty-Sixth ACM SIGMOD-SIGACT-SIGART Symposium on Principles of Database
-Systems (PODS '07)*, ACM, 31-40, 2007.
+[2] Todd J. Green, Grigoris Karvounarakis, and Val Tannen, "Provenance
+Semirings," in *Proceedings of the Twenty-Sixth ACM SIGMOD-SIGACT-SIGART
+Symposium on Principles of Database Systems (PODS '07)*, 2007, pp. 31-40. DOI:
+<https://doi.org/10.1145/1265530.1265535>.
 
 [3] Camille Bourgaux, Pierre Bourhis, Liat Peterfreund, and Michael Thomazo,
-["Revisiting Semiring Provenance for
-Datalog"](https://arxiv.org/abs/2202.10766), arXiv:2202.10766, 2022.
+"Revisiting Semiring Provenance for Datalog," arXiv:2202.10766, 2022. URL:
+<https://arxiv.org/abs/2202.10766>.
 
-[4] Blake A. Richards and Paul W. Frankland, ["The Persistence and Transience
-of Memory"](https://doi.org/10.1016/j.neuron.2017.04.037), *Neuron* 94(6),
-1071-1084, 2017.
+[4] Douglas Comer, "The Ubiquitous B-Tree," *ACM Computing Surveys*
+11(2):121-137, 1979. DOI: <https://doi.org/10.1145/356770.356776>.

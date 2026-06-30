@@ -61,8 +61,8 @@ transaction callback, but JavaScript does not; staged mutation of existing
 Entity objects is Clojure-only.
 
 Many of the patterns in Part VI were informed by the author's decade-long
-experience building the Juji platform [3], as well as building Xia, a separate
-open-source personal AI assistant project [4]. Xia can be considered a reference
+experience building the Juji platform [1], as well as building Xia, a separate
+open-source personal AI assistant project [2]. Xia can be considered a reference
 implementation for these agent-memory ideas: long-term memory, scoped task
 state, local tool boundaries, scheduled work, and persistent assistant state. It
 is not part of Datalevin and does not change what Datalevin provides; it shows
@@ -353,8 +353,8 @@ Cognitive science often distinguishes three types of memory:
     records they summarize.
 
 This analogy follows standard cognitive-science distinctions: Tulving's
-episodic/semantic memory distinction [1] and Baddeley and Hitch's
-working-memory model [2].
+episodic/semantic memory distinction [3] and Baddeley and Hitch's
+working-memory model [4].
 
 The analogy should not be taken too literally. A database is not a brain, and an
 LLM does not have human memory. The value of the analogy is architectural. It
@@ -691,14 +691,14 @@ review, consolidation, and action selection remain application responsibilities.
 
 ## References
 
-[1] Endel Tulving, "Episodic and Semantic Memory," in *Organization of Memory*,
-Academic Press, 1972, pp. 381-403.
-
-[2] Alan D. Baddeley and Graham Hitch, "Working Memory," in *Psychology of
-Learning and Motivation*, vol. 8, Academic Press, 1974, pp. 47-89.
-
-[3] Michelle X. Zhou, Jie Lu, Huahai Yang, and Wenxi Chen,
+[1] Michelle X. Zhou, Jie Lu, Huahai Yang, and Wenxi Chen,
 *Human-Centered Agentic AI: Fundamentals, Practice, Applications, and Future
 Directions*, ACM Press, in press.
 
-[4] Huahai Yang, [Xia](https://github.com/huahaiy/xia), GitHub repository.
+[2] Huahai Yang, "Xia," GitHub repository. URL: <https://github.com/huahaiy/xia>.
+
+[3] Endel Tulving, "Episodic and Semantic Memory," in *Organization of Memory*,
+Academic Press, 1972, pp. 381-403.
+
+[4] Alan D. Baddeley and Graham Hitch, "Working Memory," in *Psychology of
+Learning and Motivation*, vol. 8, Academic Press, 1974, pp. 47-89.

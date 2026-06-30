@@ -1351,10 +1351,10 @@ may continue running until it returns, so transaction callbacks should remain
 small and bounded.
 
 `with-transaction` is a serialization tool, not a general retry loop. If the
-body throws, the transaction aborts. Datalevin retries its own safe internal
-map-resize condition, but logical failures such as CAS mismatch, lookup-ref
-miss, validation failure, or unique conflict are returned to the caller. Chapter
-22 pulls those cases together into a production retry and error-handling policy.
+body throws, the transaction aborts. Logical failures such as CAS mismatch,
+lookup-ref miss, validation failure, or unique conflict are returned to the
+caller. Chapter 22 pulls those cases together into a production retry and
+error-handling policy.
 
 ### 4.1 Mixing Datalog and KV Writes
 
@@ -1836,6 +1836,6 @@ applications that are both correct and fast.
 
 ## References
 
-[1] Theo Haerder and Andreas Reuter, ["Principles of Transaction-Oriented
-Database Recovery"](https://doi.org/10.1145/289.291), *ACM Computing Surveys*,
-15(4):287-317, 1983.
+[1] Theo Haerder and Andreas Reuter, "Principles of Transaction-Oriented
+Database Recovery," *ACM Computing Surveys* 15(4):287-317, 1983. DOI:
+<https://doi.org/10.1145/289.291>.

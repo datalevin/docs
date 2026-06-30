@@ -33,7 +33,7 @@ transactional capability of the database itself.
 The performance case is workload-specific, but not hypothetical. The Datalevin
 project includes a self-published benchmark against Apache Lucene 8.10.1 on a
 processed English Wikipedia dataset, using 4.1 million articles and 40,000 real
-Web queries from the TREC 2009 Million Query Track [4]. On the reported
+Web queries from the TREC 2009 Million Query Track [1]. On the reported
 single-machine setup, Datalevin had lower mean and median query latency and
 about 75% higher search throughput. Lucene indexed the same corpus faster, and
 Datalevin had worse tail latency on very broad queries. Treat this as evidence
@@ -2080,7 +2080,7 @@ space. Ranking asks: which document vectors are most similar to the query
 vector?
 
 Datalevin uses TF-IDF weighting described by Manning, Raghavan, and Schütze in
-*Introduction to Information Retrieval* [1], with the `lnu.ltn` weighting
+*Introduction to Information Retrieval* [2], with the `lnu.ltn` weighting
 scheme. The important ideas are:
 
 - **Term frequency (TF)**: a term that appears more often in a document is more
@@ -2110,7 +2110,7 @@ document.
 
 Datalevin uses **Tiered WAND** (T-Wand) to find the highest-scoring documents
 efficiently. The algorithm is described in the T-Wand blog post [3]. To
-understand what T-Wand adds, first understand ordinary WAND [2].
+understand what T-Wand adds, first understand ordinary WAND [4].
 
 WAND is a top-k retrieval algorithm. A query such as `"red fox database"` has
 one posting iterator per query term. Each iterator walks the document references
@@ -2186,21 +2186,22 @@ without operating a separate search cluster.
 
 ## References
 
-[1] Christopher D. Manning, Prabhakar Raghavan, and Hinrich Schütze,
-   *Introduction to Information Retrieval*, Cambridge University Press, 2008,
-   Chapter 6: [Scoring, term weighting and the vector space model](https://nlp.stanford.edu/IR-book/html/htmledition/scoring-term-weighting-and-the-vector-space-model-1.html),
-   especially Section 6.3,
-   [The vector space model for scoring](https://nlp.stanford.edu/IR-book/html/htmledition/the-vector-space-model-for-scoring-1.html).
+[1] Datalevin project, "Datalevin Search Benchmark," benchmark implementation.
+URL: <https://github.com/datalevin/datalevin/tree/master/benchmarks/search-bench>.
 
-[2] Andrei Z. Broder, David Carmel, Michael Herscovici, Aya Soffer, and Jason
-   Zien, "Efficient Query Evaluation Using a Two-Level Retrieval Process,"
-   *Proceedings of the Twelfth International Conference on Information and
-   Knowledge Management* (CIKM '03), 2003,
-   DOI: [10.1145/956863.956944](https://doi.org/10.1145/956863.956944).
+[2] Christopher D. Manning, Prabhakar Raghavan, and Hinrich Schütze,
+*Introduction to Information Retrieval*, Cambridge University Press, 2008,
+Chapter 6, "Scoring, Term Weighting and the Vector Space Model." URL:
+<https://nlp.stanford.edu/IR-book/html/htmledition/scoring-term-weighting-and-the-vector-space-model-1.html>.
+Section 6.3, "The Vector Space Model for Scoring." URL:
+<https://nlp.stanford.edu/IR-book/html/htmledition/the-vector-space-model-for-scoring-1.html>.
 
-[3] Huahai Yang, [T-Wand: Beat Lucene in Less Than 600 Lines of Code](https://yyhh.org/blog/2021/11/t-wand-beat-lucene-in-less-than-600-lines-of-code/),
-   yyhh.org, November 5, 2021.
+[3] Huahai Yang, "T-Wand: Beat Lucene in Less Than 600 Lines of Code,"
+yyhh.org, November 5, 2021. URL:
+<https://yyhh.org/blog/2021/11/t-wand-beat-lucene-in-less-than-600-lines-of-code/>.
 
-[4] Datalevin project, "Datalevin Search Benchmark."
-
-https://github.com/datalevin/datalevin/tree/master/benchmarks/search-bench
+[4] Andrei Z. Broder, David Carmel, Michael Herscovici, Aya Soffer, and Jason
+Zien, "Efficient Query Evaluation Using a Two-Level Retrieval Process," in
+*Proceedings of the Twelfth International Conference on Information and
+Knowledge Management* (CIKM '03), 2003. DOI:
+<https://doi.org/10.1145/956863.956944>.

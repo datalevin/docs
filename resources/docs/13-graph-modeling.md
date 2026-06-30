@@ -57,7 +57,7 @@ In the figure, the direct edge `A -> B` becomes a `Follow` entity with two refs,
 `:follow/follower` and `:follow/following`, plus facts such as
 `:follow/created-at` or `:follow/strength`. This gives you
 property-graph-style modeling [1] while keeping Datalevin's normalized fact
-representation [7]. Chapter 12 shows the same move in ER examples such as
+representation [2]. Chapter 12 shows the same move in ER examples such as
 memberships, line items, and enrollments.
 
 
@@ -700,7 +700,7 @@ of nodes, people and movies, with many connections between the two sets. People
 connect to movies through credits, and two people are adjacent if they worked on
 the same movie. A Datomic article by Andrew Dennis used this problem to show
 both Datalog joins and application-level breadth-first search over database
-facts [4]. The same idea applies naturally to Datalevin.
+facts [3]. The same idea applies naturally to Datalevin.
 
 ![Co-appearance as a bipartite graph: people (Kevin Bacon, John Belushi, Tom Hanks) and movies (Animal House, Apollo 13) connected through Credit entities, projected to a person-to-person acted-with graph where Bacon links to Belushi via Animal House and to Hanks via Apollo 13, while Belushi and Hanks share no movie](/images/diagrams/coappearance-bipartite.svg)
 
@@ -1321,7 +1321,7 @@ encoded as one Datalog query.
 
 Some graphs are not stored as one obvious edge. For example, doctoral student
 advisor lineage is traced through dissertations: a person advises a
-dissertation, and the dissertation points to the student who authored it [5].
+dissertation, and the dissertation points to the student who authored it [4].
 The logical edge "advisor advised student" is therefore a derived relation, not
 a stored attribute.
 
@@ -1503,7 +1503,7 @@ meaning while rules recover the convenient graph relation.
 
 Graph reasoning is not limited to social links or dependency chains. In some
 cases, entities have concrete `:type` facts, and rules derive membership in
-broader classes such as `:Student`, `:Faculty`, and `:Person` [6].
+broader classes such as `:Student`, `:Faculty`, and `:Person` [5].
 
 <div class="multi-lang">
 
@@ -1736,7 +1736,7 @@ two moving positions in the graph, not one source-to-target path.
 
 The LDBC Social Network Benchmark (LDBC-SNB) is an industry standard for
 evaluating graph databases. It models a social network with people, friendships,
-forums, posts, comments, likes, tags, organizations, and places [2]. Let's examine
+forums, posts, comments, likes, tags, organizations, and places [6]. Let's examine
 one real Interactive Short query from this benchmark to see how Datalevin
 handles graph traversal in practice.
 
@@ -1893,7 +1893,7 @@ This query demonstrates several Datalevin strengths:
 - **Unified schema**: All entities use the same attribute-based model
 
 The Datalevin project includes an unofficial LDBC-SNB SF1 benchmark
-implementation for both Datalevin and Neo4j [3]. Treat the numbers below as a
+implementation for both Datalevin and Neo4j [7]. Treat the numbers below as a
 reproducible, self-published workload observation, not as a general graph
 database guarantee. The reported run used LDBC-SNB scale factor 1
 (approximately 3.2M entities and 17.3M edges) on one 2023 Apple M2 Max machine
@@ -1906,7 +1906,7 @@ Under that setup, the benchmark reports that Datalevin was faster than Neo4j on
 all seven Interactive Short queries. The reported average latency is 12.6 ms for
 Datalevin versus 1908.3 ms for Neo4j, about 151x faster. For the IS6 query shown
 above, the reported latency is 1.9 ms for Datalevin versus 1494.5 ms for Neo4j,
-about 787x faster [3]. Likely contributing factors are:
+about 787x faster [7]. Likely contributing factors are:
 
 - **Index locality**: Following refs is a simple B+Tree lookup
 - **Query optimizer**: Efficient plans minimize wasted computation
@@ -1964,32 +1964,32 @@ traditional relational models.
 
 ## References
 
-[1] Renzo Angles, ["The Property Graph Database
-Model"](https://ceur-ws.org/Vol-2100/paper26.pdf), *Proceedings of the 12th
+[1] Renzo Angles, "The Property Graph Database Model," *Proceedings of the 12th
 Alberto Mendelzon International Workshop on Foundations of Data Management*,
-CEUR Workshop Proceedings 2100, 2018.
+CEUR Workshop Proceedings 2100, 2018. URL:
+<https://ceur-ws.org/Vol-2100/paper26.pdf>.
 
-[2] Graph Data Council, ["LDBC Social Network Benchmark (LDBC
-SNB)"](https://ldbcouncil.org/benchmarks/snb/), official benchmark overview and
-links to the SNB workloads, datasets, and specification.
-
-[3] Datalevin project, ["LDBC SNB
-Benchmark"](https://github.com/datalevin/datalevin/tree/master/benchmarks/LDBC-SNB-bench),
-benchmark writeup and implementation.
-
-[4] Andrew Dennis, ["Using Datomic as a Graph
-Database"](https://hashrocket.com/blog/posts/using-datomic-as-a-graph-database),
-Hashrocket, April 10, 2014.
-
-[5] Datalevin project, ["Math
-Bench"](https://github.com/datalevin/datalevin/tree/master/benchmarks/math-bench),
-benchmark implementation based on the Mathematics Genealogy Project.
-
-[6] Datalevin project,
-["OpenRuleBench"](https://github.com/datalevin/datalevin/tree/master/benchmarks/openrulebench), benchmark implementation including transitive closure, same-generation, and
-LUBM-style type inference rules.
-
-[7] E. F. Codd, "Further Normalization of the Data Base Relational Model,"
+[2] E. F. Codd, "Further Normalization of the Data Base Relational Model,"
 IBM Research Report RJ909, August 31, 1971. Republished in Randall J. Rustin,
 ed., *Data Base Systems: Courant Computer Science Symposia Series 6*,
 Prentice-Hall, 1972.
+
+[3] Andrew Dennis, "Using Datomic as a Graph Database," Hashrocket, April 10,
+2014. URL:
+<https://hashrocket.com/blog/posts/using-datomic-as-a-graph-database>.
+
+[4] Datalevin project, "Math Bench," benchmark implementation based on the
+Mathematics Genealogy Project. URL:
+<https://github.com/datalevin/datalevin/tree/master/benchmarks/math-bench>.
+
+[5] Datalevin project, "OpenRuleBench," benchmark implementation including
+transitive closure, same-generation, and LUBM-style type inference rules. URL:
+<https://github.com/datalevin/datalevin/tree/master/benchmarks/openrulebench>.
+
+[6] Graph Data Council, "LDBC Social Network Benchmark (LDBC SNB)," official
+benchmark overview and links to the SNB workloads, datasets, and specification.
+URL: <https://ldbcouncil.org/benchmarks/snb/>.
+
+[7] Datalevin project, "LDBC SNB Benchmark," benchmark writeup and
+implementation. URL:
+<https://github.com/datalevin/datalevin/tree/master/benchmarks/LDBC-SNB-bench>.

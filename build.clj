@@ -1428,6 +1428,12 @@
 (def ^:private predicate-token-tex-pattern
   #"\\(AttributeTok|FunctionTok|BuiltInTok|KeywordTok|VariableTok)\{((?:[^{}]|\{[^{}]*\})*)\}\\NormalTok\{\?([^}]*)\}")
 
+(def ^:private namespaced-reverse-attribute-tex-pattern
+  #"\\(AttributeTok|KeywordTok)\{((?:[^{}]|\{[^{}]*\})*/)\}\\NormalTok\{(\\_(?:\\_|[A-Za-z0-9*+!?<>=.'-])*)([^}]*)\}")
+
+(def ^:private unqualified-reverse-attribute-tex-pattern
+  #"\\NormalTok\{([^{}]*?)(:\\_(?:\\_|[A-Za-z0-9*+!?<>=.'-])*)([^{}]*)\}")
+
 (defn- fix-predicate-token-highlighting
   [tex]
   (str/replace
@@ -1438,11 +1444,38 @@
           (when (seq tail)
             (str "\\NormalTok{" tail "}"))))))
 
+(defn- fix-namespaced-reverse-attribute-highlighting
+  [tex]
+  (str/replace
+   tex
+   namespaced-reverse-attribute-tex-pattern
+   (fn [[_ macro prefix suffix tail]]
+     (str "\\" macro "{" prefix suffix "}"
+          (when (seq tail)
+            (str "\\NormalTok{" tail "}"))))))
+
+(defn- fix-unqualified-reverse-attribute-highlighting
+  [tex]
+  (str/replace
+   tex
+   unqualified-reverse-attribute-tex-pattern
+   (fn [[_ prefix token suffix]]
+     (str (when (seq prefix)
+            (str "\\NormalTok{" prefix "}"))
+          "\\AttributeTok{" token "}"
+          (when (seq suffix)
+            (str "\\NormalTok{" suffix "}"))))))
+
 (defn- postprocess-pandoc-tex!
   [tex-file]
   ;; Pandoc's Clojure highlighter treats a trailing predicate marker as
   ;; normal text in tokens such as :inmemory?. Keep it styled with the token.
-  (spit tex-file (fix-predicate-token-highlighting (slurp tex-file))))
+  ;; It also splits pull reverse attributes such as :order/_customer after the
+  ;; slash, and leaves unqualified reverse attributes such as :_friend unstyled.
+  (spit tex-file (-> (slurp tex-file)
+                     fix-predicate-token-highlighting
+                     fix-namespaced-reverse-attribute-highlighting
+                     fix-unqualified-reverse-attribute-highlighting)))
 
 (defn- svg-file?
   [file]

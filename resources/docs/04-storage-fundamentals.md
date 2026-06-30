@@ -428,13 +428,13 @@ for maximum performance.
 
 ## References
 
-[1] Howard Chu, ["LMDB"](https://www.youtube.com/watch?v=tEa5sAh-kVk), *The
-Databaseology Lectures*, Carnegie Mellon University, Fall 2015, YouTube video.
+[1] Howard Chu, "LMDB," *The Databaseology Lectures*, Carnegie Mellon
+University, Fall 2015, YouTube video. URL:
+<https://www.youtube.com/watch?v=tEa5sAh-kVk>.
 
-[2] Chris Okasaki, [*Purely Functional Data
-Structures*](https://doi.org/10.1017/CBO9780511530104), Cambridge University
-Press, 1998.
+[2] Chris Okasaki, *Purely Functional Data Structures*, Cambridge University
+Press, 1998. DOI: <https://doi.org/10.1017/CBO9780511530104>.
 
-[3] Rudolf Bayer and Edward M. McCreight, ["Organization and Maintenance of
-Large Ordered Indexes"](https://doi.org/10.1007/BF00288683), *Acta
-Informatica* 1, 173-189, 1972.
+[3] Rudolf Bayer and Edward M. McCreight, "Organization and Maintenance of
+Large Ordered Indexes," *Acta Informatica* 1:173-189, 1972. DOI:
+<https://doi.org/10.1007/BF00288683>.

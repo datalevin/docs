@@ -68,7 +68,7 @@ relation into the intermediate result built so far. The alternative is a bushy
 tree, where two independently built subplans are joined together. Datalevin uses
 left-deep plans because its join methods are index-scan oriented: keeping one
 side as a base relation preserves accurate counts and keeps planning cost
-bounded [4] [5].
+bounded [2,3].
 
 `P(n, 2)` is permutation notation. It means the number of ordered ways to choose
 the first two join steps from `n` candidates: `n * (n - 1)`. Datalevin searches
@@ -216,10 +216,10 @@ reservoir sampling** under actual query conditions. It:
 The last two steps are statistical guardrails. **Empirical-Bayes shrinkage**
 means the planner does not trust a small or noisy sample completely; it pulls the
 sample estimate toward a prior expectation so a few sampled entities do not
-dominate the whole plan [6]. **Skew-aware upper-bound correction** means the
+dominate the whole plan [4]. **Skew-aware upper-bound correction** means the
 planner treats heavy-tailed distributions cautiously. If a few values are much
 more frequent than average, the estimate is adjusted upward so the optimizer
-does not choose a plan that only works for the average case [7]. These
+does not choose a plan that only works for the average case [5]. These
 statistical techniques are what often prevent the edge cases that create
 catastrophic query slowdown incidents in production.
 
@@ -252,12 +252,12 @@ with bound values.
 ### 1.4 Merge Scan
 
 For star-like queries (multiple attributes on the same entity), Datalevin uses
-**merge scan** — a technique similar to pivot scan [9].
+**merge scan** — a technique similar to pivot scan [6].
 
 Instead of joining each attribute separately, a single index scan on the EAV
 index retrieves all matching attributes at once. The optimizer can then plan
 over a simplified query graph whose nodes are star-shaped groups and whose edges
-are links between those groups, reducing the join search space [10] [11] [12].
+are links between those groups, reducing the join search space [7,8,9].
 This is the **bulk of query execution time** and provides massive speedup.
 
 
@@ -352,7 +352,7 @@ for testing your own schema, data distribution, hardware, and database
 configuration.
 
 - **Join Order Benchmark (JOB)**: 113 complex SQL queries ported to Datalog.
-  In the Datalevin JOB benchmark [13], the reported run used a November 2023
+  In the Datalevin JOB benchmark [10], the reported run used a November 2023
   16-inch MacBook Pro with an Apple M3 Pro, 36GB RAM, and a 1TB SSD. PostgreSQL
   was Homebrew PostgreSQL@18, Datalevin was the repository version under test,
   and all systems used default configuration without tuning. Each system was run
@@ -363,7 +363,7 @@ configuration.
   portion in 295 seconds, already more than 4x slower than Datalevin, and 9
   queries hit the benchmark timeout. Counting those queries to completion would
   make the SQLite gap larger.
-- **LDBC SNB**: The Datalevin LDBC-SNB benchmark [14] is an unofficial
+- **LDBC SNB**: The Datalevin LDBC-SNB benchmark [11] is an unofficial
   implementation of the Interactive workload for Datalevin and Neo4j. The
   reported run used scale factor 1, about 3.2M entities and 17.3M edges, on a
   2023 Apple M2 Max machine with 12 cores, 32GB RAM, a 1TB SSD, macOS 15.2,
@@ -413,7 +413,7 @@ grandparent facts already found in the second round. On large graphs, this
 redundant computation can dominate the query.
 
 Datalevin therefore uses **semi-naive evaluation**, the standard bottom-up
-strategy for recursive Datalog [2]. The key idea is delta tracking: each round
+strategy for recursive Datalog [12]. The key idea is delta tracking: each round
 only uses the *new* tuples discovered in the previous round. Evaluation continues
 until a fixpoint, meaning a round produces no new tuples. For stratified rules,
 the engine divides rules into **strata**: layers evaluated in dependency order
@@ -430,7 +430,7 @@ Bottom-up evaluation has one obvious risk: it can compute more of the world than
 the user asked for. If a query asks only for Alice's ancestors, the engine should
 not materialize every ancestor relation in the database. Datalevin uses
 **magic-set rewriting**, a classic Datalog transformation for making bottom-up
-evaluation goal-directed [2] [3]. Magic-set rules push bound variables from the
+evaluation goal-directed [12,13]. Magic-set rules push bound variables from the
 outer query into the recursive rule, pruning intermediate results to the part of
 the graph relevant to the question.
 
@@ -551,7 +551,7 @@ Datalevin also connects rule evaluation back to the cost-based optimizer:
     use indexes and join estimates.
 3.  **Temporal elimination**: Recursive rules that meet T-stratification
     criteria, a time-aware form of the stratum ordering above, can keep only the
-    last iteration's results, reducing memory use for long chains [8].
+    last iteration's results, reducing memory use for long chains [14].
 4.  **Stratified negation**: `not` and `not-join` in rules are evaluated only
     after the positive facts they depend on have been computed, giving recursive
     queries a single well-defined result.
@@ -800,54 +800,54 @@ Datalevin plans a query and why a query may be slower than expected.
 
 ## References
 
-[1] Patricia G. Selinger, Morton M. Astrahan, Donald D. Chamberlin,
-   Raymond A. Lorie, and Thomas G. Price,
-   [Access Path Selection in a Relational Database Management System](https://research.ibm.com/publications/access-path-selection-in-a-relational-database-management-system),
-   SIGMOD 1979, pp. 23-34,
-   [doi:10.1145/582095.582099](https://doi.org/10.1145/582095.582099).
+[1] Patricia G. Selinger, Morton M. Astrahan, Donald D. Chamberlin, Raymond A.
+Lorie, and Thomas G. Price, "Access Path Selection in a Relational Database
+Management System," SIGMOD 1979, pp. 23-34. URL:
+<https://research.ibm.com/publications/access-path-selection-in-a-relational-database-management-system>.
+DOI: <https://doi.org/10.1145/582095.582099>.
 
-[2] Todd J. Green, Shan Shan Huang, Boon Thau Loo, and Wenchao Zhou,
-   [Datalog and Recursive Query Processing](https://www.nowpublishers.com/article/Details/DBS-017),
-   Foundations and Trends in Databases, vol. 5, no. 2, pp. 105-195, 2013,
-   [doi:10.1561/1900000017](https://doi.org/10.1561/1900000017).
+[2] Guido Moerkotte and Thomas Neumann, "Dynamic Programming Strikes Back,"
+SIGMOD 2008, pp. 539-552.
 
-[3] Francois Bancilhon, David Maier, Yehoshua Sagiv, and Jeffrey D. Ullman,
-   [Magic Sets and Other Strange Ways to Implement Logic Programs](https://doi.org/10.1145/6012.15399),
-   PODS 1986, pp. 1-15,
-   [doi:10.1145/6012.15399](https://doi.org/10.1145/6012.15399).
+[3] Hongjun Lan, Zhifeng Bao, and Yuwei Peng, "A Survey on Advancing the DBMS
+Query Optimizer: Cardinality Estimation, Cost Model, and Plan Enumeration,"
+*Data Science and Engineering*, 2021.
 
-[4] Guido Moerkotte and Thomas Neumann, "Dynamic Programming Strikes Back",
-   SIGMOD 2008, pp. 539-552.
+[4] Max Heimel, Volker Markl, and Kartik Murthy, "A Bayesian Approach to
+Estimating the Selectivity of Conjunctive Predicates," DBIS 2009.
 
-[5] Hongjun Lan, Zhifeng Bao, and Yuwei Peng, "A Survey on Advancing the DBMS
-   Query Optimizer: Cardinality Estimation, Cost Model, and Plan Enumeration",
-   *Data Science and Engineering*, 2021.
+[5] Peter J. Haas and Arun N. Swami, "Sampling-Based Selectivity Estimation for
+Joins Using Augmented Frequent Value Statistics," ICDE 1995.
 
-[6] Max Heimel, Volker Markl, and Kartik Murthy, "A Bayesian Approach to
-   Estimating the Selectivity of Conjunctive Predicates", DBIS 2009.
+[6] Andre Brodt, Olaf Schiller, and Bernhard Mitschang, "Efficient Resource
+Attribute Retrieval in RDF Triple Stores," CIKM 2011.
 
-[7] Peter J. Haas and Arun N. Swami, "Sampling-Based Selectivity Estimation for
-   Joins Using Augmented Frequent Value Statistics", ICDE 1995.
+[7] Andrey Gubichev and Thomas Neumann, "Exploiting the Query Structure for
+Efficient Join Ordering in SPARQL Queries," EDBT 2014.
 
-[8] Amir Shaikhha et al., "Optimizing Nested Recursive Queries", *Proceedings of
-   the ACM on Management of Data* 2(1), SIGMOD 2024, pp. 1-27.
+[8] Marios Meimaris et al., "Extended Characteristic Sets: Graph Indexing for
+SPARQL Query Optimization," ICDE 2017.
 
-[9] Andre Brodt, Olaf Schiller, and Bernhard Mitschang, "Efficient Resource
-   Attribute Retrieval in RDF Triple Stores", CIKM 2011.
+[9] Thomas Neumann and Guido Moerkotte, "Characteristic Sets: Accurate
+Cardinality Estimation for RDF Queries with Multiple Joins," ICDE 2011.
 
-[10] Andrey Gubichev and Thomas Neumann, "Exploiting the Query Structure for
-   Efficient Join Ordering in SPARQL Queries", EDBT 2014.
+[10] Datalevin project, "Join Order Benchmark," benchmark writeup and
+implementation. URL:
+<https://github.com/datalevin/datalevin/tree/master/benchmarks/JOB-bench>.
 
-[11] Marios Meimaris et al., "Extended Characteristic Sets: Graph Indexing for
-   SPARQL Query Optimization", ICDE 2017.
+[11] Datalevin project, "LDBC Social Network Benchmark," benchmark writeup and
+implementation. URL:
+<https://github.com/datalevin/datalevin/tree/master/benchmarks/LDBC-SNB-bench>.
 
-[12] Thomas Neumann and Guido Moerkotte, "Characteristic Sets: Accurate
-   Cardinality Estimation for RDF Queries with Multiple Joins", ICDE 2011.
+[12] Todd J. Green, Shan Shan Huang, Boon Thau Loo, and Wenchao Zhou,
+"Datalog and Recursive Query Processing," *Foundations and Trends in
+Databases* 5(2):105-195, 2013. URL:
+<https://www.nowpublishers.com/article/Details/DBS-017>. DOI:
+<https://doi.org/10.1561/1900000017>.
 
-[13] Datalevin project,
-   [Join Order Benchmark](https://github.com/datalevin/datalevin/tree/master/benchmarks/JOB-bench),
-   benchmark writeup and implementation.
+[13] Francois Bancilhon, David Maier, Yehoshua Sagiv, and Jeffrey D. Ullman,
+"Magic Sets and Other Strange Ways to Implement Logic Programs," PODS 1986,
+pp. 1-15. DOI: <https://doi.org/10.1145/6012.15399>.
 
-[14] Datalevin project,
-   [LDBC Social Network Benchmark](https://github.com/datalevin/datalevin/tree/master/benchmarks/LDBC-SNB-bench),
-   benchmark writeup and implementation.
+[14] Amir Shaikhha et al., "Optimizing Nested Recursive Queries," *Proceedings of
+the ACM on Management of Data* 2(1), SIGMOD 2024, pp. 1-27.

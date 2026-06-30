@@ -1143,9 +1143,8 @@ datoms and maintain the vector index for you.
 
 ## References
 
-[1] Yu. A. Malkov and D. A. Yashunin,
-   [Efficient and robust approximate nearest neighbor search using Hierarchical
-   Navigable Small World graphs](https://arxiv.org/abs/1603.09320),
-   arXiv:1603.09320, 2016; IEEE Transactions on Pattern Analysis and Machine
-   Intelligence 42(4):824-836, 2020,
-   [doi:10.1109/TPAMI.2018.2889473](https://doi.org/10.1109/TPAMI.2018.2889473).
+[1] Yu. A. Malkov and D. A. Yashunin, "Efficient and Robust Approximate Nearest
+Neighbor Search Using Hierarchical Navigable Small World Graphs,"
+arXiv:1603.09320, 2016; *IEEE Transactions on Pattern Analysis and Machine
+Intelligence* 42(4):824-836, 2020. URL: <https://arxiv.org/abs/1603.09320>.
+DOI: <https://doi.org/10.1109/TPAMI.2018.2889473>.

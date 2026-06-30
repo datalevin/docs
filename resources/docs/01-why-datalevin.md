@@ -44,7 +44,7 @@ At the Datalog layer, Datalevin represents facts as EAV triples: Entity,
 Attribute, and Value. This follows the same atom-of-statement idea used by RDF:
 an RDF graph is defined as a set of subject-predicate-object triples, and
 asserting one triple states one fact: that a relationship holds between its
-subject and object [6]. Datalevin uses entity-attribute-value rather than
+subject and object [2]. Datalevin uses entity-attribute-value rather than
 subject-predicate-object because it is an operational database and chooses
 database-friendly terminology. An entity is a database identity around which
 facts collect, not necessarily a concrete subject in the RDF sense. An attribute
@@ -114,7 +114,7 @@ details).
 This makes Datalevin's notion of entity close to the metaphysical idea known as
 bundle theory: an object can be understood as the bundle of properties that
 belong together, rather than as a hidden substance underneath those properties
-[10]. The analogy should not be pushed too far. A Datalevin eid is only a
+[3]. The analogy should not be pushed too far. A Datalevin eid is only a
 system-assigned, database-local handle; it is not the object itself and not a
 domain identifier. The entity is the bundle of datoms anchored by that handle:
 the currently asserted properties and relationships that share the same eid.
@@ -198,7 +198,7 @@ This is friendlier to application developers and easier for programs to
 construct than the older Prolog-like notation because queries are ordinary data
 structures: vectors, keywords, symbols, and lists. The underlying idea is still
 classic Datalog: describe the facts that must be true, and let the engine find
-bindings for the variables [7].
+bindings for the variables [4].
 
 A small comparison makes the difference concrete:
 
@@ -340,7 +340,7 @@ cross-cutting question into an integration problem.
 
 The first reason is about programming ergonomics. SQL descends from SEQUEL,
 introduced by Chamberlin and Boyce as "a Structured English Query Language"
-[14]. That origin still shows in SQL's large English-like surface: tables,
+[5]. That origin still shows in SQL's large English-like surface: tables,
 joins, projections, grouping, subqueries, and dialect-specific extensions. SQL
 succeeded as a standard, but standardization should not be confused with
 language quality. SQL queries are usually strings assembled by a host language.
@@ -365,7 +365,7 @@ connects facts. Rules name reusable logic. Recursive queries use the same
 logical form as non-recursive queries. The result is not less relational; it is
 a higher-level way to write relational logic. Relational algebra remains the
 substrate, but the user does not have to speak in join operators to ask a
-relational question [2].
+relational question [6].
 
 The ergonomic difference is not only visible to database specialists. In
 practice, experienced developers often prefer Datalog once they have used it for
@@ -386,9 +386,9 @@ planner-sensitive rewrites. Recent text-to-SQL results show the gap clearly:
 Spider 2.0 was designed around realistic enterprise workflows, and its authors
 reported that an `o1-preview`-based code-agent setup solved only 21.3% of its
 tasks, compared with much higher scores on older benchmarks such as Spider 1.0
-[11]. A later Spider 2.0 state-of-the-art system reported 70.2% execution
+[7]. A later Spider 2.0 state-of-the-art system reported 70.2% execution
 accuracy, still far from the reliability one would want from an automatic
-application interface [12].
+application interface [8].
 
 Datalog is a better generation target for the same reason it is a better
 programming interface: the surface is smaller and more regular. A Datalevin
@@ -425,7 +425,7 @@ independence can produce wildly inaccurate estimates for them. Traditional
 estimators therefore depend on approximations such as histograms and, in some
 systems, learned models. This difficult problem of estimating result sizes,
 **cardinality estimation**, has been repeatedly identified as one of the central
-problems in query optimization in the database research literature [3] [4].
+problems in query optimization in the database research literature [9,10].
 For container-based storage, there is no cheap general answer: the counts the
 planner needs are not directly present in the storage layout, so the optimizer
 has to approximate them.
@@ -437,7 +437,7 @@ stored as nullable positions. Attributes are globally scoped. EAV
 counts direct, and larger estimates can be sampled under the same query
 conditions that execution will use. Datalevin still has to optimize queries,
 but it starts from a storage model that exposes the units the optimizer needs to
-count [5].
+count [11].
 
 This is why adding more features to a SQL database does not fully answer what
 modern applications need. An application database needs more than features:
@@ -533,7 +533,7 @@ table, build huge intermediate results, and only later discover that a different
 predicate would have narrowed the search immediately. It is therefore hard to
 predict whether a SQL query engine will perform well on complex queries. Because
 of this uncertainty, large join queries are widely treated as
-optimizer-sensitive. For example, PostgreSQL's own documentation [8] notes
+optimizer-sensitive. For example, PostgreSQL's own documentation [12] notes
 that possible join orders grow exponentially, that exhaustive planning becomes
 impractical beyond roughly ten input tables, and that the planner switches to
 heuristic search for many-relation queries. It also documents techniques for
@@ -541,7 +541,7 @@ constraining join order to reduce planning time. That is the practical pressure
 behind advice to denormalize, split a query, materialize intermediate results,
 or hand-guide the planner when SQL joins become too large or too sensitive to
 cardinality estimation. Cardinality estimation is the work of estimating the
-result size of all subplans of a query [9].
+result size of all subplans of a query [13].
 
 Fact-based storage changes that problem. Datalevin does not have to answer every
 selectivity question from table containers. Its EAV and AVE indexes expose
@@ -563,7 +563,7 @@ queries, that is often because the complexity has been moved into denormalized
 records, application-side filtering, or cache materialization rather than
 disappearing.
 
-Join Order Benchmark (JOB) is the benchmark version of this problem [3]. It is
+Join Order Benchmark (JOB) is the benchmark version of this problem [9]. It is
 not a benchmark of simple key lookups or single-table scans, nor an academic
 exercise with synthetic data. JOB is based on the real IMDb dataset, where value
 frequencies and relationships have the same nonuniform shape seen in many
@@ -571,7 +571,7 @@ production datasets. It requires joins across many related entities: 113
 analytical queries, with query shapes that range from a few joins to more than
 a dozen. Its queries have enough joins that a poor query plan can produce orders
 of magnitude more intermediate rows than a good one. In Datalevin's published
-JOB run [13], the same workload was compared with both PostgreSQL and SQLite.
+JOB run [14], the same workload was compared with both PostgreSQL and SQLite.
 Datalevin finished the workload in 71 seconds, compared with 171 seconds for
 PostgreSQL. SQLite completed the non-timeout portion in 295 seconds and hit
 timeout on 9 queries, so the often-quoted "more than 4x faster than SQLite"
@@ -878,60 +878,59 @@ Datalevin as persistent memory.
 [1] Frederick P. Brooks, Jr., *The Mythical Man-Month: Essays on Software
 Engineering*, Anniversary Edition, Addison-Wesley, 1995.
 
-[2] Huahai Yang,
-   [Competing for the JOB with a Triplestore](https://yyhh.org/blog/2024/09/competing-for-the-job-with-a-triplestore/),
-   yyhh.org, 2024.
+[2] Richard Cyganiak, David Wood, and Markus Lanthaler, "RDF 1.1 Concepts and
+Abstract Syntax," W3C Recommendation, February 25, 2014. URL:
+<https://www.w3.org/TR/rdf11-concepts/>.
 
-[3] Viktor Leis, Andrey Gubichev, Atanas Mirchev, Peter Boncz,
-   Alfons Kemper, and Thomas Neumann,
-   [How Good Are Query Optimizers, Really?](https://www.vldb.org/pvldb/vol9/p204-leis.pdf),
-   Proceedings of the VLDB Endowment, vol. 9, no. 3, 2015, pp. 204-215.
+[3] Howard Robinson and Ralph Weir, "Substance," *The Stanford Encyclopedia of
+Philosophy*, substantive revision May 6, 2024, especially Section 3.2, "Bundle
+theories versus substrata and thin particulars." URL:
+<https://plato.stanford.edu/entries/substance/>.
 
-[4] Viktor Leis, Bernhard Radke, Andrey Gubichev, Alfons Kemper,
-   and Thomas Neumann,
-   [Cardinality Estimation Done Right: Index-Based Join Sampling](https://www.cidrdb.org/cidr2017/papers/p9-leis-cidr17.pdf),
-   CIDR 2017.
+[4] Stefano Ceri, Georg Gottlob, and Letizia Tanca, "What You Always Wanted to
+Know About Datalog (And Never Dared to Ask)," *IEEE Transactions on Knowledge
+and Data Engineering* 1(1):146-166, 1989. URL:
+<https://hdl.handle.net/11311/665510>.
 
-[5] Huahai Yang,
-   [SQLite in Production? Not So Fast for Complex Queries](https://yyhh.org/blog/2026/01/sqlite-in-production-not-so-fast-for-complex-queries/),
-   yyhh.org, January 27, 2026.
+[5] Donald D. Chamberlin and Raymond F. Boyce, "SEQUEL: A Structured English
+Query Language," in *Proceedings of the 1974 ACM SIGFIDET Workshop on Data
+Description, Access and Control*, 1974, pp. 249-264. DOI:
+<https://doi.org/10.1145/800296.811515>.
 
-[6] Richard Cyganiak, David Wood, and Markus Lanthaler,
-   [RDF 1.1 Concepts and Abstract Syntax](https://www.w3.org/TR/rdf11-concepts/),
-   W3C Recommendation, February 25, 2014.
+[6] Huahai Yang, "Competing for the JOB with a Triplestore," yyhh.org, 2024.
+URL: <https://yyhh.org/blog/2024/09/competing-for-the-job-with-a-triplestore/>.
 
-[7] Stefano Ceri, Georg Gottlob, and Letizia Tanca,
-   [What You Always Wanted to Know About Datalog (And Never Dared to Ask)](https://hdl.handle.net/11311/665510),
-   *IEEE Transactions on Knowledge and Data Engineering*, 1(1):146-166, 1989.
+[7] Fangyu Lei, Jixuan Chen, Yuxiao Ye, Ruisheng Cao, Dongchan Shin, Hongjin Su,
+Zhaoqing Suo, Hongcheng Gao, Wenjing Hu, Pengcheng Yin, Victor Zhong, Caiming
+Xiong, Ruoxi Sun, Qian Liu, Sida Wang, and Tao Yu, "Spider 2.0: Evaluating
+Language Models on Real-World Enterprise Text-to-SQL Workflows,"
+arXiv:2411.07763, 2024. URL: <https://arxiv.org/abs/2411.07763>.
 
-[8] PostgreSQL Global Development Group,
-    [Controlling the Planner with Explicit JOIN Clauses](https://www.postgresql.org/docs/current/explicit-joins.html), PostgreSQL Documentation.
+[8] Tanmay Parekh, Ella Hofmann-Coyle, Shuyi Wang, Sachith Sri Ram Kothur,
+Srivas Prasad, and Yunmo Chen, "PExA: Parallel Exploration Agent for Complex
+Text-to-SQL," arXiv:2604.22934, 2026. URL:
+<https://arxiv.org/abs/2604.22934>.
 
-[9] Han, Yuxing, et al. Cardinality estimation in DBMS: A comprehensive
-benchmark evaluation. VLDB, 15:4, (2022).
+[9] Viktor Leis, Andrey Gubichev, Atanas Mirchev, Peter Boncz, Alfons Kemper,
+and Thomas Neumann, "How Good Are Query Optimizers, Really?" *Proceedings of
+the VLDB Endowment* 9(3):204-215, 2015. URL:
+<https://www.vldb.org/pvldb/vol9/p204-leis.pdf>.
 
-[10] Howard Robinson and Ralph Weir,
-   [Substance](https://plato.stanford.edu/entries/substance/),
-   *The Stanford Encyclopedia of Philosophy*, substantive revision May 6, 2024,
-   especially Section 3.2, "Bundle theories versus substrata and thin
-   particulars."
+[10] Viktor Leis, Bernhard Radke, Andrey Gubichev, Alfons Kemper, and Thomas
+Neumann, "Cardinality Estimation Done Right: Index-Based Join Sampling," CIDR
+2017. URL: <https://www.cidrdb.org/cidr2017/papers/p9-leis-cidr17.pdf>.
 
-[11] Fangyu Lei, Jixuan Chen, Yuxiao Ye, Ruisheng Cao, Dongchan Shin,
-   Hongjin Su, Zhaoqing Suo, Hongcheng Gao, Wenjing Hu, Pengcheng Yin,
-   Victor Zhong, Caiming Xiong, Ruoxi Sun, Qian Liu, Sida Wang, and Tao Yu,
-   [Spider 2.0: Evaluating Language Models on Real-World Enterprise Text-to-SQL Workflows](https://arxiv.org/abs/2411.07763),
-   arXiv:2411.07763, 2024.
+[11] Huahai Yang, "SQLite in Production? Not So Fast for Complex Queries,"
+yyhh.org, January 27, 2026. URL:
+<https://yyhh.org/blog/2026/01/sqlite-in-production-not-so-fast-for-complex-queries/>.
 
-[12] Tanmay Parekh, Ella Hofmann-Coyle, Shuyi Wang, Sachith Sri Ram Kothur,
-   Srivas Prasad, and Yunmo Chen,
-   [PExA: Parallel Exploration Agent for Complex Text-to-SQL](https://arxiv.org/abs/2604.22934),
-   arXiv:2604.22934, 2026.
+[12] PostgreSQL Global Development Group, "Controlling the Planner with Explicit
+JOIN Clauses," *PostgreSQL Documentation*. URL:
+<https://www.postgresql.org/docs/current/explicit-joins.html>.
 
-[13] Datalevin project,
-   [Join Order Benchmark](https://github.com/datalevin/datalevin/tree/master/benchmarks/JOB-bench),
-   benchmark writeup and implementation.
+[13] Yuxing Han et al., "Cardinality Estimation in DBMS: A Comprehensive
+Benchmark Evaluation," *Proceedings of the VLDB Endowment* 15(4), 2022.
 
-[14] Donald D. Chamberlin and Raymond F. Boyce,
-   [SEQUEL: A Structured English Query Language](https://doi.org/10.1145/800296.811515),
-   *Proceedings of the 1974 ACM SIGFIDET Workshop on Data Description,
-   Access and Control*, 1974, pp. 249-264.
+[14] Datalevin project, "Join Order Benchmark," benchmark writeup and
+implementation. URL:
+<https://github.com/datalevin/datalevin/tree/master/benchmarks/JOB-bench>.

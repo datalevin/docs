@@ -1701,9 +1701,9 @@ text.
 ## References
 
 [1] Richard Evans, Jose Hernandez-Orallo, Johannes Welbl, Pushmeet Kohli, and
-Marek Sergot, ["Making sense of sensory
-input"](https://doi.org/10.1016/j.artint.2020.103438), *Artificial Intelligence*
-293, 2021, article 103438.
+Marek Sergot, "Making Sense of Sensory Input," *Artificial Intelligence* 293,
+2021, article 103438. DOI:
+<https://doi.org/10.1016/j.artint.2020.103438>.
 
-[2] Jon Doyle, "A Truth Maintenance System", *Artificial Intelligence* 12(3),
-251-272, 1979.
+[2] Jon Doyle, "A Truth Maintenance System," *Artificial Intelligence*
+12(3):251-272, 1979.

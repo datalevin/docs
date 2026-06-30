@@ -1066,9 +1066,9 @@ high-performance applications.
 
 ## References
 
-[1] Chen, Peter Pin-Shan. "The Entity-Relationship Model: Toward a Unified View
-of Data." ACM Transactions on Database Systems 1, no. 1 (1976): 9-36.
-https://doi.org/10.1145/320434.320440
+[1] Peter Pin-Shan Chen, "The Entity-Relationship Model: Toward a Unified View
+of Data," *ACM Transactions on Database Systems* 1(1):9-36, 1976. DOI:
+<https://doi.org/10.1145/320434.320440>.
 
 [2] E. F. Codd, "Further Normalization of the Data Base Relational Model,"
 IBM Research Report RJ909, August 31, 1971. Republished in Randall J. Rustin,

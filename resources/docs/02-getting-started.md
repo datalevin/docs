@@ -366,9 +366,10 @@ variable symbols in the query are meaningful only inside that query, not for the
 surrounding code, where they would be considered undefined.
 
 `(d/db conn)` gives the read APIs access to the current database state. A DB
-object is not a durable value to save and reuse later. Treat it like a fresh
-look at a changing external world: get it when you are about to read, use it for
-that operation, and ask the connection again before making a later decision.
+object is a read handle over the underlying storage plus cached metadata for
+that storage state, not a durable value to save and reuse later. Get it when you
+are about to read, use it for that operation, and ask the connection again
+before making a later decision.
 
 
 ## 4. Pull One Entity

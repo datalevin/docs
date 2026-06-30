@@ -1192,7 +1192,7 @@ database capabilities.
 
 ## References
 
-[1] Stuart Russell and Peter Norvig, [*Artificial Intelligence: A Modern
-Approach*, 4th US ed.](https://aima.cs.berkeley.edu/), Pearson, 2020.
+[1] Stuart Russell and Peter Norvig, *Artificial Intelligence: A Modern
+Approach*, 4th US ed., Pearson, 2020. URL: <https://aima.cs.berkeley.edu/>.
 
-[2] [Juji Inc.](https://juji.io/).
+[2] Juji Inc. URL: <https://juji.io/>.

@@ -1781,11 +1781,12 @@ test backup and restore paths.
 
 ## References
 
-[1] Diego Ongaro and John Ousterhout, ["In Search of an Understandable Consensus
-Algorithm"](https://raft.github.io/raft.pdf), USENIX ATC 2014.
+[1] Diego Ongaro and John Ousterhout, "In Search of an Understandable Consensus
+Algorithm," USENIX ATC 2014. URL: <https://raft.github.io/raft.pdf>.
 
-[2] Cognitect, ["Transit Format"](https://github.com/cognitect/transit-format).
+[2] Cognitect, "Transit Format." URL:
+<https://github.com/cognitect/transit-format>.
 
-[3] Elaine Barker, ["Recommendation for Key Management: Part 1 -
-General"](https://doi.org/10.6028/NIST.SP.800-57pt1r5), NIST Special Publication
-800-57 Part 1 Revision 5, 2020.
+[3] Elaine Barker, "Recommendation for Key Management: Part 1 - General," NIST
+Special Publication 800-57 Part 1 Revision 5, 2020. DOI:
+<https://doi.org/10.6028/NIST.SP.800-57pt1r5>.

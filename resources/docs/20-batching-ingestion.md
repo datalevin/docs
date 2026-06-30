@@ -375,7 +375,7 @@ and every `:db.type/ref` value must already be the final numeric entity id.
 A simple technique works well for relational imports whose source tables already
 have integer primary keys: reserve a non-overlapping entity-id range for each
 source table, then convert every primary key and foreign key with the same
-function [1] [2]. For example:
+function [1,2]. For example:
 
 <div class="multi-lang">
 
@@ -776,11 +776,10 @@ Datalevin.
 
 ## References
 
-[1] Huahai Yang,
-   [Competing for the JOB with a Triplestore](https://yyhh.org/blog/2024/09/competing-for-the-job-with-a-triplestore/),
-   yyhh.org, 2024.
+[1] Huahai Yang, "Competing for the JOB with a Triplestore," yyhh.org, 2024.
+URL: <https://yyhh.org/blog/2024/09/competing-for-the-job-with-a-triplestore/>.
 
 [2] Viktor Leis, Andrey Gubichev, Atanas Mirchev, Peter Boncz, Alfons Kemper,
-   and Thomas Neumann,
-   [How Good Are Query Optimizers, Really?](https://www.vldb.org/pvldb/vol9/p204-leis.pdf),
-   Proceedings of the VLDB Endowment, vol. 9, no. 3, 2015, pp. 204-215.
+and Thomas Neumann, "How Good Are Query Optimizers, Really?" *Proceedings of
+the VLDB Endowment* 9(3):204-215, 2015. URL:
+<https://www.vldb.org/pvldb/vol9/p204-leis.pdf>.

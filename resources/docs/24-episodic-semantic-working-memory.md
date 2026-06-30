@@ -1361,8 +1361,8 @@ stage, recall and context assembly, a coherent substrate to work from.
 
 ## References
 
-[1] James L. McClelland, Bruce L. McNaughton, and Randall C. O'Reilly, ["Why
+[1] James L. McClelland, Bruce L. McNaughton, and Randall C. O'Reilly, "Why
 There Are Complementary Learning Systems in the Hippocampus and Neocortex:
 Insights from the Successes and Failures of Connectionist Models of Learning and
-Memory"](https://doi.org/10.1037/0033-295X.102.3.419), *Psychological Review*
-102, no. 3, 1995, pp. 419-457.
+Memory," *Psychological Review* 102(3):419-457, 1995. DOI:
+<https://doi.org/10.1037/0033-295X.102.3.419>.

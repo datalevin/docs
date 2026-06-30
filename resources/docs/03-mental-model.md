@@ -412,16 +412,17 @@ The syntax has a few pieces:
 - `db` is a Datalevin DB object used as the query input.
 
 Datalevin does not provide "database as a value" semantics like Datomic. A DB
-object is a mutable reference to database state, not a persistent immutable
-value. In application code, keep and share the connection. When you need to
-read, call `(d/db conn)` and use that DB object for the current operation.
+object is a mutable read handle to storage plus cached metadata about the
+storage state, not a persistent immutable value. In application code, keep and
+share the connection. When you need to read, call `(d/db conn)` and use that DB
+object for the current operation.
 
 The useful mental model is perception, not possession. The database is the
 surrogate of an external world that changes. Calling `d/db` is like looking at
 that world now. A `db` object saved from earlier is not an "old database" you
-can reason from; it is an expired reference whose meaning for current reads is
-undefined. Like a river, the database state is something you look at again
-before deciding what to do.
+can reason from; it is an expired reference whose cached metadata may no longer
+describe the current storage state. Like a river, the database state is
+something you look at again before deciding what to do.
 
 <div class="multi-lang">
 
@@ -758,6 +759,6 @@ IBM Research Report RJ909, August 31, 1971. Republished in Randall J. Rustin,
 ed., *Data Base Systems: Courant Computer Science Symposia Series 6*,
 Prentice-Hall, 1972.
 
-[4] Robert A. Kowalski, ["Predicate Logic as Programming
-Language"](https://www.doc.ic.ac.uk/~rak/papers/IFIP74.pdf), IFIP Congress,
-1974, pp. 569-574.
+[4] Robert A. Kowalski, "Predicate Logic as Programming Language," IFIP
+Congress, 1974, pp. 569-574. URL:
+<https://www.doc.ic.ac.uk/~rak/papers/IFIP74.pdf>.

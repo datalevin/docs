@@ -451,7 +451,7 @@ In RDF, predicates are often IRIs chosen from shared vocabularies or ontologies.
 They are meant to carry portable meaning across datasets, organizations, and
 reasoning systems. RDF Schema and OWL can then attach richer ontology semantics
 to those predicates: class hierarchies, property relationships, domain/range
-constraints, and inference rules [2] [3].
+constraints, and inference rules [2,3].
 
 Datalevin attributes are intentionally more local and operational. An attribute
 such as `:order/placed-at` or `:invoice/issued-at` is not trying to be a
@@ -700,14 +700,13 @@ outside world should use.
 
 ## References
 
-[1] Richard Cyganiak, David Wood, and Markus Lanthaler,
-   [RDF 1.1 Concepts and Abstract Syntax](https://www.w3.org/TR/rdf11-concepts/),
-   W3C Recommendation, February 25, 2014.
+[1] Richard Cyganiak, David Wood, and Markus Lanthaler, "RDF 1.1 Concepts and
+Abstract Syntax," W3C Recommendation, February 25, 2014. URL:
+<https://www.w3.org/TR/rdf11-concepts/>.
 
-[2] Dan Brickley and R. V. Guha,
-   [RDF Schema 1.1](https://www.w3.org/TR/rdf-schema/),
-   W3C Recommendation, February 25, 2014.
+[2] Dan Brickley and R. V. Guha, "RDF Schema 1.1," W3C Recommendation, February
+25, 2014. URL: <https://www.w3.org/TR/rdf-schema/>.
 
-[3] W3C OWL Working Group,
-   [OWL 2 Web Ontology Language Document Overview (Second Edition)](https://www.w3.org/TR/owl2-overview/),
-   W3C Recommendation, December 11, 2012.
+[3] W3C OWL Working Group, "OWL 2 Web Ontology Language Document Overview
+(Second Edition)," W3C Recommendation, December 11, 2012. URL:
+<https://www.w3.org/TR/owl2-overview/>.

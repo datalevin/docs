@@ -27,9 +27,13 @@ The Java, Python, and JavaScript snippets assume an open connection named
 object obtained with `(d/db conn)`.
 
 Datalevin's `db` is not a Datomic-style immutable database-as-value object. It
-is a mutable DB object/reference used by read APIs. Treat it as access to the
-current database state for the current operation, not as durable application
-state.
+is the DB handle currently held by a connection: a handle to the underlying
+storage plus metadata and caches derived from the storage state. Those cached
+details help read APIs interpret schema, ids, indexes, and pull patterns
+efficiently. `(d/db conn)` does not copy the database, create an
+application-level historical snapshot, or memoize entity reads. It gives read
+APIs an explicit data source for the operation about to run; it is not a history
+API exposed to application code.
 
 The reason read examples use `(d/db conn)` instead of passing `conn` directly
 to `d/q` is not ceremony. `d/q` is a query over data sources. A source may be
@@ -39,12 +43,15 @@ to pretend that all of those sources are connections. Transaction functions are
 different: they work through a connection because they coordinate writes,
 validation, indexes, and durability for one database.
 
-Call `(d/db conn)` when you need to read the connection's current state. Do not
-save a `db` object or an entity object and expect it to remain meaningful after
-later transactions; if you are making a new decision, get a new `db` from the
-connection before reading. There is no application-level concept of an "old
-db" in Datalevin. A saved DB object is better understood as an expired
-reference, not as something the application can treat as an earlier world.
+Call `(d/db conn)` when you need to read the connection's current state. A
+single query, pull, or entity lookup uses a consistent read view while that
+operation runs. Do not save a `db` object or an entity object and expect it to
+remain meaningful after later transactions; the handle's cached metadata may no
+longer match the current storage state. If you are making a new decision, get a
+new `db` from the connection before reading. There is no application-level
+concept of an "old db" in Datalevin. A saved DB object is better understood as
+an expired reference, not as something the application can treat as an earlier
+world.
 
 You may see `@conn` in older examples or REPL notes. Treat that as Clojure
 deref shorthand that relies on connection implementation details, not as the

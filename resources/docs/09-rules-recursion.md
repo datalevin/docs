@@ -481,7 +481,7 @@ and the system applies those conditions to facts. In Datalevin, the conditions
 are Datalog rules and the classifications are query-time derived tuples.
 
 These terms come from the older expert-system and production-system literature
-[1][2][3]. Classic expert systems separated a knowledge base of facts and rules
+[1,2,3]. Classic expert systems separated a knowledge base of facts and rules
 from an inference engine that derived conclusions. Forward chaining is the
 data-driven strategy in that family: start with known facts, apply rules, and
 derive consequences. Datalevin's mechanism here is Datalog rule evaluation, not
@@ -492,7 +492,7 @@ from it.
 If you are comparing this style with Clojure production rule engines such as
 Clara, the Datalevin repository includes an OpenRuleBench implementation that
 exercises recursive workloads such as transitive closure and same-generation
-queries [4][5]. In those workloads, Datalevin's bottom-up deductive evaluation
+queries [4,5]. In those workloads, Datalevin's bottom-up deductive evaluation
 is much more performant than forward-chaining production-rule engines. Treat
 that as workload-specific benchmark evidence, not as a universal ranking of all
 rule-engine use cases.
@@ -1332,19 +1332,18 @@ these patterns for graph data, see **Chapter 13: Graph Modeling**.
 ## References
 
 [1] Stuart Russell and Peter Norvig, *Artificial Intelligence: A Modern
-Approach*, 4th US ed., Pearson, 2020. https://aima.cs.berkeley.edu/
+Approach*, 4th US ed., Pearson, 2020. URL: <https://aima.cs.berkeley.edu/>.
 
 [2] Charles L. Forgy, "Rete: A Fast Algorithm for the Many Pattern/Many Object
-Pattern Match Problem," *Artificial Intelligence*, 19(1):17-37, 1982.
-https://doi.org/10.1016/0004-3702(82)90020-0
+Pattern Match Problem," *Artificial Intelligence* 19(1):17-37, 1982. DOI:
+<https://doi.org/10.1016/0004-3702(82)90020-0>.
 
 [3] Peter Jackson, *Introduction to Expert Systems*, 3rd ed., Addison-Wesley,
 1998.
 
 [4] Michael Kifer, Georg Lausen, and James Wu, *OpenRuleBench: An Analysis of
-the Performance of Rule Engines*, 2009.
-https://www3.cs.stonybrook.edu/~kifer/TechReports/OpenRuleBench09.pdf
+the Performance of Rule Engines*, 2009. URL:
+<https://www3.cs.stonybrook.edu/~kifer/TechReports/OpenRuleBench09.pdf>.
 
-[5] Datalevin project, OpenRuleBench benchmark implementation.
-
-https://github.com/datalevin/datalevin/tree/master/benchmarks/openrulebench
+[5] Datalevin project, "OpenRuleBench," benchmark implementation. URL:
+<https://github.com/datalevin/datalevin/tree/master/benchmarks/openrulebench>.

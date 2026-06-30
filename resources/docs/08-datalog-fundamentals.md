@@ -1466,9 +1466,10 @@ graph-shaped data structures.
 
 ## References
 
-[1] Datomic, [Query Reference](https://docs.datomic.com/query/query-data-reference.html),
-Datomic documentation.
+[1] Datomic, "Query Reference," Datomic documentation. URL:
+<https://docs.datomic.com/query/query-data-reference.html>.
 
-[2] Stefano Ceri, Georg Gottlob, and Letizia Tanca, "What you always wanted to
-know about Datalog (and never dared to ask)," *IEEE Transactions on Knowledge
-and Data Engineering*, 1(1):146-166, 1989.
+[2] Stefano Ceri, Georg Gottlob, and Letizia Tanca, "What You Always Wanted to
+Know About Datalog (And Never Dared to Ask)," *IEEE Transactions on Knowledge
+and Data Engineering* 1(1):146-166, 1989. URL:
+<https://hdl.handle.net/11311/665510>.

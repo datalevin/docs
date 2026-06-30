@@ -1279,8 +1279,9 @@ prompt strings.
 
 [1] Nelson F. Liu, Kevin Lin, John Hewitt, Ashwin Paranjape, Michele Bevilacqua,
 Fabio Petroni, and Percy Liang, "Lost in the Middle: How Language Models Use
-Long Contexts," 2023. arXiv:2307.03172. https://arxiv.org/abs/2307.03172
+Long Contexts," arXiv:2307.03172, 2023. URL:
+<https://arxiv.org/abs/2307.03172>.
 
 [2] Bennet B. Murdock, "The Serial Position Effect of Free Recall," *Journal of
-Experimental Psychology* 64, no. 5, 1962, pp. 482-488. DOI
-https://doi.org/10.1037/h0045106
+Experimental Psychology* 64(5):482-488, 1962. DOI:
+<https://doi.org/10.1037/h0045106>.
