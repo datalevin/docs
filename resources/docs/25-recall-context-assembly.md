@@ -162,6 +162,9 @@ Those numbers come from different scoring systems. Instead, run bounded queries
 for each lens, apply the same logical constraints to each candidate set, and
 fuse the resulting ranked lists with reciprocal rank fusion (RRF).
 
+The examples below assume `:doc/content` has `:db/fulltext true` and
+`:db.fulltext/autoDomain true`; the vector lens uses `:doc/vec`.
+
 <!-- pdf-listing: Hybrid recall with full-text, vector search, authorization, and RRF -->
 
 <div class="multi-lang">

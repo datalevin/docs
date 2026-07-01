@@ -52,7 +52,9 @@ This single-engine model has consequences beyond convenience:
 
 Clojure snippets below use an explicit `db` value. Java, Python, and JavaScript
 snippets assume an open connection named `conn`, whose `query` method supplies
-the current database as `$`.
+the current database as `$`. Snippets that call `fulltext` with an attribute
+argument, such as `:doc/content`, assume that attribute has `:db/fulltext true`
+and `:db.fulltext/autoDomain true`.
 
 
 ## 2. Index Return Formats

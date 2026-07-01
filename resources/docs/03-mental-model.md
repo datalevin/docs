@@ -6,11 +6,11 @@ part: "I — Foundations: A Multi-Paradigm Database"
 
 # Chapter 3: Datalevin Mental Model
 
-Transitioning to Datalevin often requires a fundamental shift in how you perceive
-data. If you are coming from a relational (SQL) or document (NoSQL) background,
-your mental model likely revolves around "containers": table rows with fixed
-columns or documents with nested structures. In these systems, the container is
-the primary unit of truth.
+Transitioning to Datalevin often requires a fundamental shift in how you think
+about data. If you are coming from a relational (SQL) or document (NoSQL)
+background, your mental model likely revolves around "containers": table rows
+with fixed columns or documents with nested structures. In these systems, the
+container is the primary unit of truth.
 
 Datalevin asks you to look deeper, past the containers, to the atomic facts
 themselves. Moving from SQL to Datalevin is less like moving between different
@@ -26,7 +26,7 @@ You might create a `Users` table and add a row for Alice. The fact of her email
 address is then trapped within the context of that row and those other columns.
 
 At the conceptual level, Datalevin discards these rigid boxes. Instead, it
-stores data as a stream of atomic facts called **datoms**. Each datom is a
+stores data as a collection of atomic facts called **datoms**. Each datom is a
 simple statement of truth represented as a triple: `[entity attribute value]`.
 
 - **Entity (E):** The "who" or "what" (a unique 64-bit integer id in Datalevin).
@@ -142,8 +142,8 @@ transaction succeed together, or none are applied. Transaction processing is the
 database discipline of making those changes atomic, isolated, and durable while
 many users or programs read and write concurrently [2].
 
-Jim Gray's deeper motivation for transactions is that a database acts as a
-surrogate for the part of the external world your application cares about.
+A deeper motivation for transactions is that a database acts as a surrogate for
+the part of the external world your application cares about.
 Real-world events do not happen halfway. A customer either placed an order or
 did not. A payment either settled or did not. A job either moved from pending to
 running or it did not. The database may need several internal writes to record
@@ -162,9 +162,12 @@ create entities, update cardinality-one attributes, add cardinality-many values,
 retract facts, and update custom key-value data in the same Datalevin store.
 After the transaction commits, readers see a consistent database state.
 
-In the example below, one transaction creates two entities and relates them. A
-**reference** attribute, declared with data type `:db.type/ref`, stores the
-entity id of another entity. This is how Datalevin represents graph edges.
+A small example makes this concrete. In transaction data, `:db/id` identifies
+the entity being written. If its value is a negative integer or string,
+Datalevin treats it as a temporary id, or **tempid**, and replaces it with a
+permanent entity id when the transaction commits. In the example below, MIT uses
+tempid `-10` because Alice's `:person/school` value points to it. Alice does
+not need `:db/id` because no other new entity refers to Alice.
 
 <div class="multi-lang">
 
@@ -179,9 +182,8 @@ entity id of another entity. This is how Datalevin represents graph edges.
 
 ;; Data is written as a collection of entities here.
 ;; Notice how 'Alice' and 'MIT' are just sets of attributes.
-;; :db/id is a system attribute for entity id; tempids are used here
 (d/transact! conn
-  [{:db/id -1 :person/name "Alice" :person/email "alice@example.com" :person/school -10}
+  [{:person/name "Alice" :person/email "alice@example.com" :person/school -10}
    {:db/id -10 :school/name "MIT" :school/country "USA"}])
 ```
 
@@ -202,7 +204,7 @@ Schema schema = Datalevin.schema()
 // Data is written as a collection of entities.
 // Notice how 'Alice' and 'MIT' are just sets of attributes.
 conn.transact(Datalevin.tx()
-    .entity(Tx.entity(-1)
+    .entity(Tx.entity()
         .put("person/name", "Alice")
         .put("person/email", "alice@example.com")
         .put("person/school", -10))
@@ -223,8 +225,7 @@ schema = {
 # Data is written as a collection of entities.
 # Notice how 'Alice' and 'MIT' are just sets of attributes.
 conn.transact([
-    {":db/id": -1,
-     ":person/name": "Alice",
+    {":person/name": "Alice",
      ":person/email": "alice@example.com",
      ":person/school": -10},
     {":db/id": -10,
@@ -245,8 +246,7 @@ const schema = {
 // Data is written as a collection of entities.
 // Notice how 'Alice' and 'MIT' are just sets of attributes.
 await conn.transact([
-  { ":db/id": -1,
-    ":person/name": "Alice",
+  { ":person/name": "Alice",
     ":person/email": "alice@example.com",
     ":person/school": -10 },
   { ":db/id": -10,
@@ -257,13 +257,9 @@ await conn.transact([
 
 </div>
 
-When a transaction creates several related entities at once, you can use
-temporary entity ids, or **tempids**, so the new entities can refer to one
-another before Datalevin assigns permanent ids. In entity maps, `:db/id` is the
-system attribute used to provide an explicit entity id or tempid. Negative
-integers and strings can be used as tempids. If the transaction data does not
-need to connect new entities to one another, `:db/id` can be omitted and
-Datalevin will assign permanent entity ids automatically.
+Tempids are local to one transaction. If the transaction data does not need to
+connect new entities to one another, `:db/id` can be omitted and Datalevin will
+assign permanent entity ids automatically.
 
 Do not put application identifiers in `:db/id`. A permanent Datalevin entity id
 is a system-managed `long`, not a UUID, email, slug, or external primary key.
@@ -310,24 +306,14 @@ combines facts that share a value. In this case, a query can read the
 `:order/customer` value from the order, treat that value as the customer entity
 id, and then read the customer's email from that entity.
 
-In logic-programming terminology, this matching process is called
-**unification**. A variable such as `?customer` may appear in several clauses,
-and the query engine must find values that make all appearances of that variable
-refer to the same entity. When the order clause binds `?customer` to `1001`, the
-customer clauses must use that same value. That is the logical basis of a join in
-Datalog.
-
-This may sound like extra work if you are coming from document databases, where
-joins are often avoided. In Datalevin, all facts are stored in a unified set of
-indexes. An **index** is a sorted access path optimized for a particular lookup
-order. Joining an `Order` to a `Customer` isn't a cross-table operation; it's
-just a matter of looking up datoms that share a value.
+In Datalevin, all facts are stored in a unified set of indexes. An **index** is
+a sorted access path optimized for a particular lookup order. Joining an `Order`
+to a `Customer` is just a matter of looking up datoms that share a value.
 
 ### Why Storing Facts Once Works Well in Datalevin:
 
 1.  **Granular Updates:** You can update a customer's email without touching
-    thousands of order records. In a denormalized document store, this update
-    would be a massive, expensive operation.
+    thousands of order records.
 2.  **Universal Indexing:** Every attribute is indexed. When each fact is stored
     once, the engine can use its core EAV (Entity-Attribute-Value) and AVE
     (Attribute-Value-Entity) indexes to jump directly to the relevant facts.
@@ -343,52 +329,7 @@ For a deeper dive into how this approach often beats traditional relational
 engines in query performance, see the discussion on the [Join Order
 Benchmark](https://yyhh.org/blog/2024/09/competing-for-the-job-with-a-triplestore/).
 
-## 6. Three Views of the Same Database
-
-It is useful to separate three views of Datalevin: the logical view you model
-with, the storage view the engine persists, and the query view that connects the
-two at runtime. They are not three different databases. They are three ways of
-looking at the same set of facts. This is shown in Figure 3.2.
-
-![The three views of a Datalevin database: a query resolves from the logical view (datoms and schema), through the query view (the Datalog planner and evaluator), down to the storage view (DLMDB indexes of sorted keys read with range scans)](/images/diagrams/mental-model-views.svg)
-
-### Logical View: Datoms and Schema
-
-This is the view you use when designing your application. You think in entities,
-attributes, values, references, and schema. At this level, a fact such as
-"Alice's email is alice@example.com" is simply a datom:
-`[101 :user/email "alice@example.com"]`.
-
-The logical view is intentionally small. It gives you a uniform way to describe
-people, documents, orders, permissions, embeddings, and relationships without
-inventing a new container shape for every case.
-
-### Storage View: Indexes and Sorted Keys
-
-Underneath the logical view is a high-performance **Key-Value Store** (DLMDB).
-DLMDB is Datalevin's extension of LMDB, a memory-mapped sorted key-value store.
-At this level, Datalevin maps datoms into sorted byte keys so it can answer
-common lookup patterns efficiently.
-
-This is where indexes matter. A **range scan** reads a contiguous run of sorted
-keys, for example all facts for one attribute or all values between two bounds.
-Datalevin also exposes this storage layer through a direct key-value API for
-cases where you need raw speed or simple state management without the overhead
-of a query engine.
-
-### Query View: Datalog, Planning, and Evaluation
-
-The query view is the **Datalog Engine**. Datalog is Datalevin's declarative
-query language; the engine evaluates Datalog queries by translating logical
-clauses into index lookups and joins over the storage layer. It uses a
-cost-based optimizer to decide the most efficient order for retrieving and
-combining facts.
-
-This view is what lets you stay focused on the shape of the answer instead of
-manual traversal. You describe the relationships that must hold, and the engine
-handles joins, filtering, recursion, and lookup order.
-
-## 7. Datalog: Querying as Logic Programming
+## 6. Datalog: Querying as Logic Programming
 
 If SQL is like giving the database a set of instructions on how to assemble a
 result table, Datalog is like giving the database a **description** of the
@@ -483,7 +424,7 @@ The first pattern finds entities with a `:person/name`; the second pattern binds
 
 Chapter 8 gives the details of the Datalog query language.
 
-## 8. Unified Retrieval: Plugging into the Datom Flow
+## 7. Unified Retrieval: Plugging into the Datom Flow
 
 One of the most powerful aspects of the Datalevin mental model is that
 "special" features like full-text search, vector similarity, and document
@@ -497,6 +438,9 @@ other Datalog clause. It returns a set of datoms (`[e a v]`) that can be
 immediately joined with other relational facts. The examples below destructure
 each returned datom as `[[?e _ _]]`: keep the entity id, and ignore the
 attribute and value. `_` is a placeholder symbol.
+
+The query assumes `:doc/body` is declared with `:db/fulltext true` and
+`:db.fulltext/autoDomain true`.
 
 <div class="multi-lang">
 
@@ -549,7 +493,7 @@ database state as the ordinary datoms in the query.
 
 Chapter 16 explains full-text search in detail.
 
-## 9. Rules: Teaching the Database New Tricks
+## 8. Rules: Teaching the Database New Tricks
 
 Rules are how you encapsulate and reuse logic in Datalevin. A **rule** is a
 named Datalog pattern. Query clauses can call the rule by name, and Datalevin
@@ -730,6 +674,52 @@ navigate the graph for you.
 
 Chapter 9 discusses rules in detail.
 
+## 9. Three Views of the Same Database
+
+After seeing transaction data, queries, and rules, it is useful to separate
+three views of Datalevin: the logical view you model with, the storage view the
+engine persists, and the query view that connects the two at runtime. They are
+not three different databases. They are three ways of looking at the same set of
+facts. This is shown in Figure 3.2.
+
+![The three views of a Datalevin database: a query resolves from the logical view (datoms and schema), through the query view (the Datalog planner and evaluator), down to the storage view (DLMDB indexes of sorted keys read with range scans)](/images/diagrams/mental-model-views.svg)
+
+### Logical View: Datoms and Schema
+
+This is the view you use when designing your application. You think in entities,
+attributes, values, references, and schema. At this level, a fact such as
+"Alice's email is alice@example.com" is simply a datom:
+`[101 :user/email "alice@example.com"]`.
+
+The logical view is intentionally small. It gives you a uniform way to describe
+people, documents, orders, permissions, embeddings, and relationships without
+inventing a new container shape for every case.
+
+### Storage View: Indexes and Sorted Keys
+
+Underneath the logical view is a high-performance **Key-Value Store** (DLMDB).
+DLMDB is Datalevin's extension of LMDB, a memory-mapped sorted key-value store.
+At this level, Datalevin maps datoms into sorted byte keys so it can answer
+common lookup patterns efficiently.
+
+This is where indexes matter. A **range scan** reads a contiguous run of sorted
+keys, for example all facts for one attribute or all values between two bounds.
+Datalevin also exposes this storage layer through a direct key-value API for
+cases where you need raw speed or simple state management without the overhead
+of a query engine.
+
+### Query View: Datalog, Planning, and Evaluation
+
+The query view is the **Datalog Engine**. Datalog is Datalevin's declarative
+query language; the engine evaluates Datalog queries by translating logical
+clauses into index lookups and joins over the storage layer. It uses a
+cost-based optimizer to decide the most efficient order for retrieving and
+combining facts.
+
+This view is what lets you stay focused on the shape of the answer instead of
+manual traversal. You describe the relationships that must hold, and the engine
+handles joins, filtering, recursion, and lookup order.
+
 ## Summary
 
 The Datalevin mental model is about moving from "data-in-boxes" to "data-as-facts."
@@ -743,6 +733,8 @@ The Datalevin mental model is about moving from "data-in-boxes" to "data-as-fact
   engine fast.
 - **Datalog** allows you to query by describing the logic of your answer.
 - **Rules** allow you to build complex, reusable, and recursive logic.
+- **The logical, query, and storage views** are different ways to understand
+  the same database.
 
 By embracing this model, you unlock a level of flexibility and power that
 traditional databases struggle to match.

@@ -97,6 +97,9 @@ clojure -X:verify-examples :mode :write-skeleton
 # Run examples marked :runnable in test/doc_example_manifest.edn
 clojure -X:verify-examples
 
+# Run the same runnable Clojure examples through Babashka pod mode
+clojure -X:verify-examples :runtime :pod :pod-binary '"dtlv"'
+
 # Release-gate mode: fail if any Clojure fence is still unclassified
 clojure -X:verify-examples :fail-on-unclassified true
 ```

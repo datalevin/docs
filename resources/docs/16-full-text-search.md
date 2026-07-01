@@ -346,6 +346,13 @@ query analyzer splits ordinary query text on whitespace.
 <div class="multi-lang">
 
 ```java
+Schema schema = Datalevin.schema()
+    .attr("text",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .fulltext(true)
+              .prop("db.fulltext/autoDomain", true));
+
 UdfRegistry registry = Datalevin.udfRegistry();
 UdfDescriptor analyzer = Datalevin.analyzerUdf("text/hashtags");
 UdfDescriptor queryAnalyzer =
@@ -376,6 +383,14 @@ import re
 from datalevin import (
     connect, create_udf_registry, search_domain, udf_descriptor
 )
+
+schema = {
+    ":text": {
+        ":db/valueType": ":db.type/string",
+        ":db/fulltext": True,
+        ":db.fulltext/autoDomain": True,
+    }
+}
 
 registry = create_udf_registry()
 analyzer = udf_descriptor(":text/hashtags", kind=":analyzer")
@@ -415,6 +430,14 @@ import {
   searchDomain,
   udfDescriptor
 } from "datalevin-node";
+
+const schema = {
+  ":text": {
+    ":db/valueType": ":db.type/string",
+    ":db/fulltext": true,
+    ":db.fulltext/autoDomain": true
+  }
+};
 
 const registry = await createUdfRegistry();
 const analyzer = udfDescriptor(":text/hashtags", { kind: ":analyzer" });

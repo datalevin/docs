@@ -145,6 +145,7 @@ The placeholder is also common when destructuring results from full-text,
 vector, or idoc search functions:
 
 ```clojure
+;; Assumes :doc/body has :db/fulltext true and :db.fulltext/autoDomain true.
 (d/q '[:find ?e
        :where [(fulltext $ :doc/body "clojure") [[?e _ _]]]]
      db)

@@ -501,8 +501,9 @@ grounded in real systems.
 
 This book has already benefited from volunteer reviewers in the Datalevin
 community who read draft chapters, ran examples, questioned unclear
-explanations, and improved phrasing: Estevo U. C. Castro, Max Rothman, Weidong
-Cai, Amar Mehta, and Norbert Wójtowicz. I am grateful for their contributions.
+explanations, and improved phrasing: Max Rothman, Estevo U. C. Castro, Weidong
+Cai, Amar Mehta, Vlad Poh, and Norbert Wójtowicz. I am grateful for their
+contributions.
 
 <div class="preface-signature" style="text-align: right; margin-top: 2rem;">
 Huahai Yang<br>

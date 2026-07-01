@@ -502,6 +502,15 @@ binary directly:
 (require '[pod.huahaiy.datalevin :as d])
 ```
 
+Pod mode is intended to have parity with embedded Clojure for the public
+Datalevin APIs used in this book. When testing examples, keep the pod and
+embedded library on the same Datalevin version; using `pods/load-pod "dtlv"` is
+a good way to test the exact local binary you downloaded. If a snippet works in
+embedded Clojure but fails in the pod at the same version, treat that as a bug
+or packaging issue rather than a semantic difference. Datalevin does not store
+`nil` values; pod mode should report the same validation failure as embedded
+mode, not crash.
+
 The pod also provides `defpodfn`, which lets a script define a custom function
 and call it from a query:
 

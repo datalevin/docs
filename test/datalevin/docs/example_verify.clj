@@ -2,6 +2,7 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.pprint :as pprint]
+            [clojure.java.shell :as sh]
             [clojure.string :as str])
   (:import [java.io PushbackReader StringReader]))
 
@@ -195,15 +196,56 @@
           (when teardown
             (eval-code! teardown)))))))
 
+(defn- pod-code
+  [code]
+  (some-> code
+          (str/replace #"\(require\s+'\[datalevin\.core\s+:as\s+d\]\)" "")
+          (str/replace #"\(require\s+\(quote\s+\[datalevin\.core\s+:as\s+d\]\)\)" "")))
+
+(defn- pod-script
+  [{:keys [code setup teardown]} pod-binary]
+  (combine-code
+   "(require '[babashka.pods :as pods])"
+   (pr-str (list 'pods/load-pod pod-binary))
+   "(require '[pod.huahaiy.datalevin :as d])"
+   (pod-code setup)
+   "(try"
+   (pod-code code)
+   "(finally"
+   (pod-code teardown)
+   "))"))
+
+(defn- eval-pod-example!
+  [example {:keys [bb pod-binary]}]
+  (let [script-file (java.io.File/createTempFile "datalevin-doc-example-" ".bb")
+        script (pod-script example pod-binary)]
+    (try
+      (spit script-file script)
+      (let [{:keys [exit out err]} (sh/sh bb (.getPath script-file))]
+        (when-not (zero? exit)
+          (throw (ex-info "Babashka pod example failed"
+                          {:exit exit
+                           :out out
+                           :err err}))))
+      (finally
+        (.delete script-file)))))
+
+(defn- run-example!
+  [runtime example opts]
+  (case runtime
+    :embedded (eval-example! example)
+    :pod (eval-pod-example! example opts)))
+
 (defn- run-runnable!
-  [examples]
+  [examples {:keys [runtime] :as opts}]
   (let [runnable (filter #(= :runnable (:status %)) examples)]
-    (println "Running runnable Clojure examples:" (count runnable))
+    (println "Running runnable Clojure examples:" (count runnable)
+             "runtime:" runtime)
     (loop [[example & more] runnable
            results []]
       (if example
         (let [result (try
-                       (eval-example! example)
+                       (run-example! runtime example opts)
                        {:id (:id example)
                         :status :pass}
                        (catch Throwable t
@@ -300,9 +342,11 @@
   [existing-examples example]
   (let [[id generated] (manifest-entry-for example)
         existing (get existing-examples id)]
-    [id (assoc (merge generated existing)
-               :source (:source generated)
-               :preview (:preview generated))]))
+    [id (if (= (:preview existing) (:preview generated))
+          (assoc (merge generated existing)
+                 :source (:source generated)
+                 :preview (:preview generated))
+          generated)]))
 
 (defn- generated-manifest
   [examples existing-manifest]
@@ -339,11 +383,17 @@
   :docs-dir              defaults to resources/docs
   :manifest              defaults to test/doc_example_manifest.edn
   :mode                  :verify, :inventory, or :write-skeleton
+  :runtime               :embedded or :pod
+  :bb                    Babashka executable for :pod runtime
+  :pod-binary            dtlv executable loaded by Babashka for :pod runtime
   :fail-on-unclassified  throw when any Clojure fence lacks a manifest entry"
-  [{:keys [docs-dir manifest mode fail-on-unclassified]
+  [{:keys [docs-dir manifest mode runtime bb pod-binary fail-on-unclassified]
     :or {docs-dir "resources/docs"
          manifest "test/doc_example_manifest.edn"
          mode :verify
+         runtime :embedded
+         bb "bb"
+         pod-binary "dtlv"
          fail-on-unclassified false}}]
   (let [raw-examples (extract-examples {:docs-dir docs-dir})]
     (if (= :write-skeleton mode)
@@ -366,7 +416,9 @@
                                            unclassified)})))
         (if (= :inventory mode)
           {:status-counts (status-counts examples)}
-          (let [results (run-runnable! examples)
+          (let [results (run-runnable! examples {:runtime runtime
+                                                 :bb bb
+                                                 :pod-binary pod-binary})
                 failures (failure-summary results)]
             (when (seq failures)
               (println "Runnable example failures:")

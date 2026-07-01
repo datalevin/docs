@@ -20,10 +20,13 @@ attributes are stored, constrained, indexed, and queried. The database is
 flexible by default, but provides powerful controls when you need performance
 and integrity.
 
-![Attribute schema lifecycle: a new attribute appears on transact and is added automatically; by default it has an implicit EDN-blob type supporting exact-match lookup; declaring :db/valueType with :db/cardinality and :db/unique unlocks range and sorted queries, validation, upsert, and compact storage; adding the :db/fulltext and :db/embedding flags unlocks full-text and embedding search — a progression from flexible, no declared schema to strict, enforced types and indexes](/images/diagrams/attribute-schema-lifecycle.svg)
+![Attribute schema control spectrum: undeclared attributes are flexible and added automatically; declared attribute behavior such as :db/valueType, :db/cardinality, and :db/unique adds typed encoding, range queries, references, upsert, and compact storage; optional capabilities such as :db/fulltext, :db/embedding, and :db.type/idoc add search and nested-value indexes; connection-wide options such as :validate-data? and :closed-schema? add write-time checks](/images/diagrams/attribute-schema-spectrum.svg)
 
-Figure 5.1 depicts the lifecycle of schema evolution for an application. The
-detailed description of each stage comes in the following sections.
+Figure 5.1 shows Datalevin's schema controls as a spectrum. An attribute can
+start with no declaration, but you can add declared behavior when the
+application needs typed storage, range access, identity, references, specialized
+indexes, or stricter write-time checks. The detailed description of each control
+comes in the following sections.
 
 
 ## 1. Attributes: Flexible Schema
@@ -294,7 +297,8 @@ always include a **namespace**.
 
 In EDN, `:user/email` is a qualified keyword. The part before the slash,
 `user`, is the keyword namespace. The part after the slash, `email`, is the
-keyword name.
+keyword name. The same syntax is used for attribute names and for keyword
+values, so the examples below include both.
 
 <div class="multi-lang">
 
@@ -302,32 +306,42 @@ keyword name.
 :user/email          ;; namespace: user, name: email
 :order/id            ;; namespace: order, name: id
 :line-item/quantity  ;; namespace: line-item, name: quantity
+:order.status/paid   ;; namespace: order.status, name: paid
 ```
 
 ```java
 String userEmail = "user/email";              // namespace: user, name: email
 String orderId = "order/id";                  // namespace: order, name: id
 String lineItemQuantity = "line-item/quantity"; // namespace: line-item, name: quantity
+String orderStatusPaid = "order.status/paid"; // namespace: order.status, name: paid
 ```
 
 ```python
 user_email = ":user/email"          # namespace: user, name: email
 order_id = ":order/id"              # namespace: order, name: id
 line_item_quantity = ":line-item/quantity"  # namespace: line-item, name: quantity
+order_status_paid = ":order.status/paid"    # namespace: order.status, name: paid
 ```
 
 ```javascript
 const userEmail = ":user/email";          // namespace: user, name: email
 const orderId = ":order/id";              // namespace: order, name: id
 const lineItemQuantity = ":line-item/quantity"; // namespace: line-item, name: quantity
+const orderStatusPaid = ":order.status/paid"; // namespace: order.status, name: paid
 ```
 
 </div>
 
-The namespace is part of the attribute's identity. `:user/name`,
+For attributes, the namespace is part of the attribute's identity. `:user/name`,
 `:product/name`, and `:company/name` are three different attributes. They may
 all store strings called "name" in English, but Datalevin stores and indexes
 them as distinct facts.
+
+A dot inside the namespace is just another character in the keyword namespace.
+Datalevin does not treat `:order.status/paid` as nested under `:order/status`;
+the slash is the delimiter that separates namespace from name. Dotted namespaces
+are a common convention for enum value domains, such as order statuses, but
+Datalevin assigns no special meaning to the dot.
 
 ### 3.1 Namespaces Are Not Tables
 
@@ -434,7 +448,8 @@ await conn.transact([{ ":order/status": paid }]);
 
 Here, `:order/status` is an attribute on an order. The value
 `:order.status/paid` is an enum-like keyword from the order-status value domain.
-This pattern keeps the attribute and its possible values distinct.
+This pattern keeps the attribute and its possible values distinct. It is a
+naming convention, not a database requirement.
 
 System namespaces such as `:db`, `:db.type`, `:db.cardinality`,
 `:db.unique`, and `:datalevin` are used by Datalevin itself. Treat them as
@@ -521,11 +536,14 @@ general-purpose ontology predicate before it can be useful.
 
 ### 3.5 Rules of Thumb
 
-Use these conventions unless your domain has a strong reason to differ:
+The following are conventions and suggestions, not hard requirements. Use them
+unless your domain has a strong reason to differ:
 
 1.  Use qualified keywords for application attributes: `:user/email`, not
     `:email`.
-2.  Use singular domain nouns: `:user/email`, not `:users/email`.
+2.  Use singular domain nouns for namespaces: `:user/email`, not
+    `:users/email`. The attribute name can still be plural when it represents a
+    cardinality-many value, such as `:user/emails`.
 3.  Put the namespace on the entity or relationship that owns the fact:
     `:order/customer`, `:comment/post`, `:role-assignment/user`.
 4.  Use separate value namespaces for enums: `:order.status/paid`,
@@ -670,19 +688,18 @@ a built-in identity attribute for system-wide named entities such as enums.
 
 ## 5. Schema Workflow in Practice
 
-As depicted in Figure 5.1, the schema workflow can be summarized as the
-following:
+In practice, the schema workflow often follows this path:
 
 1. **Prototyping**: Start without a schema. Just transact maps.
-2. **Optimization**: Once you know your access patterns, add `:db/valueType` to
+2. **Relations**: Use `:db.type/ref` to connect entities, forming the graph that
+   Datalog traverses so well.
+3. **Optimization**: Once you know your access patterns, add `:db/valueType` to
    enable range queries on specific attributes. Chapter 11 covers the
    `update-schema` workflow, including Datalevin's supported migration from
    untyped EDN values to typed values.
-3. **Integrity**: Add `:db.unique/identity` for fields like emails or slugs so
+4. **Integrity**: Add `:db.unique/identity` for fields like emails or slugs so
    you can use them as "lookup refs" (e.g., `[:user/email
    "alice@example.com"]`).
-4. **Relations**: Use `:db.type/ref` to connect entities, forming the graph that
-   Datalog traverses so well.
 5. **Lock-down**: In production, consider opening the connection with
    `{:closed-schema? true}` to reject unknown attributes, and
    `{:validate-data? true}` to check values against their declared types.

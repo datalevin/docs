@@ -66,7 +66,7 @@
   <text class="key" x="546" y="462">(:person/name,"Alice")<tspan class="code"> → 101</tspan></text>
   <text class="key" x="546" y="494">(:person/name,"Bob")<tspan class="code">   → 102</tspan></text>
   <text class="answer" x="730" y="556" text-anchor="middle">Answers: who has age 30?</text>
-  <text class="sub" x="730" y="584" text-anchor="middle">reverse refs &amp; range scans too</text>
+  <text class="sub" x="730" y="584" text-anchor="middle">reverse refs &amp; range scans</text>
 
   <text class="caption" x="500" y="660" text-anchor="middle">One sorted byte order serves equality lookups, range scans, and ordered iteration.</text>
 </svg>

@@ -39,9 +39,8 @@ the whole database file is loaded into memory. When Datalevin reads data, the OS
 kernel handles fetching the required pages from disk into the file-system
 **page cache**. This is the operating system's cache of file-backed pages in
 main memory, not the CPU's L1/L2/L3 hardware caches.
-A page is the basic unit of the OS's memory management. On operating systems such
-as Linux or Windows, the page size often defaults to 4KB, while on macOS with
-Apple Silicon, the default is 16KB. The memory map reserves a range of virtual address
+A page is a fixed-size block of virtual memory that the OS maps, caches, and
+evicts as a unit.[^page-size] The memory map reserves a range of virtual address
 space; physical memory is used for pages that are actually touched, and clean
 pages can be evicted by the kernel when memory is needed elsewhere. LMDB
 deliberately made this architectural choice, because the OS already manages
@@ -81,15 +80,12 @@ rest of the host. This design has some benefits for its use cases:
   **read-only**.
   That matters because many objections to mmap focus on writable mappings:
   accidental memory corruption, dirty-page writeback surprises, or weaker
-  control over when modified pages reach storage. In LMDB's default mode, the
-  read path does not modify the database file through the mapping. Writes go
-  through LMDB's transaction machinery and copy-on-write discipline: new pages
-  are prepared by LMDB and committed through file-system write and sync calls.
-  Writable-map mode belongs to a different discussion: it is a non-default,
-  non-durable write mode for cases where speed matters more than making the LMDB
-  file durable at every commit, usually with another durability mechanism such as
-  WAL. Datalevin's mmap argument here is about the default read-only map used for
-  reads, not writable mappings for ordinary writes.
+  control over when modified pages reach storage. In LMDB's default mode, write
+  transactions still read existing pages through the read-only map. When they
+  modify data, LMDB follows its copy-on-write discipline: it prepares new pages
+  and commits them through file-system write and sync calls rather than by
+  modifying the mapped pages in place. Writable-map mode is a non-default,
+  non-durable option, not the mode discussed here.
 
 - **OS-Wide Cache Management**: The page cache is shared with the rest of the
   machine. This is a strong fit for cloud deployments, desktop applications, and
@@ -352,34 +348,42 @@ root switching gives the LMDB file immediate recovery after a crash.
 For write-intensive workloads, Datalevin can add a **Write-Ahead Log (WAL) mode**
 above LMDB. A WAL is an append-only transaction log. Datalevin first records the
 transaction in that log, then applies the change to LMDB in a faster non-durable
-mode. Durability comes from the WAL record, while LMDB remains the indexed
-B+Tree state used for reads. On restart, Datalevin can replay committed WAL
-records that were not yet reflected in the LMDB file.
+mode. Depending on the WAL durability profile, Datalevin may sync WAL records
+immediately or batch them before syncing. Once a WAL record is durable, it is
+the recovery source, while LMDB remains the indexed B+Tree state used for reads.
+On restart, Datalevin can replay durable WAL records that were not yet reflected
+in the LMDB file.
 
-This is why WAL recovery does not contradict LMDB's direct-commit recovery. They
-apply to different modes. Without WAL, LMDB recovers by finding the last valid
-committed root. With WAL, Datalevin may replay its own committed log records into
-LMDB.
+The recovery path differs from LMDB's direct commit path, and the durability
+timing depends on the selected WAL profile. Without WAL, LMDB recovers by
+finding the last valid committed root. With WAL, Datalevin may replay its own
+durable log records into LMDB. The default local WAL profile is `:relaxed`,
+which batches syncs and trades a short crash-loss window for higher throughput.
 
 WAL mode also supports multi-thread write concurrency and lays the foundation for
 data replication and high availability (HA) server behavior. In this chapter, the
-important point we convey is about the storage shape of WAL: append a durable
-log record first, then update the indexed LMDB state. The operational details
-are covered in Part V. WAL mode can be enabled in these ways:
+important point we convey is about the storage shape of WAL: append a log record
+first, use the selected profile to decide when it must be synced, then update
+the indexed LMDB state. The operational details are covered in Part V. WAL mode
+is enabled according to the Datalevin surface or deployment mode you are using.
+For local stores, WAL is an explicit opt-in:
 
-- **Datalog**: Disabled by default for local embedded databases; enable with
-  `{:wal? true}` in `create-conn` or `get-conn` options.
-- **Key-Value**: Disabled by default; enable with `{:wal? true}` in `open-kv`
-  options.
-- **Async read replicas**: A non-HA replica requires the primary to have WAL
-  enabled so it can bootstrap from a copy and then tail durable records.
-- **HA**: Consensus-lease HA forces WAL on.
+- **Datalog databases**: Local embedded databases disable WAL by default; enable
+  it with `{:wal? true}` in `create-conn` or `get-conn` options.
+- **Key-value stores**: Disabled by default; enable with `{:wal? true}` in
+  `open-kv` options.
+
+For server deployments, WAL is part of the operational design:
+
+- **Async read replicas**: A non-HA replica requires WAL on the primary so it
+  can bootstrap from a copy and then tail durable records.
+- **Consensus-lease HA**: HA forces WAL on.
 
 ### 7.1 How WAL Mode Works
 
 At a high level, a WAL transaction follows this sequence:
 
-1.  **Transaction**: A write request arrives.
+1.  **Application Request**: The application requests a transaction.
 2.  **WAL Append**: The change is encoded and appended to a sequential log
     segment file.
 3.  **Position Tracking**: Every transaction receives a strictly increasing log
@@ -391,8 +395,9 @@ At a high level, a WAL transaction follows this sequence:
     decides when the WAL record must be forced to storage.
 6.  **Acknowledgment**: The application receives success once the selected
     durability condition has been met.
-7.  **Recovery**: On restart, Datalevin scans the WAL segments and replays any
-    committed transactions that weren't yet fully persisted in the LMDB file.
+
+On restart after a crash, Datalevin scans the WAL segments and replays any
+committed transactions that were not yet fully persisted in the LMDB file.
 
 **Note**: Bulk load operations (like `init-db` and `fill-db`) bypass the WAL for
 maximum performance and will not appear in the transaction log.
@@ -438,3 +443,8 @@ Press, 1998. DOI: <https://doi.org/10.1017/CBO9780511530104>.
 [3] Rudolf Bayer and Edward M. McCreight, "Organization and Maintenance of
 Large Ordered Indexes," *Acta Informatica* 1:173-189, 1972. DOI:
 <https://doi.org/10.1007/BF00288683>.
+
+[^page-size]: Common page sizes are 4KB on many Linux and Windows systems and
+16KB on macOS with Apple Silicon. The exact size is platform dependent; the
+conceptual point is that memory-mapped files are brought into memory in page
+units.

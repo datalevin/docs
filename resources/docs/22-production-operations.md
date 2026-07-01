@@ -516,11 +516,21 @@ Two pitfalls are worth avoiding:
   assertion (Appendix E):
 
 ```clojure
-(d/transact! conn [{:doc/content "vector search guide"}])
-(d/wait-for-secondary-index conn)
-(is (seq (d/q '[:find [?e ...]
-                :where [(fulltext $ :doc/content "vector") [[?e _ _]]]]
-              (d/db conn))))
+(let [conn (d/create-conn
+             nil
+             {:doc/content {:db/valueType :db.type/string
+                            :db/fulltext true
+                            :db.fulltext/autoDomain true}}
+             {:kv-opts {:inmemory? true}
+              :search-domains {"doc/content" {:indexing-mode :async}}})]
+  (try
+    (d/transact! conn [{:doc/content "vector search guide"}])
+    (d/wait-for-secondary-index conn)
+    (is (seq (d/q '[:find [?e ...]
+                    :where [(fulltext $ :doc/content "vector") [[?e _ _]]]]
+                  (d/db conn))))
+    (finally
+      (d/close conn))))
 ```
 
 The high-level Java, Python, and JavaScript bindings can test the same full-text,

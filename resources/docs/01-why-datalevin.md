@@ -715,7 +715,8 @@ fact.
 ;; Schema is optional, but this example declares it for type checking and indexes.
 (def schema
   {:doc/body {:db/valueType :db.type/string
-              :db/fulltext  true}
+              :db/fulltext  true
+              :db.fulltext/autoDomain true}
    :doc/lang {:db/valueType :db.type/string}
    :doc/idoc {:db/valueType :db.type/idoc}})
 
@@ -749,7 +750,8 @@ Schema schema = Datalevin.schema()
     .attr("doc/body",
           Schema.attribute()
               .valueType(Schema.ValueType.STRING)
-              .fulltext(true))
+              .fulltext(true)
+              .prop("db.fulltext/autoDomain", true))
     .attr("doc/lang",
           Schema.attribute().valueType(Schema.ValueType.STRING))
     .attr("doc/idoc",
@@ -784,7 +786,8 @@ from datalevin import connect
 # Schema is optional, but this example declares it for type checking and indexes.
 schema = {
     ":doc/body": {":db/valueType": ":db.type/string",
-                  ":db/fulltext": True},
+                  ":db/fulltext": True,
+                  ":db.fulltext/autoDomain": True},
     ":doc/lang": {":db/valueType": ":db.type/string"},
     ":doc/idoc": {":db/valueType": ":db.type/idoc"}}
 
@@ -814,7 +817,8 @@ import { connect } from "datalevin-node";
 // Schema is optional, but this example declares it for type checking and indexes.
 const schema = {
   ":doc/body": { ":db/valueType": ":db.type/string",
-                 ":db/fulltext": true },
+                 ":db/fulltext": true,
+                 ":db.fulltext/autoDomain": true },
   ":doc/lang": { ":db/valueType": ":db.type/string" },
   ":doc/idoc": { ":db/valueType": ":db.type/idoc" }
 };
