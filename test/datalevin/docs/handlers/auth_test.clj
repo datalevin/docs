@@ -1,10 +1,11 @@
 (ns datalevin.docs.handlers.auth-test
   (:require [biff.datalevin.auth :as biff-auth]
-    [biff.datalevin.session :as session]
-    [clojure.test :refer [deftest is testing]]
-    [datalevin.core :as d]
-    [datalevin.docs.mail :as mail]
-    [datalevin.docs.handlers.auth :as auth])
+            [biff.datalevin.db :as biff-db]
+            [biff.datalevin.session :as session]
+            [clojure.test :refer [deftest is testing]]
+            [datalevin.core :as d]
+            [datalevin.docs.mail :as mail]
+            [datalevin.docs.handlers.auth :as auth])
   (:import [java.util UUID]))
 
 (deftest sanitize-return-to-behavior
@@ -65,9 +66,15 @@
                   d/transact! (fn [_ tx] (swap! txs conj tx))
                   biff-auth/github-exchange-code (fn [_] {:access_token "token"})
                   biff-auth/github-get-user (fn [_] {:id 42 :login "admin" :email "admin@example.com"})
+                  biff-auth/github-get-emails (fn [_] [{:email "admin@example.com"
+                                                        :primary true
+                                                        :verified true}])
                   biff-auth/find-user-by-github-id (fn [_ _]
                                                     {:user/id user-id
+                                                     :user/github-id 42
+                                                     :user/github-username "admin"
                                                      :user/email "admin@example.com"
+                                                     :user/username "admin"
                                                      :user/role :user})
                   session/create-session (fn [lookup]
                                            {:tx {:session/id session-id
@@ -96,6 +103,101 @@
                         :session/user [:user/id user-id]}]
                       %)
                   @txs))))))
+
+(deftest github-callback-links-existing-verified-email-account
+  (let [txs (atom [])
+        user-id (UUID/fromString "aaaaaaaa-1111-1111-1111-111111111111")
+        session-id (UUID/fromString "bbbbbbbb-2222-2222-2222-222222222222")
+        avatar-url "https://avatars.githubusercontent.com/u/1001"]
+    (with-redefs [d/db (fn [_] :db)
+                  d/transact! (fn [_ tx] (swap! txs conj tx))
+                  biff-auth/github-exchange-code (fn [_] {:access_token "token"})
+                  biff-auth/github-get-user (fn [_] {:id 1001
+                                                     :login "octo"
+                                                     :avatar_url avatar-url})
+                  biff-auth/github-get-emails (fn [_] [{:email "octo@example.com"
+                                                        :primary true
+                                                        :verified true}])
+                  biff-auth/find-user-by-github-id (fn [_ _] nil)
+                  biff-auth/find-user-by-email (fn [_ email]
+                                                 (when (= "octo@example.com" email)
+                                                   {:user/id user-id
+                                                    :user/email email
+                                                    :user/username "octo-local"
+                                                    :user/role :user}))
+                  session/create-session (fn [lookup]
+                                           {:tx {:session/id session-id
+                                                 :session/user lookup}
+                                            :session-id session-id})]
+      (let [resp (auth/github-callback-handler {:params {"code" "code"
+                                                         "state" "expected"}
+                                               :session {:github-oauth-state "expected"}
+                                               :biff/config {:env "dev"}
+                                               :admin-emails #{}
+                                               :github-client-id "client"
+                                               :github-client-secret "secret"
+                                               :base-url "https://docs.example.com"
+                                               :biff.datalevin/conn :conn})]
+        (is (= 302 (:status resp)))
+        (is (= "/" (get-in resp [:headers "Location"])))
+        (is (some #(= [{:db/id [:user/id user-id]
+                        :user/github-id 1001
+                        :user/github-username "octo"
+                        :user/avatar-url avatar-url
+                        :user/email-verified? true}]
+                      %)
+                  @txs))
+        (is (some #(= [{:session/id session-id
+                        :session/user [:user/id user-id]}]
+                      %)
+                  @txs))))))
+
+(deftest google-callback-creates-user-and-session
+  (let [txs (atom [])
+        session-id (UUID/fromString "cccccccc-3333-3333-3333-333333333333")
+        avatar-url "https://lh3.googleusercontent.com/a/photo"]
+    (with-redefs [d/db (fn [_] :db)
+                  d/transact! (fn [_ tx] (swap! txs conj tx))
+                  biff-db/lookup-id (fn [_ attr value]
+                                      (when (= [:user/username "person"] [attr value])
+                                        nil))
+                  biff-auth/google-exchange-code (fn [_] {:access_token "google-token"})
+                  biff-auth/google-get-user (fn [_] {:sub "google-sub-123"
+                                                     :email "person@example.com"
+                                                     :email_verified true
+                                                     :name "Person Example"
+                                                     :picture avatar-url})
+                  biff-auth/find-user-by-google-id (fn [_ _] nil)
+                  biff-auth/find-user-by-email (fn [_ _] nil)
+                  session/create-session (fn [lookup]
+                                           {:tx {:session/id session-id
+                                                 :session/user lookup}
+                                            :session-id session-id})]
+      (let [resp (auth/google-callback-handler {:params {"code" "code"
+                                                         "state" "expected"}
+                                               :session {:google-oauth-state "expected"
+                                                         :return-to "/examples/new"}
+                                               :biff/config {:env "prod"}
+                                               :admin-emails #{}
+                                               :google-client-id "client"
+                                               :google-client-secret "secret"
+                                               :base-url "https://docs.example.com"
+                                               :biff.datalevin/conn :conn})
+            user-tx (ffirst @txs)
+            session-tx (second @txs)]
+        (is (= 302 (:status resp)))
+        (is (= "/examples/new" (get-in resp [:headers "Location"])))
+        (is (= "google-sub-123" (:user/google-id user-tx)))
+        (is (= "person@example.com" (:user/email user-tx)))
+        (is (= "person" (:user/username user-tx)))
+        (is (= avatar-url (:user/avatar-url user-tx)))
+        (is (= :user (:user/role user-tx)))
+        (is (true? (:user/email-verified? user-tx)))
+        (is (uuid? (:user/id user-tx)))
+        (is (= [{:session/id session-id
+                 :session/user [:user/id (:user/id user-tx)]}]
+               session-tx))
+        (is (true? (get-in resp [:cookies auth/auth-session-cookie-name :secure])))))))
 
 (deftest register-handler-sends-verification-email
   (let [txs (atom [])

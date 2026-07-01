@@ -1487,12 +1487,14 @@ expand to more transaction data while the transaction is being prepared. They
 run against the current DB object and are committed atomically with the rest of
 the transaction.
 
-A transaction function can be one of the supported vector forms:
+Transaction-time vector forms include:
 
 - `[:db.fn/call f arg ...]` calls an inline function, an installed function, or
   a user defined function (UDF) descriptor.
 - `[:some/installed-fn arg ...]` calls an installed transaction function whose
   entity has `:db/ident :some/installed-fn`.
+- `[:db/ensure pred arg ...]` records a post-condition to run after all
+  transaction data has been expanded and applied, but before commit.
 - `[:db/cas e a old new]` or `[:db.fn/cas e a old new]` performs
   compare-and-swap.
 - `[:db.fn/retractAttribute e a]`, `[:db.fn/retractEntity e]`, and
@@ -1512,7 +1514,41 @@ Both mechanisms install an entity with `:db/ident`, and both can be invoked with
 `[:some/ident arg ...]` or through `:db.fn/call`. The difference is not the call
 shape; it is how the implementation is stored and resolved.
 
-### 5.1 Compare-and-Swap
+### 5.1 Post-Conditions with `:db/ensure`
+
+Use `:db/ensure` when the invariant must be checked after the entire
+transaction has been expanded and applied, but before commit. This is different
+from a transaction function: a transaction function sees the database at the
+point where it is expanded, while `:db/ensure` sees the would-be database after
+applying the whole transaction.
+
+The first argument is a predicate: a function, var, or qualified symbol.
+Datalevin resolves tempid arguments through the transaction report, then calls
+the predicate with the would-be database after applying the transaction followed
+by the resolved ensure arguments.
+
+```clojure
+(ns my.app.payments
+  (:require [datalevin.core :as d]))
+
+(defn account-open-and-unlocked? [db eid]
+  (let [account (d/entity db eid)]
+    (and (= :open (:account/status account))
+         (not (:account/locked? account)))))
+
+;; The later add would violate an ordinary precondition, but :db/ensure sees
+;; the would-be database after the transaction and aborts before commit.
+(d/transact! conn
+  [{:db/id "acct"
+    :account/status :open}
+   [:db/add "acct" :account/locked? true]
+   [:db/ensure 'my.app.payments/account-open-and-unlocked? "acct"]])
+```
+
+`:db/ensure` forms are not included in `:tx-data`. If the predicate returns
+falsey or throws, the transaction aborts.
+
+### 5.2 Compare-and-Swap
 
 Use `:db/cas` when the write should succeed only if the current value is what
 you expect. The entity position may be an entity id or a lookup ref.
@@ -1562,7 +1598,7 @@ useful for conditional updates that must not silently overwrite newer data. A
 CAS failure is a logical conflict, not an automatic retry signal; Chapter 22
 shows how to re-read and retry when that is the correct application behavior.
 
-### 5.2 Transaction UDFs
+### 5.3 Transaction UDFs
 
 For arbitrary user defined functions (UDF), Datalevin allows descriptor-backed
 transaction functions. The same descriptor and registry model is available from
@@ -1750,7 +1786,7 @@ Only the descriptor is stored in the database. The implementation comes from the
 runtime registry or resolver, so server processes must be configured with the
 same UDF implementation before they can execute the transaction function.
 
-### 5.3 Inline Transaction Functions
+### 5.4 Inline Transaction Functions
 
 In embedded Clojure, `:db.fn/call` can call a regular Clojure function. The
 function receives the current DB object as its first argument and must return
@@ -1772,7 +1808,7 @@ transaction data.
 The returned transaction data is prepared and committed as part of the same
 write transaction.
 
-### 5.4 Installed Transaction Functions
+### 5.5 Installed Transaction Functions
 
 For stored transaction functions written in Clojure, install an entity with
 `:db/ident` and `:db/fn`. The function value should be created with
@@ -1783,7 +1819,7 @@ Use this mechanism when the transaction logic is naturally Clojure and the
 environment can evaluate Datalevin interpreted functions. If the same installed
 function must be implemented outside Clojure or resolved by different server
 processes and language bindings, use the `:db/udf` descriptor mechanism from
-Section 5.2 instead.
+Section 5.3 instead.
 
 ```clojure
 (require '[datalevin.interpret :as i])

@@ -672,6 +672,8 @@ attributes instead of relying on path names or prompt instructions.
 A powerful agent architecture needs a background consolidation loop, shown in
 Figure 24.2, to move data from episodic memory into semantic memory:
 
+![The consolidation loop: a periodic job, run off the hot path, moves episodes into durable semantic facts and then refreshes working memory in five steps — (1) ingest episodes by storing every interaction, (2) analyze recent episodes with an LLM or rules, (3) abstract patterns into candidate facts, (4) update semantic memory with the fact plus its source and confidence, and (5) refresh working memory as a bounded projection — turning raw events into durable, structured facts much like memory consolidation](/images/diagrams/consolidation-loop.svg)
+
 1. **Ingest Episodes**: Store every interaction as a raw episode.
 2. **Analyze**: Periodically use an LLM or Datalog rule set to scan recent
    episodes.

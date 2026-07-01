@@ -149,7 +149,7 @@
    "Content-Security-Policy" (str "default-src 'self'; "
                                   "script-src 'self'; "
                                   "style-src 'self' 'unsafe-inline'; "
-                                  "img-src 'self' https://avatars.githubusercontent.com data:; "
+                                  "img-src 'self' https://avatars.githubusercontent.com https://lh3.googleusercontent.com data:; "
                                   "font-src 'self'; "
                                   "connect-src 'self' https://api.github.com; "
                                   "frame-ancestors 'none'")})
@@ -268,6 +268,8 @@
                      ["/auth/verify-email" {:get {:handler auth/verify-email-handler}}]
                      ["/auth/github" {:get {:handler auth/github-login-handler}}]
                      ["/auth/github/callback" {:get {:handler auth/github-callback-handler}}]
+                     ["/auth/google" {:get {:handler auth/google-login-handler}}]
+                     ["/auth/google/callback" {:get {:handler auth/google-callback-handler}}]
                      ["/auth/forgot-password" {:get {:handler forgot-password-page}
                                                :post {:handler (rate-limit/wrap-forgot-password-rate-limit auth/forgot-password-handler)}}]
                      ["/auth/reset-password" {:get {:handler reset-password-page}

@@ -1000,15 +1000,129 @@ substitute for application validation when user input quality matters. In
 particular, use correctly typed values for identities and lookup-facing
 attributes; Datalevin may need those values before general value correction.
 
-Schema validation is intentionally structural. It can enforce declared value
-types, uniqueness semantics, cardinality behavior, closed-schema writes, tuple
-shape, and specialized parsers such as `:db.type/idoc`. It does not by itself
-enforce arbitrary business rules such as "every user must have an email", "age
-must be positive", or "an order total must equal the sum of its line items".
-Keep those checks in transaction construction, application validation, import
-pipelines, or transaction functions. If a value becomes unknown or inapplicable,
-retract the existing datom or omit the attribute in new transaction data; do not
-replace it with `nil`.
+Schema validation can enforce declared value types, uniqueness semantics,
+cardinality behavior, closed-schema writes, tuple shape, specialized parsers
+such as `:db.type/idoc`, and per-attribute predicates with `:db.attr/preds`.
+Use attribute predicates for checks that depend only on the value being written
+for that attribute. Attribute predicates are named by qualified symbols, receive
+the normalized attribute value, and must return `true`:
+
+```clojure
+{:bank/routing-number {:db/valueType  :db.type/string
+                       :db.attr/preds ['my.app.payments/routing-number?]}
+ :venmo/handle        {:db/valueType  :db.type/string
+                       :db.attr/preds ['my.app.payments/venmo-handle?]}}
+```
+
+An attribute predicate runs when that attribute is present. It is not an entity
+shape rule: it does not decide that every bank account must have both a routing
+number and an account number, or that every Venmo account must have a handle.
+Use `:db/ensure` for entity invariants over the would-be transaction result.
+
+An ensure predicate receives the would-be database after applying the
+transaction followed by its resolved arguments, and should return truthy on
+success. Because `:db/ensure` runs after transaction functions, tempid
+resolution, upserts, map expansion, retractions, and other transaction data have
+produced the would-be final datoms, it checks the would-be entity state rather
+than only the inputs that appeared before it in `tx-data`.
+
+```clojure
+(ns my.app.payments
+  (:require [clojure.string :as str]
+            [datalevin.core :as d]))
+
+(defn non-blank-string? [v]
+  (and (string? v) (not (str/blank? v))))
+
+(defn routing-number? [v]
+  (boolean (re-matches #"\d{9}" v)))
+
+(defn venmo-handle? [v]
+  (and (non-blank-string? v)
+       (str/starts-with? v "@")))
+
+(defn bank-account? [db eid]
+  (let [account (d/pull db
+                        '[:account/owner
+                          :account/identity
+                          :account/type
+                          :bank/routing-number
+                          :bank/account-number]
+                        eid)]
+    (and (= :account.type/bank (:account/type account))
+         (some? (:account/owner account))
+         (non-blank-string? (:account/identity account))
+         (non-blank-string? (:bank/routing-number account))
+         (non-blank-string? (:bank/account-number account)))))
+
+(defn venmo-account? [db eid]
+  (let [account (d/pull db
+                        '[:account/owner
+                          :account/identity
+                          :account/type
+                          :venmo/handle]
+                        eid)]
+    (and (= :account.type/venmo (:account/type account))
+         (some? (:account/owner account))
+         (non-blank-string? (:account/identity account))
+         (non-blank-string? (:venmo/handle account)))))
+
+(def schema
+  {:account/identity   {:db/valueType  :db.type/string
+                        :db.attr/preds ['my.app.payments/non-blank-string?]}
+   :account/type       {:db/valueType  :db.type/keyword}
+   :account/created-at {:db/valueType  :db.type/instant}
+   :account/owner      {:db/valueType  :db.type/ref}
+   :bank/routing-number {:db/valueType  :db.type/string
+                         :db.attr/preds ['my.app.payments/routing-number?]}
+   :bank/account-number {:db/valueType  :db.type/string
+                         :db.attr/preds ['my.app.payments/non-blank-string?]}
+   :venmo/handle        {:db/valueType  :db.type/string
+                         :db.attr/preds ['my.app.payments/venmo-handle?]}})
+
+(defn ->base-account [input]
+  {:account/owner      (:owner input)
+   :account/identity   (:identity input)
+   :account/created-at (:created-at input)})
+
+(defn ->bank-account [input]
+  (assoc (->base-account input)
+         :account/type        :account.type/bank
+         :bank/routing-number (:routing-number input)
+         :bank/account-number (:account-number input)))
+
+(defn ->venmo-account [input]
+  (assoc (->base-account input)
+         :account/type  :account.type/venmo
+         :venmo/handle  (:venmo-handle input)))
+
+;; Fails because the would-be bank account has no account number.
+(d/transact! conn
+  [(assoc (->bank-account {:owner          42
+                           :identity       "acct-1"
+                           :routing-number "021000021"})
+          :db/id "acct")
+   [:db/ensure 'my.app.payments/bank-account? "acct"]])
+
+;; Succeeds; the tempid in :db/ensure is resolved before the predicate runs.
+(d/transact! conn
+  [(assoc (->venmo-account {:owner        42
+                            :identity     "acct-2"
+                            :created-at   #inst "2026-07-01T00:00:00.000-00:00"
+                            :venmo-handle "@ada"})
+          :db/id "acct")
+   [:db/ensure 'my.app.payments/venmo-account? "acct"]])
+```
+
+The account constructors remain ordinary map builders, so the base and
+type-specific constructors are still composable. The invariant guarantee comes
+from the explicit `:db/ensure` form in the transaction. A transaction function is
+still useful when you want a named command to construct transaction data, but it
+is not a substitute for a post-condition: transaction functions expand while the
+transaction is being prepared, while `:db/ensure` observes the would-be result
+before commit. If a value becomes unknown or inapplicable, retract the existing
+datom or omit the attribute in new transaction data; do not replace it with
+`nil`.
 
 Not every property can be changed freely once data exists. Datalevin validates
 schema mutations against stored datoms:

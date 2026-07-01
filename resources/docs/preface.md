@@ -116,7 +116,7 @@ its LDBC Social Network Benchmark run compares graph queries with Neo4j [4]. In
 the JOB run, Datalevin is more than 2x faster than PostgreSQL. Against SQLite,
 the reported speedup is already more than 4x when counting only the queries
 SQLite completed; including its timed-out queries would make the advantage
-larger. In the LDBC SNB run, Datalevin is several orders of magnitude faster
+larger. In the LDBC SNB run, Datalevin is more than an order of magnitude faster
 than Neo4j on short interactive queries. These are not claims that Datalevin
 wins every workload; they are evidence for the structural benefits of triple
 storage and the advantages of its Datalog query optimizer.
@@ -131,7 +131,7 @@ text-generation providers are built in, and a bundled MCP server exposes
 Datalevin to AI agents without a separate adapter. In summary, Datalevin aims to
 be a simple, fast, and versatile database.
 
-## Implementation Strategies
+## Built for Performance and Flexibility
 
 Realizing Datalevin's goals requires some unusual implementation choices,
 because a database like this needs both performance and flexibility. Storage is
@@ -177,13 +177,14 @@ two follow relationships, and asks for Alice's friend-of-a-friend.
 For the printed book, we show Clojure examples for their conciseness. You do
 not need to know Clojure to understand them; most are just data and Datalevin
 function calls. The web version at
-https://datalevin.org shows the same examples in four languages side by side:
+[datalevin.org](https://datalevin.org) shows the same examples in four languages
+side by side:
 Clojure, Java, Python, and JavaScript.
 
 To grasp the full nuances of some examples, you may want to be familiar with
 EDN (extensible data notation), the data notation used throughout the book. EDN
-is similar to JSON, but with slightly richer data types. Appendix B is the EDN
-reference for this book.
+is similar to JSON, but with a more regular syntax and slightly richer data
+types. Appendix B is the EDN reference for this book.
 
 <div class="multi-lang">
 
@@ -407,7 +408,8 @@ logic-programming ideas of variables and rules.
 
 Most examples use Clojure because Datalevin's native data model is easiest to
 see in EDN and Datalog forms, but the ideas are not limited to Clojure. As noted
-earlier, the web version at https://datalevin.org shows each example in all four
+earlier, the web version at [datalevin.org](https://datalevin.org) shows each
+example in all four
 languages, following one set of per-language conventions:
 
 - Clojure examples use EDN directly.
@@ -470,7 +472,6 @@ The larger argument of the book is simple: an application database can be more
 than a passive container behind SQL strings. It can be a logical substrate: a
 place where facts are stored, relationships are traversed, knowledge is derived,
 evidence is preserved, and intelligent systems can maintain state over time.
-
 Datalevin is one concrete way to build on that idea.
 
 ## Acknowledgments
@@ -508,7 +509,7 @@ Huahai Yang<br>
 June 2026
 </div>
 
-[^datalevin-name]: The name joins LMDB's "Lightning" with "levin", an Old
+[^datalevin-name]: The name joins LMDB's "Lightning" with "levin", a Middle
 English word for lightning.
 
 ## References

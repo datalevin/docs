@@ -109,6 +109,8 @@
                :mail-config mail-config
                :github-client-id (:github-client-id cfg)
                :github-client-secret (:github-client-secret cfg)
+               :google-client-id (:google-client-id cfg)
+               :google-client-secret (:google-client-secret cfg)
                :admin-emails (:admin-emails cfg)
                :reindex-secret (:reindex-secret cfg)
                :session-scheduler session-scheduler

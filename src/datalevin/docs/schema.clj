@@ -10,6 +10,7 @@
    :user/password-hash {:db/valueType :db.type/string}
    :user/github-id {:db/valueType :db.type/long :db/unique :db.unique/identity}
    :user/github-username {:db/valueType :db.type/string}
+   :user/google-id {:db/valueType :db.type/string :db/unique :db.unique/identity}
    :user/avatar-url {:db/valueType :db.type/string}
    :user/role {:db/valueType :db.type/keyword}
    :user/email-verified? {:db/valueType :db.type/boolean}

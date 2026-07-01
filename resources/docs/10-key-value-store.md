@@ -273,9 +273,12 @@ Tuple types are composite KV type descriptors. They are used when a key or
 DUPSORT value needs to sort by more than one field, such as
 `[customer-id created-at]` or `[tenant-id order-total order-id]`.
 
-This is different from Datalog schema composite `:db.type/tuple`, but the same
-as the heterogeneous and homogeneous tuple types. In the KV API, a tuple type is
-written as a vector of scalar KV types:
+Do not confuse these KV type descriptors with Datalog schema composite
+`:db.type/tuple`. Here, the descriptor controls how a vector is encoded in the
+KV layer. KV tuple descriptors come in two forms: heterogeneous descriptors,
+with one scalar type per position, and homogeneous descriptors, with one scalar
+type repeated for every element. In the KV API, a tuple type is written as a
+vector of scalar KV types:
 
 | Type Descriptor | Meaning |
 | :--- | :--- |

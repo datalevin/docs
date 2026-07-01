@@ -15,10 +15,11 @@ and many examples use tagged literals such as `#inst` and `#uuid`.
 
 Readers coming from JSON, SQL, Java, Python, or JavaScript do not need to learn
 Clojure as a programming language in order to read the examples. EDN is data,
-not code. It is closer to JSON with richer scalar types and symbolic names than
-to a programming syntax. This appendix gives the EDN subset and Datalevin
-conventions needed to read and write the examples in the rest of the book. The
-official EDN specification is maintained by the edn-format project [1].
+not code. It is closer to JSON than to a programming syntax, but with a more
+regular syntax, richer scalar types, and symbolic names. This appendix gives the
+EDN subset and Datalevin conventions needed to read and write the examples in
+the rest of the book. The official EDN specification is maintained by the
+edn-format project [1].
 
 
 ## 1. EDN at a Glance

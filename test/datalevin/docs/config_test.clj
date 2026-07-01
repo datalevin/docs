@@ -66,3 +66,22 @@
            clojure.lang.ExceptionInfo
            #"DATALEVIN_VERSION must be set when ENV=prod"
            (config/datalevin-version))))))
+
+(deftest oauth-config-env-behavior
+  (testing "OAuth provider credentials are read from environment"
+    (with-redefs [config/env (fn [name]
+                               (case name
+                                 "GITHUB_CLIENT_ID" "github-client"
+                                 "GITHUB_CLIENT_SECRET" "github-secret"
+                                 "GOOGLE_CLIENT_ID" "google-client"
+                                 "GOOGLE_CLIENT_SECRET" "google-secret"
+                                 nil))]
+      (is (= {:github-client-id "github-client"
+              :github-client-secret "github-secret"
+              :google-client-id "google-client"
+              :google-client-secret "google-secret"}
+             (select-keys (config/resolve-env {})
+                          [:github-client-id
+                           :github-client-secret
+                           :google-client-id
+                           :google-client-secret]))))))

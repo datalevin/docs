@@ -53,6 +53,8 @@
    :env (or (env "ENV") "dev")
    :github-client-id (env "GITHUB_CLIENT_ID")
    :github-client-secret (env "GITHUB_CLIENT_SECRET")
+   :google-client-id (env "GOOGLE_CLIENT_ID")
+   :google-client-secret (env "GOOGLE_CLIENT_SECRET")
    :admin-emails (when-let [s (env "ADMIN_EMAILS")]
                    (into #{} (map str/trim) (str/split s #",")))
    :reindex-secret (env "REINDEX_SECRET")

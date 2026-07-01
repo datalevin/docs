@@ -13,6 +13,11 @@
   [params k]
   (or (get params (keyword k)) (get params (str k)) ""))
 
+(defn- blank->nil
+  [s]
+  (when-not (str/blank? s)
+    s))
+
 (defn sanitize-return-to
   "Allow only local application paths for post-auth redirects."
   [return-to]
@@ -77,7 +82,8 @@
 
 (defn- effective-user-role
   [admin-emails user]
-  (if (contains? admin-emails (:user/email user))
+  (if (and (:user/email user)
+           (contains? admin-emails (:user/email user)))
     :admin
     (:user/role user)))
 
@@ -90,6 +96,161 @@
       (d/transact! conn [{:db/id [:user/id (:user/id user)]
                           :user/role role}]))
     (assoc user :user/role role)))
+
+(defn- compact-tx
+  [tx]
+  (into {} (remove (fn [[_ v]] (nil? v))) tx))
+
+(defn- normalize-username
+  [value]
+  (let [username (-> (or value "user")
+                     str/lower-case
+                     (str/replace #"@.*$" "")
+                     (str/replace #"[^a-z0-9_-]+" "-")
+                     (str/replace #"^-+|-+$" ""))]
+    (if (str/blank? username)
+      "user"
+      (subs username 0 (min 32 (count username))))))
+
+(defn- with-username-suffix
+  [base n]
+  (let [suffix (str "-" n)
+        max-base-len (max 1 (- 32 (count suffix)))]
+    (str (subs base 0 (min max-base-len (count base))) suffix)))
+
+(defn- username-taken?
+  [db username]
+  (boolean (db/lookup-id db :user/username username)))
+
+(defn- unique-username
+  [db value]
+  (let [base (normalize-username value)]
+    (loop [n 0]
+      (let [candidate (if (zero? n)
+                        base
+                        (with-username-suffix base (inc n)))]
+        (cond
+          (not (username-taken? db candidate))
+          candidate
+
+          (< n 1000)
+          (recur (inc n))
+
+          :else
+          (str (subs base 0 (min 23 (count base)))
+               "-"
+               (subs (str (UUID/randomUUID)) 0 8)))))))
+
+(defn- email-owned-by-user?
+  [db email user-id]
+  (if-let [user (and email (auth/find-user-by-email db email))]
+    (= user-id (:user/id user))
+    true))
+
+(defn- oauth-configured?
+  [client-id client-secret]
+  (and (seq client-id) (seq client-secret)))
+
+(defn- oauth-login-response
+  [{:keys [session] :as req} {:keys [client-id client-secret callback-path state-key authorize-url-fn provider-name]}]
+  (let [state (str (UUID/randomUUID))
+        base-url (:base-url req)
+        redirect-uri (str base-url callback-path)]
+    (if-not (oauth-configured? client-id client-secret)
+      {:status 302
+       :session (assoc session :flash {:error (str provider-name " OAuth not configured")})
+       :headers {"Location" "/auth/login"}}
+      {:status 302
+       :session (assoc session state-key state)
+       :headers {"Location" (authorize-url-fn {:client-id client-id
+                                                :redirect-uri redirect-uri
+                                                :state state})}})))
+
+(defn- oauth-invalid-state-response
+  [session state-key]
+  {:status 302
+   :session (assoc (dissoc session state-key) :flash {:error "OAuth failed: invalid state"})
+   :headers {"Location" "/auth/login"}})
+
+(defn- oauth-failure-response
+  [session state-key provider-name]
+  {:status 302
+   :session (assoc (dissoc session state-key) :flash {:error (str provider-name " login failed")})
+   :headers {"Location" "/auth/login"}})
+
+(defn- login-session-response
+  [req session user state-key]
+  (let [session-tx (session/create-session [:user/id (:user/id user)])]
+    (d/transact! (:biff.datalevin/conn req) [(:tx session-tx)])
+    {:status 302
+     :session (dissoc session state-key :return-to :user)
+     :headers {"Location" (post-auth-location session)}
+     :cookies {auth-session-cookie-name (session-cookie req (:session-id session-tx))}}))
+
+(defn- provider-attr-updates
+  [user provider-attrs]
+  (reduce-kv
+   (fn [updates k v]
+     (let [current (get user k)]
+       (cond
+         (nil? v) updates
+         (nil? current) (assoc updates k v)
+         (= current v) updates
+         :else (throw (ex-info "OAuth account is already linked to another provider identity"
+                               {:attr k})))))
+   {}
+   provider-attrs))
+
+(defn- profile-updates
+  [db user {:keys [email username-base avatar-url email-verified? update-attrs]}]
+  (let [attach-email? (and (str/blank? (:user/email user))
+                           email
+                           (email-owned-by-user? db email (:user/id user)))
+        has-email? (or (:user/email user) attach-email?)]
+    (merge
+     (compact-tx update-attrs)
+     (cond-> {}
+       attach-email?
+       (assoc :user/email email)
+
+       (str/blank? (:user/username user))
+       (assoc :user/username (unique-username db username-base))
+
+       (and (str/blank? (:user/avatar-url user))
+            avatar-url)
+       (assoc :user/avatar-url avatar-url)
+
+       (and email-verified? has-email?)
+       (assoc :user/email-verified? true)))))
+
+(defn- ensure-oauth-user!
+  [conn db user provider-attrs profile]
+  (let [updates (merge (provider-attr-updates user provider-attrs)
+                       (profile-updates db user profile))]
+    (when (seq updates)
+      (d/transact! conn [(assoc updates :db/id [:user/id (:user/id user)])]))
+    (merge user updates)))
+
+(defn- create-oauth-user!
+  [conn db base-tx {:keys [email username-base avatar-url email-verified?]}]
+  (let [tx (-> base-tx
+               (assoc :user/email email
+                      :user/username (unique-username db username-base)
+                      :user/avatar-url avatar-url
+                      :user/role :user
+                      :user/email-verified? (boolean email-verified?))
+               compact-tx)]
+    (d/transact! conn [tx])
+    tx))
+
+(defn- find-or-create-oauth-user!
+  [conn db {:keys [provider-id find-by-provider base-tx provider-attrs profile]}]
+  (if-let [user (find-by-provider db provider-id)]
+    (ensure-oauth-user! conn db user provider-attrs profile)
+    (if-let [user (when-let [email (:email profile)]
+                    (auth/find-user-by-email db email))]
+      (ensure-oauth-user! conn db user provider-attrs profile)
+      (create-oauth-user! conn db base-tx profile))))
 
 ;; =============================================================================
 ;; Registration (with email verification)
@@ -192,20 +353,40 @@
 ;; GitHub OAuth
 ;; =============================================================================
 
-(defn github-login-handler [{:keys [session] :as req}]
-  (let [state (str (UUID/randomUUID))
-        client-id (:github-client-id req)
-        base-url (:base-url req)
-        redirect-uri (str base-url "/auth/github/callback")]
-    (if (str/blank? client-id)
-      {:status 302
-       :session (assoc session :flash {:error "GitHub OAuth not configured"})
-       :headers {"Location" "/auth/login"}}
-      {:status 302
-       :session (assoc session :github-oauth-state state)
-       :headers {"Location" (auth/github-authorize-url {:client-id client-id
-                                                         :redirect-uri redirect-uri
-                                                         :state state})}})))
+(defn github-login-handler [req]
+  (oauth-login-response req {:client-id (:github-client-id req)
+                             :client-secret (:github-client-secret req)
+                             :callback-path "/auth/github/callback"
+                             :state-key :github-oauth-state
+                             :authorize-url-fn auth/github-authorize-url
+                             :provider-name "GitHub"}))
+
+(defn- github-email
+  [access-token gh-user]
+  (or (try
+        (auth/github-primary-email (auth/github-get-emails access-token))
+        (catch Exception e
+          (log/warn e "GitHub email lookup failed")
+          nil))
+      (blank->nil (:email gh-user))))
+
+(defn- github-oauth-user!
+  [conn db access-token]
+  (let [gh-user (auth/github-get-user access-token)
+        email (github-email access-token gh-user)
+        profile {:email email
+                 :username-base (or (:login gh-user) email)
+                 :avatar-url (:avatar_url gh-user)
+                 :email-verified? (boolean email)
+                 :update-attrs {:user/github-username (:login gh-user)}}
+        provider-attrs {:user/github-id (:id gh-user)}
+        base-tx (assoc (auth/github-create-user-tx gh-user)
+                       :user/email email)]
+    (find-or-create-oauth-user! conn db {:provider-id (:id gh-user)
+                                         :find-by-provider auth/find-user-by-github-id
+                                         :base-tx base-tx
+                                         :provider-attrs provider-attrs
+                                         :profile profile})))
 
 (defn github-callback-handler [{:keys [params session biff.datalevin/conn admin-emails] :as req}]
   (let [code (param params "code")
@@ -216,38 +397,76 @@
         base-url (:base-url req)
         redirect-uri (str base-url "/auth/github/callback")]
     (if (or (empty? code) (empty? state) (not= state expected-state))
-      {:status 302
-       :session (assoc (dissoc session :github-oauth-state) :flash {:error "OAuth failed — invalid state"})
-       :headers {"Location" "/auth/login"}}
+      (oauth-invalid-state-response session :github-oauth-state)
       (try
         (let [token-resp (auth/github-exchange-code {:client-id client-id
                                                      :client-secret client-secret
                                                      :code code
                                                      :redirect-uri redirect-uri})
               access-token (:access_token token-resp)
-              gh-user (auth/github-get-user access-token)
               db (d/db conn)
-              existing (auth/find-user-by-github-id db (:id gh-user))
-              user (if existing
-                     existing
-                     (let [tx (auth/github-find-or-create-user-tx gh-user)
-                           ;; Remove nil values — GitHub may not return email for private profiles
-                           tx (into {} (remove (fn [[_ v]] (nil? v))) tx)
-                           tx (assoc tx :user/role :user :user/email-verified? true)]
-                       (d/transact! conn [tx])
-                       tx))
+              user (github-oauth-user! conn db access-token)
               user (ensure-user-role! conn admin-emails user)
-              session-tx (session/create-session [:user/id (:user/id user)])]
-          (d/transact! conn [(:tx session-tx)])
-          {:status 302
-           :session (dissoc session :github-oauth-state :return-to :user)
-           :headers {"Location" (post-auth-location session)}
-           :cookies {auth-session-cookie-name (session-cookie req (:session-id session-tx))}})
+              req (assoc req :biff.datalevin/conn conn)]
+          (login-session-response req session user :github-oauth-state))
         (catch Exception e
           (log/error "GitHub OAuth error:" (.getMessage e) (pr-str (class e)))
-          {:status 302
-           :session (assoc (dissoc session :github-oauth-state) :flash {:error "GitHub login failed"})
-           :headers {"Location" "/auth/login"}})))))
+          (oauth-failure-response session :github-oauth-state "GitHub"))))))
+
+;; =============================================================================
+;; Google OAuth
+;; =============================================================================
+
+(defn google-login-handler [req]
+  (oauth-login-response req {:client-id (:google-client-id req)
+                             :client-secret (:google-client-secret req)
+                             :callback-path "/auth/google/callback"
+                             :state-key :google-oauth-state
+                             :authorize-url-fn auth/google-authorize-url
+                             :provider-name "Google"}))
+
+(defn- google-oauth-user!
+  [conn db access-token]
+  (let [google-user (auth/google-get-user access-token)
+        email (when (true? (:email_verified google-user))
+                (blank->nil (:email google-user)))
+        profile {:email email
+                 :username-base (or email (:name google-user) (:sub google-user))
+                 :avatar-url (:picture google-user)
+                 :email-verified? (boolean email)}
+        provider-attrs {:user/google-id (:sub google-user)}
+        base-tx (assoc (auth/google-create-user-tx google-user)
+                       :user/email email)]
+    (find-or-create-oauth-user! conn db {:provider-id (:sub google-user)
+                                         :find-by-provider auth/find-user-by-google-id
+                                         :base-tx base-tx
+                                         :provider-attrs provider-attrs
+                                         :profile profile})))
+
+(defn google-callback-handler [{:keys [params session biff.datalevin/conn admin-emails] :as req}]
+  (let [code (param params "code")
+        state (param params "state")
+        expected-state (:google-oauth-state session)
+        client-id (:google-client-id req)
+        client-secret (:google-client-secret req)
+        base-url (:base-url req)
+        redirect-uri (str base-url "/auth/google/callback")]
+    (if (or (empty? code) (empty? state) (not= state expected-state))
+      (oauth-invalid-state-response session :google-oauth-state)
+      (try
+        (let [token-resp (auth/google-exchange-code {:client-id client-id
+                                                     :client-secret client-secret
+                                                     :code code
+                                                     :redirect-uri redirect-uri})
+              access-token (:access_token token-resp)
+              db (d/db conn)
+              user (google-oauth-user! conn db access-token)
+              user (ensure-user-role! conn admin-emails user)
+              req (assoc req :biff.datalevin/conn conn)]
+          (login-session-response req session user :google-oauth-state))
+        (catch Exception e
+          (log/error "Google OAuth error:" (.getMessage e) (pr-str (class e)))
+          (oauth-failure-response session :google-oauth-state "Google"))))))
 
 ;; =============================================================================
 ;; Password Reset

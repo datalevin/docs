@@ -485,6 +485,11 @@ against the same EDB edge facts. For this graph:
 | 3 | `(reachable a e)` |
 | 4 | No new tuples; fixpoint reached. |
 
+Figure 21.3 shows the delta flow for this example. Each round consumes only the
+previous round's delta; the fixpoint is reached when the next delta is empty.
+
+![Semi-naive recursive evaluation with delta tracking: base edges a→b, b→c, b→d, d→e, p→q, and q→r produce delta round 1 with direct edges, delta round 2 with a→c, a→d, b→e, and p→r, delta round 3 with a→e, and round 4 with no new tuples; the result is the union of deltas, while a naive evaluator would keep rejoining all known tuples and rediscover old facts](/images/diagrams/semi-naive-evaluation.svg)
+
 A naive bottom-up evaluator would keep rejoining all known `reachable` tuples
 in every round, rediscovering many results it already had. Semi-naive evaluation
 uses only the previous round's delta to produce the next delta, then unions the
@@ -534,7 +539,7 @@ answers that cannot contribute to `[:find ?end :where (reachable a ?end)]`.
 For the graph above, the seeded starts are `a`, `b`, `c`, `d`, and `e`, and the
 answers are `b`, `c`, `d`, and `e`.
 
-Figure 21.3 visually compares plain bottom-up evaluation with magic-set
+Figure 21.4 visually compares plain bottom-up evaluation with magic-set
 rewriting.
 
 ![Magic-set rewrite turning broad recursion into goal-directed recursion: for the query reachable from a, plain bottom-up recursion derives the whole relation including the disconnected p→q→r component (wasted work), while the magic-set rewrite seeds the recursion at a and expands only the nodes reachable from a (a, b, c, d, e), leaving p, q, r never seeded and skipped; both return the same answer b c d e](/images/diagrams/magic-set-rewrite.svg)

@@ -1896,6 +1896,13 @@ The bulk writer is an embedded local API. It is not available through the
 Datalevin client/server API; use Datalog full-text attributes and normal
 transactions there, or run the writer in a local indexing process.
 
+Treat the bulk writer as a short-lived loading handle for one search domain. In
+Clojure there is no separate dispose step; `commit` is the required final flush.
+In Java, Python, and JavaScript, `commit` also closes the wrapper, so create a
+new writer for a later bulk load. Do not keep multiple active writers for the
+same domain; use one writer for the load, then query with a search engine or use
+normal `add-doc` / `remove-doc` operations for incremental changes.
+
 
 ## 7. Asynchronous Indexing
 

@@ -119,9 +119,24 @@ The public schema properties that Datalevin interprets are the following:
 | `:db.vec/domains` | sequence of strings | Adds a `:db.type/vec` attribute to explicit vector domains. |
 | `:db/idocFormat` | `:edn`, `:json`, `:markdown` | Format hint for `:db.type/idoc`; defaults to `:edn`. |
 | `:db/domain` | string | Explicit idoc domain for a `:db.type/idoc` attribute. If omitted, Datalevin derives the idoc domain from the attribute name. |
+| `:db.attr/preds` | qualified symbol or non-empty sequence of qualified symbols | Additional checks for values written to this attribute. Each predicate receives the normalized attribute value and must return `true`. |
 | `:db/tupleAttrs` | non-empty sequence of attribute keywords | Derived composite index entry maintained from other attributes. |
 | `:db/tupleType` | single non-tuple value type | Homogeneous tuple element type. |
 | `:db/tupleTypes` | sequence of more than one non-tuple value type | Heterogeneous tuple element types. |
+
+Use `:db/ensure` in transaction data for entity invariants over the would-be
+transaction result:
+
+```clojure
+[:db/ensure 'my.app.payments/bank-account? entity]
+```
+
+The predicate may be a function, var, or qualified symbol. It receives the
+would-be database after applying the transaction followed by the resolved ensure
+arguments, so it can check required attributes, entity-shape rules, and
+cross-attribute invariants after all transaction data has been expanded to
+datoms. `:db/ensure` forms do not become datoms in `:tx-data`; they abort the
+transaction before commit if a predicate returns falsey or throws.
 
 The schema map may also contain metadata or compatibility keys that Datalevin
 stores but does not use as behavioral schema controls. In particular,
@@ -376,6 +391,9 @@ Datalevin's Datalog model is familiar to Datomic and DataScript users, but the s
 - Unspecified value types are stored as EDN data.
 - AVE indexing is automatic for every attribute; do not add `:db/index`.
 - Use `:db/ident` for named enum/system entities.
+- Use `:db.attr/preds` for attribute-local value predicates, and use
+  `:db/ensure` for explicit entity invariants over the would-be transaction
+  result.
 
 
 ## 14. Minimal Production Template
