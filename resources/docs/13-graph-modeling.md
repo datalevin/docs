@@ -698,9 +698,9 @@ The "six degrees of Kevin Bacon" problem, depicted in Figure 13.3, is a useful
 graph example because it is not a tree. It is a dense bipartite graph: two kinds
 of nodes, people and movies, with many connections between the two sets. People
 connect to movies through credits, and two people are adjacent if they worked on
-the same movie. A Datomic article by Andrew Dennis used this problem to show
-both Datalog joins and application-level breadth-first search over database
-facts [3]. The same idea applies naturally to Datalevin.
+the same movie. Andrew Dennis used this problem to show both Datalog joins and
+application-level breadth-first search over database facts [3]. The same idea
+applies naturally to Datalevin.
 
 ![Co-appearance as a bipartite graph: people (Kevin Bacon, John Belushi, Tom Hanks) and movies (Animal House, Apollo 13) connected through Credit entities, projected to a person-to-person acted-with graph where Bacon links to Belushi via Animal House and to Hanks via Apollo 13, while Belushi and Hanks share no movie](/images/diagrams/coappearance-bipartite.svg)
 

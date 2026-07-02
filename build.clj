@@ -1434,6 +1434,9 @@
 (def ^:private unqualified-reverse-attribute-tex-pattern
   #"\\NormalTok\{([^{}]*?)(:\\_(?:\\_|[A-Za-z0-9*+!?<>=.'-])*)([^{}]*)\}")
 
+(def ^:private plus-suffixed-attribute-tex-pattern
+  #"\\(AttributeTok|KeywordTok)\{((?:[^{}]|\{[^{}]*\})*)\}\\NormalTok\{(\+(?:(?:\{[^{}]*\})|\\_|[A-Za-z0-9*+!?<>=.'_-])*)((?:\\[{}]|[^{}])*)\}")
+
 (defn- fix-predicate-token-highlighting
   [tex]
   (str/replace
@@ -1466,16 +1469,28 @@
           (when (seq suffix)
             (str "\\NormalTok{" suffix "}"))))))
 
+(defn- fix-plus-suffixed-attribute-highlighting
+  [tex]
+  (str/replace
+   tex
+   plus-suffixed-attribute-tex-pattern
+   (fn [[_ macro prefix suffix tail]]
+     (str "\\" macro "{" prefix suffix "}"
+          (when (seq tail)
+            (str "\\NormalTok{" tail "}"))))))
+
 (defn- postprocess-pandoc-tex!
   [tex-file]
   ;; Pandoc's Clojure highlighter treats a trailing predicate marker as
   ;; normal text in tokens such as :inmemory?. Keep it styled with the token.
   ;; It also splits pull reverse attributes such as :order/_customer after the
   ;; slash, and leaves unqualified reverse attributes such as :_friend unstyled.
+  ;; It can also split Clojure keywords at +, such as :line-item/order+sku.
   (spit tex-file (-> (slurp tex-file)
                      fix-predicate-token-highlighting
                      fix-namespaced-reverse-attribute-highlighting
-                     fix-unqualified-reverse-attribute-highlighting)))
+                     fix-unqualified-reverse-attribute-highlighting
+                     fix-plus-suffixed-attribute-highlighting)))
 
 (defn- svg-file?
   [file]

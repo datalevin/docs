@@ -22,16 +22,18 @@ values, see Appendix C, "Datalog Schema Reference."
 ## 1. The Power of Identity: `:db.unique/identity`
 
 One of the most important decisions in schema design is how you identify your
-entities. While Datalevin provides internal 64-bit integer ids, you often need
-to refer to entities using natural keys from your domain (like an email, a SKU,
-or a URL slug).
+entities. While Datalevin provides internal 64-bit integer ids, application
+code usually wants to refer to entities using natural keys from your domain
+(like an email, a SKU, a URL slug, or synthetic keys like a UUID).
 
 ### 1.1 Lookup Refs
 
-When an attribute is marked as `:db.unique/identity`, it becomes a **Lookup
-Ref**. This allows you to refer to an entity by its natural key in any part of
-the API — transactions, queries, or `d/pull` — without knowing its internal
-integer id.
+Any attribute marked `:db/unique` can be used in **lookup refs**. This allows
+you to refer to an entity by an attribute/value pair in any part of the API —
+transactions, queries, or `d/pull` — without knowing its internal integer id.
+For domain identifiers such as emails, SKUs, or URL slugs,
+`:db.unique/identity` is usually the right choice because it also gives you
+upsert behavior.
 
 <div class="multi-lang">
 
@@ -254,7 +256,11 @@ There are a few important rules:
 - `:db/tupleAttrs` must name cardinality-one attributes.
 - A derived tuple cannot depend on another derived tuple.
 - If a component is missing, the derived tuple may contain `nil` in that
-  position. Decide whether that is acceptable before making the tuple unique.
+  position. Datalevin still compares the whole tuple value structurally, so two
+  tuples with `nil` in the same position and the same remaining values are not
+  distinct for uniqueness checks. This differs from SQL databases that allow
+  multiple `NULL` values in a unique index. Decide whether that is acceptable
+  before making the tuple unique.
 - Composite lookup refs are simplest when the tuple components are scalar
   identity values such as tenant id, order id, SKU, date, or source-system id.
   If a component attribute is a reference, the tuple stores the resolved entity
@@ -1155,7 +1161,8 @@ When adding a new attribute to your Datalevin database, ask yourself:
 4.  **Is it a system-wide constant?** Use **`:db/ident`** to give a unique,
     globally namespaced keyword to an entity, perfect for enums and static
     system data.
-5.  **Is it many-valued?** Use `:db.cardinality/many` for sets of values.
+5.  **Is it many-valued?** Use `:db.cardinality/many` for small sets of values,
+    or join entities when the relationship is large or needs its own facts.
 6.  **Does it need keyword search?** Use `:db/fulltext` for attributes you want
     to search as text.
 7.  **Does it need semantic text search?** Use `:db/embedding` for string

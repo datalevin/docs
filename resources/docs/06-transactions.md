@@ -38,7 +38,7 @@ underlying **LMDB transaction**, which has strict ACID guarantees.
   crash. Note that the `msync` call is often an expensive system call that
   takes significant time to finish, depending on the hardware and workload.
 
-Transaction scope is one Datalevin store, i.e. one LMDB environment whose
+A transaction is scoped to one Datalevin store, i.e. one LMDB environment whose
 primary data lives in one memory-mapped data file. In the default non-WAL mode,
 a Datalog transaction is ultimately a KV transaction over that store. It can
 atomically update the Datalog indexes and any other DBIs that live in the same
@@ -53,19 +53,16 @@ not turn Datalevin into a cross-file distributed transaction manager.
 For use cases where maximum write speed is more important than crash-proof
 durability (e.g., bulk loading, caching), you can relax the `msync` behavior by
 setting LMDB flags during connection creation. For example, using `:nosync` can
-significantly improve write throughput at the cost of durability: the `msync`
-call is left to OS discretion, and an untimely system crash can result in a
-corrupted database. There are also other non-durable flags; see Chapter 10 for
-details.
+significantly improve write throughput at the cost of durability: how frequently
+dirty pages are synced is left to OS discretion, and an untimely system crash can
+result in a corrupted database. There are also other non-durable flags; see
+Chapter 10 for details.
 
-These settings are not only open-time choices. You can explicitly force a flush
-with `d/sync`, and you can change LMDB environment flags at runtime with
-`d/set-env-flags`. Both functions operate on the KV store handle; for a Datalog
-connection, use the backing KV handle returned by `d/datalog-kv`,
-`conn.datalogKV()`, `conn.datalog_kv()`, or `await conn.datalogKv()`. This is a
-KV store capability, not a Clojure-only Datalog escape hatch: Java, Python, and
-JavaScript expose the same operations on their KV objects, using host-language
-method names such as `sync`, `setEnvFlags`, and `set_env_flags`.
+Apart from controlling durability during connection creation, you can explicitly
+force a flush with `d/sync`, and you can change LMDB environment flags at
+runtime with `d/set-env-flags`. Both functions operate on the KV store handle;
+for a Datalog connection, use the backing KV handle returned by `d/datalog-kv`.
+This is a KV store capability, not a special Datalog operation.
 
 <div class="multi-lang">
 
@@ -115,16 +112,15 @@ await kv.setEnvFlags(["nosync"], false);
 
 </div>
 
-Use runtime flag changes deliberately. They affect subsequent transactions on
-that store, so they belong in controlled ingestion or maintenance workflows, not
-as incidental per-request toggles.
+Change runtime flags only in controlled ingestion or maintenance workflows. They
+affect subsequent transactions on that store, so they should not be used as
+incidental per-request toggles.
 
 ### 1.3 Asynchronous Transactions
 
 Asynchronous transactions change when the caller waits, not what a transaction
-means. `d/transact-async` in Clojure, `transactAsync` in Java and JavaScript,
-and `transact_async` in Python submit ordinary Datalevin transaction data and
-return a future or promise immediately. The transaction still commits as one
+means. The async transaction API submits ordinary Datalevin transaction data and
+returns a future or promise immediately. The transaction still commits as one
 atomic unit, produces the usual transaction report, and either succeeds or fails
 as a whole.
 
@@ -133,8 +129,8 @@ wait for the returned future or promise before reading or issuing dependent
 writes. Treating async transactions as fire-and-forget can hide validation
 errors, constraint violations, and write failures until too late. For independent
 high-volume writes, async transactions let Datalevin batch work internally and
-improve throughput. Chapter 20 shows ingestion patterns in all four bindings,
-and Chapter 19 covers the durability profiles behind those choices.
+improve throughput. Chapter 20 shows ingestion patterns, and Chapter 19 covers
+the durability profiles behind those choices.
 
 ### 1.4 Choosing a Transaction API
 
@@ -151,11 +147,6 @@ within one Datalevin store, committed writes have one serial order.
 | `tx-data->simulated-report` and variants | Tests, dry runs, validation previews, and explanations of what a transaction would do. | No live commit; Datalevin prepares the transaction against the supplied Db and returns a report shape. | Reads the supplied Db only. It does not serialize with a live connection. |
 | KV-only transaction APIs | Raw KV work without Datalog, or borrowed KV work from a Datalog store. | `transact-kv` applies one KV batch; `with-transaction-kv` opens one explicit KV transaction, with an optional timeout. Chapter 10 covers the full KV API. | Explicit KV transactions also have read-your-writes behavior, and nested KV transactions reuse the active transaction. |
 
-The explicit Datalog transaction callback is available in Clojure, Java, and
-Python. JavaScript can still express many conditional writes with one
-`conn.transact(...)`, `:db/cas`, transaction functions, or a server-side command
-running in the Datalevin-hosting process.
-
 Nested transactions in Datalevin are not independent subtransactions. When code
 is already inside a write transaction, another synchronous transaction call uses
 that active transaction. There is still only one transaction, not a stack of
@@ -165,28 +156,33 @@ whole active transaction aborts; Datalevin does not provide nested savepoints.
 ## 2. Transacting Data
 
 The primary function for writing data is `d/transact!`. It takes a connection
-and a vector of transaction data. Datalevin is flexible in how you can express
-changes.
+and a collection of transaction values, called the **transaction data**. A
+transaction value is one item that Datalevin can prepare into datoms. Transaction
+values can take several forms:
 
-Here a **transactable value** means one item in the transaction data collection
-that Datalevin can prepare into datoms. In normal application code this is most
-often an entity map, such as `{:user/name "Alice"}`. Raw datom vectors such as
-`[:db/add eid attr value]`, transaction function calls, and Datalevin's
-transactable Entity objects can also be transaction data. The examples in this
-chapter start with maps because they are the clearest shape for ordinary creates
-and updates, then introduce the lower-level forms when they become useful.
-Transactable Entity objects are a Clojure-side staging convenience; the Java,
-Python, and JavaScript entity wrappers are read/navigation wrappers, so
-non-Clojure code should use explicit entity maps, `:db/add` vectors, and
-binding helper builders. Chapter 7 covers transactable entities as part of the
-Entity API.
+- Entity maps, such as `{:user/name "Alice"}`.
+- Raw datom vectors, such as `[:db/add eid attr value]`.
+- Transaction function calls, such as `[:db.fn/call f arg1 arg2]`.
+- Transactable Entity objects, a Clojure API convenience covered in Chapter 7.
+
+Maps are the clearest shape for ordinary creates and updates, so this chapter
+starts with maps before moving on to the lower-level forms.
 
 Every successful `transact!` returns a **transaction report**. The report
 contains the database before and after the transaction, the datoms that were
 actually added or retracted, the tempid resolution map, and any transaction
 metadata supplied by the caller. When a transaction introduces attributes that
 were not previously present in the database schema, the report also includes
-`:new-attributes`:
+`:new-attributes`. The main report keys are:
+
+| Report key | Value |
+| :--- | :--- |
+| `:db-before` | The Datalog Db handle used as the transaction input. |
+| `:db-after` | The Datalog Db handle produced by the transaction. |
+| `:tx-data` | The full datom objects actually added or retracted by the transaction; Chapter 15 explains their `:e`, `:a`, `:v`, `:tx`, and `:added` fields. |
+| `:tempids` | Map from transaction tempids to assigned entity ids. |
+| `:tx-meta` | The metadata value supplied as the optional third argument to `transact!`, or `nil`. |
+| `:new-attributes` | Optional vector of attribute idents first introduced by this transaction. This appears only when the transaction adds facts for attributes that were not already in the schema. |
 
 The `:db-before` and `:db-after` fields are mainly for code that needs the
 immediate transaction boundary for the datoms affected by this transaction.
@@ -244,6 +240,11 @@ entity `101` currently has status `:open`:
 ;    :datoms [#datalevin/Datom [101 :account/status :open ... false]
 ;             #datalevin/Datom [101 :account/status :closed ... true]]}
 ```
+
+You can also attach application metadata to a transaction. This metadata is not
+transaction data and does not create datoms; Datalevin carries it through to the
+transaction report as `:tx-meta`. It is useful for request ids, audit context,
+or listener callbacks that need to know why the write happened.
 
 <div class="multi-lang">
 
@@ -303,8 +304,8 @@ const sample = {
 </div>
 
 In the example above, we select two keys of the map to show, because the full
-report is large. That report is useful not only as a return value. It is also
-the data delivered to transaction listeners, covered later in this chapter.
+report is large. The transaction report is also delivered to transaction
+listeners, covered later in this chapter.
 
 ### 2.1 Entity Maps
 
@@ -348,6 +349,11 @@ When you omit `:db/id`, Datalevin assigns a new unique entity id automatically.
 That entity id is a Datalevin internal `long`. Do not use `:db/id` for a UUID,
 slug, email address, or external primary key; put application identity in a
 separate unique attribute and address the entity with a lookup ref.
+
+A negative integer or string in `:db/id` is different: it is a tempid, used to
+let new entities refer to one another inside the same transaction. Datalevin
+still replaces it with a new permanent entity id. Positive ids are not tempids;
+the next section describes how they are handled.
 
 ### 2.2 Updating Existing Entities
 
@@ -602,30 +608,35 @@ needs a half-built intermediate state where only one side of the cycle exists.
 
 ### 2.5 Lookup Refs
 
-Instead of knowing the entity id, you can use a **lookup ref** to identify an existing entity by a unique attribute. A lookup ref is a vector `[attribute value]`:
+Instead of knowing the entity id, you can use a **lookup ref** to identify an
+existing entity by a unique attribute. A lookup ref is a vector
+`[attribute value]`. It can be used anywhere transaction data expects an entity
+id, including the `:db/id` field of an entity map:
 
 <div class="multi-lang">
 
 ```clojure
 (d/transact! conn
-  [[:db/add [:user/email "alice@example.com"] :user/active? false]])
+  [{:db/id [:user/email "alice@example.com"]
+    :user/active? false}])
 ```
 
 ```java
 conn.transact(Datalevin.tx()
-    .add(List.of("user/email", "alice@example.com"),
-         "user/active?",
-         false));
+    .entity(Tx.entity(List.of("user/email", "alice@example.com"))
+        .put("user/active?", false)));
 ```
 
 ```python
 conn.transact([
-    [":db/add", [":user/email", "alice@example.com"], ":user/active?", False]])
+    {":db/id": [":user/email", "alice@example.com"],
+     ":user/active?": False}])
 ```
 
 ```javascript
 await conn.transact([
-  [":db/add", [":user/email", "alice@example.com"], ":user/active?", false]
+  { ":db/id": [":user/email", "alice@example.com"],
+    ":user/active?": false }
 ]);
 ```
 
@@ -751,7 +762,13 @@ The operations are:
 Use `:db/retract` when you want to remove one attribute value. Use
 `:db.fn/retractAttribute` when you want to remove an entire attribute from an
 entity, regardless of its current value. Use `:db/retractEntity` when you want
-to remove an entity as a logical object.
+to remove an entire entity.
+
+For cardinality-one attributes, retracting the known current value and
+retracting the whole attribute usually have the same final effect. The
+difference matters most for cardinality-many attributes: `:db/retract` removes
+one selected value from the set, while `:db.fn/retractAttribute` removes all
+values for that attribute on that entity.
 
 <div class="multi-lang">
 
@@ -1048,10 +1065,9 @@ coercion, and schema evolution in more detail.
 
 Many applications need to react after a write commits: invalidate a cache,
 notify a UI session, enqueue a background job, update an in-process projection,
-or append an audit record in another system. `listen!` in Clojure, and
-`listen` in Java, Python, and JavaScript, register an in-process callback on a
-Datalevin connection. After a transaction commits, Datalevin calls the callback
-with the transaction report:
+or append an audit record in another system. The listener API registers an
+in-process callback on a Datalevin connection. After a transaction commits,
+Datalevin calls the callback with the transaction report:
 
 <div class="multi-lang">
 
@@ -1131,20 +1147,11 @@ await conn.unlisten(listenerKey);
 </div>
 
 The listener registration call returns the listener key. When you pass a key
-explicitly, as above, that same key is returned and can be passed to
-`unlisten!` in Clojure or `unlisten` in Java, Python, and JavaScript. When you
-register without a key, Datalevin generates and returns one for you.
+explicitly, as above, that same key is returned and can be passed to the
+matching unlisten operation. When you register without a key, Datalevin
+generates and returns one for you.
 
-The callback receives the same transaction report returned by `transact!`:
-
-| Report key | Value |
-| :--- | :--- |
-| `:db-before` | The Datalog Db handle used as the transaction input. |
-| `:db-after` | The Datalog Db handle produced by the transaction. |
-| `:tx-data` | The full datom objects actually added or retracted by the transaction; Chapter 15 explains their `:e`, `:a`, `:v`, `:tx`, and `:added` fields. |
-| `:tempids` | Map from transaction tempids to assigned entity ids. |
-| `:tx-meta` | The metadata value supplied as the optional third argument to `transact!`, or `nil`. |
-| `:new-attributes` | Optional vector of attribute idents first introduced by this transaction. This appears only when the transaction adds facts for attributes that were not already in the schema. |
+The callback receives the same transaction report returned by `transact!`.
 
 The listener key can be any unique value meaningful to the application.
 Registering another listener with the same key replaces the previous callback,
@@ -1180,9 +1187,11 @@ publishes to a queue, or calls another service, that work can fail separately
 from the Datalevin commit. Keep listener callbacks small and predictable. For
 expensive work, enqueue a lightweight task and let a worker handle it.
 
-For durable domain events, the strongest pattern is to transact the event as
-data in the same Datalevin transaction, then use the listener only to wake a
-publisher or projector:
+For durable domain events, the strongest pattern is the **outbox pattern**:
+transact the event as data in the same Datalevin transaction, then use the
+listener only to wake a publisher or projector. The event is first stored in the
+database, so publishing can be retried from durable state if the callback,
+message queue, or downstream service fails:
 
 <div class="multi-lang">
 
@@ -1241,10 +1250,6 @@ await conn.listen((_report) => publishPendingEvents(conn), "event-publisher");
 
 </div>
 
-This keeps the fact that the event happened inside the database transaction,
-while allowing delivery to be retried independently.
-
-
 ## 4. Atomic Read-Modify-Write with `with-transaction`
 
 Often, you need to read a value, modify it, and write it back as a single
@@ -1289,26 +1294,34 @@ The transaction callback ensures that the read and the write happen within the
 same isolated transaction, preventing another concurrent write from interfering.
 In isolation terminology, Datalevin write transactions are serializable within
 one store: committed writes have a single order, and a `with-transaction` body
-runs inside one read/write transaction in that order. Queries against the
-transaction-bound connection, such as `(d/db tx)` or `@tx`, read that
-transaction's state, including writes already performed earlier in the body. No
-other writer can commit in the middle of that read-modify-write sequence. In
+runs inside one read/write transaction in that order. Read APIs that use the
+transaction-bound connection or Db handle, such as `d/q`, `d/pull`, `d/entity`,
+and direct index reads, read that transaction's state. Those reads see writes
+already performed earlier in the body, but other connections do not see those
+writes until the callback commits.
+No other writer can commit in the middle of that read-modify-write sequence. In
 other words, code inside `with-transaction` has the usual read-your-writes
 behavior that application developers expect from a transaction.
 
-This guarantee is narrower than saying that every query is a transaction.
+`q`, `pull`, and the other read APIs do not have separate isolation rules. They
+read through the connection or Db handle you pass:
+
+| Read target | What the read sees |
+| :--- | :--- |
+| Transaction-bound connection or Db inside `with-transaction` | The active transaction, including writes already performed in the same body. If the body aborts, those writes never become visible after the callback. |
+| Ordinary connection or Db outside the active transaction | The committed state available to that handle; it does not see uncommitted writes from the active transaction. |
+| `:db-before` or `:db-after` from a transaction report or simulated report | Exactly the boundary state described by that report. For a simulated report, `:db-after` is a would-be state only. |
+| Older Db handle captured before the transaction | The state represented by that handle, not the active transaction. |
+
 Outside `with-transaction`, a query runs against the Db supplied to it. That read
 view is stable for the query and isolated from concurrent writes, but it is not
 an application-level read/write transaction unless the related reads and writes
 are placed inside `with-transaction` or encoded as one conditional transaction.
 
-In Clojure this is the `with-transaction` macro; Java and Python expose the same
-embedded Datalog transaction callback as `conn.withTransaction(...)` and
-`conn.with_transaction(...)`. JavaScript does not expose this Datalog callback
-because of JVM bridge re-entry constraints; use conditional transaction forms
-such as `:db/cas`, transaction functions, a single `conn.transact(...)`, or an
-application command running inside the Datalevin-hosting process when the
-read-modify-write logic must be serialized.
+Use an explicit transaction callback where the host API exposes one. When it is
+not available, encode the conditional write in one transaction, use `:db/cas`
+or transaction functions, or run the command inside the Datalevin-hosting
+process when the read-modify-write logic must be serialized.
 
 Explicit transaction callbacks can also take a timeout for the callback body:
 
@@ -1338,14 +1351,9 @@ conn.with_transaction(
 </div>
 
 The default explicit transaction timeout is unset. It can be read or changed
-with `d/explicit-transaction-timeout` and
-`d/set-explicit-transaction-timeout!`, with corresponding
-`Datalevin.explicitTransactionTimeout(...)` /
-`Datalevin.setExplicitTransactionTimeout(...)` methods in Java and
-`explicit_transaction_timeout` / `set_explicit_transaction_timeout` in Python. A
-per-call timeout overrides the default; `nil`, `null`, or `None`
-disables the default for that call. If the timeout expires, Datalevin interrupts
-the transaction body, aborts the transaction, and reports
+through the explicit transaction timeout helpers. A per-call timeout overrides
+the default; a nil/null value disables the default for that call. If the timeout
+expires, Datalevin interrupts the transaction body, aborts the transaction, and reports
 `:type :transaction/timeout` with `:timeout-ms`. Code that ignores interruption
 may continue running until it returns, so transaction callbacks should remain
 small and bounded.
@@ -1358,45 +1366,45 @@ error-handling policy.
 
 ### 4.1 Mixing Datalog and KV Writes
 
-Because a local Datalog store is built on Datalevin's KV store, embedded
-Clojure, Java, and Python code can use the Datalog transaction callback to
-update Datalog data and custom KV DBIs as one atomic unit. The important point
-is to use the KV instance inside the transactional connection, not a separately
-opened `open-kv` handle on the same directory.
+Most applications can stay entirely in Datalog transaction data. Mixing Datalog
+and KV writes is useful when the Datalog facts are the source of truth, but you
+also maintain a custom KV structure for a workflow that benefits from direct
+key-value access: an audit or outbox DBI, an ingestion checkpoint, a compact
+deduplication table, or a small side index for application code. In those cases,
+the Datalog facts and the KV entry often describe one business event and should
+commit or abort together.
 
-Use the public Datalog/KV helper to get the KV handle that belongs to a Datalog
-connection or DB:
+A local Datalog database and its custom KV DBIs live in the same Datalevin
+store. That means a Datalog update and a KV update can commit as one atomic
+unit, but only if both writes run inside the same transaction.
 
-<div class="multi-lang">
+Suppose marking an order paid must also write an audit entry to a custom
+`"audit-log"` DBI. The shape to avoid is: commit the Datalog update through the
+Datalog connection, then write the audit entry through a separately opened
+`open-kv` handle on the same directory. Those are two independent transactions.
+A crash or exception between them can leave the order marked paid without the
+audit entry.
 
 ```clojure
-(def kv (d/datalog-kv conn))
+;; Avoid this shape: two separate transactions.
+(d/transact! conn
+  [{:order/id     "o-1001"
+    :order/status :order.status/paid}])
+
+(let [separate-kv (d/open-kv db-dir)] ; the same directory used by conn
+  (d/transact-kv separate-kv "audit-log"
+    [[:put "o-1001" {:event/type :order/paid
+                     :order/id   "o-1001"}]]
+    :string :data))
 ```
 
-```java
-KV kv = conn.datalogKV();
-```
-
-```python
-kv = conn.datalog_kv()
-```
-
-```javascript
-const kv = await conn.datalogKv();
-```
-
-</div>
-
-The returned KV handle is owned by the Datalog connection. Do not close it
-separately; close the Datalog connection instead. Java, Python, and JavaScript
-expose the same borrowed handle as `conn.datalogKV()`, `conn.datalog_kv()`, and
-`await conn.datalogKv()` for setup and direct same-store KV operations. The
-transaction-bound mixed-write pattern below is available in Clojure, Java, and
-Python because those bindings expose Datalog transaction callbacks. In
-JavaScript, use a transaction function or an application command on the server
-side if the Datalog and KV updates must commit atomically. Open application DBIs
-during setup, then use the transaction-bound connection inside
-`with-transaction` for both parts of the write:
+The correct shape is to use the KV handle that belongs to the Datalog
+connection, open the application DBI during setup, and then perform both writes
+while one transaction is active. The examples below use `with-transaction`
+because it gives application code a transaction-bound connection. Inside the
+block, get the transaction-bound KV handle from that connection and use it for
+the KV write. The borrowed KV handle is owned by the Datalog connection; close
+the Datalog connection, not the borrowed handle.
 
 <!-- pdf-listing: Mixing Datalog and key-value writes in one transaction -->
 
@@ -1486,6 +1494,12 @@ transaction functions. Transaction functions are transaction data vectors that
 expand to more transaction data while the transaction is being prepared. They
 run against the current DB object and are committed atomically with the rest of
 the transaction.
+
+If a transaction function calls `q`, `pull`, or another read API, that read uses
+the DB object passed to the function. This is the database at the point where the
+function is expanded during transaction preparation, not the final
+post-transaction database. Use `:db/ensure` when the check must read the
+would-be database after all transaction data has been expanded and applied.
 
 Transaction-time vector forms include:
 
@@ -1601,10 +1615,9 @@ shows how to re-read and retry when that is the correct application behavior.
 ### 5.3 Transaction UDFs
 
 For arbitrary user defined functions (UDF), Datalevin allows descriptor-backed
-transaction functions. The same descriptor and registry model is available from
-Clojure, Java, Python, and JavaScript, and it also works in client/server
-deployments as long as the runtime that executes the transaction can resolve the
-UDF implementation.
+transaction functions. The same descriptor and registry model works in
+client/server deployments as long as the runtime that executes the transaction
+can resolve the UDF implementation.
 
 Store the descriptor in `:db/udf`, open the database with a
 runtime UDF registry or resolver, and call it by descriptor or by installed
@@ -1817,9 +1830,8 @@ usable in native image, server, and Babashka contexts.
 
 Use this mechanism when the transaction logic is naturally Clojure and the
 environment can evaluate Datalevin interpreted functions. If the same installed
-function must be implemented outside Clojure or resolved by different server
-processes and language bindings, use the `:db/udf` descriptor mechanism from
-Section 5.3 instead.
+function must be resolved by different server processes or runtimes, use the
+`:db/udf` descriptor mechanism from Section 5.3 instead.
 
 ```clojure
 (require '[datalevin.interpret :as i])

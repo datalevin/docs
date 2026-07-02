@@ -106,8 +106,9 @@ Some common options for `open-kv` include:
   Local WAL opt-in defaults to `:relaxed`; HA defaults to `:strict`.
 - `:wal-retention-bytes` and `:wal-retention-ms`: Set policies for how long to keep
   old WAL segments.
-- `:temp?`: Set to `true` to create a temporary store that is deleted on JVM
-  exit. It automatically enables `:nosync`, bypassing the `msync` overhead.
+- `:temp?`: Set to `true` to create a temporary store that is deleted when
+  closed or on JVM exit. It automatically enables `:nosync`, bypassing the
+  `msync` overhead.
 - `:inmemory?`: Set to `true` to create a KV store in memory. There is no file
   persistence and data is lost on close. This is even faster than a `:temp?`
   store.
@@ -115,6 +116,16 @@ Some common options for `open-kv` include:
   to temporary disk storage. Common keys are `:spill-threshold`, a heap-pressure
   percentage, and `:spill-root`, the directory for temporary spill files. Set
   `:spill-threshold` to `100` to disable spill-to-disk.
+
+Both `:temp?` and `:inmemory?` are for ephemeral stores, but they are not the
+same mode. A `:temp?` store is still an LMDB environment backed by files in a
+directory; Datalevin marks it for cleanup and disables synchronous flushing. Use
+it when you want temporary data but still want the normal file-backed behavior
+during the process lifetime. An `:inmemory?` store uses the native in-memory
+environment mode: the environment lives in memory, may be opened with a `nil`
+directory, and disappears when closed. Use it for small test databases,
+short-lived fixtures, and scratch stores where no filesystem-backed environment
+is needed.
 
 `:temp?` or `:inmemory?` stores are ideal for ephemeral data like session caches,
 intermediate computation results, or high-speed buffers.
@@ -227,8 +238,8 @@ await kv.openListDbi("tags");
 
 ## 3. Data Types
 
-While LMDB deals with raw bytes, Datalevin adds a layer of encoded data types to
-ensure correct sorting and efficient storage. These types can be specified as
+LMDB deals with raw bytes. Datalevin encodes and decodes typed values so those
+bytes sort correctly and store efficiently. These types can be specified as
 `key-type` or `val-type` parameters in KV operations.
 
 KV type validation is separate from Datalog schema validation. In Datalog,
@@ -275,10 +286,12 @@ DUPSORT value needs to sort by more than one field, such as
 
 Do not confuse these KV type descriptors with Datalog schema composite
 `:db.type/tuple`. Here, the descriptor controls how a vector is encoded in the
-KV layer. KV tuple descriptors come in two forms: heterogeneous descriptors,
-with one scalar type per position, and homogeneous descriptors, with one scalar
-type repeated for every element. In the KV API, a tuple type is written as a
-vector of scalar KV types:
+KV layer. In the KV API, a tuple type is written as a vector of scalar KV
+types. There are two forms:
+
+- A **heterogeneous** descriptor gives one scalar type per position.
+- A **homogeneous** descriptor gives one scalar type that repeats for every
+  element.
 
 | Type Descriptor | Meaning |
 | :--- | :--- |
@@ -296,7 +309,11 @@ elements must use encodings that preserve the intended sort order in those
 buffers: `:string`, `:long`, `:float`, `:double`, `:bigint`, `:bigdec`,
 `:bytes`, `:keyword`, `:symbol`, `:boolean`, `:instant`, and `:uuid`. Do not
 use `:data` inside a tuple; arbitrary EDN data is not a sortable tuple
-component. For numeric IDs inside tuples, use `:long`.
+component. For numeric IDs inside tuples, use `:long`: tuple elements need
+headered encodings, while the KV-only `:id` and `:int` encodings are raw
+fixed-width forms without per-element type headers. If you use `:id` or `:int`
+as a tuple element type, Datalevin will reject the tuple descriptor rather than
+silently choosing a different encoding.
 
 Tuples sort lexicographically by their encoded elements: first element first,
 then the second element to break ties, and so on. Put the field you most often
@@ -512,9 +529,9 @@ the maximum key size is **511 bytes**.
 
 ## 4. KV Operations
 
-Technically, writes to a KV store go through write transactions, and reads
-through read transactions. When we speak of a transaction, we mean a write
-transaction, and we call a read transaction a query.
+Under the hood, LMDB uses transactions for both reads and writes. In this
+section, transaction means a write transaction: a batch of changes that commits
+atomically. We call read transactions queries.
 
 ### 4.1 Transactions
 
@@ -523,7 +540,8 @@ operations atomically: either all items commit or none of them do. A single KV
 transaction may write to several DBIs in the same store, but it cannot span two
 different stores or database files.
 
-Transaction items are vectors. There are two common shapes.
+Transaction items are vectors. Datalevin accepts two public layouts for KV
+transaction data.
 
 The **self-contained shape** is used with `(d/transact-kv kv txs)`. Each item
 names the DBI and may carry its own key and value types:

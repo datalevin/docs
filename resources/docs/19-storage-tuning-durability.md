@@ -329,8 +329,8 @@ by WAL retention.
 (d/create-snapshot! kv)
 ```
 
-The Java, Python, and JavaScript bindings expose the same WAL maintenance
-helpers directly on local KV handles and Datalog connections:
+WAL maintenance helpers are available directly on local KV handles and Datalog
+connections:
 
 <div class="multi-lang">
 
@@ -397,12 +397,6 @@ runs.
 (d/gc-txlog-segments! kv 5000)
 ```
 
-In Java, Python, and JavaScript, use `gcTxLogSegments`,
-`gc_tx_log_segments`, and `gcTxLogSegments` on the local KV or connection
-handle. The optional retain-floor LSN is passed as the method argument in Java
-and Python, or as `{ retainFloorLsn: 5000 }` in JavaScript.
-
-
 ### 1.6 Online Backup Copies: `d/copy`
 
 In other databases, backing up a live database can be tricky. If you simply copy
@@ -419,9 +413,6 @@ This section is about the default, non-compacting copy. It preserves the
 database content and layout closely enough for fast backup creation. If the goal
 is to reclaim free pages after large deletes or to rewrite the destination into
 a smaller file, use the compacting form in Section 1.7.1.
-
-The Java, Python, and JavaScript bindings expose `copy` directly on both
-connection and KV handles.
 
 <div class="multi-lang">
 
@@ -592,11 +583,9 @@ thread or process is accessing the same database.
   (d/re-index conn new-schema {:backup? true}))
 ```
 
-The embedded Java, Python, and JavaScript bindings expose the same operation as
-`conn.reIndex(...)`, `conn.re_index(...)`, and `conn.reIndex(...)`. KV stores
-and standalone search engines expose corresponding `reIndex` / `re_index`
-methods. Client/server users should schedule re-indexing as an operator task on
-the host that owns the local database files.
+KV stores and standalone search engines expose corresponding re-index
+operations. Client/server users should schedule re-indexing as an operator task
+on the host that owns the local database files.
 
 
 ### 1.9 Database Upgrades
@@ -663,12 +652,11 @@ knowing your data is safe from crashes and easy to recover from disasters.
 Datalevin is a "zero-copy" database, which means its memory management is very
 different from an ordinary application that keeps its working data as managed
 runtime objects. As discussed in the preface and Chapter 4, Datalevin is
-layered: native LMDB storage, a JVM/Java bridge, Clojure database semantics, and
-language bindings for Clojure, Java, Python, and JavaScript. The Garbage
-Collection (GC) discussion in this section is about Datalevin's runtime heap,
-not a requirement that application code be written in Java. The important point
-is that the database pages themselves are file-backed pages managed by the
-operating system, not objects managed by Datalevin's runtime GC.
+layered: native LMDB storage, a JVM bridge, database semantics, and host APIs.
+The Garbage Collection (GC) discussion in this section is about Datalevin's
+runtime heap, not a requirement on the application implementation language. The
+important point is that the database pages themselves are file-backed pages
+managed by the operating system, not objects managed by Datalevin's runtime GC.
 
 This section covers the best practices for tuning Datalevin's memory and storage
 parameters for maximum performance and stability.

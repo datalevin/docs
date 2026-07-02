@@ -19,9 +19,6 @@ similarity-search features:
 
 This chapter explains how to configure both paths, perform semantic searches,
 and understand the underlying Hierarchical Navigable Small World (HNSW) engine.
-The Java snippets use the high-level `Connection` API. Python snippets use
-`datalevin.connect`, and JavaScript snippets use `connect` from
-`datalevin-node`.
 
 A **vector** is an ordered array of numbers. A **dense vector** usually has a
 fixed number of dimensions, such as 384, 768, or 1536, and every position has a
@@ -358,10 +355,8 @@ during transactions. The direct provider API is useful when application code
 needs embeddings before a transaction, wants to check token counts, or needs to
 truncate text to a model limit:
 
-The Clojure API exposes the generic embedding-provider interface used by
-embedding domains. Java, Python, and JavaScript expose direct local llama.cpp
-embedder handles; configure hosted OpenAI-compatible providers through
-`:embedding-opts`, as shown above.
+Configure hosted OpenAI-compatible providers through `:embedding-opts`, as shown
+above.
 
 <div class="multi-lang">
 
@@ -747,11 +742,9 @@ await conn.query(
 
 ## 4. Standalone Vector Database
 
-Datalevin can be used as a standalone vector database:
-
-The standalone vector-index API is available from Clojure, Java, Python, and
-JavaScript. Use it when you want a KV-backed vector index without a Datalog
-schema attribute.
+Datalevin can be used as a standalone vector database. Use the standalone
+vector-index API when you want a KV-backed vector index without a Datalog schema
+attribute.
 
 <div class="multi-lang">
 

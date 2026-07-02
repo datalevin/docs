@@ -38,12 +38,12 @@ public function signatures.
 
 Some parts of the surface area are newer or more operationally sensitive than
 the core database API. WAL, replication, consensus high availability, idoc
-indexes, embedding and vector indexes, asynchronous indexing, MCP tooling, and
-language bindings may gain options, commands, or operational guidance as the
-project evolves. Unless this book marks a feature as experimental, the API
-described here is intended to be usable in the targeted release, but production
-deployments should still pin a Datalevin version, read the release notes before
-upgrading, and verify behavior in staging.
+indexes, embedding and vector indexes, asynchronous indexing, and MCP tooling
+may gain options, commands, or operational guidance as the project evolves.
+Unless this book marks a feature as experimental, the API described here is
+intended to be usable in the targeted release, but production deployments should
+still pin a Datalevin version, read the release notes before upgrading, and
+verify behavior in staging.
 
 Platform support can also differ by feature. For example, the core Datalog and
 KV APIs may be available on a platform where optional vector or embedding
@@ -74,10 +74,8 @@ to a more realistic level only when the test needs it.
 Chapter 8 showed that the query engine accepts any sequence of `[e a v]` tuples
 as a data source. This is the fastest way to unit-test query and rule logic,
 because there is no store to open, transact, or clean up. The fixture data sits
-in the test itself. In Clojure the tuple sequence can be the only data source.
-In Java, Python, and JavaScript, the high-level `conn.query` method supplies the
-normal `$` database source, so the examples use a throwaway in-memory connection
-and bind the tuple fixture as `$data`.
+in the test itself. The examples use a throwaway in-memory connection and bind
+the tuple fixture as `$data`.
 
 <div class="multi-lang">
 
@@ -533,37 +531,32 @@ Two pitfalls are worth avoiding:
       (d/close conn))))
 ```
 
-The high-level Java, Python, and JavaScript bindings can test the same full-text,
-idoc, and vector queries through ordinary `conn.query` calls. For async
-secondary-index maintenance helpers, check the current language-compatibility
-document for wrapper coverage; otherwise keep unit tests in synchronous indexing
-mode and put async-index assertions behind a Clojure maintenance hook or
+The same full-text, idoc, and vector queries can be tested through ordinary
+query calls. For async secondary-index maintenance helpers, check the current
+API reference for wrapper coverage; otherwise keep unit tests in synchronous
+indexing mode and put async-index assertions behind a maintenance hook or
 integration test.
 
-### 1.7 Testing From Other Language Bindings
+### 1.7 Testing From Application Test Runners
 
-Use the test runner native to each host language: `clojure.test`, JUnit or
-AssertJ, pytest, Node's built-in test runner, Jest, or whatever your application
-already uses. Datalevin should be ordinary application code inside those tests.
+Use the test runner your application already uses. Datalevin should be ordinary
+application code inside those tests.
 
 The portable patterns are:
 
-- **Tuple-backed query tests**: Clojure can call `d/q` directly on an EAV tuple
-  sequence. Java, Python, and JavaScript can bind the same tuple sequence as a
-  named source such as `$data` while using a throwaway in-memory connection as
-  the query host.
-- **Fresh in-memory databases**: all bindings can open `nil`/`null`/`None` with
-  `:kv-opts {:inmemory? true}` and close the connection at the end of the test.
-- **Per-test temporary directories**: all bindings can use the host test
-  runner's temporary-directory facility, open a normal path-backed connection,
-  and let the runner delete the directory after the test.
-- **Simulated transaction reports**: all bindings can dry-run transaction data
-  against the current database state and assert on the resulting report without
-  committing the transaction.
-- **Clojure-specific conveniences**: `with-conn`, `clojure.test` fixtures,
-  and `datalevin.util/tmp-dir` are Clojure helper APIs. In other languages,
-  prefer explicit connection lifecycle management and the host runner's
-  temporary-directory facilities.
+- **Tuple-backed query tests**: Bind an EAV tuple sequence as a named source
+  such as `$data`, using a throwaway in-memory connection when the query API
+  needs a primary database source.
+- **Fresh in-memory databases**: open a fresh in-memory database and close the
+  connection at the end of the test.
+- **Per-test temporary directories**: use the test runner's temporary-directory
+  facility, open a normal path-backed connection, and let the runner delete the
+  directory after the test.
+- **Simulated transaction reports**: dry-run transaction data against the
+  current database state and assert on the resulting report without committing
+  the transaction.
+- **Helper APIs**: fixtures and temporary-directory helpers are conveniences;
+  explicit connection lifecycle management works everywhere.
 
 
 ## 2. Choose a Deployment Mode
@@ -986,8 +979,7 @@ await replicaConn.transact([{ ":db/id": -1, ":name": "blocked" }]);
 
 </div>
 
-Replica status is available through typed admin clients in all primary
-bindings:
+Replica status is available through typed admin clients:
 
 <div class="multi-lang">
 
@@ -1087,8 +1079,7 @@ users that should read from followers.
 
 Consensus HA membership is operator managed. Datalevin does not discover data
 nodes automatically. Update the authoritative membership for an open HA database
-with `datalevin.client/ha-update-membership!` in Clojure or the equivalent
-typed client method in the other bindings.
+with the HA membership update admin call.
 
 `ha-members` endpoints use `host:port` strings and must be ordered by ascending
 `:node-id`.
@@ -1525,10 +1516,10 @@ inside the same write transaction. Use it only for short critical sections. Do
 not perform HTTP calls, file uploads, email delivery, or long CPU work inside
 the transaction body.
 
-JavaScript does not expose the Datalog transaction callback. For JavaScript,
-keep the read-modify-write operation as a single `conn.transact(...)` when
-possible, use `:db/cas` for optimistic updates, or move the serialized command
-into the Datalevin-hosting process.
+If the host API does not expose the Datalog transaction callback, keep the
+read-modify-write operation as a single transaction when possible, use `:db/cas`
+for optimistic updates, or move the serialized command into the
+Datalevin-hosting process.
 
 When a write is intentionally optimistic, use CAS and retry at the application
 operation boundary. Re-read inside every attempt:

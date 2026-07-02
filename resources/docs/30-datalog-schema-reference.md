@@ -107,7 +107,7 @@ The public schema properties that Datalevin interprets are the following:
 | :--- | :--- | :--- |
 | `:db/valueType` | See value type table below | Encoded value type. Required for refs, range-friendly ordering, tuples, vectors, idocs, and typed validation. |
 | `:db/cardinality` | `:db.cardinality/one`, `:db.cardinality/many` | One value or a set of values per entity. Defaults to one. |
-| `:db/unique` | `:db.unique/value`, `:db.unique/identity` | Enforces uniqueness. Identity also enables lookup refs and upsert. |
+| `:db/unique` | `:db.unique/value`, `:db.unique/identity` | Enforces uniqueness. Both modes support lookup refs; identity also enables upsert. |
 | `:db/isComponent` | `true`, `false` | Owned child relationship. Must be used with `:db/valueType :db.type/ref`. |
 | `:db/doc` | string | Human-readable attribute documentation. |
 | `:db/fulltext` | `true`, `false` | Maintains a full-text secondary index. Values are converted with `str` before indexing. |
@@ -137,14 +137,6 @@ arguments, so it can check required attributes, entity-shape rules, and
 cross-attribute invariants after all transaction data has been expanded to
 datoms. `:db/ensure` forms do not become datoms in `:tx-data`; they abort the
 transaction before commit if a predicate returns falsey or throws.
-
-The schema map may also contain metadata or compatibility keys that Datalevin
-stores but does not use as behavioral schema controls. In particular,
-`:db/index` is not needed because Datalevin maintains AVE entries for every
-attribute by default, and `:db/noHistory` does not enable Datomic-style history
-behavior. Treat such keys as inert metadata unless a Datalevin feature
-explicitly documents them.
-
 
 ## 5. Value Types
 
@@ -178,7 +170,8 @@ which is flexible but not as useful for ordered range access.
 `:db.unique/value` means no two entities may have the same value for that
 attribute. Duplicates will be rejected with a transaction error.
 
-`:db.unique/identity` enables lookup refs and upsert:
+Any `:db/unique` attribute can be used in a lookup ref. `:db.unique/identity`
+also enables upsert:
 
 ```clojure
 {:user/email {:db/valueType :db.type/string
@@ -389,7 +382,7 @@ Datalevin's Datalog model is familiar to Datomic and DataScript users, but the s
 - Schema is passed to `get-conn`, `create-conn`, `empty-db`, or `init-db`, and later changed with `update-schema`.
 - Undefined attributes are allowed unless `:closed-schema? true` is set.
 - Unspecified value types are stored as EDN data.
-- AVE indexing is automatic for every attribute; do not add `:db/index`.
+- AVE indexing is automatic for every attribute.
 - Use `:db/ident` for named enum/system entities.
 - Use `:db.attr/preds` for attribute-local value predicates, and use
   `:db/ensure` for explicit entity invariants over the would-be transaction

@@ -45,11 +45,11 @@ The implementation of a datom is a richer Datom object. A full Datom has five fi
 The `:tx` value is Datalevin's internal numeric transaction id for the
 transaction report. Datalevin maintains the latest transaction counter as store
 metadata (`max-tx`), but per-datom transaction ids are not stored in the
-persistent EAV/AVE indexes. A transaction id is also not a Datomic-style
-reified transaction entity with automatically stored attributes. The optional
-`tx-meta` argument to `transact!` is returned in the transaction report and sent
-to listeners, but it is not stored as queryable transaction-entity metadata
-unless your application explicitly transacts its own audit facts.
+persistent EAV/AVE indexes. A transaction id is also not a queryable
+transaction entity with automatically stored attributes. The optional `tx-meta`
+argument to `transact!` is returned in the transaction report and sent to
+listeners, but it is not stored as queryable transaction metadata unless your
+application explicitly transacts its own audit facts.
 
 The printed form emphasizes the logical triple:
 
@@ -71,23 +71,24 @@ In a transaction report, the transaction fields are available on `:tx-data`:
 ;=> {:e 101, :a :user/email, :v "alice@example.com", :tx 42, :added true}
 ```
 
-Datalevin's current database indexes expose current facts, so datoms returned
-from `datoms`, `search-datoms`, and `index-range` should be treated as current
-`[e a v]` facts, not as historical records keyed by transaction. Transaction
-reports are where `:tx` and `:added false` most often matter: a report's
-`:tx-data` can include datoms that were retracted by the transaction.
+Datalevin's EAV/AVE indexes expose the facts present in the database state you
+are reading, so datoms returned from `datoms`, `search-datoms`, and
+`index-range` should be treated as `[e a v]` facts, not as historical records
+keyed by transaction. Transaction reports are where `:tx` and `:added false`
+most often matter: a report's `:tx-data` can include datoms that were retracted
+by the transaction.
 
 This distinction explains a recurring convention in the book: `[e a v]` means
 "the logical fact used by a query or index key"; the full Datom object carries
 the extra transaction metadata needed by lower-level APIs and transaction
 reports.
 
-The contrast with database-as-value systems is direct. One way to support that
-style of history is to store the transaction dimension with every datom: keep
-each assertion and retraction with its transaction id, then answer historical
-queries by selecting the datoms whose transaction ids are visible at a chosen
-point in time. Datalevin deliberately does not make that per-datom transaction
-dimension part of the persistent EAV/AVE indexes.
+Datalevin's persistent EAV/AVE indexes are not history indexes. A system that
+supports historical database values can store the transaction dimension with
+every datom: keep each assertion and retraction with its transaction id, then
+answer historical queries by selecting the datoms whose transaction ids are
+visible at a chosen point in time. Datalevin deliberately does not make that
+per-datom transaction dimension part of the persistent EAV/AVE indexes.
 
 **Why not database-as-value history?** Datalevin is designed first as an OLTP
 database: an operational store for current application state. For that workload,
@@ -241,14 +242,6 @@ on-disk storage size and write overhead.
 One of the most powerful features of Datalevin is that it exposes these indexes
 directly to the developer. You are not limited to the Datalog query engine; you
 can treat the indexes as **programmable capabilities**.
-
-Most non-Clojure examples earlier in the book use high-level convenience
-methods such as `conn.query`, `conn.transact`, and `conn.pull`. Direct index
-access is lower-level, but the Java, Python, and JavaScript bindings expose
-the common index reads as high-level connection methods too. The Clojure
-examples below use `datalevin.core` as `d`; Java examples assume a
-`Connection conn`; Python examples assume a `Connection conn`; JavaScript
-examples assume an async `Connection conn`.
 
 Direct index APIs return datoms in index order. They are best for simple, known
 access paths where you want the index itself, not the Datalog planner, to be the

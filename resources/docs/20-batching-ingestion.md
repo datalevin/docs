@@ -23,8 +23,7 @@ manual batches submitted through `transact-async`, often with WAL mode enabled.
 Chapter 19 explains WAL durability profiles and LSN maintenance; here the point
 is how to submit work without making every caller wait for its own commit.
 
-`d/transact-async` in Clojure, `transactAsync` in Java and JavaScript, and
-`transact_async` in Python submit ordinary transaction data and return a future
+The async transaction API submits ordinary transaction data and returns a future
 or promise. Datalevin can then batch concurrent submissions internally.
 
 <div class="multi-lang">
@@ -218,15 +217,10 @@ const conn = await connect("/tmp/import-dl", {
 
 </div>
 
-In the Java, Python, and JavaScript examples, the flag values use
-colon-prefixed strings because these option values are Datalevin keywords. The
-Python `shared=True` and JavaScript `shared: true` options select the shared
-connection form corresponding to Java's `getConn`.
-
 If you use `:nosync` or `:writemap`/`:mapasync`, write the import so it can be
 replayed from a durable source. For raw KV imports, call the KV `sync` operation
-(`d/sync` in Clojure) at explicit checkpoints or before handing the database to
-normal durable workloads. For online systems with irreplaceable writes, prefer
+at explicit checkpoints or before handing the database to normal durable
+workloads. For online systems with irreplaceable writes, prefer
 WAL mode with async transactions and tune durability there instead.
 
 
@@ -360,11 +354,8 @@ overhead entirely using `d/init-db` and `d/fill-db`. Note that these functions
   database
 - **`d/fill-db`**: Bulk load additional datoms into an existing database
 
-The same bulk-load path is exposed in the Java, Python, and JavaScript
-bindings: `Datalevin.initDb` / `fillDb`, `init_db` / `fill_db`, and `initDb` /
-`fillDb`, respectively. Use normal transactions instead when you need tempids,
-lookup refs, upserts, transaction functions, or transaction-level integrity
-checks.
+Use normal transactions instead when you need tempids, lookup refs, upserts,
+transaction functions, or transaction-level integrity checks.
 
 ### 3.1 Assigning Entity Ids for Prepared Datoms
 

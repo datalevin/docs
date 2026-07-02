@@ -19,12 +19,6 @@ model. Use `idoc` when the nested structure is flexible metadata, imported JSON,
 Markdown-derived structure, or application-defined data that should be searched
 by path without forcing every field into the schema.
 
-The Java snippets in this chapter assume an open `Connection` named `conn`.
-Python and JavaScript snippets assume open `conn` and `db` handles. When an
-example passes a Datalog form as data, non-Clojure snippets use EDN helpers such
-as `Datalevin.edn`, `interop().read_edn`, and `await interop().readEdn`.
-
-
 ## 1. Logical Documents with `:db/isComponent`
 
 The most common way to model durable domain documents in Datalevin is to use

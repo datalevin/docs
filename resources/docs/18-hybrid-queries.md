@@ -50,11 +50,9 @@ This single-engine model has consequences beyond convenience:
   access-control boundary, and one failure domain, instead of three systems that
   can fail or drift independently.
 
-Clojure snippets below use an explicit `db` value. Java, Python, and JavaScript
-snippets assume an open connection named `conn`, whose `query` method supplies
-the current database as `$`. Snippets that call `fulltext` with an attribute
-argument, such as `:doc/content`, assume that attribute has `:db/fulltext true`
-and `:db.fulltext/autoDomain true`.
+Snippets that call `fulltext` with an attribute argument, such as
+`:doc/content`, assume that attribute has `:db/fulltext true` and
+`:db.fulltext/autoDomain true`.
 
 
 ## 2. Index Return Formats
@@ -543,12 +541,9 @@ specialized indexes.
 
 The example above uses a Datalog function binding through the portable `udf`
 form: the function receives a value from the query and returns another value
-that the query can bind. Clojure can also call ordinary Clojure functions
-directly in embedded queries, but descriptor-backed UDFs are the portable shape
-for Java, Python, JavaScript, server deployments, and code that should be
-configured through an application registry. Register implementations with
-`datalevin.udf/register!`, Java `UdfRegistry.queryFn`, Python
-`registry.query_udf`, or JavaScript `registry.queryUdf`.
+that the query can bind. Descriptor-backed UDFs are the portable shape for
+server deployments and code that should be configured through an application
+registry.
 
 Keep query UDFs deterministic and cheap. If a function performs network calls,
 writes state, or scans a large KV range, it can make query behavior surprising

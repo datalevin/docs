@@ -22,48 +22,13 @@ This chapter covers the first three. Chapter 8 focuses on Datalog query syntax,
 but queries will appear here when they help explain how lookup refs and pull
 work together.
 
-The Java, Python, and JavaScript snippets assume an open connection named
-`conn`. Clojure snippets use `conn` for a connection and `db` for a Datalog DB
-object obtained with `(d/db conn)`.
-
-Datalevin's `db` is not a Datomic-style immutable database-as-value object. It
-is the DB handle currently held by a connection: a handle to the underlying
-storage plus metadata and caches derived from the storage state. Those cached
-details help read APIs interpret schema, ids, indexes, and pull patterns
-efficiently. `(d/db conn)` does not copy the database, create an
-application-level historical snapshot, or memoize entity reads. It gives read
-APIs an explicit data source for the operation about to run; it is not a history
-API exposed to application code.
-
-The reason read examples use `(d/db conn)` instead of passing `conn` directly
-to `d/q` is not ceremony. `d/q` is a query over data sources. A source may be
-the current DB from one connection, the current DB from several connections, or
-even an in-memory sequence of raw EAV tuples. The query engine should not have
-to pretend that all of those sources are connections. Transaction functions are
-different: they work through a connection because they coordinate writes,
-validation, indexes, and durability for one database.
-
-Call `(d/db conn)` when you need to read the connection's current state. A
-single query, pull, or entity lookup uses a consistent read view while that
-operation runs. Do not save a `db` object or an entity object and expect it to
-remain meaningful after later transactions; the handle's cached metadata may no
-longer match the current storage state. If you are making a new decision, get a
-new `db` from the connection before reading. There is no application-level
-concept of an "old db" in Datalevin. A saved DB object is better understood as
-an expired reference, not as something the application can treat as an earlier
-world.
-
-You may see `@conn` in older examples or REPL notes. Treat that as Clojure
-deref shorthand that relies on connection implementation details, not as the
-recommended public style. This book uses `(d/db conn)` consistently.
-
 
 ## 1. Reading by Identity with Lookup Refs
 
 Datalevin stores entities internally by numeric entity id. Application code,
 however, usually knows a natural key: a user's email, an account number, a URL
 slug, or an external system id. A **lookup ref** is the bridge between those two
-worlds. Prefer lookup refs and unique identity attributes at application
+worlds. Prefer lookup refs and unique domain attributes at application
 boundaries because eids are database-local handles; the same logical entity may
 have different eids in two databases.
 
@@ -89,10 +54,12 @@ List.of("user/email", "alice@example.com")
 
 </div>
 
-The first element must be an attribute marked `:db/unique`, usually
-`:db.unique/identity` for domain identity. The second element is the value of
-that unique attribute. Datalevin resolves the vector to the matching entity id
-when an API expects an entity.
+The first element must be an attribute marked `:db/unique`. Both
+`:db.unique/value` and `:db.unique/identity` can be used in lookup refs;
+`:db.unique/identity` is the usual choice for domain identifiers when you also
+want upsert behavior. The second element is the value of that unique attribute.
+Datalevin resolves the vector to the matching entity id when an API expects an
+entity.
 
 <div class="multi-lang">
 
@@ -230,7 +197,7 @@ id:
 ;; => 1
 
 ;; Pull by lookup ref.
-(d/pull db '[:user/name :user/email] [:user/email "alice@example.com"])
+(d/pull db [:user/name :user/email] [:user/email "alice@example.com"])
 ;; => {:user/name "Alice", :user/email "alice@example.com"}
 
 ;; Navigate by lookup ref.
@@ -328,9 +295,7 @@ const orderIds = await conn.query(
 </div>
 
 If a lookup ref does not resolve, `d/entid`, `d/entity`, and `d/pull` return
-`nil`. A numeric id is different: it is already an id, so `d/entid` returns it
-without proving that the entity has datoms. Use a lookup ref, a query, or a
-specific attribute read when you need an existence check.
+`nil`.
 
 
 ## 2. Pull: Fetching a Declared Shape
@@ -358,13 +323,12 @@ const result = await conn.pull(pattern, eidOrLookupRef);
 
 </div>
 
-The pattern is a vector describing which attributes to retrieve. The result is a
-plain map, not a lazy entity.
+The pattern is a vector describing which attributes to retrieve.
 
 <div class="multi-lang">
 
 ```clojure
-(d/pull db '[:user/name :user/email]
+(d/pull db [:user/name :user/email]
         [:user/email "alice@example.com"])
 ;; => {:user/name "Alice", :user/email "alice@example.com"}
 ```
@@ -387,14 +351,17 @@ const alice = await conn.pull('[:user/name :user/email]',
 
 </div>
 
-If you already have the numeric entity id, pass it directly to `d/pull` for a
-shaped map or to `d/entity` for lazy navigation. You do not need a Datalog query
-just to retrieve one known entity:
+If you already have the numeric entity id, pass it directly to `d/pull`. You do
+not need a Datalog query just to retrieve one known entity:
+
+A numeric id is treated as an id, not as an existence check. `d/entid` returns
+numeric ids unchanged; use a lookup ref, a query, or a specific attribute read
+when you need to verify that an entity currently exists.
 
 <div class="multi-lang">
 
 ```clojure
-(d/pull db '[:user/name :user/email] 1)
+(d/pull db [:user/name :user/email] 1)
 ;; => {:user/name "Alice", :user/email "alice@example.com"}
 ```
 
@@ -412,37 +379,12 @@ const alice = await conn.pull('[:user/name :user/email]', 1);
 
 </div>
 
-The entity APIs are another option when you want navigation rather than a fixed
-pull shape:
-
-<div class="multi-lang">
-
-```clojure
-(:user/name (d/entity db 1))
-;; => "Alice"
-```
-
-```java
-conn.entityMap(1).get("user/name");
-```
-
-```python
-conn.entity(1)[":user/name"]
-```
-
-```javascript
-const alice = await conn.entity(1);
-await alice.get(":user/name");
-```
-
-</div>
-
 Use `[*]` to fetch all forward attributes of the entity:
 
 <div class="multi-lang">
 
 ```clojure
-(d/pull db '[*] [:user/email "alice@example.com"])
+(d/pull db ['*] [:user/email "alice@example.com"])
 ;; => {:db/id 1,
 ;;     :user/name "Alice",
 ;;     :user/email "alice@example.com"}
@@ -474,15 +416,11 @@ Pull patterns can follow reference attributes. If `:order/customer` has
 `:db/valueType :db.type/ref`, a nested map in the pattern tells Datalevin how to
 shape the referenced entity:
 
-This example uses the schema from Section 1, where `:order/id` is declared
-`:db.unique/identity`. Without that uniqueness declaration, `[:order/id
-"o-1001"]` is just a two-element vector, not a valid lookup ref.
-
 <div class="multi-lang">
 
 ```clojure
 (d/pull db
-        '[:order/id {:order/customer [:user/name :user/email]}]
+        [:order/id {:order/customer [:user/name :user/email]}]
         [:order/id "o-1001"])
 ```
 
@@ -519,7 +457,7 @@ reference:
 <div class="multi-lang">
 
 ```clojure
-(d/pull db '[:order/id :order/customer] [:order/id "o-1001"])
+(d/pull db [:order/id :order/customer] [:order/id "o-1001"])
 ;; => {:order/id "o-1001", :order/customer {:db/id 1}}
 ```
 
@@ -551,16 +489,97 @@ expand the component recursively, because the component is part of the parent's
 logical document. For stable API responses, prefer an explicit nested pattern
 or a bounded recursive pattern even for components.
 
-### 2.2 Pulling Many Entities
+### 2.2 Reverse Pull
 
-When you already have several entity ids or lookup refs, use `d/pull-many`
-rather than calling `d/pull` in a loop:
+A reference attribute points forward from one entity to another. For example,
+an order has `:order/customer` pointing to a user. Sometimes you want to start
+from the user and ask, "which orders point here?"
+
+Pull supports this with **reverse attributes**. For a namespaced attribute like
+`:order/customer`, the reverse attribute is `:order/_customer`. For an
+unqualified attribute like `:friend`, the reverse attribute is `:_friend`.
+
+<div class="multi-lang">
+
+```clojure
+(d/pull db
+        [:user/name {:order/_customer [:order/id]}]
+        [:user/email "alice@example.com"])
+;; => {:user/name "Alice",
+;;     :order/_customer [{:order/id "o-1001"}]}
+```
+
+```java
+Map<?, ?> alice =
+    conn.pull("[:user/name {:order/_customer [:order/id]}]",
+              List.of("user/email", "alice@example.com"));
+```
+
+```python
+alice = conn.pull('[:user/name {:order/_customer [:order/id]}]',
+                  [":user/email", "alice@example.com"])
+```
+
+```javascript
+const alice =
+  await conn.pull('[:user/name {:order/_customer [:order/id]}]',
+                  [':user/email', 'alice@example.com']);
+```
+
+</div>
+
+As with forward references, a bare reverse attribute returns only small entity
+reference maps:
+
+<div class="multi-lang">
+
+```clojure
+(d/pull db
+        [:user/name :order/_customer]
+        [:user/email "alice@example.com"])
+;; => {:user/name "Alice",
+;;     :order/_customer [{:db/id 3}]}
+```
+
+```java
+Map<?, ?> alice =
+    conn.pull("[:user/name :order/_customer]",
+              List.of("user/email", "alice@example.com"));
+```
+
+```python
+alice = conn.pull('[:user/name :order/_customer]',
+                  [":user/email", "alice@example.com"])
+```
+
+```javascript
+const alice =
+  await conn.pull('[:user/name :order/_customer]',
+                  [':user/email', 'alice@example.com']);
+```
+
+</div>
+
+Plain forward pull returns the stored value even when an attribute is untyped.
+The `:db.type/ref` declaration matters when the pattern asks Datalevin to
+traverse: nested pull such as `{:order/customer [...]}` and reverse pull such as
+`:order/_customer` require `:order/customer` to be declared as a ref. Otherwise
+Datalevin rejects the pull pattern instead of treating an arbitrary value as an
+entity id.
+
+### 2.3 Pulling Many Entities
+
+When you already have several entity ids or lookup refs, `d/pull-many` applies
+one pull pattern to all of them and returns the maps in the same order. In
+embedded code this is mostly a clearer shape with a small benefit: Datalevin
+prepares the pattern once for the batch. In client/server code it is more
+important because it avoids one round trip per entity.
 
 <div class="multi-lang">
 
 ```clojure
 (d/pull-many db
-             '[:user/name]
+             [:user/name]
              [[:user/email "alice@example.com"]
               [:user/email "bob@example.com"]])
 ;; => [{:user/name "Alice"} {:user/name "Bob"}]
@@ -717,94 +736,11 @@ const users = await usersConn.query(
 </div>
 
 
-## 3. Reverse Pull
-
-A reference attribute points forward from one entity to another. For example,
-an order has `:order/customer` pointing to a user. Sometimes you want to start
-from the user and ask, "which orders point here?"
-
-Pull supports this with **reverse attributes**. For a namespaced attribute like
-`:order/customer`, the reverse attribute is `:order/_customer`. For an
-unqualified attribute like `:friend`, the reverse attribute is `:_friend`.
-
-<div class="multi-lang">
-
-```clojure
-(d/pull db
-        '[:user/name {:order/_customer [:order/id]}]
-        [:user/email "alice@example.com"])
-;; => {:user/name "Alice",
-;;     :order/_customer [{:order/id "o-1001"}]}
-```
-
-```java
-Map<?, ?> alice =
-    conn.pull("[:user/name {:order/_customer [:order/id]}]",
-              List.of("user/email", "alice@example.com"));
-```
-
-```python
-alice = conn.pull('[:user/name {:order/_customer [:order/id]}]',
-                  [":user/email", "alice@example.com"])
-```
-
-```javascript
-const alice =
-  await conn.pull('[:user/name {:order/_customer [:order/id]}]',
-                  [':user/email', 'alice@example.com']);
-```
-
-</div>
-
-As with forward references, a bare reverse attribute returns only small entity
-reference maps:
-
-<div class="multi-lang">
-
-```clojure
-(d/pull db
-        '[:user/name :order/_customer]
-        [:user/email "alice@example.com"])
-;; => {:user/name "Alice",
-;;     :order/_customer [{:db/id 3}]}
-```
-
-```java
-Map<?, ?> alice =
-    conn.pull("[:user/name :order/_customer]",
-              List.of("user/email", "alice@example.com"));
-```
-
-```python
-alice = conn.pull('[:user/name :order/_customer]',
-                  [":user/email", "alice@example.com"])
-```
-
-```javascript
-const alice =
-  await conn.pull('[:user/name :order/_customer]',
-                  [':user/email', 'alice@example.com']);
-```
-
-</div>
-
-Use a nested reverse pattern when you want attributes from the entities that
-point back to the current entity.
-
-Reverse pull is not a special side table. As Chapter 15 explains, references
-are values in Datalevin's indexes, so reverse reference lookup is an indexed
-value-to-entity lookup.
-
-Reverse navigation works best when the attribute is declared as
-`:db.type/ref`. Without that schema information, Datalevin cannot know that the
-value should be treated as an entity reference in higher-level navigation APIs.
-
-
-## 4. Pull Pattern Options
+### 2.4 Pull Pattern Options
 
 Pull supports attribute options for common response-shaping needs.
 
-### 4.1 Limiting Cardinality-Many Attributes
+#### 2.4.1 Limiting Cardinality-Many Attributes
 
 Pull returns at most 1000 values for a cardinality-many attribute by default.
 Use `:limit` to choose a smaller limit, or `nil` for no limit. The option is
@@ -813,7 +749,7 @@ written as an attribute expression:
 <div class="multi-lang">
 
 ```clojure
-(d/pull db '[[:user/friends :limit 5]]
+(d/pull db [[:user/friends :limit 5]]
         [:user/email "bob@example.com"])
 ```
 
@@ -841,7 +777,7 @@ The same attribute expression can be used as the key in a nested map spec:
 
 ```clojure
 (d/pull db
-        '[:user/name {[:user/friends :limit 5] [:user/name]}]
+        [:user/name {[:user/friends :limit 5] [:user/name]}]
         [:user/email "bob@example.com"])
 ```
 
@@ -864,7 +800,7 @@ const bob =
 
 </div>
 
-### 4.2 Default Values
+#### 2.4.2 Default Values
 
 Use `:default` when the response should include a value even if the entity does
 not currently have that attribute:
@@ -873,7 +809,7 @@ not currently have that attribute:
 
 ```clojure
 (d/pull db
-        '[:user/name [:user/active? :default true]]
+        [:user/name [:user/active? :default true]]
         [:user/email "alice@example.com"])
 ;; => {:user/name "Alice", :user/active? true}
 ```
@@ -897,7 +833,7 @@ const alice =
 
 </div>
 
-### 4.3 Attribute Renaming
+#### 2.4.3 Attribute Renaming
 
 Use `:as` when the external response should use a different key:
 
@@ -905,8 +841,8 @@ Use `:as` when the external response should use a different key:
 
 ```clojure
 (d/pull db
-        '[[:user/name :as :name]
-          [:user/email :as :email]]
+        [[:user/name :as :name]
+         [:user/email :as :email]]
         [:user/email "alice@example.com"])
 ;; => {:name "Alice", :email "alice@example.com"}
 ```
@@ -933,17 +869,17 @@ const alice =
 Renaming is a presentation choice. It does not change the stored attributes or
 the schema.
 
-### 4.4 Transforming Pull Values
+#### 2.4.4 Transforming Pull Values
 
 Use `:xform` when a value should be transformed before it is placed in the pull
-result. The transform may be a Clojure function value or a resolvable symbol,
-such as `vector` or `clojure.string/upper-case`:
+result. The transform may be a function value or a resolvable symbol, such as
+`vector` or `clojure.string/upper-case`:
 
 <div class="multi-lang">
 
 ```clojure
 (d/pull db
-        '[[:user/name :as :name :xform clojure.string/upper-case]]
+        [[:user/name :as :name :xform 'clojure.string/upper-case]]
         [:user/email "alice@example.com"])
 ;; => {:name "ALICE"}
 ```
@@ -969,9 +905,8 @@ const alice =
 
 </div>
 
-For pull patterns that cross language or process boundaries, prefer resolvable
-symbols and make sure the runtime can load them. Anonymous functions are
-Clojure values and are best kept to embedded Clojure code.
+For pull patterns that may be stored or sent across process boundaries, prefer
+resolvable symbols and make sure the runtime can load them.
 
 If an attribute is missing and no default is supplied, the transform receives
 `nil`:
@@ -980,7 +915,7 @@ If an attribute is missing and no default is supplied, the transform receives
 
 ```clojure
 (d/pull db
-        '[[:user/nickname :xform vector]]
+        [[:user/nickname :xform vector]]
         [:user/email "alice@example.com"])
 ;; => {:user/nickname [nil]}
 ```
@@ -1011,7 +946,7 @@ returned as-is:
 
 ```clojure
 (d/pull db
-        '[[:user/nickname :default "unknown" :xform vector]]
+        [[:user/nickname :default "unknown" :xform vector]]
         [:user/email "alice@example.com"])
 ;; => {:user/nickname "unknown"}
 ```
@@ -1037,11 +972,11 @@ const alice =
 
 For reference, reverse-reference, and nested pull attributes, `:xform` receives
 the pulled value for that attribute. This is useful for small response-shaping
-steps. For transformations with business rules, error handling, or host-language
-portability requirements, prefer ordinary application code after the pull.
+steps. For transformations with business rules, error handling, or portability
+requirements, prefer ordinary application code after the pull.
 
 
-## 5. Recursive Pull and Component Trees
+### 2.5 Recursive Pull and Component Trees
 
 Nested pull is not limited to one fixed level. When a reference points to the
 same kind of entity repeatedly, such as a category tree, organization chart,
@@ -1057,7 +992,7 @@ Use a bounded depth for user-facing APIs unless the graph is naturally small:
 
 ```clojure
 (d/pull db
-        '[:category/name {:category/children 2}]
+        [:category/name {:category/children 2}]
         [:category/slug "databases"])
 ```
 
@@ -1087,7 +1022,7 @@ model guarantees a sensible boundary:
 
 ```clojure
 (d/pull db
-        '[:category/name {:category/children ...}]
+        [:category/name {:category/children '...}]
         [:category/slug "databases"])
 ```
 
@@ -1118,7 +1053,7 @@ parents:
 
 ```clojure
 (d/pull db
-        '[:category/name {:category/_children 3}]
+        [:category/name {:category/_children 3}]
         [:category/slug "lmdb"])
 ```
 
@@ -1155,8 +1090,8 @@ to expose. Prefer an explicit pattern when the external shape matters:
 
 ```clojure
 (d/pull db
-        '[:order/id
-          {:order/items [:line/sku :line/qty]}]
+        [:order/id
+         {:order/items [:line/sku :line/qty]}]
         [:order/id "o-1001"])
 ```
 
@@ -1182,35 +1117,45 @@ const order =
 Appendix E has the complete pull pattern syntax table.
 
 
-## 6. Entity API: Lazy Map-Like Navigation
+## 3. Entity API: Lazy Map-Like Navigation
 
 `d/entity` returns an entity object tied to the Datalog DB object used to create
-it. Python and JavaScript expose the same lazy entity idea as `conn.entity`.
-Java's public `Connection.entityMap` materializes a bridge-safe map for the
-entity; use `pull` when Java code needs a declared shape.
+it. Use `pull` when you need a declared map shape.
+
+Pass either a lookup ref or a numeric entity id:
 
 <div class="multi-lang">
 
 ```clojure
 (def alice (d/entity db [:user/email "alice@example.com"]))
+
+(:user/name (d/entity db 1))
+;; => "Alice"
 ```
 
 ```java
 Map<?, ?> alice =
     conn.entityMap(List.of("user/email", "alice@example.com"));
+
+conn.entityMap(1).get("user/name");
 ```
 
 ```python
 alice = conn.entity([":user/email", "alice@example.com"])
+
+conn.entity(1)[":user/name"]
 ```
 
 ```javascript
 const alice = await conn.entity([":user/email", "alice@example.com"]);
+
+const aliceById = await conn.entity(1);
+await aliceById.get(":user/name");
 ```
 
 </div>
 
-An entity behaves like a Clojure map for attribute lookup:
+An entity behaves like a map-like object for attribute lookup:
 
 <div class="multi-lang">
 
@@ -1254,7 +1199,7 @@ await alice.has(":user/name");
 The important difference from `d/pull` is laziness. Creating `alice` does not
 fetch every attribute. Reading `(:user/name alice)` fetches and caches that
 attribute. Reading another attribute may touch storage again. This makes
-`d/entity` or a lazy binding entity pleasant for conditional application logic:
+entity navigation pleasant for conditional application logic:
 
 <div class="multi-lang">
 
@@ -1291,6 +1236,14 @@ const displayName =
 
 </div>
 
+This is not a Datalog query-planning path: a forward attribute read is an
+indexed pattern lookup for that entity and attribute, and a reverse reference
+read is an indexed lookup for entities that point to the current entity. The
+performance tradeoff is the laziness itself. A single lookup is predictable, but
+walking many entities or many references can become many small reads whose count
+depends on application control flow. For bulk reads and API responses, prefer
+`d/q` with `pull`, `d/pull`, or `d/pull-many` so the read shape is explicit.
+
 Use `d/touch` when you intentionally want to realize all attributes of an entity
 for debugging, logging, or exploratory REPL work:
 
@@ -1325,9 +1278,8 @@ await alice.touch();
 </div>
 
 `d/touch` realizes the attributes, but it does not turn the entity into a plain
-persistent Clojure map. The value is still an entity object. That distinction
-matters with functions such as `merge` that construct maps by conjoining
-entries:
+persistent map. The value is still an entity object. That distinction matters
+with functions such as `merge` that construct maps by conjoining entries:
 
 ```clojure
 (def alice-ent (d/touch (d/entity db [:user/email "alice@example.com"])))
@@ -1341,11 +1293,10 @@ For API responses, prefer `d/pull` with an explicit pattern. `d/touch` says
 "realize everything currently on this entity"; `d/pull` says "return this
 declared shape."
 
-### 6.1 Entity References
+### 3.1 Entity References
 
 When an entity attribute is declared as `:db.type/ref`, lazy entity navigation
-returns entity objects for the referenced entities. Java code can use `pull`
-for the same nested read shape:
+returns entity objects for the referenced entities.
 
 <div class="multi-lang">
 
@@ -1387,7 +1338,7 @@ are lazy too, so this kind of navigation can be very convenient in a REPL or in
 small conditional branches. For large result sets, use Datalog plus pull or
 `pull-many` so the read shape is explicit.
 
-### 6.2 Reverse Navigation on Entities
+### 3.2 Reverse Navigation on Entities
 
 Entity navigation also supports reverse attributes:
 
@@ -1432,16 +1383,20 @@ that reference. For non-component references the result is a set. Component
 references can return a single owner because a component has at most one owner
 in a well-formed model.
 
-### 6.3 Entity Values and Stale Reads
+### 3.3 DB Handles, Entity Values, and Stale Reads
 
-An entity is bound to the DB object used to create it. If the connection later
-receives a transaction, the old entity does not update itself:
+Datalevin's `db` is a DB object/reference used by read APIs, not a durable
+application-state value. Treat it as a read handle for the current operation.
+Call `(d/db conn)` when you need to read the connection's current state.
+
+An entity is bound to the DB object used to create it. Do not save a `db` object
+or an entity object and expect it to follow later transactions. If freshness
+matters after a write, get a new `db` from the connection before reading:
 
 <div class="multi-lang">
 
 ```clojure
-(def db1 (d/db conn))
-(def alice-v1 (d/entity db1 [:user/email "alice@example.com"]))
+(def alice-v1 (d/entity (d/db conn) [:user/email "alice@example.com"]))
 
 (d/transact! conn
   [[:db/add [:user/email "alice@example.com"] :user/name "Alice A."]])
@@ -1502,16 +1457,10 @@ await aliceV2.get(":user/name");
 
 </div>
 
-The same rule applies to `db1` itself: it was the DB object for the read you
-were doing then. For a later read, call `(d/db conn)` again after the
-transaction. In Java, Python, and JavaScript, reacquire the entity or map from
-the connection after a write when you need to observe current state. Reads are
-stable for the operation because they use a specific DB object, not a moving
-connection.
+### 3.4 Using `d/entity` in Transaction Functions
 
-### 6.4 Why Chapter 6 Uses `d/entity`
-
-Chapter 6 used `d/entity` inside an embedded Clojure transaction function:
+Transaction functions often use `d/entity` for read-side navigation before
+returning transaction data:
 
 ```clojure
 (defn rename-user [db email new-name]
@@ -1520,30 +1469,26 @@ Chapter 6 used `d/entity` inside an embedded Clojure transaction function:
     (throw (ex-info "No user with email" {:email email}))))
 ```
 
-That pattern is common. The transaction function receives a DB object, uses a
-lookup ref to find the current entity, reads `:db/id`, and then returns
-ordinary transaction data. It does not need a separate query just to resolve the
-user.
+The transaction function receives a DB object, uses a lookup ref to find the
+current entity, reads `:db/id`, and then returns ordinary transaction data. It
+does not need a separate query just to resolve the user.
 
-That is a read use of `d/entity`: find an entity, inspect it, and return
-ordinary transaction data. Datalevin also has a transactable Entity feature,
-described next.
+This is still a read use of `d/entity`: find an entity, inspect it, and return
+transaction data. Chapter 6 covers transaction functions in more detail.
+Datalevin also has a transactable Entity feature, described next.
 
-### 6.5 Transactable Entities
+### 3.5 Transactable Entities
 
 Datalevin Entity objects are not plain maps, but they do support a small
 staging interface for writes. `assoc`, `update`, `d/add`, `d/retract`, and
 `dissoc` return a new Entity value that carries pending changes. The original
 entity and the DB object it came from are not modified. The staged changes
 become transaction data only when the staged entity is passed to `d/transact!`.
-This staged mutation interface is Clojure-only. Java, Python, and JavaScript
-entity wrappers are for lazy reads and materialization; write updates from
-those languages as explicit transaction maps/forms or binding transaction
-builders.
+When this staging interface is not available, express writes as ordinary
+transaction maps or datom vectors.
 
 ```clojure
-(def db1 (d/db conn))
-(def alice (d/entity db1 [:user/email "alice@example.com"]))
+(def alice (d/entity (d/db conn) [:user/email "alice@example.com"]))
 
 (def staged-alice
   (-> alice
@@ -1564,7 +1509,7 @@ does not change until the staged entity is transacted:
 (d/transact! conn [staged-alice])
 
 (d/pull (d/db conn)
-        '[:user/name {:user/friends [:user/name]}]
+        [:user/name {:user/friends [:user/name]}]
         [:user/email "alice@example.com"])
 ;; => {:user/name "Alice A.",
 ;;     :user/friends [{:user/name "Bob"}]}
@@ -1575,22 +1520,20 @@ Use `d/add` when adding a value to a cardinality-many attribute. Use
 without a value when retracting an entire attribute:
 
 ```clojure
-(def db2 (d/db conn))
-(def alice2 (d/entity db2 [:user/email "alice@example.com"]))
-(def bob (d/entity db2 [:user/email "bob@example.com"]))
-
-(d/transact! conn
-  [(d/retract alice2 :user/friends bob)])
+(let [db     (d/db conn)
+      alice2 (d/entity db [:user/email "alice@example.com"])
+      bob    (d/entity db [:user/email "bob@example.com"])]
+  (d/transact! conn
+    [(d/retract alice2 :user/friends bob)]))
 ```
 
 This feature is useful at the REPL and in small update flows because the code
 can look like ordinary map transformation while still producing normal
-transaction data. For larger workflows, validation-heavy updates, or non-Clojure
-clients, explicit transaction maps and datom vectors are usually easier to audit
-and test.
+transaction data. For larger workflows or validation-heavy updates, explicit
+transaction maps and datom vectors are usually easier to audit and test.
 
 
-## 7. Choosing the Right Read API
+## 4. Choosing the Right Read API
 
 Use these rules of thumb:
 
@@ -1603,9 +1546,42 @@ Use these rules of thumb:
 | You need a bounded tree or hierarchy | `d/pull` with a recursive pattern such as `{:category/children 2}` |
 | You need to discover matching entities | `d/q` |
 | You need discovered entities in map form | `d/q` with `(pull ?e pattern)` |
-| You are navigating conditionally | Clojure/Python/JavaScript entity APIs, or Java `entityMap` for a realized map |
+| You are navigating conditionally | Entity API for lazy navigation, or `d/pull` when you need a realized map |
 | You are debugging an entity at the REPL | `d/entity` plus `d/touch` |
-| You want to stage a small Clojure update from an entity | Transactable Entity with `assoc`, `d/add`, `d/retract`, or `dissoc` |
+| You want to stage a small update from an entity | Transactable Entity with `assoc`, `d/add`, `d/retract`, or `dissoc` |
+
+### 4.1 Read Performance
+
+These APIs differ mostly in when they discover entities, how much of the result
+shape is declared up front, and how much per-call work they do.
+
+`d/pull` is a good fit when you already know one entity and want one explicit
+map shape. Calling `d/pull` in a loop is correct, but it repeats the API call
+for each entity. In embedded use that overhead is often small, especially when
+the same pull pattern is reused and can be prepared from cache. In client/server
+use, a loop can be much more expensive because each call may be a separate
+request.
+
+`d/pull-many` is the batch form for known entity ids or lookup refs. It prepares
+one pull pattern for the batch, returns results in the same order as the input
+ids, and uses one client/server request. Internally it still pulls each entity;
+it is not a different query optimizer. Prefer it over a loop when many known
+entities need the same shape.
+
+`d/entity` is lazy navigation from one known entity. A single attribute read is
+an indexed lookup and the result is cached on that entity object. This can be
+efficient when control flow may read only one or two attributes. It is a poor
+fit for bulk response construction, because walking many entities or references
+can become many small indexed reads whose total count is less visible in the
+code. Use `d/pull`, `d/pull-many`, or `d/q` with `pull` when the desired result
+shape is known.
+
+`d/q` is the right starting point when the database must discover which entities
+match constraints. Among these read APIs, it is the one that uses the query
+optimizer: the engine can reorder clauses and use indexes to narrow the
+candidate set before returning values. If the final result should be maps, use
+`pull` in `:find` so the query discovers the entities and pull shapes only the
+results.
 
 Do not treat `d/pull` as a guaranteed performance shortcut over `d/q`.
 Datalevin's query engine is optimized, and many pull-shaped reads can be
@@ -1618,18 +1594,17 @@ The main distinction is the shape of the problem:
 
 - `d/q` is for finding facts and entities that satisfy constraints.
 - `d/pull` is for returning a declared nested map for known entities.
-- `d/entity` and binding entity wrappers are for lazy navigation from one known entity; Java's `entityMap` returns a realized map.
-- Transactable Entity is for staging small Clojure-side updates before
-  `d/transact!`.
+- `d/entity` is for lazy navigation from one known entity.
+- Transactable Entity is for staging small updates before `d/transact!`.
 
 
 ## Summary
 
 Datalevin gives you several ways to read the same logical facts. Lookup refs let
 you use domain identifiers instead of internal ids. Pull returns explicit plain
-maps for application boundaries. Entity APIs provide lazy or realized
-navigation for code that wants to move through references one step at a time,
-and Clojure transactable entities let that same Entity API stage small updates.
+maps for application boundaries. Entity APIs provide navigation for code that
+wants to move through references one step at a time, and transactable entities
+let that same Entity API stage small updates.
 The APIs overlap by design, but they are not redundant: choose the one that
 matches whether you are identifying, shaping, discovering, navigating, or
 updating data.

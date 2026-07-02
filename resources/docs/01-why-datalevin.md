@@ -193,12 +193,11 @@ facts are joined by shared variables. The second feels graph-oriented: entity
 references are followed as edges. In Datalevin both are expressed as logical
 patterns over datoms.
 
-Datalevin uses the EDN Datalog format pioneered by Datomic (see Appendix B).
-This is friendlier to application developers and easier for programs to
-construct than the older Prolog-like notation because queries are ordinary data
-structures: vectors, keywords, symbols, and lists. The underlying idea is still
-classic Datalog: describe the facts that must be true, and let the engine find
-bindings for the variables [4].
+Datalevin writes Datalog queries as EDN data structures: vectors, keywords,
+symbols, and lists. This is friendlier to application developers and easier for
+programs to construct than the older Prolog-like notation. The underlying idea
+is still classic Datalog: describe the facts that must be true, and let the
+engine find bindings for the variables [4].
 
 A small comparison makes the difference concrete:
 

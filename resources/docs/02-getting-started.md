@@ -12,24 +12,18 @@ close the connection, and reopen the same database. The rest of the book builds
 on the first example.
 
 For details of getting Datalevin to work in various deployment modes, Appendix A
-covers installation, supported platforms, Java/Clojure/Python/JavaScript
-packages, `dtlv`, server mode, Babashka pod, Docker, MCP, and troubleshooting.
-
-The print book edition uses Clojure code examples to conserve space and keep the
-executable path clear. Again, you do not need to know Clojure to understand the
-examples. To understand the shape of the EDN data format we use, consult
-Appendix B. The web edition includes parallel Java, Python, and JavaScript
-examples where the bindings expose equivalent APIs.
+covers installation, supported platforms, packages, `dtlv`, server mode,
+Babashka pod, Docker, MCP, and troubleshooting. To understand the shape of the
+EDN data format we use, consult Appendix B.
 
 
 ## Before You Start
 
-You need Java 21 or newer. Python examples also assume Python 3.10 or newer,
-and JavaScript examples assume Node.js 20 or newer. This book targets the
-Datalevin 1.0.x release line; for dependency coordinates in this starter
-project, use the current released 1.0.x package version. In this edition, that
-version is shown as `{{datalevin-version}}`. Check the package page or the
-Datalevin GitHub repository for the current release.
+You need Java 21 or newer. This book targets the Datalevin 1.0.x release line;
+for dependency coordinates in this starter project, use the current released
+1.0.x package version. In this edition, that version is shown as
+`{{datalevin-version}}`. Check the package page or the Datalevin GitHub
+repository for the current release.
 
 Add the Datalevin package for the language you want to use:
 
@@ -68,9 +62,9 @@ npm install datalevin-node
 
 </div>
 
-Datalevin uses native storage code through the JVM. For Clojure and Java
-programs, pass the required JVM options when starting the process. Python and
-Node.js bindings add these options automatically.
+Datalevin uses native storage code through the JVM. When starting the JVM
+directly, pass the required JVM options; packages that manage the JVM for you
+handle these options automatically.
 
 <div class="multi-lang">
 
@@ -374,8 +368,8 @@ before making a later decision.
 
 ## 4. Pull One Entity
 
-Unique attributes can be used as lookup refs to find an entity. A lookup ref is
-a pair of attribute and value that uniquely identifies an entity:
+Unique attributes can be used in lookup refs to find an entity. A lookup ref is
+a pair of a unique attribute and a value that identifies an entity:
 
 <div class="multi-lang">
 

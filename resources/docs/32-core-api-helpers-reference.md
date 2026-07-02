@@ -77,7 +77,7 @@ worked examples.
 | `set-explicit-transaction-timeout!` | Sets or clears the default explicit transaction timeout; pass `nil` to disable it. |
 | `listen!`, `unlisten!` | Register or remove transaction-report callbacks on a connection. |
 | `tx-data->simulated-report` | Builds a transaction report from a DB object and tx data without mutating the connection. |
-| `resolve-tempid` | Datomic-compatibility helper for looking up tempids in a transaction report. |
+| `resolve-tempid` | Helper for looking up tempids in a transaction report. |
 | `update-schema` | Applies explicit schema changes, deletions, or renames to an open connection. |
 
 `listen!` replaces an existing callback when the same key is registered again.
@@ -199,12 +199,12 @@ Provider helpers are direct model calls. Persisted facts, episodes,
 embeddings, summaries, and provenance are ordinary application data.
 
 
-## 9. Small Compatibility and Utility Helpers
+## 9. Small Utility Helpers
 
 | Function | Use |
 | --- | ------ |
-| `tempid` | Datomic-compatibility helper that returns a negative temporary id. Prefer explicit negative ids when possible. |
-| `squuid`, `squuid-time-millis` | Datomic-compatible semi-sequential UUID helpers. Use application identity attributes for durable domain identity. |
+| `tempid` | Helper that returns a negative temporary id. Prefer explicit negative ids when possible. |
+| `squuid`, `squuid-time-millis` | Semi-sequential UUID helpers. Use application identity attributes for durable domain identity. |
 | `read-csv` | Reads CSV data from a string or reader into lazy vectors of strings. |
 | `write-csv` | Writes CSV rows to a writer. |
 | `hexify-string`, `unhexify-string` | Encode a string as hex text and decode it back. |

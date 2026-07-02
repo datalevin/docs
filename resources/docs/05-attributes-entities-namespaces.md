@@ -143,7 +143,7 @@ below lists some example attribute properties.
 | `:db/idocFormat` | Format for `:db.type/idoc` attributes: `:edn`, `:json`, or `:markdown`. |
 | `:db/doc` | Human-readable documentation string for the attribute. |
 
-> **Note on Indexing**: Unlike some other Datalog databases, Datalevin indexes **every attribute** by default in the AVE (Attribute-Value-Entity) index. You do not need to specify a `:db/index` property to enable fast lookups.
+> **Note on Indexing**: Datalevin indexes **every attribute** by default in the AVE (Attribute-Value-Entity) index.
 
 Appendix C includes a complete reference for the schema properties that
 Datalevin interprets.
@@ -275,16 +275,17 @@ join-entity pattern in Chapter 11).
 ### 2.2 Uniqueness: Identity vs. Value
 
 The two `:db/unique` settings both enforce that no two entities share a value
-for the attribute, but they differ in how a duplicate write is handled:
+for the attribute, and both can be used in lookup refs. They differ in how a
+duplicate write is handled:
 
 - `:db.unique/value` is a pure constraint: transacting a duplicate is an
-  **error**. Use it for values that must never collide but are not used as
-  entity identifiers, such as a serial number.
+  **error**. Use it for values that must never collide but should not trigger
+  upsert behavior, such as a serial number.
 - `:db.unique/identity` treats the value as the entity's identity: transacting
   a map with an existing value **upserts**, i.e. it updates the existing entity
-  instead of creating a new one. It also enables **lookup refs**, which let you
-  address an entity as `[:user/email "alice@example.com"]` anywhere an entity
-  id is expected.
+  instead of creating a new one. Use it for natural keys such as email
+  addresses, slugs, or external ids that application code uses to identify an
+  entity.
 
 Chapter 6 shows lookup refs and upserts in transactions; Chapter 11 goes deeper
 into identity modeling.
@@ -584,8 +585,9 @@ add facts to an existing entity, include its id; to create a new entity, omit
 `:db/id` is not a place for application identity. A real entity id is a
 Datalevin-managed `long`; you cannot assign a UUID, slug, email address, or
 other domain key as the permanent `:db/id`. Store those values in ordinary
-attributes declared with `:db.unique/identity`, then use lookup refs such as
-`[:user/id some-uuid]` or `[:user/email "alice@example.com"]`.
+unique attributes, usually `:db.unique/identity` when you want upsert behavior,
+then use lookup refs such as `[:user/id some-uuid]` or `[:user/email
+"alice@example.com"]`.
 
 A positive integer in `:db/id` is treated as a concrete entity id, not as a
 tempid. If the current maximum entity id is `1000` and you transact

@@ -18,6 +18,15 @@ spreadsheet programs and more like moving from a spreadsheet to a knowledge
 graph: a network of things and relationships represented as facts. This chapter
 provides the narrative framework to help you navigate this shift.
 
+The chapter moves through four modes:
+
+- Sections 1-3 explain why Datalevin starts from facts and attributes rather
+  than tables or documents.
+- Section 4 gives the minimum transaction vocabulary needed to read the
+  examples: assertions, retractions, references, and tempids.
+- Sections 5-8 show the modeling and query habits that follow from the model.
+- Section 9 ties the logical, storage, and query views together.
+
 ## 1. Think in Datoms, Not Containers
 
 In traditional databases, if you want to record that Alice's email address is
@@ -133,7 +142,12 @@ debug, migrate, replay, and explain because the application state has a durable,
 queryable shape. Datalevin gives that style a database substrate: facts remain
 small, attributes remain additive, and queries compose across domains.
 
-## 4. Transactions: Controlled Change
+## 4. Operational Basics: Transactions and Tempids
+
+This section switches from motivation to mechanics. It is not the full
+transaction API; Chapter 6 covers that. The goal here is to give you enough
+vocabulary to understand how facts enter the database and how new entities can
+refer to each other in one atomic change.
 
 A database is not only a place to read facts. It is also a system for changing
 facts without leaving the application in a half-updated state. A
@@ -274,6 +288,10 @@ steps, not by mutating one fact at a time in isolation.
 
 ## 5. Store Each Fact Once, Then Link Entities
 
+With the basic write vocabulary in place, switch back to modeling. The next
+habit is about where facts should live and how entities should point to each
+other.
+
 Once you start thinking in datoms, the next modeling habit is simple: store each
 durable fact in one place, then connect entities with references. Suppose a
 customer places many orders. You could copy the customer's email address into
@@ -331,6 +349,10 @@ Benchmark](https://yyhh.org/blog/2024/09/competing-for-the-job-with-a-triplestor
 
 ## 6. Datalog: Querying as Logic Programming
 
+The next three sections are query intuition, not a complete language reference.
+They show how the fact model affects ordinary reads, search, and reusable query
+logic.
+
 If SQL is like giving the database a set of instructions on how to assemble a
 result table, Datalog is like giving the database a **description** of the
 answer you want. That declarative style comes from logic programming [4]:
@@ -352,11 +374,10 @@ The syntax has a few pieces:
   variable agree.
 - `db` is a Datalevin DB object used as the query input.
 
-Datalevin does not provide "database as a value" semantics like Datomic. A DB
-object is a mutable read handle to storage plus cached metadata about the
-storage state, not a persistent immutable value. In application code, keep and
-share the connection. When you need to read, call `(d/db conn)` and use that DB
-object for the current operation.
+Datalevin's DB object is a mutable read handle to storage plus cached metadata
+about the storage state, not a persistent immutable application value. In
+application code, keep and share the connection. When you need to read, call
+`(d/db conn)` and use that DB object for the current operation.
 
 The useful mental model is perception, not possession. The database is the
 surrogate of an external world that changes. Calling `d/db` is like looking at

@@ -402,8 +402,8 @@ You should be comfortable with basic database ideas: transactions, indexes,
 schemas, filters, and query results. You do not need prior Datalog
 experience. The book introduces Datalog from first principles, then returns to it
 throughout the modeling, search, performance, and intelligent-systems chapters.
-Datalevin uses the Datomic-style EDN form of Datalog: friendlier for application
-developers than the older Prolog-like notation, but still based on the same
+Datalevin uses an EDN form of Datalog: friendlier for application developers
+than the older Prolog-like notation, but still based on the same
 logic-programming ideas of variables and rules.
 
 Most examples use Clojure because Datalevin's native data model is easiest to
@@ -503,7 +503,7 @@ This book has already benefited from volunteer reviewers in the Datalevin
 community who read draft chapters, ran examples, questioned unclear
 explanations, and improved phrasing: Max Rothman, Estevo U. C. Castro, Weidong
 Cai, Amar Mehta, Vlad Poh, and Norbert Wójtowicz. I am grateful for their
-contributions.
+contributions. Any remaining mistakes are my own responsibility.
 
 <div class="preface-signature" style="text-align: right; margin-top: 2rem;">
 Huahai Yang<br>

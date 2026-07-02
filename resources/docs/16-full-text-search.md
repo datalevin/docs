@@ -206,11 +206,10 @@ the stop word `"in"`, and stems the remaining terms.
 
 ![Analyzer pipeline: document d1 "Running runners in databases" is split by a regexp tokenizer into tokens with positions and offsets; token filters lower-case, drop the stop word "in", and stem the rest, preserving positions to yield ["run" 0 0], ["runner" 1 8], ["databas" 3 19]; a second document d2 "database run" runs through the same analyzer, and both are indexed by term in the inverted index, which maps each term to the documents and positions where it appears (run to d1·0 and d2·1, runner to d1·1, databas to d1·3 and d2·0)](/images/diagrams/analyzer-pipeline.svg)
 
-Clojure can pass analyzer functions directly. Java, Python, and JavaScript use
-the same analyzer model through runtime UDFs: register a host-language function
-with kind `:analyzer` or `:query-analyzer`, pass the UDF registry in
-`:runtime-opts :udf-registry`, and put the descriptor in the full-text domain
-options. In all languages, the analyzer callable receives one string and returns
+Custom analyzers can be direct functions or runtime UDF descriptors. For the
+UDF route, register a function with kind `:analyzer` or `:query-analyzer`, pass
+the UDF registry in `:runtime-opts :udf-registry`, and put the descriptor in the
+full-text domain options. The analyzer callable receives one string and returns
 a sequence of `[term position offset]` triples.
 
 ### 3.1 Stemming and Stop Words
@@ -315,11 +314,12 @@ full-text index quickly.
 ;; => (1)
 ```
 
-### 3.3 Analyzer UDFs from Java, Python, and JavaScript
+### 3.3 Analyzer UDFs
 
 For Datalog full-text domains, `:analyzer` and `:query-analyzer` may be normal
-Clojure functions, UDF descriptor maps, or registered UDF id keywords. The UDF
-route is what gives Java, Python, and JavaScript analyzer parity with Clojure.
+functions, UDF descriptor maps, or registered UDF id keywords. Use descriptor
+maps when the analyzer implementation should be resolved through a runtime
+registry.
 
 Analyzer UDFs run during full-text indexing, including normal transactions,
 re-indexing, and DB-open recovery for pending async jobs. Query-analyzer UDFs
@@ -328,18 +328,17 @@ state: the descriptor can be stored in options, but the process that indexes or
 queries must register the callable implementation before opening or using the
 database.
 
-The pattern is the same in each binding:
+The pattern is:
 
 1. Create a UDF registry.
 2. Create an analyzer descriptor with kind `:analyzer`.
 3. Optionally create a query-analyzer descriptor with kind `:query-analyzer`.
-4. Register host-language functions that return `[term position offset]`
-   triples.
+4. Register functions that return `[term position offset]` triples.
 5. Pass the registry in `:runtime-opts`.
 6. Put the descriptors in the target search domain's `:analyzer` and
    `:query-analyzer` options.
 
-Here is the shape in the non-Clojure bindings. The tokenizer implementation is
+Here is the descriptor-backed shape. The tokenizer implementation is
 intentionally simple: the index analyzer stores only hashtag terms, while the
 query analyzer splits ordinary query text on whitespace.
 
@@ -677,16 +676,16 @@ await conn.query('[:find ?e ?a ?v ' +
 </div>
 
 Available options:
-- `:top` — number of results when `:limit` is not supplied (default 10)
-- `:limit` — page size; when supplied, this overrides `:top` as the number of
-  returned results
-- `:offset` — number of ranked results to skip before returning results
-- `:paging-cache-pages` — number of `:limit`-sized pages to score and cache as
-  one top-k window for paged search (default 10)
-- `:display` — `:refs` (default), `:refs+scores`, `:texts`, `:offsets`, or
-  `:texts+offsets`
-- `:domains` — list of search domains to query
-- `:doc-filter` — predicate function to filter results
+
+| Option | Default | Meaning |
+| :--- | :--- | :--- |
+| `:top` | `10` | Number of results when `:limit` is not supplied. |
+| `:limit` | none | Page size; when supplied, this overrides `:top` as the number of returned results. |
+| `:offset` | `0` | Number of ranked results to skip before returning results. |
+| `:paging-cache-pages` | `10` | Number of `:limit`-sized pages to score and cache as one top-k window for paged search. |
+| `:display` | `:refs` | Result shape: `:refs`, `:refs+scores`, `:texts`, `:offsets`, or `:texts+offsets`. |
+| `:domains` | all domains | List of search domains to query. |
+| `:doc-filter` | none | Predicate function to filter results. |
 
 Use `:top` for one bounded result set, such as the first page of a search UI.
 Use `:limit` and `:offset` when the interface needs stable page-sized slices of
@@ -1188,7 +1187,7 @@ There are two separate decisions:
 
 Figure 16.2 shows an example of assigning attributes to search domains.
 
-![Search domain membership: :post/title (domains public + autoDomain) belongs to the named domain public and its own attribute domain post/title; :post/body belongs to public; :post/draft belongs to private; :note/body, with no domain keys, belongs to the default datalevin domain — showing the default, named, and automatic attribute domain kinds and that one attribute can join several domains](/images/diagrams/search-domains.svg)
+![Search domain membership from schema keys: all shown attributes have :db/fulltext true; :post/title has public domains plus autoDomain true and joins public plus post/title; :post/body joins public; :post/draft joins private; :note/body has no domain keys and joins the default datalevin domain](/images/diagrams/search-domains.svg)
 
 ### 5.1 Assigning Attributes to Domains
 
@@ -1593,8 +1592,7 @@ message.
 
 ## 6. Standalone Search Engine
 
-Datalevin can be used as a standalone search engine outside of Datalog from the
-embedded bindings:
+Datalevin can be used as a standalone embedded search engine outside of Datalog:
 
 <div class="multi-lang">
 
@@ -1818,8 +1816,6 @@ await engine.addDoc(docRef, docText, { checkExist: false });
 </div>
 
 For larger embedded imports, use `search-index-writer`, `write`, and `commit`.
-The Java, Python, and JavaScript bindings expose the same standalone search
-writer as `SearchIndexWriter` / `search_index_writer` / `searchIndexWriter`.
 The writer batches index changes and flushes final term metadata on `commit`,
 so call `commit` before relying on search results:
 
@@ -1920,11 +1916,11 @@ Datalevin client/server API; use Datalog full-text attributes and normal
 transactions there, or run the writer in a local indexing process.
 
 Treat the bulk writer as a short-lived loading handle for one search domain. In
-Clojure there is no separate dispose step; `commit` is the required final flush.
-In Java, Python, and JavaScript, `commit` also closes the wrapper, so create a
-new writer for a later bulk load. Do not keep multiple active writers for the
-same domain; use one writer for the load, then query with a search engine or use
-normal `add-doc` / `remove-doc` operations for incremental changes.
+all APIs, `commit` is the required final flush. After commit, treat the writer
+as finished and create a new writer for a later bulk load. Do not keep multiple
+active writers for the same domain; use one writer for the load, then query with
+a search engine or use normal `add-doc` / `remove-doc` operations for
+incremental changes.
 
 
 ## 7. Asynchronous Indexing

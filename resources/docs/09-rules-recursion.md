@@ -41,9 +41,7 @@ piece of that logic a name, parameter list, and reusable call site.
 A rule consists of a **Head** and a **Body**:
 
 - **Head**: The rule name and its parameters, e.g., `(is-manager? ?e)`.
-  The name plus the number of parameters is the rule's shape. Keep all
-  definitions of the same rule at the same arity, i.e. the same number of
-  parameters.
+  The name plus the number of parameters is the rule's shape.
 - **Body**: One or more Datalog clauses that must be true for the rule to match.
 
 Read a rule as a definition of a relation. The head names the relation and its
@@ -193,8 +191,7 @@ The important points are:
   definitions, not a nested vector of rule groups.
 - Rules may call rules from another group as long as the called rule is present
   in the assembled rule set.
-- Multiple definitions with the same rule name and arity are alternatives, i.e.
-  logical `OR`.
+- Multiple definitions of the same rule are alternatives, i.e. logical `OR`.
 - Keep the public rule names and arities stable. Treat helper rules as internal
   application conventions, just as you would with helper functions.
 
@@ -264,12 +261,15 @@ can stay stable while policy modules evolve.
 
 ## 3. Logical OR: Multiple Rule Definitions
 
-In standard Datalog, all clauses in a `:where` block are joined by an implicit
-`AND`. Rules provide a clean way to express logical `OR`.
+Just like clauses in `:where`, all clauses in a rule body are joined by an
+implicit `AND`. To express `OR` in rules, in addition to using `or` or
+`or-join`, you can define a rule with the same name and arity multiple times.
+The engine treats those definitions as alternatives. If *any* definition
+matches, the rule is satisfied.
 
-If you define a rule with the same name multiple times, the engine treats these
-definitions as alternatives. If *any* of the definitions match, the rule is
-satisfied.
+Keep all definitions of the same rule at the same arity, i.e. the same number
+of parameters. In the example below, every `has-access?` definition takes
+`?user` and `?resource`.
 
 <div class="multi-lang">
 
@@ -327,15 +327,9 @@ is an admin over a resource entity, OR has a direct permission, OR has a team
 permission. This is much cleaner and more maintainable than using a complex
 `(or ...)` block in every query.
 
-### 3.1 Expanding One Variable from Multiple Sources
-
-The same pattern is useful when one logical variable can come from several
-places. Datalog does not "append" values into a variable imperatively. A
-variable gets more possible values when the query produces more result tuples.
-Multiple rule definitions with the same head are the idiomatic way to say
-"`?alias` may come from any of these sources."
-
-<div class="multi-lang">
+The same mechanism works when one logical value can come from several
+attributes. For example, this rule says that `?alias` may come from a person's
+name, legal name, or nickname:
 
 ```clojure
 (def alias-rules
@@ -347,134 +341,34 @@ Multiple rule definitions with the same head are the idiomatic way to say
 
     [(alias-of ?person ?alias)
      [?person :person/nickname ?alias]]])
-
-(d/q '[:find ?alias
-       :in $ % ?person-id
-       :where
-       [?person :person/id ?person-id]
-       (alias-of ?person ?alias)]
-     db alias-rules "u-123")
 ```
 
-```java
-Object aliasRules = Datalevin.edn("[[(alias-of ?person ?alias) " +
-    "[?person :person/name ?alias]] " +
-    "[(alias-of ?person ?alias) " +
-    "[?person :person/legal-name ?alias]] " +
-    "[(alias-of ?person ?alias) " +
-    "[?person :person/nickname ?alias]]]");
-
-Object aliases = conn.query("[:find ?alias " +
-    ":in $ % ?person-id " +
-    ":where [?person :person/id ?person-id] " +
-    "       (alias-of ?person ?alias)]",
-    aliasRules, "u-123");
-```
-
-```python
-alias_rules = interop().read_edn('[[(alias-of ?person ?alias) '
-    '[?person :person/name ?alias]] '
-    '[(alias-of ?person ?alias) '
-    '[?person :person/legal-name ?alias]] '
-    '[(alias-of ?person ?alias) '
-    '[?person :person/nickname ?alias]]]')
-
-aliases = conn.query('[:find ?alias '
-    ':in $ % ?person-id '
-    ':where [?person :person/id ?person-id] '
-    '       (alias-of ?person ?alias)]',
-    alias_rules, 'u-123')
-```
-
-```javascript
-const aliasRules = await interop().readEdn('[[(alias-of ?person ?alias) ' +
-    '[?person :person/name ?alias]] ' +
-    '[(alias-of ?person ?alias) ' +
-    '[?person :person/legal-name ?alias]] ' +
-    '[(alias-of ?person ?alias) ' +
-    '[?person :person/nickname ?alias]]]');
-
-const aliases = await conn.query('[:find ?alias ' +
-    ':in $ % ?person-id ' +
-    ':where [?person :person/id ?person-id] ' +
-    '       (alias-of ?person ?alias)]',
-    aliasRules, 'u-123');
-```
-
-</div>
-
-Each implementation contributes rows to the derived relation
+Each definition contributes rows to the derived relation
 `(alias-of ?person ?alias)`. If the same alias is found through more than one
-branch, normal Datalog set semantics remove the duplicate result.
-
-You can express the same idea locally with `or` or `or-join`:
-
-<div class="multi-lang">
-
-```clojure
-(d/q '[:find ?alias
-       :in $ ?person-id
-       :where
-       [?person :person/id ?person-id]
-       (or-join [?person ?alias]
-         [?person :person/name ?alias]
-         [?person :person/legal-name ?alias]
-         [?person :person/nickname ?alias])]
-     db "u-123")
-```
-
-```java
-Object aliases = conn.query("[:find ?alias " +
-    ":in $ ?person-id " +
-    ":where [?person :person/id ?person-id] " +
-    "       (or-join [?person ?alias] " +
-    "         [?person :person/name ?alias] " +
-    "         [?person :person/legal-name ?alias] " +
-    "         [?person :person/nickname ?alias])]",
-    "u-123");
-```
-
-```python
-aliases = conn.query('[:find ?alias '
-    ':in $ ?person-id '
-    ':where [?person :person/id ?person-id] '
-    '       (or-join [?person ?alias] '
-    '         [?person :person/name ?alias] '
-    '         [?person :person/legal-name ?alias] '
-    '         [?person :person/nickname ?alias])]',
-    'u-123')
-```
-
-```javascript
-const aliases = await conn.query('[:find ?alias ' +
-    ':in $ ?person-id ' +
-    ':where [?person :person/id ?person-id] ' +
-    '       (or-join [?person ?alias] ' +
-    '         [?person :person/name ?alias] ' +
-    '         [?person :person/legal-name ?alias] ' +
-    '         [?person :person/nickname ?alias])]',
-    'u-123');
-```
-
-</div>
-
-Use `or-join` for one-off branching inside a single query. Use multiple rule
+definition, normal Datalog set semantics remove the duplicate result. Use
+`or-join` for one-off branching inside a single query. Use multiple rule
 definitions when the expansion has a name, is reused, or is clearer as part of
 the domain model.
 
 
-## 4. Datalevin as a Reasoner: Forward-Chaining Logic
+## 4. Datalevin as a Reasoner: Bottom-Up Rules
 
-Because Datalevin's rule engine evaluates rules from the bottom up (see Chapter
-21), it can act as a **forward-chaining reasoner**. In this mode, the database
-doesn't just store data; it "reasons" about it to infer new classifications or
-higher-level facts that were never explicitly transacted.
+Datalevin evaluates rules bottom-up (see Chapter 21). In this mode, the database
+doesn't just store data; it can infer new classifications or higher-level facts
+that were never explicitly transacted.
 
-In this context, "forward chaining" means that the engine starts from base
-facts and repeatedly applies rules to discover derived tuples until no new
-tuples can be found. This still happens inside a query. Datalevin is not running
-a background job that stores inferred facts unless your application chooses to
-materialize those results.
+Bottom-up evaluation starts from base facts and repeatedly applies rules to
+discover derived tuples until no new tuples can be found. In rule-engine
+terminology, this is a forward-chaining style of reasoning: facts drive rule
+application, and rule application derives more facts. This still happens inside
+a query. Datalevin is not running a background job that stores inferred facts
+unless your application chooses to materialize those results.
+
+This is different from Prolog-style backward chaining, where evaluation starts
+with a goal and recursively asks what subgoals could prove it. A Datalevin query
+does name the rule relations it needs, but recursive rule evaluation itself is
+set-oriented and bottom-up. Chapter 21 explains how magic-set rewriting can make
+bottom-up evaluation goal-directed without turning it into backward chaining.
 
 An "expert system" is a rule-based classifier: domain experts write conditions,
 and the system applies those conditions to facts. In Datalevin, the conditions
@@ -482,19 +376,17 @@ are Datalog rules and the classifications are query-time derived tuples.
 
 These terms come from the older expert-system and production-system literature
 [1,2,3]. Classic expert systems separated a knowledge base of facts and rules
-from an inference engine that derived conclusions. Forward chaining is the
-data-driven strategy in that family: start with known facts, apply rules, and
-derive consequences. Datalevin's mechanism here is Datalog rule evaluation, not
-a production-system shell or a Rete implementation, but the modeling direction
-is similar: represent domain knowledge as data and derive higher-level facts
-from it.
+from an inference engine that derived conclusions. Datalevin's mechanism here is
+Datalog rule evaluation, not a production-system shell or a Rete implementation,
+but the modeling direction is similar: represent domain knowledge as data and
+derive higher-level facts from it.
 
 If you are comparing this style with Clojure production rule engines such as
 Clara, the Datalevin repository includes an OpenRuleBench implementation that
 exercises recursive workloads such as transitive closure and same-generation
 queries [4,5]. In those workloads, Datalevin's bottom-up deductive evaluation
-is much more performant than forward-chaining production-rule engines. Treat
-that as workload-specific benchmark evidence, not as a universal ranking of all
+is much more performant than Rete-style production-rule engines [2]. Treat that as
+workload-specific benchmark evidence, not as a universal ranking of all
 rule-engine use cases.
 
 ### Example: Automated Classification (Expert Systems)
@@ -694,7 +586,186 @@ This approach is useful because:
    code modules.
 
 
-## 5. Recursion: Navigating Hierarchies
+## 5. Rule Parameters and Binding
+
+Rules are not limited to single variables. They can take multiple parameters,
+and those parameters may be bound or unbound when the rule is called.
+
+In Datalog, "bound" means a variable already has a value from an input or an
+earlier clause. "Unbound" means the engine is free to discover values that make
+the rule true. Rules are more relational than ordinary functions: a function
+call usually has inputs and a return value, but a rule describes a relation.
+
+There is one important practical nuance. Data patterns are naturally relational:
+the same attribute can be used to find an entity, find a value, or test that an
+entity/value pair exists. Function binding clauses are directional. A clause
+such as `[(+ ?x ?y) ?sum]` computes and binds `?sum`; `?sum` should be unbound
+when that clause runs. Datalevin does not run arithmetic functions backward:
+`[(= ?dist2 100)]` can filter computed distances, but it does not let the engine
+infer which `?x` and `?y` values would produce that distance. When writing a
+rule that filters on a computed value, express that as a function binding for
+the computed variable plus a predicate over that variable. Ordinary data
+constraints still determine which candidate tuples the rule has to consider.
+
+<div class="multi-lang">
+
+```clojure
+(def distance-rules
+  '[[(distance-squared ?p1 ?p2 ?d2)
+     [?p1 :point/x ?x1]
+     [?p1 :point/y ?y1]
+     [?p2 :point/x ?x2]
+     [?p2 :point/y ?y2]
+     [(- ?x2 ?x1) ?dx]
+     [(- ?y2 ?y1) ?dy]
+     [(* ?dx ?dx) ?dx2]
+     [(* ?dy ?dy) ?dy2]
+     [(+ ?dx2 ?dy2) ?d2]]])
+```
+
+```java
+Object distanceRules = Datalevin.edn("[[(distance-squared ?p1 ?p2 ?d2) " +
+    "[?p1 :point/x ?x1] " +
+    "[?p1 :point/y ?y1] " +
+    "[?p2 :point/x ?x2] " +
+    "[?p2 :point/y ?y2] " +
+    "[(- ?x2 ?x1) ?dx] " +
+    "[(- ?y2 ?y1) ?dy] " +
+    "[(* ?dx ?dx) ?dx2] " +
+    "[(* ?dy ?dy) ?dy2] " +
+    "[(+ ?dx2 ?dy2) ?d2]]]");
+```
+
+```python
+distance_rules = interop().read_edn('[[(distance-squared ?p1 ?p2 ?d2) '
+    '[?p1 :point/x ?x1] '
+    '[?p1 :point/y ?y1] '
+    '[?p2 :point/x ?x2] '
+    '[?p2 :point/y ?y2] '
+    '[(- ?x2 ?x1) ?dx] '
+    '[(- ?y2 ?y1) ?dy] '
+    '[(* ?dx ?dx) ?dx2] '
+    '[(* ?dy ?dy) ?dy2] '
+    '[(+ ?dx2 ?dy2) ?d2]]]')
+```
+
+```javascript
+const distanceRules = await interop().readEdn('[[(distance-squared ?p1 ?p2 ?d2) ' +
+    '[?p1 :point/x ?x1] ' +
+    '[?p1 :point/y ?y1] ' +
+    '[?p2 :point/x ?x2] ' +
+    '[?p2 :point/y ?y2] ' +
+    '[(- ?x2 ?x1) ?dx] ' +
+    '[(- ?y2 ?y1) ?dy] ' +
+    '[(* ?dx ?dx) ?dx2] ' +
+    '[(* ?dy ?dy) ?dy2] ' +
+    '[(+ ?dx2 ?dy2) ?d2]]]');
+```
+
+</div>
+
+This rule computes the distance between two points. You can use this rule in
+different ways:
+
+- **Filter**: compute `?dist2`, then constrain it with a predicate such as
+  `[(= ?dist2 100)]`.
+- **Calculate**: `(distance-squared ?a ?b ?dist2)` — Find pairs and *bind* the
+  squared distance to `?dist2`.
+
+For filtering, let the rule compute the squared distance, then test it:
+
+<div class="multi-lang">
+
+```clojure
+(d/q '[:find ?name-a ?name-b
+       :in $ %
+       :where [?a :point/name ?name-a]
+              [?b :point/name ?name-b]
+              (distance-squared ?a ?b ?dist2)
+              [(= ?dist2 100)]]
+     db distance-rules)
+```
+
+```java
+Object result = conn.query("[:find ?name-a ?name-b " +
+    ":in $ % " +
+    ":where [?a :point/name ?name-a] " +
+    "       [?b :point/name ?name-b] " +
+    "       (distance-squared ?a ?b ?dist2) " +
+    "       [(= ?dist2 100)]]",
+    distanceRules);
+```
+
+```python
+result = conn.query('[:find ?name-a ?name-b '
+    ':in $ % '
+    ':where [?a :point/name ?name-a] '
+    '       [?b :point/name ?name-b] '
+    '       (distance-squared ?a ?b ?dist2) '
+    '       [(= ?dist2 100)]]',
+    distance_rules)
+```
+
+```javascript
+const result = await conn.query('[:find ?name-a ?name-b ' +
+    ':in $ % ' +
+    ':where [?a :point/name ?name-a] ' +
+    '       [?b :point/name ?name-b] ' +
+    '       (distance-squared ?a ?b ?dist2) ' +
+    '       [(= ?dist2 100)]]',
+    distanceRules);
+```
+
+</div>
+
+For calculation, leave the distance variable unbound and include it in
+`:find`:
+
+<div class="multi-lang">
+
+```clojure
+(d/q '[:find ?name ?dist2
+       :in $ %
+       :where [?origin :point/name "origin"]
+              [?p :point/name ?name]
+              (distance-squared ?origin ?p ?dist2)]
+     db distance-rules)
+```
+
+```java
+Object result = conn.query("[:find ?name ?dist2 " +
+    ":in $ % " +
+    ":where [?origin :point/name \"origin\"] " +
+    "       [?p :point/name ?name] " +
+    "       (distance-squared ?origin ?p ?dist2)]",
+    distanceRules);
+```
+
+```python
+result = conn.query('[:find ?name ?dist2 '
+    ':in $ % '
+    ':where [?origin :point/name "origin"] '
+    '       [?p :point/name ?name] '
+    '       (distance-squared ?origin ?p ?dist2)]',
+    distance_rules)
+```
+
+```javascript
+const result = await conn.query('[:find ?name ?dist2 ' +
+    ':in $ % ' +
+    ':where [?origin :point/name "origin"] ' +
+    '       [?p :point/name ?name] ' +
+    '       (distance-squared ?origin ?p ?dist2)]',
+    distanceRules);
+```
+
+</div>
+
+The first query uses the computed third column as a filter. The second query
+returns it as data. The rule body is the same in both cases.
+
+
+## 6. Recursion: Navigating Hierarchies
 
 Recursion is the "superpower" of rules. It allows you to query data structures
 with arbitrary depth, which is impossible with standard SQL joins without
@@ -949,181 +1020,6 @@ tree, your application or transaction functions should still prevent illegal
 management cycles.
 
 
-## 6. Rule Parameters and Binding
-
-Rules are not limited to single variables. They can take multiple parameters,
-and those parameters may be bound or unbound when the rule is called.
-
-In Datalog, "bound" means a variable already has a value from an input or an
-earlier clause. "Unbound" means the engine is free to discover values that make
-the rule true. Rules are more relational than ordinary functions: a function
-call usually has inputs and a return value, but a rule describes a relation.
-
-There is one important practical nuance. Data patterns are naturally relational:
-the same attribute can be used to find an entity, find a value, or test that an
-entity/value pair exists. Function binding clauses are directional. A clause
-such as `[(+ ?x ?y) ?sum]` computes and binds `?sum`; `?sum` should be unbound
-when that clause runs. To filter on a computed value, compute it into a variable
-first and then add a predicate.
-
-<div class="multi-lang">
-
-```clojure
-(def distance-rules
-  '[[(distance-squared ?p1 ?p2 ?d2)
-     [?p1 :point/x ?x1]
-     [?p1 :point/y ?y1]
-     [?p2 :point/x ?x2]
-     [?p2 :point/y ?y2]
-     [(- ?x2 ?x1) ?dx]
-     [(- ?y2 ?y1) ?dy]
-     [(* ?dx ?dx) ?dx2]
-     [(* ?dy ?dy) ?dy2]
-     [(+ ?dx2 ?dy2) ?d2]]])
-```
-
-```java
-Object distanceRules = Datalevin.edn("[[(distance-squared ?p1 ?p2 ?d2) " +
-    "[?p1 :point/x ?x1] " +
-    "[?p1 :point/y ?y1] " +
-    "[?p2 :point/x ?x2] " +
-    "[?p2 :point/y ?y2] " +
-    "[(- ?x2 ?x1) ?dx] " +
-    "[(- ?y2 ?y1) ?dy] " +
-    "[(* ?dx ?dx) ?dx2] " +
-    "[(* ?dy ?dy) ?dy2] " +
-    "[(+ ?dx2 ?dy2) ?d2]]]");
-```
-
-```python
-distance_rules = interop().read_edn('[[(distance-squared ?p1 ?p2 ?d2) '
-    '[?p1 :point/x ?x1] '
-    '[?p1 :point/y ?y1] '
-    '[?p2 :point/x ?x2] '
-    '[?p2 :point/y ?y2] '
-    '[(- ?x2 ?x1) ?dx] '
-    '[(- ?y2 ?y1) ?dy] '
-    '[(* ?dx ?dx) ?dx2] '
-    '[(* ?dy ?dy) ?dy2] '
-    '[(+ ?dx2 ?dy2) ?d2]]]')
-```
-
-```javascript
-const distanceRules = await interop().readEdn('[[(distance-squared ?p1 ?p2 ?d2) ' +
-    '[?p1 :point/x ?x1] ' +
-    '[?p1 :point/y ?y1] ' +
-    '[?p2 :point/x ?x2] ' +
-    '[?p2 :point/y ?y2] ' +
-    '[(- ?x2 ?x1) ?dx] ' +
-    '[(- ?y2 ?y1) ?dy] ' +
-    '[(* ?dx ?dx) ?dx2] ' +
-    '[(* ?dy ?dy) ?dy2] ' +
-    '[(+ ?dx2 ?dy2) ?d2]]]');
-```
-
-</div>
-
-This rule computes the distance between two points. You can use this rule in
-different ways:
-
-- **Filter**: compute `?dist2`, then constrain it with a predicate such as
-  `[(= ?dist2 100)]`.
-- **Calculate**: `(distance-squared ?a ?b ?dist2)` — Find pairs and *bind* the
-  squared distance to `?dist2`.
-
-For filtering, let the rule compute the squared distance, then test it:
-
-<div class="multi-lang">
-
-```clojure
-(d/q '[:find ?name-a ?name-b
-       :in $ %
-       :where [?a :point/name ?name-a]
-              [?b :point/name ?name-b]
-              (distance-squared ?a ?b ?dist2)
-              [(= ?dist2 100)]]
-     db distance-rules)
-```
-
-```java
-Object result = conn.query("[:find ?name-a ?name-b " +
-    ":in $ % " +
-    ":where [?a :point/name ?name-a] " +
-    "       [?b :point/name ?name-b] " +
-    "       (distance-squared ?a ?b ?dist2) " +
-    "       [(= ?dist2 100)]]",
-    distanceRules);
-```
-
-```python
-result = conn.query('[:find ?name-a ?name-b '
-    ':in $ % '
-    ':where [?a :point/name ?name-a] '
-    '       [?b :point/name ?name-b] '
-    '       (distance-squared ?a ?b ?dist2) '
-    '       [(= ?dist2 100)]]',
-    distance_rules)
-```
-
-```javascript
-const result = await conn.query('[:find ?name-a ?name-b ' +
-    ':in $ % ' +
-    ':where [?a :point/name ?name-a] ' +
-    '       [?b :point/name ?name-b] ' +
-    '       (distance-squared ?a ?b ?dist2) ' +
-    '       [(= ?dist2 100)]]',
-    distanceRules);
-```
-
-</div>
-
-For calculation, leave the distance variable unbound and include it in
-`:find`:
-
-<div class="multi-lang">
-
-```clojure
-(d/q '[:find ?name ?dist2
-       :in $ %
-       :where [?origin :point/name "origin"]
-              [?p :point/name ?name]
-              (distance-squared ?origin ?p ?dist2)]
-     db distance-rules)
-```
-
-```java
-Object result = conn.query("[:find ?name ?dist2 " +
-    ":in $ % " +
-    ":where [?origin :point/name \"origin\"] " +
-    "       [?p :point/name ?name] " +
-    "       (distance-squared ?origin ?p ?dist2)]",
-    distanceRules);
-```
-
-```python
-result = conn.query('[:find ?name ?dist2 '
-    ':in $ % '
-    ':where [?origin :point/name "origin"] '
-    '       [?p :point/name ?name] '
-    '       (distance-squared ?origin ?p ?dist2)]',
-    distance_rules)
-```
-
-```javascript
-const result = await conn.query('[:find ?name ?dist2 ' +
-    ':in $ % ' +
-    ':where [?origin :point/name "origin"] ' +
-    '       [?p :point/name ?name] ' +
-    '       (distance-squared ?origin ?p ?dist2)]',
-    distanceRules);
-```
-
-</div>
-
-The first query uses the computed third column as a filter. The second query
-returns it as data. The rule body is the same in both cases.
-
-
 ## 7. Rules as an Abstraction Layer
 
 Beyond their technical capabilities, rules serve as a powerful **abstraction
@@ -1322,7 +1218,10 @@ sophisticated tool for knowledge derivation.
 
 - **Encapsulation**: Wrap complex `:where` clauses in a named rule.
 - **Reusability**: Define logic once and use it across many queries.
-- **Logical OR**: Use multiple rule definitions for clean branching logic.
+- **Named alternatives**: Express branching domain logic once instead of
+  repeating `or` blocks across queries.
+- **Parameters and bindings**: Use rules as relations whose arguments may be
+  inputs, outputs, or both.
 - **Recursion**: Traverse graphs and hierarchies of any depth with ease.
 
 By mastering rules, you can build expressive and maintainable data models that

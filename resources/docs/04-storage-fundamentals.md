@@ -245,6 +245,10 @@ attribute/value lookup or range close together. Chapter 15 explains the physical
 DUPSORT nesting behind these indexes, including how the key/value split saves
 space by avoiding repeated prefixes.
 
+If you are comparing this layout with databases that keep more primary Datalog
+index orders, Chapter 15 explains why Datalevin's core Datalog indexes are EAV
+and AVE.
+
 ### 4.1 Storing Raw Bytes
 
 All triples are encoded into raw bytes, using a header byte for different data
