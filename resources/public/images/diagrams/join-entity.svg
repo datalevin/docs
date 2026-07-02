@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="400" viewBox="0 0 1000 400" role="img" aria-labelledby="title desc">
-  <title id="title">Reifying an edge into an associative entity</title>
-  <desc id="desc">A simple directed edge is transformed into an associative entity so the relationship can carry data. Before: user A points to user B with a single :user/follows reference, which has nowhere to store edge data. After: a Follow entity sits between them as a hub node. The Follow entity has a :follow/follower reference to user A and a :follow/following reference to user B, and it holds scalar properties on the relationship itself, such as created-at 2024-01-01 and strength 0.85. User A is the follower and user B is the following. This gives property-graph-style edges while keeping Datalevin's normalized fact representation.</desc>
+  <title id="title">Reifying an edge into a join entity</title>
+  <desc id="desc">A simple directed edge is transformed into a join entity so the relationship can carry data. Before: user A points to user B with a single :user/follows reference, which has nowhere to store edge data. After: a Follow entity sits between them as a hub node. The Follow entity has a :follow/follower reference to user A and a :follow/following reference to user B, and it holds scalar properties on the relationship itself, such as created-at 2024-01-01 and strength 0.85. User A is the follower and user B is the following. This gives property-graph-style edges while keeping Datalevin's normalized fact representation.</desc>
   <defs>
     <style>
       .card { fill: #ffffff; }
@@ -31,7 +31,7 @@
   <!-- Figure card (transparent corners adapt to light/dark page) -->
   <rect class="card" x="2" y="2" width="996" height="396" rx="18" stroke="#e2e8f0" stroke-width="2"/>
 
-  <text class="title" x="500" y="42" text-anchor="middle">Edges With Properties: the Associative Entity</text>
+  <text class="title" x="500" y="42" text-anchor="middle">Edges With Properties: the Join Entity</text>
   <text class="caption" x="500" y="70" text-anchor="middle">Reify an edge into a node when the relationship itself carries data.</text>
 
   <!-- ===== BEFORE: simple edge ===== -->
@@ -47,7 +47,7 @@
   <path class="becomes" d="M500 180 V210" marker-end="url(#at)"/>
   <text class="blabel" x="550" y="200" text-anchor="start">becomes</text>
 
-  <!-- ===== AFTER: associative entity ===== -->
+  <!-- ===== AFTER: join entity ===== -->
   <rect class="node" x="120" y="296" width="96" height="44" rx="22"/>
   <text class="nodet" x="168" y="323" text-anchor="middle">user A</text>
   <text class="role" x="168" y="362" text-anchor="middle">(follower)</text>

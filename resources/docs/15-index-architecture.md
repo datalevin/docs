@@ -689,9 +689,6 @@ More details are summarized in the table below:
 | `rseek-datoms` | You need a reverse cursor starting near an upper bound. | Same as `seek-datoms`, but walks backward. |
 | `index-range` | You need all values of one attribute between two bounds. | Scans the AVE range for one attribute. |
 
-For `:eav`, the positional components are `c1 = e`, `c2 = a`, and `c3 = v`. For
-`:ave`, they are `c1 = a`, `c2 = v`, and `c3 = e`.
-
 The two attribute-scoped value lookups are both range scans for the same reason.
 Fixing the attribute pins the leading bytes of the AVE key, so LMDB has a known
 lower and upper byte bound to scan between. Reading every value of an attribute

@@ -42,16 +42,14 @@ as `:user/_follows`. In Datalog queries, use the normal attribute and let the
 query optimizer choose the index from the bound variables.
 
 
-## 2. Modeling Complex Edges (Associative Entities)
+## 2. Modeling Complex Edges (Join Entities)
 
 In a simple graph, an edge can be a direct reference such as
 `:user/follows`. When the edge itself has facts, promote the edge to an entity.
-Graph literature often calls this a property edge; ER modeling calls it an
-associative entity; Chapter 11 calls it a join entity. The Datalevin shape is the
-same in all three vocabularies: ordinary entities connected by ordinary ref
-attributes.
+Graph literature often calls this a property edge. In Datalevin, model it as a
+join entity: ordinary entities connected by ordinary ref attributes.
 
-![Reifying an edge into an associative entity: a simple user A :user/follows user B edge becomes a Follow entity that references user A as :follow/follower and user B as :follow/following, and carries properties such as created-at and strength on the relationship itself](/images/diagrams/associative-entity.svg)
+![Reifying an edge into a join entity: a simple user A :user/follows user B edge becomes a Follow entity that references user A as :follow/follower and user B as :follow/following, and carries properties such as created-at and strength on the relationship itself](/images/diagrams/join-entity.svg)
 
 In the figure, the direct edge `A -> B` becomes a `Follow` entity with two refs,
 `:follow/follower` and `:follow/following`, plus facts such as
@@ -1683,10 +1681,13 @@ that occupy the same structural level.
   '[[(same-generation ?x ?y)
      [?x :parent _]
      [(ground ?x) ?y]]
+    [(same-generation ?x ?y)
+     [_ :parent ?x]
+     [(ground ?x) ?y]]
 
     [(same-generation ?x ?y)
-     [?a :parent ?x]
-     [?b :parent ?y]
+     [?x :parent ?a]
+     [?y :parent ?b]
      (same-generation ?a ?b)]])
 ```
 
@@ -1696,8 +1697,11 @@ Object sameGenerationRules = Datalevin.edn(
     "  [?x :parent _] " +
     "  [(ground ?x) ?y]] " +
     " [(same-generation ?x ?y) " +
-    "  [?a :parent ?x] " +
-    "  [?b :parent ?y] " +
+    "  [_ :parent ?x] " +
+    "  [(ground ?x) ?y]] " +
+    " [(same-generation ?x ?y) " +
+    "  [?x :parent ?a] " +
+    "  [?y :parent ?b] " +
     "  (same-generation ?a ?b)]]");
 ```
 
@@ -1707,8 +1711,11 @@ same_generation_rules = interop().read_edn(
     '  [?x :parent _] '
     '  [(ground ?x) ?y]] '
     ' [(same-generation ?x ?y) '
-    '  [?a :parent ?x] '
-    '  [?b :parent ?y] '
+    '  [_ :parent ?x] '
+    '  [(ground ?x) ?y]] '
+    ' [(same-generation ?x ?y) '
+    '  [?x :parent ?a] '
+    '  [?y :parent ?b] '
     '  (same-generation ?a ?b)]]')
 ```
 
@@ -1718,18 +1725,23 @@ const sameGenerationRules = await interop().readEdn(
   "  [?x :parent _] " +
   "  [(ground ?x) ?y]] " +
   " [(same-generation ?x ?y) " +
-  "  [?a :parent ?x] " +
-  "  [?b :parent ?y] " +
+  "  [_ :parent ?x] " +
+  "  [(ground ?x) ?y]] " +
+  " [(same-generation ?x ?y) " +
+  "  [?x :parent ?a] " +
+  "  [?y :parent ?b] " +
   "  (same-generation ?a ?b)]]");
 ```
 
 </div>
 
-The base case says a node that has a parent is in the same generation as
-itself. The recursive case says that parents of same-generation nodes are also
-same-generation. This kind of query is useful for structural comparisons,
-lineage analysis, and rule-engine tests because the derived relation is about
-two moving positions in the graph, not one source-to-target path.
+The base cases say that any node participating in the parent graph, whether as
+a child or only as a parent, is in the same generation as itself. The second
+base case covers root nodes that have no parent of their own. The recursive
+case says that children of same-generation parents are also in the same
+generation. This kind of query is useful for structural comparisons, lineage
+analysis, and rule-engine tests because the derived relation is about two
+moving positions in the graph, not one source-to-target path.
 
 
 ## 5. Example: Finding the Forum for a Message (LDBC-SNB IS6)

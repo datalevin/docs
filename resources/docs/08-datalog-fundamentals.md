@@ -93,6 +93,9 @@ Datalevin allows trailing positions to be omitted when you do not need them.
 The pattern `[?e :user/name]` means "some datom exists for entity `?e` and
 attribute `:user/name`, regardless of value":
 
+The query uses `:find [?e ...]`, the collection find form, so the result is a
+collection of entity ids rather than tuples. Section 8.1 covers find shapes.
+
 ```clojure
 (d/q '[:find [?e ...]
        :where [?e :user/name]]
@@ -130,7 +133,7 @@ give it a normal variable name:
 Use `_` when a position must be present but should not bind a variable. Use
 omission when later positions of a data pattern are simply not part of the
 question. The same placeholder syntax also appears in binding patterns for
-query functions; Section 4.3 shows an example.
+query functions; Section 3.3 shows an example.
 
 
 ## 2. Joins Across Entities
@@ -164,7 +167,9 @@ entity ids internally.
  [order-4 :order/total    300]]
 ```
 
-Now ask for London users with orders over 100:
+Now ask for London users with orders over 100. For now, read
+`[(> ?total 100)]` as a filter clause; Section 3.2 introduces these more
+formally as predicate clauses.
 
 ```clojure
 (d/q '[:find ?name ?total
@@ -227,7 +232,7 @@ after [?o :order/total ?total]
 {?u bob,   ?name "Bob",   ?o order-3, ?total 200}
 ```
 
-The predicate clause keeps only rows whose total is greater than 100:
+The final filter keeps only rows whose total is greater than 100:
 
 ```text pdf-keep
 after [(> ?total 100)]
@@ -245,59 +250,21 @@ query, but they are not returned:
 ```
 
 This is the core Datalog mental model: data patterns create candidate bindings,
-shared variables keep those bindings consistent, predicates filter rows, and
-`:find` shapes the surviving values into the result.
+shared variables keep those bindings consistent, filter clauses remove rows,
+and `:find` shapes the surviving values into the result.
 
 The join also affects result cardinality. Alice has two orders in the source
 facts, so the intermediate relation has two Alice rows after joining users to
 orders. The later predicate removes the smaller order, but without that
 predicate both Alice orders would contribute rows.
 
-
-## 3. Pull in Queries
-
-When a query discovers the matching entities, `pull` can shape those entities
-immediately in the `:find` clause. This is the usual pattern for "find the
-matching entities and return application maps":
-
-<div class="multi-lang">
-
-```clojure
-(d/q '[:find [(pull ?e [:user/name {:user/orders [:order/id]}]) ...]
-       :where [?e :user/city "London"]]
-     db)
-```
-
-```java
-Object result = conn.query("[:find [(pull ?e [:user/name {:user/orders [:order/id]}]) ...] " +
-    ":where [?e :user/city \"London\"]]");
-```
-
-```python
-result = conn.query('[:find [(pull ?e [:user/name {:user/orders [:order/id]}]) ...] '
-    ':where [?e :user/city "London"]]')
-```
-
-```javascript
-const result = await conn.query('[:find [(pull ?e [:user/name {:user/orders [:order/id]}]) ...] ' +
-    ':where [?e :user/city "London"]]');
-```
-
-</div>
-
-This query finds all users in London and, for each one, pulls their name and a
-nested list of their orders. Chapter 7 covers pull patterns in detail. In this
-chapter, the important point is that `:where` discovers the entities and `pull`
-shapes only the entities that survived the query.
-
-
-## 4. Variables and Functions in `:where`
+## 3. Variables and Functions in `:where`
 
 Data patterns are the foundation, but `:where` clauses can also use variables
 in the attribute position, call predicates to filter rows, and call functions
 that bind new values.
 
-### 4.1 Variable Attributes
+### 3.1 Variable Attributes
 
 The attribute position can be a variable, so you can ask questions about the
 shape of your data:
@@ -339,7 +306,7 @@ collection form `:find [?attr ...]` when you want a flat collection of
 attribute keywords. If you also need the values, write `[?p ?attr ?value]` and
 include `?value` in `:find`.
 
-### 4.2 Predicate Clauses
+### 3.2 Predicate Clauses
 
 `:where` clauses are not limited to data patterns. They can also call functions
 to filter rows or compute new variable bindings.
@@ -390,7 +357,7 @@ comparisons such as `=`, `<`, `>`, `<=`, and `>=`, and Datalevin-specific
 helpers such as `like` and `in`. Appendix D lists the built-in query and
 aggregate functions.
 
-### 4.3 Binding Clauses
+### 3.3 Binding Clauses
 
 You can also use functions to compute and bind new variables.
 
@@ -454,7 +421,7 @@ The `fulltext` function is covered in Chapter 16. It appears here because its
 return binding is a compact example: bind the entity id to `?e`, and ignore the
 attribute and value positions.
 
-### 4.4 User-Defined Query Functions
+### 3.4 User-Defined Query Functions
 
 The function name at the start of a predicate or binding clause is resolved
 before the clause runs. Common built-in functions and predicates, such as `+`,
@@ -482,7 +449,7 @@ The `adult?` function is not built in, so the query includes
 `my-app.queries/adult?`. Without that namespace, Datalevin cannot resolve the
 function.
 
-### 4.5 Predicate Performance
+### 3.5 Predicate Performance
 
 Predicate clauses are constraints, but not all constraints give the optimizer
 the same information. When a simple built-in comparison applies to a value from
@@ -517,7 +484,7 @@ for simple value tests when possible. Keep custom predicates for logic that
 cannot be expressed directly, and combine them with selective data patterns so
 they run over a small candidate set.
 
-## 5. Alternatives and Negation
+## 4. Alternatives and Negation
 
 By default, all `:where` clauses are joined with an implicit `and`. Datalog also
 provides forms for alternatives and exclusion:
@@ -529,7 +496,7 @@ provides forms for alternatives and exclusion:
 -   `not-join`: like `not`, but explicitly lists the variables that connect the
     negative pattern to the surrounding query.
 
-### 5.1 `or`
+### 4.1 `or`
 
 Use `or` when each branch is an alternative way to bind the same logical
 variables. For example, this query finds users whose status is either
@@ -577,7 +544,7 @@ When an alternative needs more than one clause, wrap those clauses in
 Plain `or` requires the branches to use the same set of free variables. That is
 what lets the rest of the query continue with a consistent binding shape.
 
-### 5.2 `or-join`
+### 4.2 `or-join`
 
 Use `or-join` when an alternative branch needs variables that should stay local
 to that branch. The vector after `or-join` names the variables that connect the
@@ -600,7 +567,7 @@ The variable `?manager` is needed only inside the second branch. With plain
 states that only `?e` is the branch result that must unify with the rest of the
 query.
 
-### 5.3 `not`
+### 4.3 `not`
 
 Use `not` to remove rows that match a negative pattern. A `not` clause is a
 test against bindings already produced by surrounding positive clauses; it does
@@ -639,13 +606,90 @@ const result2 = await conn.query('[:find ?e ' +
 A single `not` form with multiple clauses negates their conjunction: the row is
 excluded only when all clauses inside the `not` match together.
 
-### 5.4 `not-join`
+### 4.4 `not-join`
 
 Use `not-join` when the negative pattern needs local variables or when only
 some variables should connect the negative pattern to the surrounding query.
 The vector after `not-join` names those connecting variables. Variables not
 listed there are local to the negative pattern. The listed variables must
-already be bound before the `not-join` runs.
+already be bound before the `not-join` runs. Section 6.2 shows a complete
+example.
+
+## 5. Query Inputs
+
+So far, most examples have omitted `:in`. When a query has no explicit `:in`,
+Datalevin behaves as if it had `:in $`, where `$` names the default data
+source.
+
+Real application queries usually take values from function arguments, request
+parameters, or UI state. Use `:in` when the query needs inputs beyond the
+default data source. The simplest explicit declaration with a scalar input is
+`:in $ ?city`:
+
+<div class="multi-lang">
+
+```clojure
+(d/q '[:find ?name
+       :in $ ?city
+       :where [?e :user/city ?city]
+              [?e :user/name ?name]]
+     db
+     "London")
+```
+
+```java
+Object result = conn.query("[:find ?name " +
+    " :in $ ?city " +
+    " :where [?e :user/city ?city] " +
+    "        [?e :user/name ?name]]",
+    "London");
+```
+
+```python
+result = conn.query('[:find ?name '
+    ' :in $ ?city '
+    ' :where [?e :user/city ?city] '
+    '        [?e :user/name ?name]]',
+    "London")
+```
+
+```javascript
+const result = await conn.query('[:find ?name ' +
+    ' :in $ ?city ' +
+    ' :where [?e :user/city ?city] ' +
+    '        [?e :user/name ?name]]',
+    'London');
+```
+
+</div>
+
+The `$` symbol names the default data source: the database, or other EAV data
+source, being queried. Variables after `$` are input bindings. They are bound
+from the remaining arguments in the same order as they appear in `:in`. In the
+Clojure call above, `db` fills `$` and `"London"` fills `?city`. In the
+connection APIs, the connection supplies `$`, and the extra arguments fill the
+remaining inputs.
+
+Inputs are just bindings. Once `?city` or `?min-total` is bound, the rest of the
+query treats it like any other variable:
+
+```clojure
+(d/q '[:find ?name ?total
+       :in $ ?city ?min-total
+       :where [?u :user/city ?city]
+              [?u :user/name ?name]
+              [?o :order/customer ?u]
+              [?o :order/total ?total]
+              [(> ?total ?min-total)]]
+     db
+     "London"
+     100)
+```
+
+Data sources are inputs too. The default source is named `$`, and additional
+sources can be given their own source symbols, such as `$users`, `$orders`, or
+`$data`. Section 10 returns to that general case after the rest of the basic
+query forms have been introduced.
 
 ## 6. When You Think You Need a Subquery
 
@@ -828,13 +872,29 @@ question for each candidate user; `or-join` keeps the alternatives in one query
 plan.
 
 
-## 7. The `:find` Specification: Shaping Your Results
+## 7. Declarative Power: The Query Optimizer
+
+Because Datalog is declarative, the **order of your `:where` clauses does not
+matter**. Datalevin has a sophisticated **query optimizer** that analyzes your
+clauses and automatically determines the most efficient execution plan.
+
+The optimizer uses the order statistics from the underlying storage layer (see
+Chapter 4) to make informed decisions. For example, if there are only 3 users in
+"London" but 10,000 users named "Alice", it will almost certainly start by
+finding the London users first, as it's a much smaller set to filter.
+
+> **Key takeaway**: Do not try to manually optimize your queries by reordering
+> `:where` clauses. State your constraints clearly and let the optimizer do its
+> job.
+
+
+## 8. The `:find` Specification: Shaping Your Results
 
 The `:find` clause determines in what shape your query should be returned. While
 its basic use is to return a collection of values, it has several powerful
 variations for aggregation and shaping data.
 
-### 7.1 Find Specifications
+### 8.1 Result Shapes
 
 By default, `:find` returns a **relation**: a set of tuples, where each tuple
 contains the values named in the `:find` clause.
@@ -1023,7 +1083,43 @@ const users = await conn.query('[:find ?name ?age ' +
 Use `:keys` for keyword keys, `:strs` for string keys, and `:syms` for symbol
 keys.
 
-### 7.2 Aggregation
+### 8.2 Pull in Queries
+
+When a query discovers the matching entities, `pull` can shape those entities
+immediately in the `:find` clause. This is the usual pattern for "find the
+matching entities and return application maps":
+
+<div class="multi-lang">
+
+```clojure
+(d/q '[:find [(pull ?e [:user/name {:user/orders [:order/id]}]) ...]
+       :where [?e :user/city "London"]]
+     db)
+```
+
+```java
+Object result = conn.query("[:find [(pull ?e [:user/name {:user/orders [:order/id]}]) ...] " +
+    ":where [?e :user/city \"London\"]]");
+```
+
+```python
+result = conn.query('[:find [(pull ?e [:user/name {:user/orders [:order/id]}]) ...] '
+    ':where [?e :user/city "London"]]')
+```
+
+```javascript
+const result = await conn.query('[:find [(pull ?e [:user/name {:user/orders [:order/id]}]) ...] ' +
+    ':where [?e :user/city "London"]]');
+```
+
+</div>
+
+This query finds all users in London and, for each one, pulls their name and a
+nested list of their orders. Chapter 7 covers pull patterns in detail. In this
+chapter, the important point is that `:where` discovers the entities and `pull`
+shapes only the entities that survived the query.
+
+### 8.3 Aggregation
 
 Datalog supports aggregate functions directly in the `:find` clause. Aggregates
 compute over the found result set and can produce summaries similar to SQL
@@ -1077,6 +1173,7 @@ const cityCounts = await conn.query('[:find ?city (count ?e) ' +
 ```
 
 </div>
+
 Common aggregates include `sum`, `avg`, `count`, `min`, `max`, and `median`.
 The function `vec` is also useful as an aggregate when you want to collect the
 values in each group into a vector.
@@ -1132,25 +1229,9 @@ Aggregate expressions support `+`, `-`, `*`, `/`, `mod`, `rem`, and `quot`.
 Their arguments may be aggregate calls, constants, or nested aggregate
 expressions, for example `(* 2 (+ (sum ?x) (sum ?y)))`.
 
-## 8. Declarative Power: The Query Optimizer
-
-Because Datalog is declarative, the **order of your `:where` clauses does not
-matter**. Datalevin has a sophisticated **query optimizer** that analyzes your
-clauses and automatically determines the most efficient execution plan.
-
-The optimizer uses the order statistics from the underlying storage layer (see
-Chapter 4) to make informed decisions. For example, if there are only 3 users in
-"London" but 10,000 users named "Alice", it will almost certainly start by
-finding the London users first, as it's a much smaller set to filter.
-
-> **Key takeaway**: Do not try to manually optimize your queries by reordering
-> `:where` clauses. State your constraints clearly and let the optimizer do its
-> job.
-
-
 ## 9. Query Modifiers and Post-Processing
 
-Beyond the core `where` clauses, Datalog provides additional clauses to refine,
+Beyond the core `:where` clauses, Datalog provides additional clauses to refine,
 filter, order, and paginate your query results.
 
 ### 9.1 `:with`: Preserving Rows for Aggregates
@@ -1476,9 +1557,9 @@ section.
 
 ## 10. Flexible Data Sources: Beyond a Single Database
 
-One of the most powerful aspects of Datalevin's Datalog engine is that queries
-are not limited to a single database. The `:in` clause allows you to specify
-multiple data sources, enabling cross-database joins and ad-hoc data analysis.
+Section 5 introduced query inputs and the default source symbol `$`.
+Datalevin's Datalog engine generalizes that idea: sources are inputs too. A
+query can read from more than one database, or from any sequence of EAV tuples.
 This is why the Clojure `d/q` API takes data sources rather than a connection:
 queries run over data, while transactions run through connections.
 
@@ -1556,7 +1637,7 @@ Even more flexibly, the query engine accepts **any sequence of EAV tuples** as a
 data source. If you can represent your data as `[entity attribute value]`
 triples, you can query it with Datalog, no database required.
 
-The examples below bind the tuple sequence as a named source, `$data`.
+In each query below, `$data` is the source symbol for the tuple sequence.
 
 <div class="multi-lang">
 
@@ -1569,9 +1650,9 @@ The examples below bind the tuple sequence as a named source, `$data`.
    [2 :user/age 25]])
 
 (d/q '[:find ?name
-       :in $ ?min-age
-       :where [$ ?e :user/name ?name]
-              [$ ?e :user/age ?age]
+       :in $data ?min-age
+       :where [$data ?e :user/name ?name]
+              [$data ?e :user/age ?age]
               [(>= ?age ?min-age)]]
      my-data 28)
 ;; => #{["Alice"]}

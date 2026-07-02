@@ -10,7 +10,6 @@
   :index "vector search!approximate nearest neighbor"
   :patterns ["approximate nearest[- ]neighbor"]}
  {:term "apperception"}
- {:term "associative entity" :index "graph modeling!associative entity"}
  {:term "attribute"}
  {:term "AVE"}
  {:term "AVE" :index "indexes!AVE"}
@@ -105,6 +104,9 @@
   :patterns ["\\bJava\\b" "JavaDoc"]}
  {:term "JavaScript API"
   :patterns ["\\bJavaScript\\b"]}
+ {:term "join entity"
+  :index "graph modeling!join entity"
+  :patterns ["join entity" "join entities"]}
  {:term "join order" :index "query planner!join order"}
  {:term "key-value store"}
  {:term "left-deep join" :index "query planner!left-deep join"}

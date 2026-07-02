@@ -65,12 +65,13 @@ In a document-oriented database, you are often taught to denormalize — to
 ### 2.1 The "Join Entity" Pattern
 
 Chapter 11 gives the Datalevin decision framework for many-to-many
-relationships. In ER terms, the normalized version is an **associative entity**:
-the relationship is promoted to its own entity. If you have `Users` and
-`Groups`, a `Membership` entity records the user's membership in a group.
+relationships. Datalevin calls the normalized form a **join entity**. In ER
+terminology, this is an associative entity: the relationship is promoted to its
+own entity. If you have `Users` and `Groups`, a `Membership` entity records the
+user's membership in a group.
 
 ```clojure
-;; Associative Entity: Membership
+;; Join entity: Membership
 {:membership/user  101 ; ref to User
  :membership/group 202 ; ref to Group
  :membership/role  :role/admin}
@@ -80,6 +81,16 @@ The ER point is that membership is not just a pointer; it can have its own role,
 join time, inviter, validity interval, or audit facts. For the performance trade
 offs between small `:db.cardinality/many` refs and join entities, use Chapter
 11, Section 2.2.
+
+This is not a claim that join entities are cheaper in raw datom count. They are
+usually more expensive: one join entity normally stores at least two ref
+datoms, plus any facts about the relationship itself. A small
+`:db.cardinality/many` property is more compact when the relationship is just a
+bounded set of values and will mostly be pulled with its owner. Promote the
+relationship when the relationship itself needs identity, attributes, lifecycle,
+uniqueness, direct queries, or selective filtering. The benefit is not fewer
+datoms; it is a more explicit relationship that the query engine and your
+application can address directly.
 
 
 ## 3. ER Design Decisions in Datalevin
@@ -154,7 +165,7 @@ cardinality, but it does not enforce all ER participation constraints for you.
 
 - **One-to-many**: Put a cardinality-one ref on the many side, such as
   `:order/user` or `:comment/post`.
-- **Many-to-many**: Use an associative entity when the relationship is queried
+- **Many-to-many**: Use a join entity when the relationship is queried
   directly, may grow large, or has attributes of its own.
 - **Optional participation**: Omit the datom when the relationship is unknown or
   not applicable; do not invent sentinel values like `"N/A"`.
@@ -178,7 +189,7 @@ signal to make the relationship an entity.
 ;; A thin model: the relationship has nowhere to put its own facts.
 {:order/products [[:product/sku "SKU-1"] [:product/sku "SKU-2"]]}
 
-;; A stronger model: each line item is a relationship entity.
+;; A stronger model: each line item is a join entity.
 {:line-item/order    [:order/id "ord-1001"]
  :line-item/product  [:product/sku "SKU-1"]
  :line-item/quantity 2
@@ -242,7 +253,7 @@ an identity, or a value.
 | :--- | :--- | :--- |
 | One entity points to one parent | Cardinality-one `:db.type/ref` on the child | Normalized, easy to join, and easy to reverse-pull. |
 | A small owned set of refs or values | `:db.cardinality/many` | Convenient when the set is small and the members have no facts of their own; each member is still a separate datom. |
-| A relationship has attributes, lifecycle, uniqueness, or direct queries | Relationship entity | The relationship itself is a thing the domain talks about. |
+| A relationship has attributes, lifecycle, uniqueness, or direct queries | Join entity | The relationship itself is a thing the domain talks about. |
 | A combination of attributes identifies an entity | Composite tuple attribute with `:db/tupleAttrs` | Datalevin maintains a derived lookup/index entry from ordinary attributes. |
 | A small vector-like value whose elements all have one type | Stored homogeneous tuple with `:db/tupleType` | The tuple is one value, such as a coordinate or numeric interval. |
 | A small record-like value with fixed positions of different types | Stored heterogeneous tuple with `:db/tupleTypes` | The tuple is one value with typed positions, such as `[amount currency]`. |
@@ -488,8 +499,7 @@ should be derived from facts, and stored tuples should be reserved for values.
 ## 5. A Worked ER Example: Course Enrollment
 
 Consider a small school registration system. In an ER diagram you would likely
-draw several strong entity types, one scheduled offering, and one associative
-entity:
+draw several stable domain entities, one course offering, and one join entity:
 
 - `Student`: identified by a student id.
 - `Course`: identified by a course code.
@@ -499,16 +509,23 @@ entity:
   instructor.
 - `Enrollment`: the fact that a student is enrolled in a course offering.
 
-Figure 12.1 is an ER diagram showing the relationships among the entities.
+Here, a course offering is a scheduled section: a reusable catalog course such
+as `CS101`, offered in a particular term, with a section number, instructor, and
+capacity. It is not a special Datalevin construct. It is a contextual entity,
+because students enroll in that specific offering rather than directly in the
+catalog course.
 
-![ER model for course enrollment: Student, Course, Term, and Instructor are strong entities; CourseOffering joins Course, Term, and Instructor for a scheduled section; Enrollment joins Student to CourseOffering and carries status, grade, enrollment time, and a composite unique key over student and offering](/images/diagrams/er-course-enrollment.svg)
+Figure 12.1 is an ER diagram showing the relationships among the entities. The
+figure labels `CourseOffering` as a scheduled section to make that modeling role
+visible.
 
-The important modeling move is to separate the catalog course from the thing a
-student actually enrolls in. `CS101` is a course. `CS101, Fall 2026, Section
-001` is a course offering. `Enrollment` is not just a many-to-many link between
-student and course; it has attributes of its own: status, grade, enrollment
-time, and perhaps the source system that created the record. That makes it a
-proper entity in Datalevin.
+![ER model for course enrollment: Student, Course, Term, and Instructor are strong entities; CourseOffering represents a scheduled section by referencing Course, Term, and Instructor; Enrollment joins Student to CourseOffering and carries status, grade, enrollment time, and a composite unique key over student and offering](/images/diagrams/er-course-enrollment.svg)
+
+The important modeling move is the same one the figure highlights: `Enrollment`
+points to the course offering, not directly to the catalog course. The
+enrollment has attributes of its own: status, grade, enrollment time, and
+perhaps the source system that created the record. That makes it a join entity
+in Datalevin.
 
 Listing 12.1 shows the actual schema.
 
@@ -693,8 +710,8 @@ const schoolSchema = {
 
 </div>
 
-The refs are the relationship model. `?offering` points to the course, term,
-and instructor entities. `?enrollment` points to the student and offering
+The refs are the relationship model. A course offering points to the course,
+term, and instructor entities. An enrollment points to the student and offering
 entities. Ordinary joins recover the corresponding domain identifiers when
 needed. There is no need to copy `:course/code`, `:term/id`, or
 `:instructor/id` onto the enrollment just to make later queries convenient. If
@@ -809,7 +826,7 @@ await conn.transact([
 
 </div>
 
-To update that enrollment later, find the relationship entity by joining through
+To update that enrollment later, find the join entity by joining through
 the domain identifiers. Notice that the query moves from course and term to the
 offering, then from offering and student to enrollment:
 
@@ -987,9 +1004,9 @@ model:
 2.  **Scheduled or contextual entities** such as course offerings, reservations,
     shipments, or price lists. These are real things in the domain, not just
     attributes copied onto another entity.
-3.  **Relationship entities** such as enrollments, line items, memberships, and
+3.  **Join entities** such as enrollments, line items, memberships, and
     assignments.
-4.  **Composite identities** for relationship entities that need upsert,
+4.  **Composite identities** for join entities that need upsert,
     lookup, or import stability.
 
 Use composite identities as constraints and access paths, not as a reason to
@@ -1180,10 +1197,10 @@ Many-to-many relationships require a choice:
 
 1.  Use a cardinality-many ref when the set is small, directly owned by the
     entity, and has no attributes of its own.
-2.  Use an associative entity when the relationship needs metadata, lifecycle,
+2.  Use a join entity when the relationship needs metadata, lifecycle,
     uniqueness, or direct queries.
 
-For SQL migrations, join tables usually become associative entities. A
+For SQL migrations, join tables usually become join entities. A
 `user_groups` table with `user_id`, `group_id`, `role`, and `joined_at` is not
 just a link; it is a membership entity.
 
@@ -1194,7 +1211,7 @@ For an existing SQL application, migrate in this order:
 1.  Map each table to a namespace and each column to an attribute.
 2.  Preserve stable primary keys as `:db.unique/identity` attributes.
 3.  Convert foreign keys to `:db.type/ref` attributes that point to lookup refs.
-4.  Convert join tables with payload columns into associative entities.
+4.  Convert join tables with payload columns into join entities.
 5.  Decide which nullable columns represent absent facts, optional refs, or
     values that should be modeled differently.
 6.  Add `:db/doc` to attributes whose meaning came from SQL constraints,
@@ -1211,7 +1228,7 @@ would recreate an object graph, not a normalized relational model.
 
 In Datalevin, keep the same conceptual separation that made the SQL model
 useful. Products and customers are stable domain entities. Orders are events or
-business records that point to customers. Line items are relationship entities:
+business records that point to customers. Line items are join entities:
 each one connects one order to one product and carries facts about that
 relationship, such as quantity. The result is still relational, but the joins
 are expressed as Datalog variable sharing over refs rather than SQL `JOIN`
@@ -1234,7 +1251,7 @@ clauses over table names.
    :order/id      {:db/unique :db.unique/identity :db/valueType :db.type/string}
    :order/customer {:db/valueType :db.type/ref}
 
-   ;; Verb/Associative Entity: Line Item (joins Order and Product)
+   ;; Join entity: Line Item (joins Order and Product)
    :line-item/order    {:db/valueType :db.type/ref}
    :line-item/product  {:db/valueType :db.type/ref}
    :line-item/quantity {:db/valueType :db.type/long}})
@@ -1271,7 +1288,7 @@ Schema ecommerceSchema = Datalevin.schema()
     .attr("order/customer",
           Schema.attribute()
               .valueType(Schema.ValueType.REF))
-    // Verb/Associative Entity: Line Item (joins Order and Product)
+    // Join entity: Line Item (joins Order and Product)
     .attr("line-item/order",
           Schema.attribute()
               .valueType(Schema.ValueType.REF))
@@ -1295,7 +1312,7 @@ ecommerce_schema = {
     # Noun: Order
     ":order/id": {":db/unique": ":db.unique/identity", ":db/valueType": ":db.type/string"},
     ":order/customer": {":db/valueType": ":db.type/ref"},
-    # Verb/Associative Entity: Line Item (joins Order and Product)
+    # Join entity: Line Item (joins Order and Product)
     ":line-item/order": {":db/valueType": ":db.type/ref"},
     ":line-item/product": {":db/valueType": ":db.type/ref"},
     ":line-item/quantity": {":db/valueType": ":db.type/long"}}
@@ -1313,7 +1330,7 @@ const ecommerceSchema = {
     // Noun: Order
     ":order/id": {":db/unique": ":db.unique/identity", ":db/valueType": ":db.type/string"},
     ":order/customer": {":db/valueType": ":db.type/ref"},
-    // Verb/Associative Entity: Line Item (joins Order and Product)
+    // Join entity: Line Item (joins Order and Product)
     ":line-item/order": {":db/valueType": ":db.type/ref"},
     ":line-item/product": {":db/valueType": ":db.type/ref"},
     ":line-item/quantity": {":db/valueType": ":db.type/long"}};
@@ -1341,7 +1358,7 @@ order status, timestamps, shipment entities, payment attempts, discounts,
 inventory reservations, or a composite `:line-item/key` over order and product
 when the domain allows only one line per product per order. The modeling rule is
 the same: keep durable nouns as entities, represent foreign keys as refs, and
-promote relationships with their own facts into relationship entities.
+promote relationships with their own facts into join entities.
 
 
 ## Summary: Relational Best Practices

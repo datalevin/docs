@@ -489,9 +489,11 @@ This shape gives the query optimizer more granular facts to count, join, and
 filter. It also avoids treating a very large relationship set as if it were a
 small property of one entity. If you expect a single entity to have thousands of
 references, such as a "Public" group with millions of members, a join entity is
-the better default for performance and operational clarity. It is also the right
-model when the relationship itself has attributes, such as role assignment time,
-quantity, rank, validity interval, or source system.
+the better default for query planning and operational clarity. This is not a raw
+datom-count optimization; a join entity usually stores more datoms than one
+cardinality-many ref. It is the right model when the relationship itself has
+attributes, such as role assignment time, quantity, rank, validity interval, or
+source system.
 
 <div class="multi-lang">
 
@@ -499,7 +501,7 @@ quantity, rank, validity interval, or source system.
 ;; Instead of many references in one entity:
 {:user/id "u-1" :user/roles [:role/admin :role/editor]}
 
-;; Use join entities for better performance:
+;; Use join entities for large or queryable relationships:
 (d/transact! conn
   [{:role-assignment/user [:user/id "u-1"]
     :role-assignment/role :role/admin}
@@ -514,7 +516,7 @@ Tx.entity()
     .put("user/roles", List.of(Datalevin.kw("role/admin"),
                                Datalevin.kw("role/editor")));
 
-// Use join entities for better performance:
+// Use join entities for large or queryable relationships:
 conn.transact(Datalevin.tx()
     .entity(Tx.entity()
         .put("role-assignment/user", List.of("user/id", "u-1"))
@@ -533,7 +535,7 @@ kw = interop().keyword
 many_roles = {":user/id": "u-1",
               ":user/roles": [kw(":role/admin"), kw(":role/editor")]}
 
-# Use join entities for better performance:
+# Use join entities for large or queryable relationships:
 conn.transact([
     {":role-assignment/user": [":user/id", "u-1"],
      ":role-assignment/role": kw(":role/admin")},
@@ -551,7 +553,7 @@ const editor = await raw.keyword(":role/editor");
 // Instead of many references in one entity:
 const manyRoles = {":user/id": "u-1", ":user/roles": [admin, editor]};
 
-// Use join entities for better performance:
+// Use join entities for large or queryable relationships:
 await conn.transact([
   {":role-assignment/user": [":user/id", "u-1"],
    ":role-assignment/role": admin},

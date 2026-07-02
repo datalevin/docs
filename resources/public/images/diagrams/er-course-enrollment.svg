@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="700" viewBox="0 0 1000 700" role="img" aria-labelledby="title desc">
   <title id="title">Entity-relationship model for course enrollment</title>
-  <desc id="desc">An entity-relationship diagram for a school registration model. Student, Course, Term, and Instructor are strong entities with unique identities. CourseOffering is a scheduled section that references Course, Term, and Instructor. Enrollment is an associative entity that references Student and CourseOffering and carries status, grade, enrollment time, and a unique composite key over student and offering.</desc>
+  <desc id="desc">An entity-relationship diagram for a school registration model. Student, Course, Term, and Instructor are strong entities with unique identities. CourseOffering represents a scheduled section by referencing Course, Term, and Instructor. Enrollment is a join entity that references Student and CourseOffering and carries status, grade, enrollment time, and a unique composite key over student and offering.</desc>
   <defs>
     <style>
       .card { fill: #ffffff; stroke: #e2e8f0; stroke-width: 2; }
@@ -31,7 +31,7 @@
   <rect class="card" x="2" y="2" width="996" height="696" rx="18"/>
 
   <text class="title" x="500" y="44" text-anchor="middle">ER Model: Course Enrollment</text>
-  <text class="caption" x="500" y="70" text-anchor="middle">Catalog course, scheduled offering, and enrollment are separate facts.</text>
+  <text class="caption" x="500" y="70" text-anchor="middle">Catalog course, scheduled section, and enrollment are separate facts.</text>
 
   <!-- Relationship edges -->
   <path class="rel" d="M280 165 C340 165 320 245 400 245 H825 V285"/>
@@ -116,7 +116,7 @@
   <rect class="body" x="690" y="285" width="270" height="210" rx="8"/>
   <path class="head-assoc" d="M690 293 a8 8 0 0 1 8 -8 h254 a8 8 0 0 1 8 8 v26 h-270 z"/>
   <text class="entity-assoc" x="706" y="310">Enrollment</text>
-  <text class="stereo" x="946" y="310" text-anchor="end">associative</text>
+  <text class="stereo" x="946" y="310" text-anchor="end">join entity</text>
   <line class="divider-assoc" x1="690" y1="319" x2="960" y2="319"/>
   <text class="attr" x="706" y="344">enrollment/student</text>
   <rect class="fk" x="912" y="332" width="30" height="16" rx="8"/>

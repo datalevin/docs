@@ -31,19 +31,31 @@ datoms, but treats that entity as owned by its parent.
 
 ```clojure
 ;; Schema: :post/comments owns comment entities.
-{:post/comments {:db/valueType   :db.type/ref
+{:post/slug     {:db/valueType :db.type/string
+                 :db/unique    :db.unique/identity}
+ :post/comments {:db/valueType   :db.type/ref
                  :db/cardinality :db.cardinality/many
                  :db/isComponent true}
+ :user/email    {:db/valueType :db.type/string
+                 :db/unique    :db.unique/identity}
  :comment/author {:db/valueType :db.type/ref}}
 ```
 
 ```java
 Schema schema = Datalevin.schema()
+    .attr("post/slug",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .unique(Schema.Unique.IDENTITY))
     .attr("post/comments",
           Schema.attribute()
               .valueType(Schema.ValueType.REF)
               .cardinality(Schema.Cardinality.MANY)
               .isComponent(true))
+    .attr("user/email",
+          Schema.attribute()
+              .valueType(Schema.ValueType.STRING)
+              .unique(Schema.Unique.IDENTITY))
     .attr("comment/author",
           Schema.attribute()
               .valueType(Schema.ValueType.REF));
@@ -51,10 +63,18 @@ Schema schema = Datalevin.schema()
 
 ```python
 schema = {
+    ":post/slug": {
+        ":db/valueType": ":db.type/string",
+        ":db/unique": ":db.unique/identity"
+    },
     ":post/comments": {
         ":db/valueType": ":db.type/ref",
         ":db/cardinality": ":db.cardinality/many",
         ":db/isComponent": True
+    },
+    ":user/email": {
+        ":db/valueType": ":db.type/string",
+        ":db/unique": ":db.unique/identity"
     },
     ":comment/author": {
         ":db/valueType": ":db.type/ref"
@@ -64,10 +84,18 @@ schema = {
 
 ```javascript
 const schema = {
+  ":post/slug": {
+    ":db/valueType": ":db.type/string",
+    ":db/unique": ":db.unique/identity"
+  },
   ":post/comments": {
     ":db/valueType": ":db.type/ref",
     ":db/cardinality": ":db.cardinality/many",
     ":db/isComponent": true
+  },
+  ":user/email": {
+    ":db/valueType": ":db.type/string",
+    ":db/unique": ":db.unique/identity"
   },
   ":comment/author": {
     ":db/valueType": ":db.type/ref"
@@ -83,62 +111,62 @@ data has identity, relationships, constraints, or a lifecycle that should remain
 visible to Datalog.
 
 For example, comments can be modeled as components of a post while their authors
-remain separate top-level entities:
+remain separate top-level entities, addressed through a unique email lookup ref:
 
 <div class="multi-lang">
 
 ```clojure
 (d/transact! conn
-  [{:db/id 200
-    :user/name "Ada"
+  [{:user/name "Ada"
     :user/email "ada@example.com"}
-   {:db/id 1
+   {:post/slug "indexes-as-capabilities"
     :post/title "Indexes as Capabilities"
     :post/comments [{:comment/body "This clarifies the mental model."
-                     :comment/author 200}]}])
+                     :comment/author [:user/email "ada@example.com"]}]}])
 ```
 
 ```java
+Object ada = List.of("user/email", "ada@example.com");
+
 conn.transact(Datalevin.tx()
-    .entity(Tx.entity(200)
+    .entity(Tx.entity()
         .put("user/name", "Ada")
         .put("user/email", "ada@example.com"))
-    .entity(Tx.entity(1)
+    .entity(Tx.entity()
+        .put("post/slug", "indexes-as-capabilities")
         .put("post/title", "Indexes as Capabilities")
         .put("post/comments", List.of(
             Tx.entity()
                 .put("comment/body", "This clarifies the mental model.")
-                .put("comment/author", 200)
+                .put("comment/author", ada)
                 .build()))));
 ```
 
 ```python
 conn.transact([
-    {":db/id": 200,
-     ":user/name": "Ada",
+    {":user/name": "Ada",
      ":user/email": "ada@example.com"},
-    {":db/id": 1,
+    {":post/slug": "indexes-as-capabilities",
      ":post/title": "Indexes as Capabilities",
      ":post/comments": [
          {":comment/body": "This clarifies the mental model.",
-          ":comment/author": 200}]}
+          ":comment/author": [":user/email", "ada@example.com"]}]}
 ])
 ```
 
 ```javascript
 await conn.transact([
   {
-    ":db/id": 200,
     ":user/name": "Ada",
     ":user/email": "ada@example.com"
   },
   {
-    ":db/id": 1,
+    ":post/slug": "indexes-as-capabilities",
     ":post/title": "Indexes as Capabilities",
     ":post/comments": [
       {
         ":comment/body": "This clarifies the mental model.",
-        ":comment/author": 200
+        ":comment/author": [":user/email", "ada@example.com"]
       }
     ]
   }
@@ -154,27 +182,27 @@ For triple-based documents, use pull patterns to navigate nested paths:
 ```clojure
 (d/pull db
         [:post/title {:post/comments [:comment/body {:comment/author [:user/name]}]}]
-        1)
+        [:post/slug "indexes-as-capabilities"])
 ```
 
 ```java
 conn.pull(
     "[:post/title {:post/comments [:comment/body {:comment/author [:user/name]}]}]",
-    1);
+    List.of("post/slug", "indexes-as-capabilities"));
 ```
 
 ```python
 conn.pull(
     [":post/title", {":post/comments": [":comment/body",
                                         {":comment/author": [":user/name"]}]}],
-    1)
+    [":post/slug", "indexes-as-capabilities"])
 ```
 
 ```javascript
 await conn.pull(
   [':post/title', { ':post/comments': [':comment/body',
                                        { ':comment/author': [':user/name'] }] }],
-  1
+  [':post/slug', 'indexes-as-capabilities']
 );
 ```
 
@@ -637,10 +665,8 @@ attribute name without the leading colon; for example, `:user/metadata` becomes
 
 ### 2.2 `idoc` Domains
 
-An `idoc` domain is the namespace for one path index. Internally, each domain has
-its own document-reference map, path dictionary, and inverted path index. That
-domain name is what lets Datalevin find the correct path index when
-`idoc-match` runs.
+An `idoc` domain is the namespace for one path index. That domain name is what
+lets Datalevin find the correct path index when `idoc-match` runs.
 
 This is related to, but not the same as, full-text, vector, or embedding
 domains. Those indexes use domain lists or store-level domain maps to configure
@@ -1386,17 +1412,12 @@ When a path traverses arrays, `idoc-get` returns a vector of matching values.
 
 ## 4. How `idoc` Indexes Work
 
-Datalevin stores the idoc itself as the datom value. The path index stores
-references into those datoms, so path queries can narrow candidates quickly
-without duplicating full documents.
-
-- Each idoc domain maintains a document-reference map, a path dictionary, and an
-  inverted index.
-- The domain name is used as the namespace for those internal idoc index DBIs.
-- Indexing is synchronous during transactions, so committed idoc queries see the
-  committed document state.
-- Path ids are 32-bit integers.
-- Markdown idocs are parsed into nested maps with normalized header keys.
+Datalevin stores the idoc itself as the datom value. The path index records
+enough path and value information to narrow candidates quickly without
+duplicating full documents. Each domain has a separate path index, and indexing
+is synchronous during transactions. After a transaction commits, `idoc-match`
+sees the updated document state. Markdown idocs are parsed into nested maps with
+normalized header keys.
 
 This implementation detail matters for modeling: idoc gives you fast path
 filters, but the document remains one value from the perspective of ordinary
